@@ -15,9 +15,14 @@ interface Props {
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
+  // `bare` strips the standard reading chrome (gutter shell + footer) and shows
+  // only the fixed corner overlay: brand top-left, the blog micro-nav top-right.
+  // Used by the home page, whose whole canvas is the scroll-scrubbed scene.
+  bare?: boolean;
 }
 
 const props = Astro.props;
+const { bare = false } = props;
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 const year = new Date().getFullYear();
@@ -31,33 +36,86 @@ const isActive = (p: string) => norm(href(p)) === path;
 ---
 
 <!doctype html>
-<html lang={SITE_LANG}>
+<html lang={SITE_LANG} class={bare ? 'is-bare' : undefined}>
   <head>
     <BaseHead {...props} />
   </head>
-  <body>
-    <div class="wrap">
-      <header class="site-header">
-        <a class="brand" href={href('')}>{SITE_TITLE}<span class="dot">.</span></a>
-        <nav class="nav-pill">
-          <a href={href('')} class={isActive('') ? 'is-active' : undefined} aria-current={isActive('') ? 'page' : undefined}>Home</a>
-          <a href={href('')} class={undefined}>Writing</a>
-          <a href={href('about')} class={isActive('about') ? 'is-active' : undefined} aria-current={isActive('about') ? 'page' : undefined}>About</a>
-        </nav>
-      </header>
+  <body class={bare ? 'bare' : undefined}>
+    {
+      bare ? (
+        <Fragment>
+          {/* Fixed corner overlay: identity top-left, the blog micro-nav
+              top-right. Everything else is the scene canvas behind it. */}
+          <a class="overlay-brand" href={href('')}>
+            {SITE_TITLE}
+            <span class="dot">.</span>
+          </a>
 
-      <main>
-        <slot />
-      </main>
+          {/* The blog micro-graphic, top-right: a tiny constellation mark that
+              opens the About / Writing routes. Small, quiet, always reachable. */}
+          <nav class="overlay-blog" aria-label="Sections">
+            <a class="overlay-blog-mark" href={href('about')} aria-label="About and writing">
+              <svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true">
+                <circle cx="6" cy="8" r="1.6" />
+                <circle cx="20" cy="6" r="1.2" />
+                <circle cx="22" cy="18" r="1.6" />
+                <circle cx="10" cy="20" r="1.2" />
+                <circle cx="14" cy="13" r="2.2" class="overlay-blog-core" />
+                <path d="M6 8 L14 13 L20 6 M14 13 L22 18 M14 13 L10 20" />
+              </svg>
+            </a>
+            <div class="overlay-blog-links">
+              <a href={href('about')}>About</a>
+              <a href={href('about')}>Writing</a>
+            </div>
+          </nav>
 
-      <footer class="site-footer">
-        <span>© {year} {SITE_TITLE}</span>
-        <span class="socials">
-          {SOCIALS.github && <a href={SOCIALS.github}>github</a>}
-          {SOCIALS.twitter && <a href={SOCIALS.twitter}>twitter</a>}
-          {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}>email</a>}
-        </span>
-      </footer>
-    </div>
+          <main class="bare-main">
+            <slot />
+          </main>
+        </Fragment>
+      ) : (
+        <div class="wrap">
+          <header class="site-header">
+            <a class="brand" href={href('')}>
+              {SITE_TITLE}
+              <span class="dot">.</span>
+            </a>
+            <nav class="nav-pill">
+              <a
+                href={href('')}
+                class={isActive('') ? 'is-active' : undefined}
+                aria-current={isActive('') ? 'page' : undefined}
+              >
+                Home
+              </a>
+              <a href={href('')} class={undefined}>
+                Writing
+              </a>
+              <a
+                href={href('about')}
+                class={isActive('about') ? 'is-active' : undefined}
+                aria-current={isActive('about') ? 'page' : undefined}
+              >
+                About
+              </a>
+            </nav>
+          </header>
+
+          <main>
+            <slot />
+          </main>
+
+          <footer class="site-footer">
+            <span>© {year} {SITE_TITLE}</span>
+            <span class="socials">
+              {SOCIALS.github && <a href={SOCIALS.github}>github</a>}
+              {SOCIALS.twitter && <a href={SOCIALS.twitter}>twitter</a>}
+              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}>email</a>}
+            </span>
+          </footer>
+        </div>
+      )
+    }
   </body>
 </html>

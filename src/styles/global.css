@@ -167,398 +167,164 @@ h1, h2, h3 { line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; }
 }
 .nav-pill a.is-active:hover { color: var(--bg); }
 
-/* === Hero (the showpiece) ==================================================
-   The hero is the same room as the rest of the site, lit. It reads from the
-   global tokens above (no more --h-* world) so the new palette is shared, not
-   leaked. What stays hero-only is the TREATMENT: a lit panel with a 1px border
-   and a single cobalt bloom, where the page reads the visitor's signals and
-   reports them back like a navigational instrument.
+/* === Bare home: the scroll-scrubbed stellar-lifecycle scene =================
+   The home page is one pinned three.js canvas (the black hole that runs the
+   stellar lifecycle in reverse as you scroll) with a fixed corner overlay and a
+   per-stage narrative. There is no reading chrome here — see .bare below. The
+   old .hero / .crystal system is gone; the canvas IS the page.
+   =========================================================================== */
 
-   Client behavior: a calm time-based opener appears instantly, then the
-   "about you" fragment types itself in, in cobalt. See src/hero/Hero.tsx.
-   Every effect below has a reduced-motion fallback near the top of this file. */
-.hero {
-  position: relative;
-  margin-top: 0.5rem;
-  margin-bottom: 3rem;
-  /* NO PANEL. The hero box is now invisible — no background, border, blur or
-     radius. It stays in the DOM purely as the measuring anchor for the crystal:
-     the cobalt→copper split on the gem traces THIS rectangle's top-left corner,
-     so the shape is suggested entirely by colour, never drawn. The text floats
-     directly on the dark page.
-
-     The negative margin still bleeds the (invisible) rectangle to the column
-     edges, and the padding still spaces the text the way the panel used to — so
-     removing the box doesn't collapse the layout. */
-  /* Bleed out past the .wrap gutter so the hero text reaches the viewport edges,
-     matching the reference (name hard top-left, big line spanning full width).
-     -1 * --gutter cancels the shell padding; the hero then sets its own. */
-  margin-inline: calc(-1 * var(--gutter));
-  padding: clamp(1.75rem, 5vw, 2.75rem) clamp(1.5rem, 5vw, 2.5rem) clamp(2rem, 5vw, 2.75rem);
-  color: var(--fg);
-}
-
-/* Centered variant: the planet is PINNED to the exact center of the viewport
-   (its own fixed layer) and the hero text is arranged AROUND it, in the manner of
-   the reference layout — identity top-left, the quiet tagline bottom-right, and
-   the big personalized line as a band along the bottom. The middle row is left
-   open so the planet reads through it, uninterrupted.
-
-   A viewport-filling 2-col / 3-row grid does the placement:
-     row 1  .hero-id      (top-left)
-     row 2  .hero-tagline (open band — tagline pinned bottom-right)
-     row 3  .hero-line    (full-width bottom band)
-     row 4  .hero-reveal  (disclosure, beneath the band) */
-.hero--centered {
-  /* Fill the FIRST VIEWPORT edge-to-edge. The shell header sits above it, so the
-     hero takes the rest of the viewport (minus the header's ~3.5rem) and arranges
-     the text against the four edges around the centered planet. */
-  min-height: calc(100svh - 3.5rem);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto 1fr auto;
-  column-gap: clamp(1rem, 4vw, 3rem);
-  align-items: start;
-  /* Hug the viewport edges: the name reaches the left edge, the big line the
-     bottom edge, the tagline the right edge — the way the reference does. */
-  padding: clamp(1rem, 3vh, 2rem) clamp(1.5rem, 5vw, 5rem) clamp(1.25rem, 4vh, 2.5rem);
-  margin-bottom: 0;
-}
-/* TOP-LEFT identity block. */
-.hero--centered .hero-id {
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: start;
-  /* Above the crystal so the identity is never covered by the planet (only the
-     headline goes behind it). */
-  position: relative;
-  z-index: 2;
-}
-/* The tagline rides the OPEN middle row, pinned to its bottom-right corner so it
-   sits just above the band and clear of the planet's center. It can graze the
-   planet's right (copper) edge, so it carries the same dark halo the headline
-   uses to stay legible wherever it overlaps the gem. */
-.hero--centered .hero-tagline {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: end;
-  justify-self: end;
-  text-align: right;
+/* The bare body fills the viewport and hides its own scrollbar gutter jump; the
+   real scroll height comes from the invisible .scene-track. */
+body.bare {
   margin: 0;
-  max-width: 24ch;
-  font-size: clamp(1.1rem, 1.6vw, 1.4rem);
-  line-height: 1.45;
-  color: var(--fg-dim);
-  text-shadow:
-    0 0 14px color-mix(in oklch, var(--bg) 92%, transparent),
-    0 0 5px color-mix(in oklch, var(--bg) 80%, transparent);
+  background: #000;            /* the scene is pure black at the edges */
+  overflow-x: hidden;
 }
-/* The personalized line is the big bottom band — spanning the full viewport
-   width and pinned to the bottom edge, the page's headline (like the reference's
-   "Percieve. Design. Develop"). Scaled up by viewport width so it fills the line. */
-.hero--centered .hero-line {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  align-self: end;
-  font-size: clamp(2.5rem, 8vw, 6rem);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
-  text-wrap: balance;
-  /* Lift the headline UP just enough that its TOP edge tucks under the planet's
-     lower rim — the crystal (z-1) hides only the line's top, not its body. A gentle
-     rise; the bulk of the line stays readable below the gem. */
-  transform: translateY(clamp(-4rem, -6vh, -2rem));
-}
-/* The disclosure rides the OPEN middle row, bottom-LEFT — opposite the tagline
-   (which sits bottom-right). It sits clear of the planet's center and clear of
-   the bottom band, so the big line can run full-width and the reference's clean
-   bottom edge is preserved while keeping this real feature on screen. */
-.hero--centered .hero-reveal {
-  grid-column: 1;
-  grid-row: 2;
-  align-self: end;
-  justify-self: start;
-  margin: 0;
-  max-width: 26ch;
-}
+.bare-main { display: block; }
 
-/* --- The identity block (top-left, around the planet) ---------------------- */
-.hero-name {
-  font-family: var(--font-display);
-  /* Large and airy like the reference's "RISHABH UPADHYAY" — wide tracking, thin
-     weight, reaching toward the left edge as the page's anchor. */
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  margin: 0;
-  color: var(--fg);
-  text-shadow:
-    0 0 14px color-mix(in oklch, var(--bg) 88%, transparent),
-    0 0 4px color-mix(in oklch, var(--bg) 70%, transparent);
-}
-.hero-role {
-  font-family: var(--font-display);
-  font-size: clamp(0.95rem, 1.4vw, 1.2rem);
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  color: var(--fg-dim);
-  margin: 0.55rem 0 0;
-}
+/* The scroll track: N viewport-tall stages that exist only to give the page
+   scrollable height. They render nothing — the pinned canvas reads scrollY. */
+.scene-track { position: relative; z-index: 0; }
+.scene-stage { height: 100svh; }
 
-/* The flat cobalt bloom (.hero-glow) is gone: with no panel, the crystal's
-   colour split is the ONLY atmosphere, and a soft bloom would smear its clean
-   corner edge. The reduced-motion fallback in the top block no longer needs it
-   either. */
-
-/* === The crystal — the signature object ===================================
-   ONE faceted gem (React Three Fiber, see src/hero/Crystal.tsx) on a FIXED,
-   full-viewport layer that sits behind the page content. Because it is no longer
-   trapped inside the hero's clipped, isolated box, the single crystal can cross
-   the hero's edge — and a shader splits its colour at that boundary: cobalt
-   inside the hero rectangle, its copper negative outside. The layer is
-   pointer-transparent and sits below the readable content, which keeps its own
-   solid/# backgrounds so text never competes with the gem behind it.
-
-   z-index map:
-      0  .crystal-layer (this) — above <body> bg, below content
-      1  .wrap content flow
-   With the hero panel removed, the gem's cobalt half shows directly on the dark
-   page and its copper mass spills into the wide side margins a big screen leaves
-   around the narrow column. The cobalt→copper edge is the only thing that traces
-   the (invisible) hero corner. */
-.crystal-layer {
+/* --- Fixed corner overlay -------------------------------------------------- */
+/* Identity top-left, the blog micro-graphic top-right. Both sit above the
+   canvas (which is aria-hidden) and stay put through the whole scroll. */
+.overlay-brand {
   position: fixed;
-  inset: 0;
-  /* Raised ABOVE the headline (.hero-line, z-0) so the planet OCCLUDES the big
-     line — the line's top is hidden behind the gem's lower edge. Still below the
-     identity/nav/tagline (z-2), and still pointer-transparent so clicks (incl.
-     click-to-shatter) pass straight through to the content beneath. */
-  z-index: 1;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 1.3s var(--ease-out-quint);
-}
-/* Fade the whole layer up once personalization lands. The crystal is the sole
-   hero cue, so on wide screens it runs at full strength. */
-body:has(.hero .is-personalized) .crystal-layer {
-  opacity: 1;
-}
-/* The planet is PINNED to viewport center and stays fully present the whole
-   scroll — there's no scroll recede/dissolve anymore, so the canvas runs at full
-   opacity. (The layer's slow reveal-on-personalize transition still composes on
-   the wrapper above.) */
-.crystal-canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .crystal-layer { opacity: 1 !important; }
-}
-
-/* Mobile readability fallback. On a narrow column there are no side margins for
-   the copper to spill into, so the gem sits directly behind the headline and the
-   cobalt half kills text contrast (blue word on blue field). Hold the layer well
-   back there — the gem becomes a soft corner tint, the words win. The implied-
-   shape effect is a wide-screen reward; small screens get a calm version. */
-@media (max-width: 48rem) {
-  body:has(.hero .is-personalized) .crystal-layer { opacity: 0.38; }
-  /* Centered variant: the planet is scaled to fit the narrow column (see
-     viewportFitScale) and stays the page's focal object, so it keeps most of its
-     presence rather than dimming to a tint. The single-column layout below keeps
-     the text off the planet's busiest center. */
-  body:has(.hero--centered .is-personalized) .crystal-layer { opacity: 0.85; }
-
-  /* Collapse the around-the-planet grid to one column on a phone: identity at
-     top, the big line as the bottom band, tagline left-aligned just above it —
-     all clear of the centered planet rather than wrapped tightly around it. */
-  .hero--centered {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto auto auto;
-  }
-  .hero--centered .hero-id { grid-column: 1; grid-row: 1; }
-  .hero--centered .hero-tagline {
-    grid-column: 1;
-    grid-row: 3;
-    justify-self: start;
-    text-align: left;
-    max-width: 30ch;
-  }
-  .hero--centered .hero-line { grid-column: 1; grid-row: 4; }
-  .hero--centered .hero-reveal { grid-column: 1; grid-row: 5; }
-}
-
-/* Stacking around the planet (within .wrap's stacking context):
-     z-0  .hero-line   — the big headline, BEHIND the crystal so the planet hides
-                         its top edge (the requested "slightly hidden" overlap).
-     z-1  .crystal-layer (set above) — the planet, occluding the headline.
-     z-2  everything else — identity, nav, tagline, disclosure stay in front of
-                            the gem so they're never covered. */
-.hero-eyebrow,
-.hero-tagline,
-.hero-reveal { position: relative; z-index: 2; }
-.hero-line { position: relative; z-index: 0; }
-
-.hero-eyebrow {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 0.78rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--highlight);       /* amber — the one warm light */
-  margin: 0 0 0.9rem;
-  min-height: 1.1em;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 0.4s var(--ease-out-quint),
-    transform 0.4s var(--ease-out-quint);
-}
-.hero:has(.is-personalized) .hero-eyebrow { opacity: 1; transform: none; }
-
-.hero-line {
+  top: clamp(1rem, 3vw, 2rem);
+  left: clamp(1rem, 4vw, 3rem);
+  z-index: 20;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 5.6vw, 3.25rem);
-  font-weight: 800;
+  font-weight: 900;
+  font-size: clamp(1.05rem, 1.4vw, 1.35rem);
   letter-spacing: -0.03em;
-  line-height: 1.12;
-  margin: 0;
-  text-wrap: balance;
-  color: var(--fg);             /* solid — no gradient-clipped text */
-  /* Contrast insurance: a soft dark halo in the room colour. Invisible on the
-     plain dark page, but wherever the crystal's cobalt grazes a glyph it keeps
-     the letters readable — belt-and-braces with the width-aware gem offset. */
-  text-shadow:
-    0 0 14px color-mix(in oklch, var(--bg) 88%, transparent),
-    0 0 4px color-mix(in oklch, var(--bg) 70%, transparent);
+  color: var(--fg);
+  text-decoration: none;
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.8), 0 0 5px rgba(0, 0, 0, 0.7);
 }
+.overlay-brand .dot { color: var(--accent); }
 
-/* The calm half — the generic greeting. */
-.hero-opener,
-.hero-sep,
-.hero-stop { color: var(--fg); }
+.overlay-blog {
+  position: fixed;
+  top: clamp(0.75rem, 2.5vw, 1.5rem);
+  right: clamp(1rem, 4vw, 3rem);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.overlay-blog-mark {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.18s ease, transform 0.18s var(--ease-out-quint);
+}
+.overlay-blog-mark svg {
+  fill: var(--fg-dim);
+  stroke: var(--fg-dim);
+  stroke-width: 0.9;
+  transition: fill 0.18s ease, stroke 0.18s ease;
+}
+.overlay-blog-mark .overlay-blog-core { fill: var(--accent); stroke: var(--accent); }
+.overlay-blog-mark:hover { border-color: var(--accent); transform: rotate(-8deg); }
+.overlay-blog-mark:hover svg { fill: var(--fg); stroke: var(--fg); }
+.overlay-blog-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* The "about you" half — the part the page actually read. This is the payoff,
-   so it carries the cobalt and the typing caret. */
-.hero-jab {
-  color: var(--accent);
-  white-space: normal;
+.overlay-blog-links {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
 }
-.hero-caret {
-  display: inline-block;
-  width: 0.06em;
-  height: 0.82em;
-  margin-left: 0.04em;
-  vertical-align: -0.04em;
-  background: var(--accent);
-  border-radius: 1px;
-  animation: hero-caret-blink 1.05s steps(1) infinite;
-}
-/* Once typing finishes, the caret fades out rather than blinking forever. */
-.hero-jab.is-done .hero-caret {
-  animation: none;
-  opacity: 0;
-  transition: opacity 0.45s 0.25s var(--ease-out-quint);
-}
-@keyframes hero-caret-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
-}
-
-.hero-tagline {
-  font-family: var(--font-display);
-  margin: 1.35rem 0 0;
-  font-size: 1.12rem;
-  line-height: 1.6;
+.overlay-blog-links a {
   color: var(--fg-dim);
-  max-width: 36rem;
-  text-wrap: pretty;
-}
-
-/* --- "How does it know that?" disclosure ----------------------------------- */
-/* Converts the hidden trick into visible proof of craft, for the hiring-manager
-   visitor. Native <details> — keyboard-operable, works with zero JS for toggle.
-   Reads like an instrument's status readout: mono labels, tabular values. */
-.hero-reveal {
-  font-family: var(--font-display);
-  margin-top: 1.6rem;
-  font-size: 0.92rem;
-}
-.hero-reveal > summary {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5ch;
-  list-style: none;
-  cursor: pointer;
-  width: fit-content;
-  padding: 0.3rem 0;
-  color: var(--fg-dim);
-  border-radius: 6px;
+  text-decoration: none;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
   transition: color 0.16s ease;
 }
-.hero-reveal > summary::-webkit-details-marker { display: none; }
-.hero-reveal > summary:hover { color: var(--fg); }
-.hero-reveal > summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-.hero-reveal-q {
-  font-weight: 600;
-  color: var(--fg);
-  border-bottom: 1px dashed color-mix(in oklch, var(--highlight) 60%, transparent);
-  padding-bottom: 1px;
-}
-.hero-reveal[open] .hero-reveal-q { border-bottom-color: transparent; }
-.hero-reveal-hint {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--fg-faint);
+.overlay-blog-links a:hover { color: var(--fg); }
+@media (max-width: 34rem) {
+  .overlay-blog-links { display: none; } /* mark only on the smallest screens */
 }
 
-.hero-reveal-body {
-  margin-top: 0.9rem;
-  padding-left: 1rem;
-  border-left: 1px solid var(--line);
-  animation: hero-reveal-in 0.4s var(--ease-out-quint) both;
+/* --- Narrative beats (pinned, cross-faded by scroll) ----------------------- */
+/* The island positions these absolutely over the canvas and drives their
+   opacity from scroll progress so each lifecycle stage reveals a line about
+   Iliès. Kept to a readable column, lower-left, clear of the centred object. */
+.bh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
 }
-@keyframes hero-reveal-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
+.bh-beat {
+  position: absolute;
+  left: clamp(1.25rem, 5vw, 5rem);
+  bottom: clamp(2rem, 8vh, 5rem);
+  max-width: min(34rem, 80vw);
+  transition: opacity 0.5s var(--ease-out-quint);
+  will-change: opacity;
 }
-.hero-reveal-lede {
-  margin: 0 0 1.1rem;
-  color: var(--fg-dim);
-  max-width: 56ch;
-  line-height: 1.6;
+.bh-beat-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--highlight);
+  margin: 0 0 0.9rem;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
 }
-.hero-facts {
+.bh-beat-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2rem, 5.5vw, 3.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin: 0 0 1rem;
+  color: var(--fg);
+  text-wrap: balance;
+  text-shadow: 0 0 26px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.7);
+}
+.bh-beat-body {
   margin: 0;
-  display: grid;
-  gap: 0.6rem 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  font-size: clamp(1rem, 1.5vw, 1.18rem);
+  line-height: 1.6;
+  color: var(--fg-dim);
+  text-wrap: pretty;
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
-.hero-fact {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr;
-  gap: 0.85rem;
-  align-items: baseline;
-}
-.hero-fact dt {
+
+/* A faint scroll hint, shown only at the very top, fades on first scroll. */
+.bh-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  z-index: 10;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--fg-faint);
+  pointer-events: none;
+  animation: bh-hint-pulse 2.4s ease-in-out infinite;
 }
-.hero-fact dd {
-  margin: 0;
-  font-family: var(--font-display);   /* values in Geist; only labels are mono */
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
+@keyframes bh-hint-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.85; }
 }
+
+/* Unused legacy hero hook kept as a no-op anchor so old references don't error. */
+.hero { display: contents; }
 
 /* --- Section headings ------------------------------------------------------ */
 .section-label {
@@ -868,21 +634,22 @@ body:has(.hero .is-personalized) .crystal-layer {
 .site-footer .socials { display: flex; gap: 1.1rem; }
 
 /* ===========================================================================
-   Black hole hero — a full-bleed ray-marched Schwarzschild black hole.
-   Replaces the crystal as the page's signature object. The canvas fills the
-   first viewport edge-to-edge (bleeding past the shell gutter); a single glass
-   control panel floats bottom-right with live physics sliders. Everything else
-   on the canvas is intentionally stripped — just the black hole.
+   Black hole scene — the pinned, scroll-scrubbed stellar-lifecycle object.
+   The canvas is FIXED to the full viewport and stays centred while the page
+   scrolls behind it (the invisible .scene-track supplies the scroll height).
+   The three.js scene reads window scrollY and morphs the object through the
+   reverse lifecycle (black hole → reverse supernova → …). See BlackHole.tsx.
    =========================================================================== */
+.bh-root { position: relative; }
 .bh-stage {
-  position: relative;
-  /* full-bleed: cancel the .wrap gutter so the canvas reaches the viewport edges */
-  margin-inline: calc(-1 * var(--gutter));
-  margin-top: -0.5rem;
-  margin-bottom: 3rem;
-  height: calc(100svh - 3.5rem);
-  min-height: 30rem;
+  position: fixed;
+  inset: 0;
+  z-index: 0;          /* behind the overlay + corner chrome, above body bg */
   background: #000;
   overflow: hidden;
 }
-.bh-stage canvas { display: block; width: 100% !important; height: 100% !important; }
+.bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
+
+/* Reduced motion: the scene freezes at its settled black-hole frame (the JS
+   render loop lands there) and the narrative beats are still scroll-reachable —
+   we just don't animate the morph smoothing. Nothing strobes. */
