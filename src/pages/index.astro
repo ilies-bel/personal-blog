@@ -27,16 +27,38 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     <div class="scene-stage"></div>
     <div class="scene-stage"></div>
     <div class="scene-stage"></div>
+    <div class="scene-stage"></div>
   </div>
 
-  {/* The narrative copy is rendered by the island so it can fade per-stage in
-      lockstep with the morph; the static fallback below keeps the page meaningful
-      for crawlers / no-JS. */}
+  {/* The manifesto copy is rendered by the island so it can fade per-state in
+      lockstep with the morph and swap its big line on scroll direction. The
+      static fallback below mirrors that copy (down-arc big lines + whispers) so
+      the page stays meaningful and indexable for crawlers / no-JS. */}
   <noscript>
     <div class="scene-fallback measure">
-      <h1>{SITE_TITLE}</h1>
-      <p>Software engineer. I build small, precise things for the web.</p>
-      <p><a href={href('about')}>About</a> · <a href={href('about')}>Writing</a></p>
+      <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
+      <p class="scene-fallback-role">Software Engineer</p>
+
+      <h1>every project ends. eventually.</h1>
+      <p>the part nobody sees is what holds it together.</p>
+
+      <h2>doomed to explode?</h2>
+      <p>fast to build. faster to fall apart.</p>
+
+      <h2>bigger isn't the same as lasting.</h2>
+      <p>the ai keeps adding. nobody's left who understands it.</p>
+
+      <h2>or could it just burn steady?</h2>
+      <p>the part that's still up at 3am. that's engineering.</p>
+
+      <h2>everything starts here.</h2>
+      <p>stars are born from what the last one left behind.</p>
+
+      <h2>in the beginning.</h2>
+      <p>every line you'll ever ship fits on that dot. worth doing properly, then.</p>
+
+      <p>Make it last, or don't make it. Sounds interesting?
+        <a href={`${href('about')}#get-in-touch`}>Let's connect.</a></p>
     </div>
   </noscript>
 </BaseLayout>

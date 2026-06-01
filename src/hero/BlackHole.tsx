@@ -231,6 +231,12 @@ const diskVertexShader = /* glsl */ `
   uniform float uGiant;     // 0 = remnant, 1 = sun (transition 2)
   uniform float uGiantR;    // sun radius in world units
   uniform float uGranScale;     // granulation cell frequency across the surface
+  // --- Later lifecycle transitions, each scroll-driven 0..1 (declared so the
+  //     timeline can drive them; the shader body morphs the star onward).
+  //       uYellow: red giant  -> yellow (sun-like) star
+  //       uNebula: yellow star -> nebula
+  //       uDot:    nebula      -> pale blue dot
+  uniform float uYellow, uNebula, uDot;
 
   varying float vBright;
   varying float vSeed;
@@ -949,6 +955,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uGiant: { value: 0 }, // transition 2: remnant cloud → sun
     uGiantR: { value: 4.2 }, // sun radius (world units) — a contained orb
     uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
+    // --- Later lifecycle transitions (scroll-driven 0..1 each). The scroll
+    //     timeline drives these per frame; the shader body consumes them to morph
+    //     the star onward. They sit on the timeline AFTER the red giant:
+    //       uYellow: red giant → yellow (sun-like) star   (transition 3)
+    //       uNebula: yellow star → nebula                 (transition 4)
+    //       uDot:    nebula → pale blue dot               (transition 5)
+    uYellow: { value: 0 },
+    uNebula: { value: 0 },
+    uDot: { value: 0 },
   };
 
   const diskMatPrimary = new THREE.ShaderMaterial({
@@ -1249,6 +1264,24 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uGiant.value = giant;
     diskMatSecondary.uniforms.uGiant.value = giant;
 
+    // --- transitions 3-5: yellow star → nebula → pale blue dot ---
+    // Scroll-timeline placement only — these ramp 0→1 across their stage with a
+    // small overlap into the previous one (same trick the red giant uses against
+    // the supernova tail) so no empty boundary frame shows. The shader body is
+    // yours to consume them; nothing here decides what they render.
+    //   yellow star  : ramps over stage ~2→3
+    //   nebula       : ramps over stage ~3→4
+    //   pale blue dot: ramps over stage ~4→5
+    const yellow = Math.min(1, Math.max(0, (stage - 1.7) / 0.6));
+    const nebula = Math.min(1, Math.max(0, (stage - 2.7) / 0.6));
+    const dot = Math.min(1, Math.max(0, (stage - 3.7) / 0.6));
+    diskMatPrimary.uniforms.uYellow.value = yellow;
+    diskMatSecondary.uniforms.uYellow.value = yellow;
+    diskMatPrimary.uniforms.uNebula.value = nebula;
+    diskMatSecondary.uniforms.uNebula.value = nebula;
+    diskMatPrimary.uniforms.uDot.value = dot;
+    diskMatSecondary.uniforms.uDot.value = dot;
+
     // the star/warp lensing only makes sense while the hole exists — fade it.
     // Once the SUN forms we drop the gravitational-warp background entirely and
     // restore the plain starfield to full brightness behind the star.
@@ -1389,42 +1422,88 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
 }
 
 // ---------------------------------------------------------------------------
-//  Narrative beats — each lifecycle stage reveals a little about Iliès. They are
-//  pinned over the canvas and cross-faded as the scroll morph passes their
-//  window. (Stages beyond the first are placeholders until those transitions are
-//  built; the first beat pair is the reverse-supernova story.)
+//  The manifesto — one beat per lifecycle state (six states, six beats, each
+//  roughly one viewport tall), pinned over the canvas and cross-faded as the
+//  scroll morph passes its window.
+//
+//  Core mechanic: each beat has TWO big lines and the big line SWAPS on scroll
+//  DIRECTION. Scrolling DOWN rewinds time (the hopeful arc: from the black hole
+//  at the end, back to the pale blue dot at the beginning); scrolling UP runs
+//  time forward (the tragic arc: from one good decision out to the inevitable
+//  collapse). The whisper is shared and does NOT swap.
+//
+//  All copy is real, selectable DOM text (never baked into the canvas) so it
+//  stays indexable. Straight quotes only; no em/en dashes, no curly quotes.
 // ---------------------------------------------------------------------------
-interface Beat {
-  /** Scroll-progress window [from, to] over which this beat is fully shown. */
-  at: [number, number];
-  eyebrow: string;
-  title: string;
-  body: string;
+interface ManifestoBeat {
+  /** Scroll-progress centre of the beat (it owns a ~1/6 slot around this). */
+  at: number;
+  /** The lifecycle state this beat narrates (for the label / a11y). */
+  state: string;
+  /** Big line shown while scrolling DOWN (rewind / hopeful arc). */
+  down: string;
+  /** Big line shown while scrolling UP (forward / tragic arc). */
+  up: string;
+  /** Small dim elaboration. Shared across both directions; never swaps. */
+  whisper: string;
 }
 
-const STAGE_COUNT = 5;
-// Transition 1 (reverse supernova) consumes the first stage of scroll, i.e.
-// total page progress 0 .. 1/STAGE_COUNT (= 0 .. 0.2). The beats below are placed
-// in TOTAL-PROGRESS units within that first stage. Later stages get their own
-// beats as those transitions are built.
-const BEATS: Beat[] = [
+// Six lifecycle states divide the scroll track into six full-viewport stages;
+// the five morphs run across stage boundaries 0→1 … 4→5. BUILT_STAGES caps the
+// lifecycle position so the bottom of the page rests on the final state instead
+// of running off the end.
+const STAGE_COUNT = 6;
+const BUILT_STAGES = 5;
+// Direction deadzone: ignore scroll deltas smaller than this (in progress units)
+// so sub-pixel jitter never flips the big-line swap.
+const DIR_DEADZONE = 0.0008;
+
+// Six states evenly spaced on the scroll timeline, black hole at the top
+// (progress 0), pale blue dot at the bottom (progress ~0.86). With STAGE_COUNT
+// = 6 the morph for state N settles around stage N (progress N/6), so each
+// beat's centre is placed on its state's settled frame.
+const BEATS: ManifestoBeat[] = [
   {
-    at: [0.0, 0.04],
-    eyebrow: 'Iliès — Software Engineer',
-    title: 'Most of the work is invisible.',
-    body: 'Like a black hole, the interesting part is what you cannot see directly — the structure that bends everything around it. Scroll to wind it back.',
+    at: 0.02,
+    state: 'black hole',
+    down: 'every project ends. eventually.',
+    up: 'every project ends. eventually.',
+    whisper: 'the part nobody sees is what holds it together.',
   },
   {
-    at: [0.15, 0.19],
-    eyebrow: 'Reverse supernova',
-    title: 'Run the collapse backwards.',
-    body: 'Everything that fell in comes roaring back out. I take finished, settled systems apart to understand the forces that first shaped them.',
+    at: 1 / 6,
+    state: 'reverse supernova',
+    down: 'doomed to explode?',
+    up: 'and one day it blows up.',
+    whisper: 'fast to build. faster to fall apart.',
   },
   {
-    at: [0.31, 0.4],
-    eyebrow: 'Red giant',
-    title: 'Then it settles into a star.',
-    body: 'The scattered matter gathers and finds its shape — a steady, burning thing. The same instinct runs through my work: take the chaos and make something that holds together and gives off light.',
+    at: 2 / 6,
+    state: 'red giant',
+    down: "bigger isn't the same as lasting.",
+    up: 'then it grows faster than anyone can hold.',
+    whisper: "the ai keeps adding. nobody's left who understands it.",
+  },
+  {
+    at: 3 / 6,
+    state: 'yellow star',
+    down: 'or could it just burn steady?',
+    up: 'for a while, it just works.',
+    whisper: "the part that's still up at 3am. that's engineering.",
+  },
+  {
+    at: 4 / 6,
+    state: 'nebula',
+    down: 'everything starts here.',
+    up: "a few more, and it's a real thing.",
+    whisper: 'stars are born from what the last one left behind.',
+  },
+  {
+    at: 5 / 6,
+    state: 'pale blue dot',
+    down: 'in the beginning.',
+    up: 'it starts with one good decision.',
+    whisper: "every line you'll ever ship fits on that dot. worth doing properly, then.",
   },
 ];
 
@@ -1432,39 +1511,71 @@ function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
+// Per-beat opacity: a trapezoid centred on `at` — ramp in, hold across a flat
+// top, ramp out — so neighbouring beats cross-dissolve. Half-width HOLD keeps
+// the line steady through the middle of its slot; FADE softens the edges.
+//
+// `edge` pins the open side so the first/last beats never leave a dead band at
+// the page extremes: 'leading' holds full opacity for everything BEFORE the
+// centre (the opening black-hole beat sits at the very top), 'trailing' holds
+// full opacity for everything AFTER the centre (so the closing pale-blue-dot
+// beat — and its contact bridge — stays reachable all the way to the bottom).
+const BEAT_HOLD = 0.055; // half-width of the fully-shown plateau
+const BEAT_FADE = 0.045; // ramp distance on each side
+function beatOpacity(progress: number, at: number, edge?: 'leading' | 'trailing'): number {
+  if (edge === 'leading' && progress <= at) return 1;
+  if (edge === 'trailing' && progress >= at) return 1;
+  const d = Math.abs(progress - at);
+  if (d <= BEAT_HOLD) return 1;
+  if (d >= BEAT_HOLD + BEAT_FADE) return 0;
+  return clamp01((BEAT_HOLD + BEAT_FADE - d) / BEAT_FADE);
+}
+
 // ---------------------------------------------------------------------------
 //  Public component — a thin React shell that owns the canvas container, the
-//  scroll tracker, and the narrative overlay.
+//  scroll tracker, and the manifesto overlay.
 // ---------------------------------------------------------------------------
 export default function BlackHole() {
   const hostRef = useRef<HTMLDivElement>(null);
   // Live scroll progress (0..1) drives both the morph (via a ref the render loop
-  // reads) and the narrative opacities (via React state, updated on scroll).
+  // reads) and the manifesto opacities (via React state, updated on scroll).
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0);
+  // Scroll direction drives the big-line swap. 'down' is the default (rewind /
+  // hopeful arc); 'up' swaps in the forward / tragic line. A small deadzone keeps
+  // sub-pixel jitter from flipping it.
+  const lastProgressRef = useRef(0);
+  const [direction, setDirection] = useState<'down' | 'up'>('down');
+  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const reduced = prefersReducedMotion();
+    const isReduced = prefersReducedMotion();
+    setReduced(isReduced);
 
     const tracker = new ScrollTracker(STAGE_COUNT);
     const unsub = tracker.subscribe((s) => {
       progressRef.current = s.progress;
       setProgress(s.progress);
+      // Direction from the delta, with a deadzone so tiny jitter doesn't flip it.
+      const delta = s.progress - lastProgressRef.current;
+      if (delta > DIR_DEADZONE) setDirection('down');
+      else if (delta < -DIR_DEADZONE) setDirection('up');
+      lastProgressRef.current = s.progress;
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
+    lastProgressRef.current = initial.progress;
     setProgress(initial.progress);
 
     // Lifecycle position over the scroll. Each stage is 1/STAGE_COUNT of the page;
-    // transition 1 spans stage 0→1, transition 2 spans 1→2. Clamp to the number
-    // of transitions actually built so far so later empty stages hold the last one.
-    const BUILT_STAGES = 2;
+    // the five transitions span stage 0→1, 1→2, ... 4→5. Clamp to the number of
+    // transitions built so the bottom of the page holds the final state.
     const getStage = (): number =>
       Math.min(BUILT_STAGES, progressRef.current * STAGE_COUNT);
 
-    const dispose = createScene(host, reduced, { getStage });
+    const dispose = createScene(host, isReduced, { getStage });
     return () => {
       unsub();
       tracker.stop();
@@ -1472,37 +1583,79 @@ export default function BlackHole() {
     };
   }, []);
 
+  const base = import.meta.env.BASE_URL ?? '/';
+  const contactHref = `${base}/about#get-in-touch`.replace(/\/+/g, '/');
+
   return (
     <div className="bh-root">
       <div className="bh-stage" ref={hostRef} aria-hidden="true" />
+
+      {/* Persistent identity — fixed top-left across every beat. The sole
+          top-left mark on the bare home (the small wordmark is hidden there). */}
+      <a className="bh-identity" href={base.replace(/\/+$/, '') || '/'}>
+        <span className="bh-identity-name">ILIÈS BELDJILALI</span>
+        <span className="bh-identity-role">Software Engineer</span>
+      </a>
+
       <div className="bh-overlay">
         {BEATS.map((beat, i) => {
-          // Triangular fade: ramp in before `from`, hold across the window, ramp
-          // out after `to`. The window edges are soft so beats cross-dissolve.
-          const [from, to] = beat.at;
-          const fadeIn = 0.035;
-          const fadeOut = 0.035;
-          let opacity = 0;
-          if (progress >= from - fadeIn && progress <= to + fadeOut) {
-            const inT = clamp01((progress - (from - fadeIn)) / fadeIn);
-            const outT = clamp01(((to + fadeOut) - progress) / fadeOut);
-            opacity = Math.min(inT, outT);
-          }
+          // Under reduced motion every beat is shown (so all copy is reachable);
+          // otherwise the trapezoid fade reveals one beat at a time. The first and
+          // last beats pin their outer edge so nothing goes blank at progress 0/1.
+          const isLast = i === BEATS.length - 1;
+          const edge = i === 0 ? 'leading' : isLast ? 'trailing' : undefined;
+          const opacity = reduced ? 1 : beatOpacity(progress, beat.at, edge);
+          const visible = opacity > 0.5;
           return (
             <div
               className="bh-beat"
               key={i}
-              style={{ opacity, pointerEvents: opacity > 0.5 ? 'auto' : 'none' }}
-              aria-hidden={opacity < 0.5}
+              style={{ opacity }}
+              aria-hidden={!reduced && !visible}
             >
-              <p className="bh-beat-eyebrow">{beat.eyebrow}</p>
-              <h1 className="bh-beat-title">{beat.title}</h1>
-              <p className="bh-beat-body">{beat.body}</p>
+              {/* Big line: both directions rendered, crossfaded by `direction`.
+                  Under reduced motion both are shown stacked (no crossfade). */}
+              <h2 className="bh-beat-big">
+                <span
+                  className="bh-beat-line bh-beat-line--down"
+                  data-active={reduced || direction === 'down'}
+                >
+                  {beat.down}
+                </span>
+                <span
+                  className="bh-beat-line bh-beat-line--up"
+                  data-active={reduced || direction === 'up'}
+                  aria-hidden={!reduced && direction !== 'up'}
+                >
+                  {beat.up}
+                </span>
+              </h2>
+
+              <p className="bh-beat-whisper">
+                <span className="bh-beat-state">{beat.state}</span>
+                {beat.whisper}
+              </p>
+
+              {/* Beat 6 tail: the loop invitation and the contact bridge, each
+                  progressively more faded, stacked under the dot whisper. */}
+              {isLast && (
+                <div className="bh-tail">
+                  <p className="bh-tail-loop">time only goes one way. scroll up to see it.</p>
+                  <a
+                    className="bh-tail-contact"
+                    href={contactHref}
+                    style={{ pointerEvents: reduced || visible ? 'auto' : 'none' }}
+                  >
+                    Make it last, or don't make it. Sounds interesting? Let's connect..
+                  </a>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-      {progress < 0.02 && <p className="bh-hint">scroll to rewind ↓</p>}
+
+      {!reduced && progress < 0.02 && <p className="bh-hint">scroll to rewind ↓</p>}
     </div>
   );
 }

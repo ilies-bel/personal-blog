@@ -65,6 +65,32 @@ html { scroll-behavior: smooth; }
   .hero-caret { display: none !important; }
   .hero-eyebrow { opacity: 1 !important; transform: none !important; }
 
+  /* Manifesto: all copy must stay reachable. The island renders every beat at
+     full opacity and shows BOTH big lines stacked (no direction crossfade), so
+     nothing is hidden behind motion. Lay them out in normal flow instead of
+     pinning them on top of each other, and never strobe. */
+  .bh-overlay {
+    position: static !important;
+    pointer-events: auto !important;
+  }
+  .bh-beat {
+    position: static !important;
+    inset: auto !important;
+    opacity: 1 !important;
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: clamp(2.5rem, 12vh, 6rem) var(--gutter);
+  }
+  .bh-beat-big { min-height: 0 !important; }
+  .bh-beat-line {
+    position: static !important;
+    opacity: 1 !important;
+    transform: none !important;
+    inset: auto !important;
+    margin-bottom: 0.4rem;
+  }
+  .bh-hint { display: none !important; }
+
   /* Section reveals: drop the entrance, keep the finished state. The reveal
      enhancer also reveals everything immediately under reduced motion, so this
      is the CSS belt to that JS braces (covers the brief pre-script moment too). */
@@ -256,10 +282,50 @@ body.bare {
   .overlay-blog-links { display: none; } /* mark only on the smallest screens */
 }
 
-/* --- Narrative beats (pinned, cross-faded by scroll) ----------------------- */
+/* --- Persistent identity (fixed top-left, every beat) ---------------------- */
+/* The sole top-left mark on the bare home: the small "Iliès." wordmark is hidden
+   there (see body.bare .overlay-brand below) so this owns the corner. */
+.overlay-blog { z-index: 21; } /* keep the top-right micro-nav clickable above the overlay */
+
+.bh-identity {
+  position: fixed;
+  top: clamp(1rem, 3vw, 2.1rem);
+  left: clamp(1.25rem, 5vw, 5rem);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-decoration: none;
+  color: inherit;
+}
+.bh-identity-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.05rem, 2.2vw, 1.6rem);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--fg);
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.85), 0 0 5px rgba(0, 0, 0, 0.7);
+}
+.bh-identity-role {
+  font-family: var(--font-mono);
+  font-size: clamp(0.66rem, 1vw, 0.8rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
+}
+.bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
+.bh-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+
+/* On the bare home the manifesto identity replaces the small wordmark. */
+body.bare .overlay-brand { display: none; }
+
+/* --- Manifesto beats (pinned, cross-faded by scroll) ----------------------- */
 /* The island positions these absolutely over the canvas and drives their
-   opacity from scroll progress so each lifecycle stage reveals a line about
-   Iliès. Kept to a readable column, lower-left, clear of the centred object. */
+   opacity from scroll progress so each lifecycle state reveals a beat. Each beat
+   carries TWO big lines (down/up arc); the active one is chosen by scroll
+   direction. Kept lower-left, clear of the centred object. */
 .bh-overlay {
   position: fixed;
   inset: 0;
@@ -269,38 +335,96 @@ body.bare {
 .bh-beat {
   position: absolute;
   left: clamp(1.25rem, 5vw, 5rem);
+  right: clamp(1.25rem, 5vw, 5rem);
   bottom: clamp(2rem, 8vh, 5rem);
-  max-width: min(34rem, 80vw);
-  transition: opacity 0.5s var(--ease-out-quint);
+  max-width: min(40rem, 84vw);
+  transition: opacity 0.45s var(--ease-out-quint);
   will-change: opacity;
 }
-.bh-beat-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--highlight);
-  margin: 0 0 0.9rem;
-  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+
+/* Big line: both directions stacked in the same box, crossfaded by [data-active]. */
+.bh-beat-big {
+  position: relative;
+  margin: 0 0 1.1rem;
+  min-height: 1.08em; /* reserve the line box so the whisper doesn't jump on swap */
 }
-.bh-beat-title {
+.bh-beat-line {
+  display: block;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(2rem, 5.5vw, 3.5rem);
-  line-height: 1.08;
+  font-size: clamp(2rem, 6vw, 4rem);
+  line-height: 1.04;
   letter-spacing: -0.03em;
-  margin: 0 0 1rem;
   color: var(--fg);
   text-wrap: balance;
   text-shadow: 0 0 26px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  transform: translateY(0.18em);
+  transition: opacity 0.4s var(--ease-out-quint), transform 0.4s var(--ease-out-quint);
 }
-.bh-beat-body {
+/* The up line is stacked on top of the down line; only one is active at a time. */
+.bh-beat-line--up { position: absolute; inset: 0; }
+.bh-beat-line[data-active='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Whisper: small, dim, elaborating the big line. Shared; never swaps. */
+.bh-beat-whisper {
   margin: 0;
-  font-size: clamp(1rem, 1.5vw, 1.18rem);
-  line-height: 1.6;
+  max-width: min(34rem, 80vw);
+  font-family: var(--font-mono);
+  font-size: clamp(0.8rem, 1.3vw, 0.98rem);
+  line-height: 1.55;
   color: var(--fg-dim);
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
+}
+.bh-beat-state {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--highlight);
+}
+
+/* --- Beat 6 tail: loop invitation + contact bridge, each more faded -------- */
+.bh-tail {
+  margin-top: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.bh-tail-loop {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(0.72rem, 1.1vw, 0.85rem);
+  letter-spacing: 0.06em;
+  color: var(--fg-faint);
+  opacity: 0.55; /* most faded */
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+}
+.bh-tail-contact {
+  font-family: var(--font-sans);
+  font-size: clamp(0.85rem, 1.3vw, 1rem);
+  line-height: 1.5;
+  color: var(--fg-dim);
+  opacity: 0.8;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 50%, transparent);
+  width: fit-content;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+  transition: color 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
+}
+.bh-tail-contact:hover { color: var(--fg); border-color: var(--accent); opacity: 1; }
+.bh-tail-contact:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+/* Mobile: keep the big line legible; stack identity smaller, whisper full-width. */
+@media (max-width: 34rem) {
+  .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
+  .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
+  .bh-identity-name { font-size: 1.05rem; }
 }
 
 /* A faint scroll hint, shown only at the very top, fades on first scroll. */
