@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_TITLE, SOCIALS } from '../consts';
+---
+
+<BaseLayout
+  title="About"
+  description={`About ${SITE_TITLE}: engineer, writer, and builder of small clever things on the web.`}
+  type="website"
+>
+  <article class="prose">
+    <p class="section-label">About</p>
+    <p class="about-lead">
+      Hi, I’m {SITE_TITLE}, an engineer who likes building things on the web and
+      writing about how they work.
+    </p>
+
+    <p>
+      This is my corner of the internet: a place for technical articles, notes
+      from rabbit holes, and the occasional opinion about tooling. I care about
+      fast, accessible, well-crafted software and the small details that make it
+      feel good to use.
+    </p>
+
+    <p>
+      And yes, the homepage greets you a little differently depending on when,
+      where, and how you’re visiting. It’s all done in your browser; nothing
+      about you is stored on a server or sent anywhere. It’s just a fun way to
+      say hello.
+    </p>
+
+    <h2>Get in touch</h2>
+    <ul>
+      {SOCIALS.github && <li><a href={SOCIALS.github}>GitHub</a></li>}
+      {SOCIALS.twitter && <li><a href={SOCIALS.twitter}>Twitter / X</a></li>}
+      {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`}>Email</a></li>}
+    </ul>
+  </article>
+</BaseLayout>

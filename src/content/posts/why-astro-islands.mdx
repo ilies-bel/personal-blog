@@ -1,0 +1,49 @@
+---
+title: "Why I Build Content Sites With Astro Islands"
+description: "Most of a blog should ship zero JavaScript. Astro's islands architecture lets the few interactive bits hydrate on their own without dragging the whole page down."
+pubDate: 2026-05-22
+tags: ["astro", "performance", "architecture"]
+draft: false
+---
+
+A blog is 95% text and 5% interactivity. So why do so many of them ship a full
+single-page-app framework to render a paragraph? Astro's answer (*islands*) is
+the cleanest take on this I've used, and it's why this site is built on it.
+
+## The problem with hydrating everything
+
+In a typical React/Vue/Svelte site, the server renders HTML and then the client
+re-runs the whole component tree to "hydrate" it: attach event listeners, wire
+up state, make it interactive. You pay for that even on pages where nothing is
+interactive. The text was already there; you shipped a runtime to recreate it.
+
+## Islands: hydrate only what moves
+
+Astro renders everything to static HTML by default and ships **no** JavaScript.
+Then you opt specific components into interactivity with a directive:
+
+```astro
+<Hero tagline="..." client:load />
+<Newsletter client:visible />
+<CodeSandbox client:idle />
+```
+
+Each of those becomes an independent "island" that hydrates on its own
+schedule: `client:load` immediately, `client:visible` when scrolled into view,
+`client:idle` when the browser is free. The prose between them stays inert HTML.
+
+## What that buys you
+
+- **Tiny payloads.** This page's article text ships zero JS. Only the hero
+  island carries a runtime, and it's loaded off the critical path.
+- **Great Core Web Vitals**, which search engines reward.
+- **A clean mental model.** "Is this thing interactive? Then it's an island."
+
+## The one gotcha
+
+Islands don't share React context; each is its own root. If two islands need to
+talk, you reach for a module-level store (or `useSyncExternalStore`) instead of
+a provider wrapping the tree. Once you internalize that, the model is a joy.
+
+For a content-first site that needs a few sprinkles of interactivity, I haven't
+found anything that hits the performance/DX balance better.

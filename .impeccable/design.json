@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-30T17:01:07.748Z",
+  "title": "Design System: Iliès",
+  "extensions": {
+    "colorMeta": {
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Cobalt",
+        "canonical": "oklch(0.66 0.15 252)",
+        "tonalRamp": [
+          "oklch(0.150 0.15 252)",
+          "oklch(0.264 0.15 252)",
+          "oklch(0.379 0.15 252)",
+          "oklch(0.493 0.15 252)",
+          "oklch(0.607 0.15 252)",
+          "oklch(0.721 0.15 252)",
+          "oklch(0.836 0.15 252)",
+          "oklch(0.950 0.15 252)"
+        ]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "Amber (the lighthouse beam)",
+        "canonical": "oklch(0.82 0.125 75)",
+        "tonalRamp": [
+          "oklch(0.150 0.125 75)",
+          "oklch(0.264 0.125 75)",
+          "oklch(0.379 0.125 75)",
+          "oklch(0.493 0.125 75)",
+          "oklch(0.607 0.125 75)",
+          "oklch(0.721 0.125 75)",
+          "oklch(0.836 0.125 75)",
+          "oklch(0.950 0.125 75)"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Room",
+        "canonical": "oklch(0.17 0.018 252)",
+        "tonalRamp": [
+          "oklch(0.150 0.018 252)",
+          "oklch(0.264 0.018 252)",
+          "oklch(0.379 0.018 252)",
+          "oklch(0.493 0.018 252)",
+          "oklch(0.607 0.018 252)",
+          "oklch(0.721 0.018 252)",
+          "oklch(0.836 0.018 252)",
+          "oklch(0.950 0.018 252)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "oklch(0.205 0.022 252)"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.95 0.006 252)"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "oklch(0.72 0.012 252)"
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint",
+        "canonical": "oklch(0.58 0.014 252)"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "oklch(0.32 0.022 252)"
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero line only. The page's largest voice." },
+      "headline": { "displayName": "Headline", "purpose": "Article titles (h1)." },
+      "title": { "displayName": "Title", "purpose": "Post-card titles and in-article h2/h3." },
+      "body": { "displayName": "Body", "purpose": "Reading copy, ~70ch measure, line-height 1.75 for dark reading." },
+      "label": { "displayName": "Label / Mono", "purpose": "Section label, hero eyebrow, dates, tags, fact labels. Geist Mono, uppercase, tracked." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-out-quint", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Confident ease-out for the hero reveal (eyebrow, glow, disclosure). No bounce." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Alternate ease-out curve for sharper entrances." }
+    ],
+    "breakpoints": [
+      { "name": "reading-measure", "value": "46rem", "purpose": "Max content column width (~70ch)." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Link",
+      "kind": "button",
+      "refersTo": "link",
+      "description": "The primary interactive element. The site is link-led, not button-led; links are cobalt and brighten to ink on hover.",
+      "html": "<a class=\"ds-link\" href=\"#\">Why I build with Astro islands</a>",
+      "css": ".ds-link { color: oklch(0.66 0.15 252); text-decoration: underline; text-underline-offset: 0.2em; transition: color 0.16s ease; } .ds-link:hover { color: oklch(0.95 0.006 252); } .ds-link:focus-visible { outline: 2px solid oklch(0.66 0.15 252); outline-offset: 3px; border-radius: 2px; }"
+    },
+    {
+      "name": "Brand Wordmark",
+      "kind": "nav",
+      "refersTo": "brand",
+      "description": "The site wordmark: ink text with a single cobalt period.",
+      "html": "<a class=\"ds-brand\" href=\"#\">Iliès<span class=\"ds-brand-dot\">.</span></a>",
+      "css": ".ds-brand { font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif; font-weight: 900; font-size: 1.25rem; letter-spacing: -0.03em; color: oklch(0.95 0.006 252); text-decoration: none; } .ds-brand-dot { color: oklch(0.66 0.15 252); }"
+    },
+    {
+      "name": "Nav Link",
+      "kind": "nav",
+      "refersTo": "link",
+      "description": "Header navigation: muted at rest, cobalt on hover.",
+      "html": "<a class=\"ds-nav-link\" href=\"#\">writing</a>",
+      "css": ".ds-nav-link { font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 0.95rem; color: oklch(0.72 0.012 252); text-decoration: none; transition: color 0.16s ease; } .ds-nav-link:hover { color: oklch(0.66 0.15 252); }"
+    },
+    {
+      "name": "Post Card",
+      "kind": "card",
+      "refersTo": "post-card",
+      "description": "A tappable row on the room background. No card at rest; lifts to the panel tint on hover and the title shifts to cobalt.",
+      "html": "<a class=\"ds-post-card\" href=\"#\"><span class=\"ds-post-title\">Why I Build Content Sites With Astro Islands</span><span class=\"ds-post-date\">May 30, 2026</span></a>",
+      "css": ".ds-post-card { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 0.5rem 1rem; text-decoration: none; padding: 1rem 0.75rem; border-radius: 10px; transition: background 0.18s ease; } .ds-post-card:hover { background: oklch(0.205 0.022 252); } .ds-post-title { font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; color: oklch(0.95 0.006 252); transition: color 0.18s ease; } .ds-post-card:hover .ds-post-title { color: oklch(0.66 0.15 252); } .ds-post-date { font-family: 'Geist Mono Variable', ui-monospace, Menlo, monospace; font-size: 0.8rem; color: oklch(0.58 0.014 252); white-space: nowrap; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Outlined mono readout, not a filled badge. Muted text inside a 1px line border, fully pill-rounded. The old yellow tag is retired.",
+      "html": "<span class=\"ds-tag\">astro</span>",
+      "css": ".ds-tag { font-family: 'Geist Mono Variable', ui-monospace, Menlo, monospace; font-size: 0.72rem; color: oklch(0.72 0.012 252); border: 1px solid oklch(0.32 0.022 252); border-radius: 999px; padding: 0.1rem 0.55rem; }"
+    },
+    {
+      "name": "Blockquote",
+      "kind": "custom",
+      "refersTo": "code-inline",
+      "description": "No side stripe. A quiet full-border panel on the surface tint with muted italic text. Replaces the banned border-left:3px stripe.",
+      "html": "<blockquote class=\"ds-quote\">The trick isn't doing more on the client. It's hydrating only what moves.</blockquote>",
+      "css": ".ds-quote { margin: 1.75rem 0; padding: 1rem 1.25rem; background: oklch(0.205 0.022 252); border: 1px solid oklch(0.32 0.022 252); border-radius: 10px; color: oklch(0.72 0.012 252); font-style: italic; font-size: 1.12rem; }"
+    },
+    {
+      "name": "Inline Code",
+      "kind": "custom",
+      "refersTo": "code-inline",
+      "description": "Geist Mono on the panel tint with a 1px line border.",
+      "html": "<code class=\"ds-code\">client:load</code>",
+      "css": ".ds-code { font-family: 'Geist Mono Variable', ui-monospace, Menlo, monospace; font-size: 0.88em; background: oklch(0.205 0.022 252); padding: 0.15em 0.4em; border-radius: 6px; border: 1px solid oklch(0.32 0.022 252); color: oklch(0.95 0.006 252); }"
+    },
+    {
+      "name": "Section Label",
+      "kind": "custom",
+      "refersTo": "tag",
+      "description": "The single tracked-uppercase mono label allowed on a reading page (e.g. 'Writing', 'About'). Used sparingly, never as per-section grammar.",
+      "html": "<p class=\"ds-section-label\">Writing</p>",
+      "css": ".ds-section-label { font-family: 'Geist Mono Variable', ui-monospace, Menlo, monospace; font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: oklch(0.58 0.014 252); margin: 0 0 1.25rem; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Blue-Hour Terminal",
+    "overview": "A personal blog and portfolio where the design IS the product. The whole site lives in one room: a dark, cobalt-tinted space lit by the glow of a display at blue hour, with one warm amber light playing against the cool dark. The hero reads the visitor's browser and reports it back like a navigational instrument; the reading pages are the calm after, lit by the same cobalt, in the same Geist. Built from one committed move done impeccably: a single cobalt seed generates every surface and link, a single amber accent plays the warm light, and one typeface (Geist sans + mono) carries the whole site through weight and scale contrast. Depth is tonal layering, not shadow. It rejects the generic-blog template, the dark-purple-gradient SaaS clone, trying-too-hard maximalism, and the AI-default warm-cream-plus-muted-slate-plus-tracked-eyebrow editorial scaffolding.",
+    "keyCharacteristics": [
+      "One dark cobalt room, sitewide — the hero is continuous with the page, not a separate panel.",
+      "One typeface, Geist (sans + mono), carrying hierarchy through weight and scale.",
+      "Cobalt does the structural work (links, brand, the payoff); amber is the rare warm highlight.",
+      "Depth by tonal layering, not shadow. Surfaces are flat at rest.",
+      "Body text at 7-16:1 contrast — generously lit, never muted-gray-on-tint.",
+      "Calm by default. The hero is the showpiece; reading pages get out of the way."
+    ],
+    "rules": [
+      { "name": "The One Room Rule", "body": "The whole site shares one background (oklch(0.17 0.018 252)). The hero is the same room, lit, not a panel pasted onto a different page. A second base background reintroduces the two-sites seam.", "section": "colors" },
+      { "name": "The Beam Rule", "body": "Amber appears on ≤5% of any screen. It is the one warm light in a cool room; its rarity is the point. The moment amber does structural work it has stopped being the lighthouse beam.", "section": "colors" },
+      { "name": "The No-Vermilion Rule", "body": "No hot vermilion (#ff5c39), no warm yellow (#ffd23f), no warm-cream (#fbf7f2), no Inter. Those were the old starter layer; one stray reference reads as AI slop.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "Geist carries the entire site. Hierarchy comes from weight (400/600/700/800) and scale (≥1.25 steps), never a second display face.", "section": "typography" },
+      { "name": "The Dark-Reading Rule", "body": "Light text on the dark room reads lighter; prose line-height is set at 1.75 so the measure stays calm and legible.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. State responds with a tonal shift (bg to surface) or a color shift, never a shadow appearing.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build every surface from the cobalt seed and keep the whole site on one background (oklch(0.17 0.018 252)).",
+      "Do use cobalt for links, brand, and interactive emphasis; reserve amber for the rare warm highlight (≤5%).",
+      "Do keep body text at ≥4.5:1 (it runs 7-16:1 here); push close colors toward ink.",
+      "Do carry the whole site in Geist; build hierarchy from weight and scale.",
+      "Do convey depth with tonal layering, never a drop shadow.",
+      "Do keep the reading experience calm: ~70ch measure, prose line-height 1.75, zero gimmicks.",
+      "Do give the hero its one bloom and one motion sequence, and nothing else competes with it."
+    ],
+    "donts": [
+      "Don't reintroduce the retired starter layer: no vermilion #ff5c39, no yellow #ffd23f, no warm-cream #fbf7f2, no Inter.",
+      "Don't use the AI-default warm-cream + muted-slate + tracked-eyebrow-over-every-section editorial scaffolding.",
+      "Don't use border-left/border-right greater than 1px as a colored accent stripe (the banned side-stripe).",
+      "Don't ship generic-blog-template chrome (Medium / Substack / dev.to default themes).",
+      "Don't build dark-purple-gradient SaaS clones, hero-metric stat blocks, or build-faster-ship-faster cadence.",
+      "Don't pile on maximalism: animation on every scroll, glassmorphism everywhere, effects with no purpose.",
+      "Don't let muted gray sit on the tinted dark as body copy; faint is for labels and dates only.",
+      "Don't add drop shadows. If a surface needs to lift, tint it up."
+    ]
+  }
+}

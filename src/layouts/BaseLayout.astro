@@ -1,0 +1,63 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import { SITE_TITLE, SITE_LANG, SOCIALS } from '../consts';
+// Geist powers the whole site: the display/body sans and the instrument-readout
+// mono (labels, dates, tags). Self-hosted + bundled by Astro — no render-blocking
+// CDN request. Applied sitewide via --font-sans / --font-mono in global.css.
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+  type?: 'website' | 'article';
+  publishedTime?: Date;
+  modifiedTime?: Date;
+}
+
+const props = Astro.props;
+const base = import.meta.env.BASE_URL;
+const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+const year = new Date().getFullYear();
+
+// Mark the active nav item (the reference highlights the current page in its
+// pill). Compare the current path to each link's resolved href, trailing-slash
+// insensitive, so "/" and "/about" each light up their own pill segment.
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const norm = (p: string) => p.replace(/\/+$/, '') || '/';
+const isActive = (p: string) => norm(href(p)) === path;
+---
+
+<!doctype html>
+<html lang={SITE_LANG}>
+  <head>
+    <BaseHead {...props} />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="site-header">
+        <a class="brand" href={href('')}>{SITE_TITLE}<span class="dot">.</span></a>
+        <nav class="nav-pill">
+          <a href={href('')} class={isActive('') ? 'is-active' : undefined} aria-current={isActive('') ? 'page' : undefined}>Home</a>
+          <a href={href('')} class={undefined}>Writing</a>
+          <a href={href('about')} class={isActive('about') ? 'is-active' : undefined} aria-current={isActive('about') ? 'page' : undefined}>About</a>
+        </nav>
+      </header>
+
+      <main>
+        <slot />
+      </main>
+
+      <footer class="site-footer">
+        <span>© {year} {SITE_TITLE}</span>
+        <span class="socials">
+          {SOCIALS.github && <a href={SOCIALS.github}>github</a>}
+          {SOCIALS.twitter && <a href={SOCIALS.twitter}>twitter</a>}
+          {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}>email</a>}
+        </span>
+      </footer>
+    </div>
+  </body>
+</html>

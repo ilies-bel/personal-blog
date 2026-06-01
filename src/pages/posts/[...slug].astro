@@ -1,0 +1,41 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+// Pre-render one static HTML page per post at build time (SSG → SEO-ready).
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !data.draft);
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.description}
+  ogImage={post.data.ogImage}
+  type="article"
+  publishedTime={post.data.pubDate}
+  modifiedTime={post.data.updatedDate}
+>
+  <article class="prose">
+    <header class="article-header">
+      <span class="date">{fmt(post.data.pubDate)}</span>
+      <h1>{post.data.title}</h1>
+      {
+        post.data.updatedDate && (
+          <p class="date">Updated {fmt(post.data.updatedDate)}</p>
+        )
+      }
+    </header>
+    <Content />
+  </article>
+</BaseLayout>

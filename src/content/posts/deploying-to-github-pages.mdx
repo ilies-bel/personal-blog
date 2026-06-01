@@ -1,0 +1,65 @@
+---
+title: "Deploying a Static Site to GitHub Pages the Right Way"
+description: "Base paths, GitHub Actions, and the small config gotchas that trip everyone up when shipping a framework site to Pages."
+pubDate: 2026-05-14
+tags: ["devops", "github", "astro"]
+draft: false
+---
+
+GitHub Pages is free, fast, and perfect for a personal site, but framework
+builds have a few sharp edges on it. Here's the setup I use, including the
+config that everyone forgets the first time.
+
+## The base path tax
+
+If your site lives at `username.github.io/my-repo/`, every absolute path needs
+the repo name prefixed, or your CSS and links 404 in production while working
+fine locally. In Astro you set this once:
+
+```js
+// astro.config.mjs
+export default defineConfig({
+  site: 'https://username.github.io',
+  base: '/my-repo',
+});
+```
+
+Then build links against `import.meta.env.BASE_URL` instead of hardcoding `/`.
+If you ever move to a user page or custom domain, you flip `base` to `'/'` and
+everything follows.
+
+## Build in CI, not by hand
+
+Pages can deploy from a GitHub Action, which means a push to `main` ships the
+site. The workflow has two jobs: build the static output, then publish it:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: ./dist }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/deploy-pages@v4
+```
+
+## The settings nobody mentions
+
+Two manual steps that aren't in any config file:
+
+1. In the repo, go to **Settings → Pages → Source** and choose **GitHub
+   Actions** (not "Deploy from a branch"). This is the single most common reason
+   a perfectly good workflow does nothing.
+2. Point your `sitemap` and any canonical URLs at the full Pages URL so search
+   engines index the right host.
+
+Get those right and you've got a zero-cost, auto-deploying static site with a
+green checkmark on every push. Hard to beat.
