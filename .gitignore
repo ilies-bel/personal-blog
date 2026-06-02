@@ -32,3 +32,6 @@ pnpm-debug.log*
 
 # third-party Claude skill bundles (installed locally, not version-controlled)
 /.claude/skills/
+
+# local scratch: throwaway probe scripts + capture artifacts (not versioned)
+/scratchpad/
