@@ -1485,20 +1485,35 @@ const ringVertexShader = /* glsl */ `
   void main(){
     vec4 bhC = projectionMatrix * modelViewMatrix * vec4(0.0,0.0,0.0,1.0);
     vec2 ndcBH = bhC.xy / bhC.w;
-    float r = uHole * (1.0 + (aSeed-0.5)*0.03);    // thin ring at the dark-core rim
+    // LATE-BLOOM REVEAL. At the hero (uMorph≈0) there is NO ring — the hole reads
+    // as pure black, defined only by the void and the lensed star-warp wrapping
+    // around it. The photon ring blooms in LATER in the transition: a slow start
+    // (cubic ease so it lingers near zero), rising to a peak mid-transition, then
+    // fading back out before the shadow collapses to the seed. bloom is the
+    // master 0->1->0 envelope; everything below is gated by it.
+    float rise = smoothstep(0.05, 0.36, uMorph);   // when the ring appears
+    rise = rise*rise*rise;                          // late-bloom: hugs zero, then climbs
+    float fall = 1.0 - smoothstep(0.36, 0.46, uMorph); // gone before the seed/flash
+    float bloom = rise * fall;
+    // As the ring blooms it also tightens onto the rim and slims its band, so its
+    // first appearance is a thin hairline that fills out as it brightens.
+    float tighten = mix(0.92, 1.0, bloom);         // sits closer to the rim early
+    float spread  = mix(0.012, 0.03, bloom);       // thinner radial band early
+    float r = uHole * tighten * (1.0 + (aSeed-0.5)*spread);  // thin ring at the dark-core rim
     vec2 dir = vec2(cos(aAng), sin(aAng));
     vec2 ndc = ndcBH + vec2(dir.x * r / uAspect, dir.y * r);
     gl_Position = vec4(ndc, 0.0, 1.0);
     float tw = 0.78 + 0.22*sin(uTime*1.4 + aSeed*53.0);
     // complete, crisp circle in front of the stars: high floor, approaching side a touch brighter
     float dop = 0.85 + 0.40*smoothstep(0.55, -0.7, dir.x + 0.22*dir.y);
-    vB = tw * dop * (0.6 + 0.4*aSeed) * 1.45 * uRingBright;
+    // Baseline ~50% dimmer than before (a subtle rim, never a blazing halo).
+    vB = tw * dop * (0.6 + 0.4*aSeed) * 1.45 * uRingBright * 0.5;
     // adjustable top/bottom and left/right asymmetries
     vB *= clamp(1.0 + uVertAsym * dir.y, 0.0, 3.0);
     vB *= clamp(1.0 - uHorizAsym * dir.x, 0.0, 3.0);
-    // the photon ring traces the shadow rim; as the shadow dies it brightens
-    // briefly (last flash of the rim) then vanishes with the morph.
-    vB *= (1.0 - smoothstep(0.12, 0.45, uMorph)) * (1.0 + 1.6*smoothstep(0.0, 0.18, uMorph));
+    // Gate by the late-bloom envelope: zero at the hero, blooms in mid-transition,
+    // then gone before the shadow collapses. This is the whole reveal.
+    vB *= bloom;
     gl_PointSize = uPixelRatio * (0.7 + 0.8*aSeed);
   }
 `;
