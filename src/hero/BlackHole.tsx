@@ -228,6 +228,60 @@ const diskVertexShader = /* glsl */ `
     return fbm(p + 3.0*q);
   }
 
+  // --- Ashima 3D simplex noise + fbm (the photosphere recipe ported verbatim
+  //     from the standalone Sun render) -----------------------------------
+  vec3 sMod289(vec3 x){return x - floor(x*(1.0/289.0))*289.0;}
+  vec4 sMod289(vec4 x){return x - floor(x*(1.0/289.0))*289.0;}
+  vec4 sPermute(vec4 x){return sMod289(((x*34.0)+1.0)*x);}
+  vec4 sTaylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314*r;}
+  float snoise(vec3 v){
+    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    vec3 i  = floor(v + dot(v, C.yyy));
+    vec3 x0 = v - i + dot(i, C.xxx);
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min(g.xyz, l.zxy);
+    vec3 i2 = max(g.xyz, l.zxy);
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy;
+    vec3 x3 = x0 - D.yyy;
+    i = sMod289(i);
+    vec4 p = sPermute( sPermute( sPermute(
+              i.z + vec4(0.0, i1.z, i2.z, 1.0))
+            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+    float n_ = 0.142857142857;
+    vec3 ns = n_ * D.wyz - D.xzx;
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_);
+    vec4 x = x_ * ns.x + ns.yyyy;
+    vec4 y = y_ * ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+    vec4 b0 = vec4(x.xy, y.xy);
+    vec4 b1 = vec4(x.zw, y.zw);
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+    vec3 sp0 = vec3(a0.xy, h.x);
+    vec3 sp1 = vec3(a0.zw, h.y);
+    vec3 sp2 = vec3(a1.xy, h.z);
+    vec3 sp3 = vec3(a1.zw, h.w);
+    vec4 norm = sTaylorInvSqrt(vec4(dot(sp0,sp0), dot(sp1,sp1), dot(sp2,sp2), dot(sp3,sp3)));
+    sp0 *= norm.x; sp1 *= norm.y; sp2 *= norm.z; sp3 *= norm.w;
+    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m*m;
+    return 42.0 * dot(m*m, vec4(dot(sp0,x0), dot(sp1,x1), dot(sp2,x2), dot(sp3,x3)));
+  }
+  float sfbm(vec3 p){
+    float v = 0.0; float a = 0.5;
+    for(int i=0;i<6;i++){ v += a*snoise(p); p*=2.02; a*=0.5; }
+    return v;
+  }
+
   uniform float uGiant;     // 0 = remnant, 1 = sun (transition 2)
   uniform float uGiantR;    // sun radius in world units
   uniform float uGranScale;     // granulation cell frequency across the surface
@@ -243,10 +297,20 @@ const diskVertexShader = /* glsl */ `
   varying float vGiant;  // 0 = ember ramp, 1 = sun warm ramp
   varying float vHeat;   // temperature proxy → fragment colour ramp
   varying float vExplode;// explosion heat proxy → blue-white→amber→red ramp
-  varying float vPlaceholder; // REVIEW: 0 none, 1 yellow, 2 nebula, 3 dot
+  varying float vPlaceholder; // REVIEW: 0 none, 2 nebula, 3 dot
+  // --- yellow (sun) state channels, ported from the standalone Sun render ---
+  varying float vSunM;    // warm photosphere noise field (0..1) → colour ramp
+  varying float vSunLimb; // limb factor (0 centre → 1 rim) → bright limb glow
+  varying float vSunDark; // sunspot/chromosphere darkening (0..1)
+  varying float vSunFlare;// 0 photosphere, 1 coronal loop / prominence, 2 footpoint knot
+  varying float vSunHot;  // 0..1 white-hot factor along loops / at footpoints
+  varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
 
   void main(){
     vPlaceholder = 0.0; // REVIEW placeholder tag (set in the giant/placeholder block)
+    vSunM = 0.0; vSunLimb = 0.0; vSunDark = 0.0; // sun-photosphere channels (set below)
+    vSunFlare = 0.0; vSunHot = 0.0;             // sun atmosphere channels
+    vSunRed = 0.0;                              // 0 gold (yellow), 1 red giant
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
     float r = r0;
@@ -385,11 +449,136 @@ const diskVertexShader = /* glsl */ `
       // reshape/retint the same particle sphere. Replace this whole block (and
       // the matching fragment tint) with the real morphs later.
       //   reuse: sphere (unit sphere coord), giantR, gran/heat, churn.
-      // -- yellow (sun-like) star: a tighter, hotter, brighter photosphere --
-      if(uYellow > 0.5){
-        pos = sphere * (uGiantR * 0.85) * relief;
-        heat = clamp(gran*1.15 + 0.25, 0.0, 1.3);   // hotter surface
+      // -- yellow (sun-like) star: the standalone Sun render, ported ---------
+      // Two coupled parts (matching the reference render):
+      //  (A) a high-contrast mottled PHOTOSPHERE — domain-warped simplex fbm with
+      //      crushed midtones (bright gold cells / deep dark inter-granular lanes),
+      //      sunspots and a fine granule octave;
+      //  (B) a thin ATMOSPHERE — a stable ~12% subset of particles is lifted off
+      //      the surface into coronal LOOPS (arcs that rise over the limb and fall
+      //      back to a conjugate foot), radial PROMINENCE jets, and white-hot
+      //      FOOTPOINT knots at the loop bases.
+      // Channels to the fragment: vSunM (photosphere ramp), vSunLimb (limb glow),
+      // vSunDark (network/spots), vSunFlare (1 loop/jet), vSunHot, vSunRed (palette).
+      //
+      // The SAME recipe drives two states by palette + radius:
+      //   - red giant : uGiant alone (no later state) → big, deep red, vSunRed=1
+      //   - yellow sun: uYellow → smaller, gold, vSunRed=0
+      float redGiant = (uYellow < 0.5 && uNebula < 0.5 && uDot < 0.5) ? 1.0 : 0.0;
+      float sunOn    = (uYellow > 0.5 || redGiant > 0.5) ? 1.0 : 0.0;
+      if(sunOn > 0.5){
         vPlaceholder = 1.0;
+        vSunRed = redGiant;
+        // red giants are BIG and bloated; the yellow sun is a tighter orb.
+        float sunRadFac = (redGiant > 0.5) ? 1.45 : 0.92;
+        float tt = uTime * 0.05;
+
+        // === (A) photosphere field ==========================================
+        // Big swirling convection cells (the reference's flowing mottle), NOT
+        // high-frequency sand. A LOW base frequency with heavy IQ domain-warp
+        // makes large gold cells; deep dark filamentary veins are carved between
+        // them so the surface reads bold and structured, not pale and grainy.
+        vec3 sp = sphere * 1.25;                           // big cells
+        vec3 q2 = vec3(
+          sfbm(sp + vec3(0.0,0.0,tt)),
+          sfbm(sp + vec3(5.2,1.3,2.7) + tt),
+          sfbm(sp + vec3(1.7,9.2,3.4) - tt)
+        );
+        // two-level warp = swirly, flowing currents
+        vec3 q3 = vec3(
+          sfbm(sp + 3.0*q2 + vec3(1.7,9.2,3.4)),
+          sfbm(sp + 3.0*q2 + vec3(8.3,2.8,4.1)),
+          sfbm(sp + 3.0*q2 + vec3(2.6,6.3,7.9))
+        );
+        float nn = sfbm(sp + 4.5*q3 + tt*0.5);
+        float m = clamp(nn*0.5 + 0.5, 0.0, 1.0);
+        m = pow(m, 0.62);                                  // brighten cell cores hard
+        // medium mottle riding on the big cells (keeps it from looking flat)
+        float gran2 = sfbm(sp*2.6 + tt*0.8)*0.5 + 0.5;
+        m *= 0.74 + 0.40*gran2;
+        // deep dark filamentary VEINS between the cells (the carved orange look)
+        float vein = warpFbm(sphere*2.0 + q3 + tt*0.3);    // reuse cheap warp fbm
+        float veins = smoothstep(0.58, 0.40, vein);        // network of lanes
+        // sunspots: broad low-freq cool patches
+        float spotF = sfbm(sphere*1.1 + 11.0);
+        float spot  = smoothstep(0.44, 0.30, spotF);
+        float dark  = clamp(veins*0.9 + spot*0.95, 0.0, 1.0);
+        m *= 1.0 - 0.82*dark;                              // carve veins/spots DEEP
+        m = clamp(m, 0.0, 1.0);
+
+        vSunM    = m;
+        vSunDark = dark;
+
+        float sunRelief = 1.0 + 0.05*(m - 0.55);
+        vec3 surf = sphere * (uGiantR * sunRadFac) * sunRelief;
+        pos  = surf;
+        heat = m;
+
+        // === (B) atmosphere: loops / prominences / spicules =================
+        // Pick a stable subset for the atmosphere using per-particle hashes (no
+        // uTime → identity is fixed, so a loop stays a loop frame to frame). The
+        // red giant is cooler and far less magnetically active than the yellow
+        // sun, so it gets noticeably FEWER, softer features.
+        float sunR  = uGiantR * sunRadFac;                 // actual surface radius
+        float atmoThresh = (redGiant > 0.5) ? 0.955 : 0.91;
+        float pick = h31(vec3(aSeed*53.1, aPhase*11.7, aU*7.3));
+        if(pick > atmoThresh){
+          // which active region this particle belongs to (a few clustered sites)
+          float site = floor(h31(vec3(aSeed*7.0, 2.0, aPhase*3.0)) * 7.0);
+          // a stable base direction per active region (clustered, not uniform)
+          vec3 rnd = hash33(vec3(site*13.1, site*7.7, site*3.3))*2.0 - 1.0;
+          vec3 cdir = normalize(rnd + 1e-3);
+          // tangent basis at the active-region centre
+          vec3 up0 = abs(cdir.y) < 0.95 ? vec3(0,1,0) : vec3(1,0,0);
+          vec3 t1 = normalize(cross(up0, cdir));
+          vec3 t2 = cross(cdir, t1);
+
+          float kind = h31(vec3(aPhase*9.0, aSeed*5.0, 4.0));
+          float s    = aU;                                  // 0..1 param along feature
+          float hp   = sin(3.14159265*s);                   // arch height profile
+
+          if(kind < 0.66){
+            // --- coronal LOOP: arch from one foot, over the limb, to the other ---
+            float sep  = 0.10 + 0.14*h31(vec3(site, aSeed*3.0, 8.0)); // foot half-sep
+            float kH   = 0.12 + 0.28*h31(vec3(site, 9.0, aPhase));     // arch height (contained)
+            float az   = h31(vec3(site, aSeed, 1.0)) * 6.2831;         // loop plane spin
+            vec3 span  = normalize(cos(az)*t1 + sin(az)*t2);
+            // rotate base dir from -sep..+sep around the loop-plane normal
+            vec3 axis  = normalize(cross(cdir, span));
+            float ang  = (s - 0.5) * 2.0 * sep;
+            float ca = cos(ang), sa = sin(ang);
+            vec3 base = cdir*ca + cross(axis, cdir)*sa + axis*dot(axis,cdir)*(1.0-ca);
+            float rad = sunR * (0.94 + kH*hp);               // rise above the surface
+            vec3 lpos = normalize(base) * rad;
+            // thin thread jitter so the loop reads as plasma, not a wire
+            float thick = sunR * 0.010 * (0.3 + 0.7*hp);
+            lpos += span * (h31(vec3(aSeed*31.0, aU*17.0, 5.0))-0.5) * thick;
+            pos = lpos;
+            float foot = pow(1.0 - hp, 1.6);                 // bright/hot near feet
+            vSunFlare = 1.0;
+            vSunHot   = clamp(0.25 + 0.65*foot, 0.0, 1.0);
+          } else if(kind < 0.82){
+            // --- PROMINENCE / jet: short radial spray rising off the surface ---
+            float az  = h31(vec3(site, aSeed, 2.0)) * 6.2831;
+            vec3 latd = normalize(cos(az)*t1 + sin(az)*t2);
+            float hgt = sunR * (0.08 + 0.16*h31(vec3(site, aPhase, 6.0))); // contained
+            vec3 jdir = normalize(cdir + latd*0.10);
+            float lat = sunR*0.025*sin(s*8.0 + aSeed*6.0)*pow(s,0.7);
+            vec3 jpos = jdir * (sunR*0.94 + hgt*s) + latd*lat;
+            pos = jpos;
+            vSunFlare = 1.0;
+            vSunHot   = clamp(0.55 - 0.4*s, 0.0, 1.0);       // hot root, cooler tip
+          } else {
+            // --- SPICULE spray: short fine threads fanning up off the surface
+            //     (a soft bright fringe at the active region, not a hard knot).
+            vec3 jit = (hash33(vec3(aSeed*61.0, aPhase*23.0, aU*9.0))*2.0-1.0);
+            vec3 sdir = normalize(cdir + (t1*jit.x + t2*jit.y)*0.18);
+            float len = sunR * (0.05 + 0.10*h31(vec3(aU*5.0, aSeed, 3.0)));
+            pos = sdir * (sunR*0.95 + len*s);
+            vSunFlare = 1.0;                            // treat as thin plasma thread
+            vSunHot   = clamp(0.5 - 0.3*s, 0.0, 1.0);   // hot root → cooler tip
+          }
+        }
       }
       // -- nebula: scatter the surface into a diffuse, puffy cloud -----------
       if(uNebula > 0.5){
@@ -618,6 +807,37 @@ const diskVertexShader = /* glsl */ `
       float hch = clamp(gran*(1.0 - 0.85*umbra) + plage*1.2, 0.0, 1.15);
       vHeat = mix(0.5, hch, g);
       vGiant = g;
+
+      // --- sun override: brightness from the ported photosphere recipe ------
+      // The standalone Sun render lights its surface by the warm field vSunM,
+      // limb darkening, active-region lift and a bright fresnel limb. The same
+      // lighting drives the red giant (vSunRed=1), only cooler and dimmer so it
+      // reads as a big, deep-red, matte star rather than a vivid gold sun.
+      if(vPlaceholder > 0.5 && vPlaceholder < 1.5){
+        float limb = pow(1.0 - mu, 2.0);              // fresnel limb (pow 2)
+        vSunLimb = limb;
+        if(vSunFlare > 0.5){
+          // coronal LOOP / prominence thread — glowing plasma, hotter toward
+          // the feet/root (vSunHot), softer at the apex/tip. Red giant runs its
+          // (rare) features dimmer and cooler.
+          bright = (0.7 + 1.5*vSunHot) * mix(1.0, 0.7, vSunRed);
+        } else {
+          // PHOTOSPHERE — warm cells bright, veins/spots dark. Kept deliberately
+          // LOW so ~1M additively-blended points don't stack into a white centre;
+          // the colour ramp carries the hue, brightness only modulates it. A
+          // gentle limb-darkening keeps the disc edge from glaring.
+          float m = vSunM;
+          // red giant: lower overall luminance + a bit more limb darkening (a
+          // big diffuse cool star, dimmer toward the rim).
+          float baseLo = mix(0.30, 0.22, vSunRed);
+          float baseHi = mix(0.62, 0.50, vSunRed);
+          float limbMu = mix(0.18, 0.30, vSunRed);
+          float lum = (baseLo + baseHi*m) * (1.0 - vSunDark*0.85) * ((1.0-limbMu) + limbMu*mu);
+          float arBright = smoothstep(0.86, 0.995, m) * mix(0.45, 0.25, vSunRed);
+          bright = (lum + arBright + limb*mix(0.30, 0.22, vSunRed));
+          vHeat = m;
+        }
+      }
     } else {
       vHeat = 0.5;
       vGiant = 0.0;
@@ -633,12 +853,25 @@ const diskVertexShader = /* glsl */ `
     // photosphere grains sit larger so the surface reads as solid.
     float baseSize = uPixelRatio * (1.0 + 0.6*sqrt(min(bright,6.0))) * (16.0/dist);
     float surfSize = baseSize * 1.7;
+    // yellow photosphere: enlarge the grains so ~1M points OVERLAP into a solid
+    // surface (kills the sandy per-point speckle, leaving the big swirly cells).
+    float yellowSurf = (vPlaceholder > 0.5 && vPlaceholder < 1.5 && vSunFlare < 0.5) ? 1.0 : 0.0;
+    surfSize = mix(surfSize, baseSize * 3.0, yellowSurf);
     // ejecta grains swell modestly during the blast so the debris reads as
     // glowing embers/streamers, but not so much that they overlap into a wash.
     float blastSize = baseSize * 1.5;
     float size = mix(baseSize, blastSize, morphFlare);
     size = mix(size, surfSize, vGiant);
-    gl_PointSize = clamp(size, 0.6, mix(mix(4.5, 6.0, morphFlare), 7.0, vGiant));
+    float maxSize = mix(mix(4.5, 6.0, morphFlare), 7.0, vGiant);
+    maxSize = mix(maxSize, 13.0, yellowSurf);   // bigger grains may overlap solid
+    gl_PointSize = clamp(size, 0.6, maxSize);
+    // yellow-sun atmosphere: loop/jet threads are THIN; footpoint knots a bit
+    // larger and bright. Overrides the generic surface sizing above.
+    if(vSunFlare > 1.5){
+      gl_PointSize = clamp(baseSize * 0.9, 0.8, 2.8);    // footpoint grain (small)
+    } else if(vSunFlare > 0.5){
+      gl_PointSize = clamp(baseSize * 0.8, 0.6, 2.4);    // loop / jet thread
+    }
     if(drop) gl_PointSize = 0.0;
   }
 `;
@@ -652,12 +885,24 @@ const diskFragmentShader = /* glsl */ `
   varying float vHeat;
   varying float vExplode;
   varying float vPlaceholder; // REVIEW: 0 none, 1 yellow, 2 nebula, 3 dot
+  varying float vSunM;    // warm photosphere field for the yellow-sun ramp
+  varying float vSunLimb; // limb factor → bright gold rim glow
+  varying float vSunDark; // sunspot/network darkening
+  varying float vSunFlare;// 0 photosphere, 1 loop/jet, 2 footpoint knot
+  varying float vSunHot;  // white-hot factor along loops / at footpoints
+  varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
     if(d > 0.5) discard;
     // soft round falloff that fills the photosphere.
     float a = smoothstep(0.5, 0.04, d);
+    // yellow photosphere: a smooth GAUSSIAN profile (no flat disc core) so the
+    // big overlapping grains average into a continuous surface instead of a
+    // field of hard little discs — this is what kills the sandy speckle.
+    if(vPlaceholder > 0.5 && vPlaceholder < 1.5){
+      a = (vSunFlare < 0.5) ? exp(-d*d*7.0) : exp(-d*d*9.0);
+    }
 
     // --- ember / black-hole ramp (near-monochrome, warm highlights) ---
     float t = vBright / (vBright + 1.6);
@@ -702,13 +947,54 @@ const diskFragmentShader = /* glsl */ `
     vec3 col = mix(emberCol, exCol, clamp(vExplode, 0.0, 1.0));
     col = mix(col, sunCol, vGiant);
 
-    // === REVIEW PLACEHOLDER TINTS (flat colours per new state) =============
-    // Replace alongside the geometry placeholders when the real morphs land.
+    // === STATE TINTS ======================================================
+    // Yellow (sun) is a full port of the standalone Sun render's colour grade;
+    // nebula and pale-blue-dot remain flat placeholders.
     if(vPlaceholder > 0.5){
       vec3 pcol = col;
       if(vPlaceholder < 1.5){
-        // yellow star: warm yellow-white, hotter centres push toward white.
-        pcol = mix(vec3(1.0, 0.78, 0.28), vec3(1.0, 0.97, 0.82), smoothstep(0.4, 1.1, vHeat));
+        // -- sun (ported recipe): gold for the yellow star, deep red for the
+        //    red giant. vSunRed (0 gold / 1 red) selects the palette. ---------
+        if(vSunFlare > 0.5){
+          // coronal loops / prominences: hot plasma, deep cool tip → bright root.
+          float ht = clamp(vSunHot, 0.0, 1.0);
+          // gold-sun flare ramp
+          vec3 gfc = mix(vec3(1.0, 0.40, 0.06), vec3(1.0, 0.72, 0.26), smoothstep(0.2, 0.6, ht));
+          gfc = mix(gfc, vec3(1.0, 0.94, 0.78), smoothstep(0.6, 1.0, ht));
+          // red-giant flare ramp: dark blood-red → red-orange (never white-hot)
+          vec3 rfc = mix(vec3(0.55, 0.05, 0.01), vec3(0.95, 0.26, 0.04), smoothstep(0.2, 0.65, ht));
+          rfc = mix(rfc, vec3(1.0, 0.45, 0.12), smoothstep(0.65, 1.0, ht));
+          pcol = mix(gfc, rfc, vSunRed);
+        } else {
+          // PHOTOSPHERE: the warm field vSunM drives a 5-stop ramp. The gold ramp
+          // (umbra→red→orange→gold→pale yellow) is the standalone Sun render; the
+          // red-giant ramp stays deep maroon→blood-red→red-orange (no gold/white)
+          // so the big star reads unmistakably RED.
+          float m = vSunM;
+          // gold (yellow sun)
+          vec3 sc = vec3(0.20, 0.028, 0.0);
+          sc = mix(sc, vec3(0.72, 0.17, 0.01), smoothstep(0.10, 0.34, m));
+          sc = mix(sc, vec3(1.00, 0.44, 0.06), smoothstep(0.28, 0.52, m));
+          sc = mix(sc, vec3(1.00, 0.64, 0.16), smoothstep(0.52, 0.76, m));
+          sc = mix(sc, vec3(1.00, 0.84, 0.40), smoothstep(0.84, 0.99, m));
+          sc = mix(sc, vec3(0.20, 0.030, 0.0), vSunDark);
+          sc += smoothstep(0.88, 0.99, m) * vec3(0.5, 0.28, 0.07);
+          sc = mix(sc, vec3(1.0, 0.74, 0.30), vSunLimb*0.72);
+          sc += vSunLimb * vec3(0.6, 0.32, 0.08);
+          sc *= 1.15;
+          // red giant — deep, saturated red photosphere
+          vec3 rc = vec3(0.14, 0.012, 0.004);                   // near-black umbra
+          rc = mix(rc, vec3(0.46, 0.05, 0.012), smoothstep(0.08, 0.34, m)); // dark blood red
+          rc = mix(rc, vec3(0.78, 0.13, 0.02),  smoothstep(0.30, 0.58, m)); // red
+          rc = mix(rc, vec3(0.95, 0.26, 0.04),  smoothstep(0.56, 0.80, m)); // red-orange
+          rc = mix(rc, vec3(1.00, 0.40, 0.10),  smoothstep(0.84, 1.0, m));  // hot orange (rare)
+          rc = mix(rc, vec3(0.12, 0.010, 0.0), vSunDark);       // deep dark spots/veins
+          // cool, dusky red limb (forward-scattered, not bright gold)
+          rc = mix(rc, vec3(0.85, 0.20, 0.05), vSunLimb*0.55);
+          rc += vSunLimb * vec3(0.30, 0.05, 0.01);
+
+          pcol = mix(sc, rc, vSunRed);
+        }
       } else if(vPlaceholder < 2.5){
         // nebula: soft violet/magenta cloud with cooler blue voids.
         pcol = mix(vec3(0.32, 0.16, 0.52), vec3(0.85, 0.45, 0.78), smoothstep(0.2, 0.9, vHeat));
@@ -720,6 +1006,21 @@ const diskFragmentShader = /* glsl */ `
     }
 
     float inten = vBright * a;
+    // Yellow (sun): the photosphere ramp colour already encodes surface
+    // luminance, so drive its intensity mostly from coverage (×a) with a gentle
+    // lift — keeps the gold gradient true instead of clipping to white, and lets
+    // the bloom/grade passes supply the glow (as the standalone render's bloom
+    // does). Atmosphere particles (loops/jets/knots) keep their full additive
+    // brightness so they read as glowing plasma against the disc.
+    if(vPlaceholder > 0.5 && vPlaceholder < 1.5){
+      if(vSunFlare > 0.5){
+        inten = a * clamp(vBright, 0.0, 2.2);
+      } else {
+        // bigger overlapping photosphere grains accumulate additively → keep
+        // per-grain intensity low so the disc stays in gamut and the cells show.
+        inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3));
+      }
+    }
     gl_FragColor = vec4(col * inten, 1.0);
   }
 `;
@@ -927,6 +1228,652 @@ const GradeShader = {
     }
   `,
 };
+
+// ===========================================================================
+//  YELLOW-STAR SUN RIG (the standalone "The Sun · Three.js" render, ported)
+//
+//  The yellow lifecycle stage swaps the particle cloud out for a faithful port
+//  of the reference render: a real IcosahedronGeometry photosphere mesh, a
+//  BackSide inner-glow shell, a camera-facing corona billboard, and a separate
+//  CPU-built Points system of coronal loops / prominences / spicules with a
+//  per-particle foot-to-foot "jet whip" lifecycle.
+//
+//  The reference's standalone scaffolding (its own bloom pipeline, OrbitControls
+//  drag/zoom, HUD, loader, fonts, starfield) is dropped — this scene already owns
+//  the camera, scroll, post (UnrealBloom + GradeShader) and starfield. The rig is
+//  added to the shared scene so the existing post pipeline grades it for free.
+//
+//  Ported to three ^0.180 from r128: the GLSL is unchanged (raw ShaderMaterial
+//  fragment output is not auto color-managed), but the result is sRGB-encoded on
+//  output and run through GradeShader, so the on-screen look is tuned via the
+//  render-loop yellow grade rather than copied 1:1 from the reference's ACES.
+// ===========================================================================
+
+// Ashima 3D simplex noise + fbm — kept verbatim from the reference so the
+// photosphere/corona match exactly (independent of the disk's own simplex above).
+const SUN_NOISE_GLSL = /* glsl */ `
+vec3 mod289(vec3 x){return x - floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x - floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i  = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute( permute( permute(
+            i.z + vec4(0.0, i1.z, i2.z, 1.0))
+          + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+          + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0)*2.0 + 1.0;
+  vec4 s1 = floor(b1)*2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m*m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+float fbm(vec3 p){
+  float v = 0.0; float a = 0.5;
+  for(int i=0;i<6;i++){ v += a*snoise(p); p*=2.02; a*=0.5; }
+  return v;
+}
+`;
+
+// --- photosphere mesh (high-contrast mottled gold surface) ---
+const sunSurfaceVert = /* glsl */ `
+  varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
+  void main(){
+    vObj = normalize(position);
+    vViewN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position,1.0);
+    vViewPos = mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }`;
+const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
+  uniform float uTime;
+  varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
+  void main(){
+    vec3 p = vObj * 2.4;
+    float t = uTime * 0.05;
+    vec3 q;
+    q.x = fbm(p + vec3(0.0,0.0,t));
+    q.y = fbm(p + vec3(5.2,1.3,2.7) + t);
+    q.z = fbm(p + vec3(1.7,9.2,3.4) - t);
+    float n = fbm(p + 3.2*q + t*0.5);
+    float m = clamp(n*0.5+0.5, 0.0, 1.0);
+
+    vec3 col = vec3(0.24,0.035,0.0);
+    col = mix(col, vec3(0.72,0.17,0.01), smoothstep(0.14,0.40,m));
+    col = mix(col, vec3(1.00,0.44,0.06), smoothstep(0.34,0.58,m));
+    col = mix(col, vec3(1.00,0.64,0.16), smoothstep(0.55,0.78,m));
+    col = mix(col, vec3(1.00,0.84,0.40), smoothstep(0.80,0.96,m));
+
+    float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
+    float chMask = smoothstep(0.12, -0.05, ch);
+    col = mix(col, vec3(0.20,0.030,0.0), chMask*0.55);
+
+    float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.45,0.2,m);
+    col = mix(col, vec3(0.06,0.01,0.0), spot*0.6);
+
+    float gran = fbm(p*7.0 + t*1.0);
+    col *= 0.86 + 0.26*(gran*0.5+0.5);
+
+    float ar = smoothstep(0.88, 0.99, m);
+    col += ar * vec3(0.5,0.28,0.07);
+
+    vec3 vd = normalize(-vViewPos);
+    float fres = 1.0 - max(dot(vd, vViewN), 0.0);
+    float limb = pow(fres, 2.0);
+    col = mix(col, vec3(1.0,0.74,0.30), limb*0.72);
+    col += limb * vec3(0.6,0.32,0.08);
+
+    col *= 1.15;
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+
+// --- inner chromosphere glow (BackSide additive shell) ---
+const sunGlowVert = /* glsl */ `
+  varying vec3 vN; varying vec3 vP;
+  void main(){ vN=normalize(normalMatrix*normal);
+    vec4 mv=modelViewMatrix*vec4(position,1.0); vP=mv.xyz;
+    gl_Position=projectionMatrix*mv; }`;
+const sunGlowFrag = /* glsl */ `
+  uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
+  void main(){ vec3 vd=normalize(-vP);
+    float i=pow(1.0-max(dot(vd,vN),0.0), 2.2);
+    gl_FragColor=vec4(uColor*i*1.6, 1.0); }`;
+
+// --- soft corona haze (camera-facing additive billboard) ---
+const sunCoronaVert = /* glsl */ `
+  varying vec2 vUv; void main(){ vUv=uv;
+    gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
+const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
+  uniform float uTime; uniform float uDiskFrac; varying vec2 vUv;
+  void main(){
+    vec2 pp = (vUv-0.5)*2.0;
+    float r = length(pp);
+    float a = atan(pp.y, pp.x);
+    float df = uDiskFrac;
+    float halo = exp(-max(r-df,0.0)*7.0);
+    float st = fbm(vec3(cos(a)*0.8, sin(a)*0.8, uTime*0.02));
+    st = st*0.5+0.5;
+    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*2.0);
+    float corona = halo*0.50 + streamer*0.22;
+    corona *= smoothstep(df-0.02, df+0.04, r);
+    corona *= smoothstep(1.0, df+0.05, r);
+    vec3 c = mix(vec3(1.0,0.56,0.16), vec3(1.0,0.78,0.38), st*0.7);
+    gl_FragColor = vec4(c*corona*0.6, 1.0);
+  }`;
+
+// --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
+// Unlike the lensed starfield (which warps around the dead black hole and draws
+// with depthTest OFF so it bleeds through the opaque sun), this is a simple
+// far-away dome of twinkling stars rendered with real depth testing, so the
+// solid photosphere occludes the stars behind it. It only exists for the yellow
+// stage and rides inside the sun rig group, so it shows/hides with the sun.
+const sunStarVert = /* glsl */ `
+  attribute float aSeed;
+  attribute float aMag;            // 0..1 magnitude → size + base brightness
+  uniform float uTime, uPixelRatio, uOpacity, uBright;
+  varying float vB;
+  varying float vTint;
+  void main(){
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    // slow, per-star twinkle (a few stars shimmer, most hold steady)
+    float tw = 0.78 + 0.22 * sin(uTime * (0.4 + 0.9*aSeed) + aSeed * 39.0);
+    // brighter, larger stars are rarer (aMag near 1). The overall scale (uBright)
+    // is pushed up so the points survive the tone-map + olive grade + vignette.
+    float lum = mix(0.55, 2.4, aMag*aMag);
+    vB = lum * tw * uOpacity * uBright;
+    vTint = fract(aSeed * 17.0);   // 0..1 → cool/neutral/warm star colour
+    // size scales with magnitude; the dome sits ~640u out, so the world→pixel
+    // factor keeps stars as crisp pinpoints with a few larger standouts.
+    float dist = -mv.z;
+    gl_PointSize = clamp(uPixelRatio * (1.3 + 4.5*aMag*aMag) * (640.0/dist), 1.0, 6.0);
+  }
+`;
+const sunStarFrag = /* glsl */ `
+  precision highp float;
+  varying float vB;
+  varying float vTint;
+  void main(){
+    vec2 c = gl_PointCoord - 0.5;
+    float d = length(c);
+    if(d > 0.5) discard;
+    float a = smoothstep(0.5, 0.0, d);
+    // subtle stellar colour: cool blue-white → neutral → warm gold
+    vec3 cool = vec3(0.80, 0.88, 1.00);
+    vec3 warm = vec3(1.00, 0.92, 0.78);
+    vec3 col = mix(cool, warm, smoothstep(0.35, 0.85, vTint));
+    gl_FragColor = vec4(col * vB * a, a);
+  }
+`;
+
+// --- coronal loops / prominences / footpoints (animated Points) ---
+const sunLoopVert = /* glsl */ `
+  attribute vec3 aColor; attribute float aSize; attribute float aSeed;
+  attribute float aU; attribute float aBright;
+  attribute vec3 aSeedPos; attribute float aLifeOff; attribute float aLifePer;
+  attribute float aOn; attribute float aSweep; attribute float aSeq;
+  uniform float uPix; uniform float uTime; uniform float uPS;
+  varying vec3 vCol; varying float vB; varying float vHot;
+  void main(){
+    vCol = aColor;
+    float phase = fract(uTime/aLifePer + aLifeOff);
+    float a     = phase / aOn;                       // 0..1 across active window
+    float inWin = step(phase, aOn);
+
+    // arches fire in sequence (lowest first): this arch begins at aSeq and its
+    // jet whips fast from one foot to the other like a fountain stream A -> B.
+    float JET   = 0.12;                              // per-arch crossing time (fast)
+    float la    = (a - aSeq) / JET;                  // local jet progress for this arch
+    float started = step(aSeq, a);
+    float d     = la - aSweep;                       // >0 once the jet head passed this particle
+    float emerge= smoothstep(0.0, 0.10, d) * started;
+    float fade  = 1.0 - smoothstep(0.80, 1.0, a);    // whole flare cools at the very end
+    float flash = exp(-pow(max(d,0.0)/0.05, 2.0)) * step(0.0,d) * started * inWin * fade;
+
+    float grow  = emerge * (1.0 + 0.08*smoothstep(0.5,1.0,a));   // seed -> final
+    vec3 wp     = mix(aSeedPos, position, clamp(grow, 0.0, 1.06));
+
+    float flick = 0.85 + 0.15*sin(uTime*3.0 + aSeed*6.2831);
+    vB   = aBright*flick*emerge*fade*inWin + 1.7*flash;
+    vHot = flash;
+
+    vec4 mv = modelViewMatrix*vec4(wp,1.0);
+    gl_PointSize = aSize*uPix*(uPS/-mv.z) * (0.5 + 0.5*emerge + 0.9*flash);
+    gl_Position = projectionMatrix*mv;
+  }`;
+const sunLoopFrag = /* glsl */ `
+  varying vec3 vCol; varying float vB; varying float vHot;
+  void main(){
+    float d = length(gl_PointCoord-0.5);
+    float a = smoothstep(0.5,0.0,d);
+    a = pow(a,1.25);              // soft core -> overlapping points form a line
+    vec3 col = mix(vCol, vec3(1.0,0.96,0.86), clamp(vHot,0.0,0.85));  // white-hot leading edge
+    gl_FragColor = vec4(col*a*vB*1.3, a);
+  }`;
+
+// Handles the render loop needs to drive + tear down the sun rig.
+interface SunRig {
+  group: THREE.Group;
+  surfaceMat: THREE.ShaderMaterial;
+  coronaMat: THREE.ShaderMaterial;
+  loopMat: THREE.ShaderMaterial;
+  starMat: THREE.ShaderMaterial;
+  corona: THREE.Mesh;
+  dispose: () => void;
+}
+
+// Build the standalone-Sun rig (photosphere mesh + inner glow + corona billboard
+// + animated loops/prominences Points), all centred at the world origin and
+// scaled to `R` world units. Added to `scene` hidden; the render loop reveals it
+// only during the yellow stage and advances its uTime uniforms. `pixelRatio`
+// feeds the loop Points' size, matching the reference's gl_PointSize math.
+function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig {
+  const group = new THREE.Group();
+  group.visible = false;
+
+  // --- (A) photosphere mesh ---
+  const surfaceMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: sunSurfaceVert,
+    fragmentShader: sunSurfaceFrag,
+  });
+  const surface = new THREE.Mesh(new THREE.IcosahedronGeometry(R, 24), surfaceMat);
+  group.add(surface);
+
+  // --- (B) inner chromosphere glow (BackSide additive) ---
+  const glowMat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(1.0, 0.55, 0.16) } },
+    vertexShader: sunGlowVert,
+    fragmentShader: sunGlowFrag,
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const glow = new THREE.Mesh(new THREE.IcosahedronGeometry(R * 1.08, 16), glowMat);
+  group.add(glow);
+
+  // --- (C) soft corona haze (camera-facing billboard) ---
+  const coronaHalf = R * 4.0;
+  const coronaMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf } },
+    vertexShader: sunCoronaVert,
+    fragmentShader: sunCoronaFrag,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const corona = new THREE.Mesh(new THREE.PlaneGeometry(coronaHalf * 2.0, coronaHalf * 2.0), coronaMat);
+  group.add(corona);
+
+  // --- (D) coronal loops + footpoints + prominences (CPU build, ported) ---
+  // small CPU vec helpers (reference's, verbatim)
+  type V3 = [number, number, number];
+  const vadd = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const vsub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const vscale = (a: V3, s: number): V3 => [a[0] * s, a[1] * s, a[2] * s];
+  const vdot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const vlen = (a: V3): number => Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+  const vnorm = (a: V3): V3 => {
+    const l = vlen(a) || 1;
+    return [a[0] / l, a[1] / l, a[2] / l];
+  };
+  const vcross = (a: V3, b: V3): V3 => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  const rotAround = (v: V3, axis: V3, ang: number): V3 => {
+    const c = Math.cos(ang),
+      s = Math.sin(ang),
+      d = vdot(axis, v),
+      cr = vcross(axis, v);
+    return [
+      v[0] * c + cr[0] * s + axis[0] * d * (1 - c),
+      v[1] * c + cr[1] * s + axis[1] * d * (1 - c),
+      v[2] * c + cr[2] * s + axis[2] * d * (1 - c),
+    ];
+  };
+  const frameBasis = (c: V3): [V3, V3] => {
+    const up: V3 = Math.abs(c[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0];
+    const t1 = vnorm(vcross(up, c));
+    const t2 = vcross(c, t1);
+    return [t1, t2];
+  };
+  const randn = (): number => {
+    let u = 0,
+      v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+  const cl01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+  const POS: number[] = [],
+    COL: number[] = [],
+    SZ: number[] = [],
+    SEED: number[] = [],
+    UU: number[] = [],
+    BR: number[] = [],
+    SEEDPOS: number[] = [],
+    LOFF: number[] = [],
+    LPER: number[] = [],
+    LON: number[] = [],
+    SWP: number[] = [],
+    SEQ: number[] = [];
+  const CUR = { off: 0.0, per: 10.0, on: 0.45, dir: 0, seq: 0.0 };
+  const push = (p: V3, c: V3, s: number, u: number, b: number): void => {
+    POS.push(p[0], p[1], p[2]);
+    const L = Math.sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]) || 1; // on-surface seed
+    SEEDPOS.push((p[0] / L) * R * 1.006, (p[1] / L) * R * 1.006, (p[2] / L) * R * 1.006);
+    COL.push(c[0], c[1], c[2]);
+    SZ.push(s);
+    SEED.push(Math.random() * 6.2831);
+    UU.push(u);
+    BR.push(b);
+    SWP.push(CUR.dir ? 1.0 - u : u);
+    SEQ.push(CUR.seq);
+    LOFF.push(CUR.off);
+    LPER.push(CUR.per);
+    LON.push(CUR.on);
+  };
+
+  // camera-facing tangent frame at an active region -> loops arc toward the camera
+  const arFrame = (c: V3): [V3, V3] => {
+    const h: V3 = [1, 0, 0];
+    let span = vnorm(vsub(h, vscale(c, vdot(h, c))));
+    if (vlen(span) < 0.2) span = vnorm(vsub([0, 0, 1], vscale(c, vdot([0, 0, 1], c))));
+    const depth = vnorm(vcross(c, span));
+    return [span, depth];
+  };
+
+  interface Arcade {
+    c: V3;
+    sep: number;
+    nArch: number;
+    kBase: number;
+    archLean: number;
+    fan: number;
+    spanAz: number;
+  }
+  const buildLoops = (ar: Arcade): void => {
+    const c = ar.c;
+    const fr0 = arFrame(c);
+    const span = rotAround(fr0[0], c, ar.spanAz || 0);
+    const depth = vnorm(vcross(c, span));
+    const A0 = rotAround(c, depth, -ar.sep);
+    const B0 = rotAround(c, depth, ar.sep);
+    const kMin = ar.kBase * 0.42,
+      kMax = ar.kBase * 1.62;
+    const chainSpan = 0.4;
+
+    for (let L = 0; L < ar.nArch; L++) {
+      const t = ar.nArch > 1 ? L / (ar.nArch - 1) : 0.5;
+      CUR.seq = t * chainSpan;
+      const k = kMin + t * (kMax - kMin) + (Math.random() - 0.5) * 0.035;
+      const kN = (k - kMin) / (kMax - kMin + 1e-6);
+      const lean = (0.1 + 0.9 * kN) * ar.archLean + randn() * ar.fan;
+      const np = 110 + Math.floor(k * 430);
+      const thick = R * (0.0014 + Math.random() * 0.0026);
+      for (let j = 0; j < np; j++) {
+        let u = (j + (Math.random() - 0.5) * 0.16) / (np - 1);
+        u = cl01(u);
+        const hp = Math.sin(Math.PI * u);
+        const ang = (u - 0.5) * 2.0 * ar.sep;
+        let base = rotAround(c, depth, ang);
+        base = rotAround(base, c, lean * hp);
+        const rad = R * (1.0 + k * hp);
+        let P = vscale(base, rad);
+        const tw = thick * (0.25 + 0.75 * hp);
+        P = vadd(P, vscale(depth, randn() * tw));
+        P = vadd(P, vscale(base, randn() * tw * 0.4));
+        const foot = Math.pow(1.0 - hp, 1.7);
+        const col: V3 = [1.0, Math.min(1.0, 0.64 + foot * 0.3), Math.min(1.0, 0.18 + foot * 0.52)];
+        const bright = Math.max(0.16, (0.5 + 0.55 * foot) * (1.0 - 0.4 * kN) + 0.1 * Math.random());
+        const size = Math.max(0.1, 0.15 + Math.random() * 0.15 + foot * 0.16);
+        push(P, col, size, u, bright);
+      }
+    }
+    // compact bright footpoint knots + tiny rooted threads
+    CUR.seq = 0.0;
+    let fi = 0;
+    for (const F of [A0, B0]) {
+      const uFoot = fi === 0 ? 0.015 : 0.985;
+      fi++;
+      const ff = frameBasis(F);
+      for (let n = 0; n < 70; n++) {
+        const sc = 0.026 + Math.random() * 0.018;
+        const dir = vnorm(vadd(F, vadd(vscale(ff[0], randn() * sc), vscale(ff[1], randn() * sc))));
+        const lift = R * (1.0 + Math.random() * 0.045);
+        const P = vscale(dir, lift);
+        const bigp = Math.random() < 0.12;
+        const col: V3 = bigp ? [1.0, 0.94, 0.78] : [1.0, 0.85, 0.55];
+        const size = bigp ? 0.7 + Math.random() * 0.8 : 0.26 + Math.random() * 0.38;
+        const bright = bigp ? 1.5 + Math.random() * 0.6 : 0.9 + Math.random() * 0.55;
+        push(P, col, size, uFoot + (Math.random() - 0.5) * 0.02, bright);
+      }
+      // short upward spray threads from the foot
+      for (let s2 = 0; s2 < 5; s2++) {
+        const tang = vnorm(vadd(vscale(ff[0], randn()), vscale(ff[1], randn())));
+        const len = R * (0.06 + Math.random() * 0.14),
+          npf = 28;
+        for (let j = 0; j < npf; j++) {
+          const s = j / (npf - 1);
+          const dir = vnorm(vadd(F, vscale(tang, s * 0.1)));
+          const P = vscale(dir, R * (1.0 + (len / R) * Math.sin(s * 1.4)));
+          const fo = Math.pow(1.0 - s, 1.4);
+          push(
+            P,
+            [1.0, 0.78, 0.42],
+            0.16 + fo * 0.16,
+            uFoot + (Math.random() - 0.5) * 0.02,
+            (0.7 + 0.5 * fo) * (0.7 + 0.5 * Math.random()),
+          );
+        }
+      }
+    }
+  };
+
+  // feathery red->orange erupting prominence (dense flame with glowing root)
+  const buildProminence = (c: V3, scale: number): void => {
+    scale = scale || 1.0;
+    CUR.seq = 0.0;
+    const fr = frameBasis(c);
+    const lean = vnorm(vadd(vscale(fr[0], 0.35), vscale(fr[1], 0.15)));
+    const root = Math.round(90 * scale);
+    for (let n = 0; n < root; n++) {
+      const sc = 0.045 * scale;
+      const dir = vnorm(vadd(c, vadd(vscale(fr[0], randn() * sc), vscale(fr[1], randn() * sc))));
+      const rad = R * (1.0 + Math.random() * 0.1 * scale);
+      const s = (rad / R - 1.0) / (0.1 * scale + 1e-6);
+      const col: V3 = [1.0, 0.08 + s * 0.1, 0.01 + s * 0.02];
+      push(vscale(dir, rad), col, 0.5 + Math.random() * 0.5, Math.random(), 0.6 + Math.random() * 0.3);
+    }
+    const nFil = Math.round(30 * scale);
+    for (let f = 0; f < nFil; f++) {
+      const dir0 = vnorm(vadd(c, vadd(vscale(fr[0], randn() * 0.018), vscale(fr[1], randn() * 0.018))));
+      const height = R * (0.18 + Math.random() * 0.18) * scale;
+      const wAmp = R * (0.01 + Math.random() * 0.026);
+      const wFreq = 3.0 + Math.random() * 3.5;
+      const phase = Math.random() * 6.28;
+      const latDir = vnorm(vadd(vscale(fr[0], Math.cos(phase)), vscale(fr[1], Math.sin(phase))));
+      const npf = 100 + Math.floor(Math.random() * 40);
+      for (let j = 0; j < npf; j++) {
+        const s = j / (npf - 1);
+        const rad = R + height * s;
+        const lat = wAmp * Math.sin(s * wFreq * Math.PI + phase) * Math.pow(s, 0.7);
+        const curl = R * 0.055 * scale * Math.pow(s, 1.4);
+        const fray = Math.pow(s, 2.0) * R * 0.024 * randn();
+        let P = vadd(vscale(dir0, rad), vscale(latDir, lat));
+        P = vadd(P, vscale(lean, curl));
+        P = vadd(P, vadd(vscale(fr[0], randn() * fray), vscale(fr[1], randn() * fray)));
+        const col: V3 = [1.0, 0.06 + s * 0.2, 0.004 + s * 0.025];
+        const bright = (0.85 - s * 0.35) * (0.85 + 0.4 * Math.random());
+        const size = 0.46 + Math.random() * 0.34 + (1.0 - s) * 0.55;
+        push(P, col, size, s, bright);
+      }
+    }
+  };
+
+  const randDir = (): V3 => {
+    const z = 2 * Math.random() - 1,
+      ph = Math.random() * Math.PI * 2,
+      r = Math.sqrt(Math.max(0, 1 - z * z));
+    return [r * Math.cos(ph), z, r * Math.sin(ph)];
+  };
+  const setLife = (): void => {
+    CUR.off = Math.random();
+    CUR.per = 7.0 + Math.random() * 9.0;
+    CUR.on = 0.4 + Math.random() * 0.16;
+    CUR.dir = Math.random() < 0.5 ? 0 : 1;
+  };
+
+  const NA = 16; // loop arcades
+  for (let i = 0; i < NA; i++) {
+    setLife();
+    const big = i < 4;
+    buildLoops({
+      c: randDir(),
+      sep: 0.13 + Math.random() * (big ? 0.17 : 0.11),
+      nArch: big ? 12 + Math.floor(Math.random() * 7) : 5 + Math.floor(Math.random() * 6),
+      kBase: (big ? 0.34 : 0.2) + Math.random() * 0.16,
+      archLean: (Math.random() * 2 - 1) * (big ? 0.7 : 0.5),
+      fan: 0.07 + Math.random() * 0.06,
+      spanAz: Math.random() * Math.PI * 2,
+    });
+  }
+  const NP = 9; // erupting prominences / jets
+  for (let i = 0; i < NP; i++) {
+    setLife();
+    CUR.dir = 0; // prominences always spray base -> tip
+    buildProminence(randDir(), 0.5 + Math.random() * 0.7);
+  }
+
+  const loopGeo = new THREE.BufferGeometry();
+  loopGeo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(POS), 3));
+  loopGeo.setAttribute('aColor', new THREE.BufferAttribute(Float32Array.from(COL), 3));
+  loopGeo.setAttribute('aSize', new THREE.BufferAttribute(Float32Array.from(SZ), 1));
+  loopGeo.setAttribute('aSeed', new THREE.BufferAttribute(Float32Array.from(SEED), 1));
+  loopGeo.setAttribute('aU', new THREE.BufferAttribute(Float32Array.from(UU), 1));
+  loopGeo.setAttribute('aBright', new THREE.BufferAttribute(Float32Array.from(BR), 1));
+  loopGeo.setAttribute('aSeedPos', new THREE.BufferAttribute(Float32Array.from(SEEDPOS), 3));
+  loopGeo.setAttribute('aLifeOff', new THREE.BufferAttribute(Float32Array.from(LOFF), 1));
+  loopGeo.setAttribute('aLifePer', new THREE.BufferAttribute(Float32Array.from(LPER), 1));
+  loopGeo.setAttribute('aOn', new THREE.BufferAttribute(Float32Array.from(LON), 1));
+  loopGeo.setAttribute('aSweep', new THREE.BufferAttribute(Float32Array.from(SWP), 1));
+  loopGeo.setAttribute('aSeq', new THREE.BufferAttribute(Float32Array.from(SEQ), 1));
+  // large bound so the loops/prominences are never frustum-culled
+  loopGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), R * 8);
+
+  const loopMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uPix: { value: pixelRatio }, uPS: { value: 70.0 } },
+    vertexShader: sunLoopVert,
+    fragmentShader: sunLoopFrag,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+  });
+  const loops = new THREE.Points(loopGeo, loopMat);
+  loops.frustumCulled = false;
+  group.add(loops);
+
+  // --- (E) dedicated star backdrop ---------------------------------------
+  // A far, dense dome of twinkling stars sitting BEHIND the opaque photosphere.
+  // It's a child of the rig group (R-independent radius), so the sun naturally
+  // occludes the stars it covers (real depth test) while the rest fill the empty
+  // black space around it. Distributed on a thick spherical shell so parallax
+  // from the slow camera drift gives the field a touch of depth.
+  const STAR_BACK_N = 4200;
+  const STAR_BACK_R = R * 165; // ~640 world units: far behind the sun, well inside the camera far plane
+  const sbPos = new Float32Array(STAR_BACK_N * 3);
+  const sbSeed = new Float32Array(STAR_BACK_N);
+  const sbMag = new Float32Array(STAR_BACK_N);
+  for (let i = 0; i < STAR_BACK_N; i++) {
+    const rad = STAR_BACK_R * (0.85 + Math.random() * 0.3); // thick shell for parallax
+    const u = Math.random() * 2 - 1;
+    const th = Math.random() * Math.PI * 2;
+    const s = Math.sqrt(1 - u * u);
+    sbPos[i * 3 + 0] = rad * s * Math.cos(th);
+    sbPos[i * 3 + 1] = rad * u;
+    sbPos[i * 3 + 2] = rad * s * Math.sin(th);
+    sbSeed[i] = Math.random();
+    // magnitude skewed dim (square) so bright/large stars are rarer standouts
+    // while the bulk still reads as a fine, populated field
+    sbMag[i] = Math.pow(Math.random(), 2);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(sbPos, 3));
+  starGeo.setAttribute('aSeed', new THREE.BufferAttribute(sbSeed, 1));
+  starGeo.setAttribute('aMag', new THREE.BufferAttribute(sbMag, 1));
+  starGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), STAR_BACK_R * 1.3);
+  const starMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uPixelRatio: { value: pixelRatio },
+      uOpacity: { value: 1.0 }, // faded in/out by the render loop at the stage edges
+      uBright: { value: 2.2 }, // overall scale so points survive the post grade
+    },
+    vertexShader: sunStarVert,
+    fragmentShader: sunStarFrag,
+    transparent: true,
+    depthWrite: false, // additive points: don't occlude each other...
+    depthTest: true, // ...but DO get occluded by the opaque photosphere
+    blending: THREE.AdditiveBlending,
+  });
+  const starBack = new THREE.Points(starGeo, starMat);
+  starBack.frustumCulled = false;
+  group.add(starBack);
+
+  scene.add(group);
+
+  const dispose = (): void => {
+    scene.remove(group);
+    surface.geometry.dispose();
+    glow.geometry.dispose();
+    corona.geometry.dispose();
+    loopGeo.dispose();
+    starGeo.dispose();
+    surfaceMat.dispose();
+    glowMat.dispose();
+    coronaMat.dispose();
+    loopMat.dispose();
+    starMat.dispose();
+  };
+
+  return { group, surfaceMat, coronaMat, loopMat, starMat, corona, dispose };
+}
 
 // ---------------------------------------------------------------------------
 //  Scene controller — owns all three.js state for one mount.
@@ -1198,6 +2145,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   gradePass.renderToScreen = true;
   composer.addPass(gradePass);
 
+  // --- yellow-star sun rig (revealed only during the yellow stage) ---
+  // Radius matches the particle sun's resting size: the placeholder used the
+  // uGiantR uniform (4.2) scaled by sunRadFac (0.92) ≈ 3.86 world units, so the
+  // rig lands at the same on-screen scale as the surrounding lifecycle.
+  const SUN_RIG_RADIUS = 4.2 * 0.92;
+  const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
+
   // --- lens uniforms (recomputed each frame from camera geometry) ---
   function updateLensUniforms(): void {
     const aspect = window.innerWidth / window.innerHeight;
@@ -1338,6 +2292,28 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uDot.value = dot;
     diskMatSecondary.uniforms.uDot.value = dot;
 
+    // --- yellow stage: swap the particle cloud for the mesh sun rig ---
+    // The yellow star is the one state rendered by the standalone-Sun rig (mesh
+    // photosphere + glow + corona + animated loops) instead of the point cloud.
+    // The `yellow` flag has no upper bound (stage >= 2.5), so window it to the
+    // yellow slot ONLY (>= 2.5 and < 3.5): once nebula takes over, hand the cloud
+    // back. Hide the disk Points only during that window so the two suns don't
+    // overlap; red giant, nebula and dot keep the cloud, so neighbours are intact.
+    const sunWindow = !!yellow && !nebula; // dot implies nebula, so this is the yellow slot
+    sunRig.group.visible = sunWindow;
+    diskPrimary.visible = !sunWindow;
+    diskSecondary.visible = !sunWindow;
+    // Dedicated star backdrop behind the opaque sun: ease its brightness in across
+    // the entry into the yellow slot (2.5→2.75) and back out as nebula approaches
+    // (3.25→3.5), so the field swells in with the star rather than hard-popping.
+    sunRig.starMat.uniforms.uOpacity.value =
+      smoothstep01((stage - 2.5) / 0.25) * (1 - smoothstep01((stage - 3.25) / 0.25));
+    // The sun is a SOLID, opaque sphere (like the reference). The starfield draws
+    // additively with depthTest OFF, so it would otherwise bleed THROUGH the sun's
+    // body and read as transparent. Hide it during the sun window so nothing shows
+    // through the disc; it returns for every other state. (starSecPts stays off.)
+    starPts.visible = !sunWindow;
+
     // the star/warp lensing only makes sense while the hole exists — fade it.
     // Once the SUN forms we drop the gravitational-warp background entirely and
     // restore the plain starfield to full brightness behind the star.
@@ -1392,6 +2368,43 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uSat.value = exSat;
     diskMatSecondary.uniforms.uSat.value = exSat;
 
+    // --- sun grade: bold, saturated, un-washed. The yellow star reads as vivid
+    // gold; the RED GIANT reads as a big, deep, matte red star. Both use the same
+    // restrained bloom (a thin halo, not a frame-filling glow), no olive cast and
+    // full saturation so the photosphere colour survives. The red giant is
+    // crossfaded in over the gather so the explosion grade hands off cleanly.
+    // redGiantPhase: giant formed, no later state yet.
+    const redGiantPhase = giantHeld > 0.5 && !yellow && !nebula && !dot;
+    if (sunWindow) {
+      // The yellow star is the MESH sun rig (a bright, opaque, real photosphere),
+      // not the dim particle placeholder. The reference renders it blazing gold
+      // with a strong glowing limb halo, so push exposure + bloom UP (not down)
+      // and keep the grade out of the way: no tone-map crush, no olive, no
+      // desaturation — let the bright gold body and white-hot limb survive.
+      bloom.strength = 0.7;         // bright limb/corona halo, but keep a crisp edge
+      bloom.radius = 0.5;           // tighter so the solid sphere edge stays defined
+      gradePass.uniforms.uExposure.value = 1.0;   // full exposure (reference ACES was 1.0)
+      gradePass.uniforms.uOlive.value = 0.0;
+      gradePass.uniforms.uWarmth.value = 0.0;
+      gradePass.uniforms.uSat.value = 1.0;   // full saturation → vivid gold
+    } else if (redGiantPhase) {
+      // gg eases the red-giant grade in as the star finishes gathering (giant
+      // 0→1), so the blast→giant handoff doesn't snap.
+      const gg = Math.min(1, Math.max(0, (giant - 0.4) / 0.6));
+      bloom.strength = bloom.strength * (1 - gg) + 0.22 * gg; // dim, contained halo
+      bloom.radius = CFG.bloomRad;
+      gradePass.uniforms.uExposure.value =
+        gradePass.uniforms.uExposure.value * (1 - gg) + CFG.exposure * 0.7 * gg;
+      gradePass.uniforms.uOlive.value *= 1 - gg;             // kill the olive cast
+      gradePass.uniforms.uWarmth.value = gradePass.uniforms.uWarmth.value * (1 - gg) + 0.14 * gg;
+      gradePass.uniforms.uSat.value = gradePass.uniforms.uSat.value * (1 - gg) + 1.0 * gg;
+      const rSat = diskMatPrimary.uniforms.uSat.value * (1 - gg) + 1.0 * gg;
+      diskMatPrimary.uniforms.uSat.value = rSat;
+      diskMatSecondary.uniforms.uSat.value = rSat;
+    } else {
+      bloom.radius = CFG.bloomRad;
+    }
+
     // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
     const intro = reduced ? 1 : easeOut(Math.min(t / INTRO_DUR, 1));
     const distFactor = NEAR_FACTOR + (1 - NEAR_FACTOR) * intro;
@@ -1444,6 +2457,16 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     ringMat.uniforms.uTime.value = ut;
     gradePass.uniforms.uTime.value = ut;
 
+    // sun rig: animate the photosphere flow, corona streamers and loop jets only
+    // while it is visible; keep the corona plane facing the camera (billboard).
+    if (sunRig.group.visible) {
+      sunRig.surfaceMat.uniforms.uTime.value = ut;
+      sunRig.coronaMat.uniforms.uTime.value = ut;
+      sunRig.loopMat.uniforms.uTime.value = ut;
+      sunRig.starMat.uniforms.uTime.value = ut;
+      sunRig.corona.quaternion.copy(camera.quaternion);
+    }
+
     updateLensUniforms();
     composer.render();
   }
@@ -1471,6 +2494,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       gradePass.material,
     ])
       m.dispose();
+    sunRig.dispose();
     bloom.dispose();
     renderer.dispose();
     if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
@@ -1513,6 +2537,11 @@ const BUILT_STAGES = 5;
 // Direction deadzone: ignore scroll deltas smaller than this (in progress units)
 // so sub-pixel jitter never flips the big-line swap.
 const DIR_DEADZONE = 0.0008;
+
+// Once scroll progress passes this fraction the opening chrome (name + menu)
+// fades out, so the lifecycle scene plays uninterrupted; it returns at the top.
+// Small enough that the very first nudge of the wheel begins the hide.
+const CHROME_HIDE_AT = 0.015;
 
 // Six states evenly spaced on the scroll timeline, black hole at the top
 // (progress 0), pale blue dot at the bottom (progress ~0.86). With STAGE_COUNT
@@ -1603,6 +2632,9 @@ export default function BlackHole() {
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<'down' | 'up'>('down');
   const [reduced, setReduced] = useState(false);
+  // Whether the opening chrome (name + menu) is currently shown. Tracked in a
+  // ref so the scroll callback only touches the DOM on an actual transition.
+  const chromeVisibleRef = useRef(true);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1619,6 +2651,17 @@ export default function BlackHole() {
       if (delta > DIR_DEADZONE) setDirection('down');
       else if (delta < -DIR_DEADZONE) setDirection('up');
       lastProgressRef.current = s.progress;
+      // Cinematic chrome: the name (.bh-identity) and the top-right menu
+      // (.overlay-blog, owned by the layout) belong to the opening frame only.
+      // Once the scroll leaves the top they fade away so the lifecycle scene
+      // plays uninterrupted; they return the moment you're back at the top. A
+      // class on <body> drives both (the menu lives outside this island), with a
+      // small threshold + hysteresis so a hair of jitter never flickers it.
+      const top = s.progress < CHROME_HIDE_AT;
+      if (top !== chromeVisibleRef.current) {
+        chromeVisibleRef.current = top;
+        document.body.classList.toggle('is-scrolled', !top);
+      }
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
@@ -1636,6 +2679,8 @@ export default function BlackHole() {
       unsub();
       tracker.stop();
       dispose();
+      // Leave the body in a clean state if the island unmounts mid-scroll.
+      document.body.classList.remove('is-scrolled');
     };
   }, []);
 

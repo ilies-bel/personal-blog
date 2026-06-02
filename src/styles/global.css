@@ -321,6 +321,54 @@ body.bare {
 /* On the bare home the manifesto identity replaces the small wordmark. */
 body.bare .overlay-brand { display: none; }
 
+/* --- Cinematic chrome: hide the name + menu once scrolling starts ----------- */
+/* The opening frame shows the name (.bh-identity) top-left and the menu
+   (.overlay-blog) top-right. They belong to that first beat only: as soon as the
+   scroll leaves the top, the island adds `is-scrolled` to <body> and both fade
+   up-and-out so the stellar-lifecycle scene plays without chrome in the way.
+   They glide back in the instant you return to the top. The scroll hint goes too.
+   pointer-events are dropped while hidden so the invisible menu isn't clickable. */
+body.bare .bh-identity,
+body.bare .overlay-blog {
+  transition:
+    opacity 0.5s var(--ease-out-quint),
+    transform 0.5s var(--ease-out-quint),
+    visibility 0s linear 0s;
+}
+body.bare.is-scrolled .bh-identity {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-0.6rem);
+  pointer-events: none;
+  transition:
+    opacity 0.5s var(--ease-out-quint),
+    transform 0.5s var(--ease-out-quint),
+    visibility 0s linear 0.5s;
+}
+body.bare.is-scrolled .overlay-blog {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-0.6rem);
+  pointer-events: none;
+  transition:
+    opacity 0.5s var(--ease-out-quint),
+    transform 0.5s var(--ease-out-quint),
+    visibility 0s linear 0.5s;
+}
+
+/* Honour reduced-motion: still hide, but without the slide, and instantly. */
+@media (prefers-reduced-motion: reduce) {
+  body.bare .bh-identity,
+  body.bare .overlay-blog {
+    transition: opacity 0.2s linear, visibility 0s linear 0s;
+    transform: none !important;
+  }
+  body.bare.is-scrolled .bh-identity,
+  body.bare.is-scrolled .overlay-blog {
+    transition: opacity 0.2s linear, visibility 0s linear 0.2s;
+  }
+}
+
 /* --- Manifesto beats (pinned, cross-faded by scroll) ----------------------- */
 /* The island positions these absolutely over the canvas and drives their
    opacity from scroll progress so each lifecycle state reveals a beat. Each beat
