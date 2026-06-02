@@ -243,8 +243,10 @@ const diskVertexShader = /* glsl */ `
   varying float vGiant;  // 0 = ember ramp, 1 = sun warm ramp
   varying float vHeat;   // temperature proxy → fragment colour ramp
   varying float vExplode;// explosion heat proxy → blue-white→amber→red ramp
+  varying float vPlaceholder; // REVIEW: 0 none, 1 yellow, 2 nebula, 3 dot
 
   void main(){
+    vPlaceholder = 0.0; // REVIEW placeholder tag (set in the giant/placeholder block)
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
     float r = r0;
@@ -376,6 +378,37 @@ const diskVertexShader = /* glsl */ `
       vec3 surfacePos = giantPos;
 
       pos = mix(pos, surfacePos, g);
+
+      // === REVIEW PLACEHOLDERS (no real morph) ===========================
+      // Minimal stand-ins for the three new states so their slot + look can be
+      // reviewed. They HARD-SWAP (uYellow/uNebula/uDot arrive as 0 or 1) and
+      // reshape/retint the same particle sphere. Replace this whole block (and
+      // the matching fragment tint) with the real morphs later.
+      //   reuse: sphere (unit sphere coord), giantR, gran/heat, churn.
+      // -- yellow (sun-like) star: a tighter, hotter, brighter photosphere --
+      if(uYellow > 0.5){
+        pos = sphere * (uGiantR * 0.85) * relief;
+        heat = clamp(gran*1.15 + 0.25, 0.0, 1.3);   // hotter surface
+        vPlaceholder = 1.0;
+      }
+      // -- nebula: scatter the surface into a diffuse, puffy cloud -----------
+      if(uNebula > 0.5){
+        vec3 nd = normalize(vec3(
+          h31(vec3(aSeed*91.7, aU*13.3, 7.0)) - 0.5,
+          h31(vec3(aSeed*57.1, aPhase*7.9, 8.0)) - 0.5,
+          h31(vec3(aU*43.7, aSeed*29.3, 9.0)) - 0.5
+        ) + 1e-4);
+        float spread = uGiantR * (1.4 + 2.6*aSeed);  // big loose volume
+        pos = sphere * (uGiantR*0.6) + nd * spread;
+        heat = clamp(0.25 + 0.5*fbm(pos*0.5 + churn), 0.0, 1.0);
+        vPlaceholder = 2.0;
+      }
+      // -- pale blue dot: collapse to a small, soft, cool sphere ------------
+      if(uDot > 0.5){
+        pos = sphere * (uGiantR * 0.18);
+        heat = 0.5;
+        vPlaceholder = 3.0;
+      }
     }
 
     vec4 viewP  = modelViewMatrix * vec4(pos, 1.0);
@@ -618,6 +651,7 @@ const diskFragmentShader = /* glsl */ `
   varying float vGiant;
   varying float vHeat;
   varying float vExplode;
+  varying float vPlaceholder; // REVIEW: 0 none, 1 yellow, 2 nebula, 3 dot
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
@@ -667,6 +701,23 @@ const diskFragmentShader = /* glsl */ `
     // ember (black hole) → explosion (morph) → sun (giant)
     vec3 col = mix(emberCol, exCol, clamp(vExplode, 0.0, 1.0));
     col = mix(col, sunCol, vGiant);
+
+    // === REVIEW PLACEHOLDER TINTS (flat colours per new state) =============
+    // Replace alongside the geometry placeholders when the real morphs land.
+    if(vPlaceholder > 0.5){
+      vec3 pcol = col;
+      if(vPlaceholder < 1.5){
+        // yellow star: warm yellow-white, hotter centres push toward white.
+        pcol = mix(vec3(1.0, 0.78, 0.28), vec3(1.0, 0.97, 0.82), smoothstep(0.4, 1.1, vHeat));
+      } else if(vPlaceholder < 2.5){
+        // nebula: soft violet/magenta cloud with cooler blue voids.
+        pcol = mix(vec3(0.32, 0.16, 0.52), vec3(0.85, 0.45, 0.78), smoothstep(0.2, 0.9, vHeat));
+      } else {
+        // pale blue dot: the famous faint blue point.
+        pcol = vec3(0.55, 0.72, 0.95);
+      }
+      col = pcol;
+    }
 
     float inten = vBright * a;
     gl_FragColor = vec4(col * inten, 1.0);
@@ -1260,21 +1311,26 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uFlash.value = flash;
     diskMatSecondary.uniforms.uFlash.value = flash;
 
-    // --- transition 2: red giant ---
-    diskMatPrimary.uniforms.uGiant.value = giant;
-    diskMatSecondary.uniforms.uGiant.value = giant;
-
     // --- transitions 3-5: yellow star → nebula → pale blue dot ---
-    // Scroll-timeline placement only — these ramp 0→1 across their stage with a
-    // small overlap into the previous one (same trick the red giant uses against
-    // the supernova tail) so no empty boundary frame shows. The shader body is
-    // yours to consume them; nothing here decides what they render.
-    //   yellow star  : ramps over stage ~2→3
-    //   nebula       : ramps over stage ~3→4
-    //   pale blue dot: ramps over stage ~4→5
-    const yellow = Math.min(1, Math.max(0, (stage - 1.7) / 0.6));
-    const nebula = Math.min(1, Math.max(0, (stage - 2.7) / 0.6));
-    const dot = Math.min(1, Math.max(0, (stage - 3.7) / 0.6));
+    // REVIEW MODE (placeholders, no real morph): the new states HARD-SWAP — each
+    // slot snaps to that state's stand-in at the stage midpoint so its look + slot
+    // can be reviewed in isolation. Replace this block (and the matching shader
+    // placeholders, marked "REVIEW PLACEHOLDER") with the real morphs later; the
+    // timeline placement stays the same.
+    //   yellow star  : active across stage 2→3  (snap at 2.5)
+    //   nebula       : active across stage 3→4  (snap at 3.5)
+    //   pale blue dot: active across stage 4→5  (snap at 4.5)
+    const yellow = stage >= 2.5 ? 1 : 0;
+    const nebula = stage >= 3.5 ? 1 : 0;
+    const dot = stage >= 4.5 ? 1 : 0;
+    // Once a later state is active the sphere is held (uGiant pinned to 1) so the
+    // placeholder branch has a sphere to reshape; only the latest-reached state shows.
+    const laterActive = yellow || nebula || dot;
+    const giantHeld = laterActive ? 1 : giant;
+
+    // --- transition 2: red giant (held at 1 once a later placeholder takes over) ---
+    diskMatPrimary.uniforms.uGiant.value = giantHeld;
+    diskMatSecondary.uniforms.uGiant.value = giantHeld;
     diskMatPrimary.uniforms.uYellow.value = yellow;
     diskMatSecondary.uniforms.uYellow.value = yellow;
     diskMatPrimary.uniforms.uNebula.value = nebula;
@@ -1287,13 +1343,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // restore the plain starfield to full brightness behind the star.
     const lensLive = 1 - Math.min(1, Math.max(0, (morph - 0.1) / 0.4));
     starMat.uniforms.uStarBright.value =
-      CFG.starBright * (0.4 + 0.6 * lensLive) * (1 - 0.45 * giant) + CFG.starBright * 0.45 * giant;
+      CFG.starBright * (0.4 + 0.6 * lensLive) * (1 - 0.45 * giantHeld) + CFG.starBright * 0.45 * giantHeld;
     // Completely remove ALL gravity once the star forms: the warp arcs, the
     // secondary (lensed) disk image, and the photon ring are switched off — a
     // star has no event horizon bending light around it. The plain (un-lensed)
     // starfield behind it is restored via uStarBright above. Below ~giant 0.02
     // these are gone entirely.
-    const gravityGone = giant > 0.02;
+    const gravityGone = giantHeld > 0.02;
     warpSeg.visible = !gravityGone;
     warpSeg2.visible = !gravityGone;
     diskSecondary.visible = !gravityGone;   // no lensed disk ghost behind the star
@@ -1303,7 +1359,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // red giant is meant to be DIM, so pull bloom right down once it forms.
     const flareAmt = Math.min(1, Math.max(0, (morph - 0.46) / 0.54));
     bloom.strength = CFG.bloomStr * (1 - 0.7 * flareAmt) + flash * 0.22;
-    bloom.strength = bloom.strength * (1 - 0.6 * giant) + 0.12 * giant;
+    bloom.strength = bloom.strength * (1 - 0.6 * giantHeld) + 0.12 * giantHeld;
     // SEED window: kill bloom hard just before the flash so the collapsed matter
     // reads as a small, crisp, dim seed point — not a big bloomed glow.
     const seedZone = Math.exp(-Math.pow((morph - 0.44) / 0.05, 2.0));
@@ -1320,19 +1376,19 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // black-hole point reads dim and dense), and settle a touch lower for the
     // dim red giant so it reads warm and matte, not glaring.
     gradePass.uniforms.uExposure.value =
-      CFG.exposure * (1 - 0.58 * hotZone) * (1 - 0.18 * giant) * (1 - 0.35 * seedZone);
+      CFG.exposure * (1 - 0.58 * hotZone) * (1 - 0.18 * giantHeld) * (1 - 0.35 * seedZone);
     // Grade through the explosion: the blue-white→amber→red debris wants strong
     // warmth & saturation and the olive/green background tint pulled right back,
     // or the blast reads as a grey-green fog. exGrade is a sharp envelope over
     // the actual blast window (morph ~0.5–0.9), decaying as the giant takes over.
-    const exGrade = Math.exp(-Math.pow((morph - 0.66) / 0.2, 2.0)) * (1 - giant);
-    gradePass.uniforms.uOlive.value = CFG.olive * (1 - 0.85 * giant) * (1 - 0.92 * exGrade);
-    gradePass.uniforms.uWarmth.value = CFG.warmth + 0.06 * giant + 0.12 * exGrade;
-    gradePass.uniforms.uSat.value = CFG.saturation + 0.5 * giant + 0.7 * exGrade;
+    const exGrade = Math.exp(-Math.pow((morph - 0.66) / 0.2, 2.0)) * (1 - giantHeld);
+    gradePass.uniforms.uOlive.value = CFG.olive * (1 - 0.85 * giantHeld) * (1 - 0.92 * exGrade);
+    gradePass.uniforms.uWarmth.value = CFG.warmth + 0.06 * giantHeld + 0.12 * exGrade;
+    gradePass.uniforms.uSat.value = CFG.saturation + 0.5 * giantHeld + 0.7 * exGrade;
     // lift the disk's IN-SHADER saturation across the blast so the explosion ramp
     // colours (warm amber/red, hot blue-white) survive instead of being crushed
     // toward grey by the global desaturation.
-    const exSat = CFG.saturation + 0.55 * exGrade + 0.5 * giant;
+    const exSat = CFG.saturation + 0.55 * exGrade + 0.5 * giantHeld;
     diskMatPrimary.uniforms.uSat.value = exSat;
     diskMatSecondary.uniforms.uSat.value = exSat;
 

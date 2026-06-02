@@ -21,8 +21,9 @@ try {
     reducedMotion: 'reduce',
   });
   const rm = await rmCtx.newPage();
-  await rm.goto(BASE, { waitUntil: 'networkidle' });
-  await rm.waitForTimeout(1500);
+  await rm.route('**/*.{woff,woff2,ttf,otf,eot}', (r) => r.abort());
+  await rm.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await rm.waitForTimeout(2000);
   await rm.screenshot({ path: resolve(OUT, 'reduced-motion-top.png') });
   console.log('✓ reduced-motion top');
   await rmCtx.close();
@@ -30,8 +31,9 @@ try {
   // --- mobile base frame ---
   const mCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const mob = await mCtx.newPage();
-  await mob.goto(BASE, { waitUntil: 'networkidle' });
-  await mob.waitForTimeout(2600);
+  await mob.route('**/*.{woff,woff2,ttf,otf,eot}', (r) => r.abort());
+  await mob.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await mob.waitForTimeout(3000);
   await mob.screenshot({ path: resolve(OUT, 'mobile-top.png') });
   console.log('✓ mobile top');
   await mCtx.close();
