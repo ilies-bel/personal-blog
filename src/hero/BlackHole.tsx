@@ -176,8 +176,12 @@ const diskVertexShader = /* glsl */ `
   uniform float uBright;
   // --- Transition 1: reverse supernova (driven by scroll). 0 = black hole.
   //   uMorph ∈ [0,1]: implosion (0→0.45), flash (~0.5), flare-out (0.55→1).
-  //   uFlash is a precomputed 0..1 burst envelope peaking at the flash. ---
-  uniform float uMorph, uFlash;
+  //   uFlash is a precomputed 0..1 burst envelope peaking at the flash.
+  //   uCollapse ∈ [0,1]: the red-giant SURFACE collapse. 0 = full red-giant
+  //     sphere; 1 = the surface has shrunk to the point (the flash/seed). The
+  //     non-homogeneous shrink of the sphere IS the explosion — laggard regions
+  //     of the surface stick out as the finger-spikes (see the giant block). ---
+  uniform float uMorph, uFlash, uCollapse;
 
   ${LENS_GLSL}
 
@@ -298,6 +302,8 @@ const diskVertexShader = /* glsl */ `
   varying float vHeat;   // temperature proxy → fragment colour ramp
   varying float vExplode;// explosion heat proxy → blue-white→amber→red ramp
   varying float vPlaceholder; // REVIEW: 0 none, 2 nebula, 3 dot
+  varying float vNeb;    // nebula radial factor (0 hot core → 1 rusty rim)
+  varying float vNebLane;// nebula lane: 0 = diffuse haze, 1 = filament strand
   // --- yellow (sun) state channels, ported from the standalone Sun render ---
   varying float vSunM;    // warm photosphere noise field (0..1) → colour ramp
   varying float vSunLimb; // limb factor (0 centre → 1 rim) → bright limb glow
@@ -311,6 +317,8 @@ const diskVertexShader = /* glsl */ `
     vSunM = 0.0; vSunLimb = 0.0; vSunDark = 0.0; // sun-photosphere channels (set below)
     vSunFlare = 0.0; vSunHot = 0.0;             // sun atmosphere channels
     vSunRed = 0.0;                              // 0 gold (yellow), 1 red giant
+    vNeb = 0.0;                                 // nebula radial factor
+    vNebLane = 0.0;                             // nebula lane (0 diffuse, 1 filament)
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
     float r = r0;
@@ -344,10 +352,14 @@ const diskVertexShader = /* glsl */ `
     // much further than the bulk (Rayleigh–Taylor fingers); a finer octave adds
     // sub-filaments. The contrast is pushed HARD so the explosion reads as
     // distinct radial RAYS spiking out of a core, not a uniform fog ball.
-    float lane = fbm(blastDir*2.6 + 11.0);
-    lane = pow(smoothstep(0.30, 0.92, lane), 2.4);  // sharp finger spikes
-    float fil  = fbm(blastDir*7.0 + 4.0);
-    float jet  = 0.35 + 1.9*lane + 0.25*fil;        // ~0.35 (void) .. ~2.5 (spike)
+    // Everything that shapes the blast is sampled from CONTINUOUS fields over the
+    // (spatial) blastDir — no per-particle aSeed term — so neighbouring particles
+    // (nearby blastDir) get nearly-identical reach/velocity and travel together as
+    // coherent sheets & filaments rather than as independent grains.
+    float lane = fbm(blastDir*2.2 + 11.0);
+    lane = pow(smoothstep(0.28, 0.90, lane), 2.2);  // sharp finger spikes
+    float fil  = fbm(blastDir*6.0 + 4.0);
+    float jet  = 0.40 + 2.6*lane + 0.30*fil;        // ~0.40 (void) .. ~3.5 (spike)
     // filament brightness from the STABLE lane field (no uTime / post-pos), so
     // bright wisps hold still as the remnant expands. High contrast: the rays
     // glow, the voids between them stay dark → the radial structure reads.
@@ -360,28 +372,53 @@ const diskVertexShader = /* glsl */ `
     // contracts to a tiny core. A modest per-particle spread is kept (and the
     // camera pushes IN, see the frame loop) so the seed reads without whiteout.
     float implodeE = implode*implode*implode;       // cubic ease-IN (speeds up)
-    // seedShrink: 1 early in the implosion → ~0.12 right before the flash, so the
-    // ball collapses from ~rIn-scale down to a tiny dense point.
-    float seedShrink = mix(1.0, 0.12, smoothstep(0.18, 0.46, uMorph));
+    // seedShrink: 1 early in the implosion → ~0.03 right before the flash, so the
+    // ball collapses from ~rIn-scale down to a TRUE speck. The camera also pulls
+    // WAY back at the seed (see the zoom story in frame()), so the combination
+    // reads as a tiny point in a vast dark field next to the huge hero black hole.
+    // ORGANIC crush: one side collapses into the seed slightly AHEAD of the other
+    // (low-freq lobe over the stable blast direction → no flicker), so the implosion
+    // is lopsided, not a perfect uniform shrink. Endpoints stay pinned (1 early, 0.03
+    // by the blast) so the hero and the blast structure are unchanged.
+    float crushBias = clamp(fbm(blastDir*1.6 + 23.0)*2.0 - 1.0, -1.0, 1.0);
+    float crushLo = clamp(0.14 - 0.10*crushBias, 0.0, 0.30);
+    float crushHi = clamp(0.46 - 0.10*crushBias, 0.34, 0.60);
+    float seedShrink = mix(1.0, 0.03, smoothstep(crushLo, crushHi, uMorph));
     float coreR    = uRin * (0.7 + 1.1*aU) * seedShrink;  // shrinks to a tiny seed
     float rImplode = mix(r0, coreR, implodeE);
 
     // -- blast: radius flung outward from the small seed, fast leading edge ----
-    // Reach is kept TIGHT so the ejecta reads as a contained fireball with rays
-    // against dark space — not a frame-filling fog. The visible frame at the
-    // origin only spans ~10 units (cam ~20 out, 30° FOV), and the disk's rOut is
-    // 18, so the bulk must stay within a few units. Bulk lands ~0.18–0.34 rOut
-    // (~3–6 units); the fastest finger jets spike to ~0.85 rOut.
-    float speed   = uRout * (0.18 + 0.16*aSeed) * jet;  // per-particle reach
-    float reach   = pow(flare, 0.55);                   // fast launch, easing
+    // The ejecta is BIG: a sprawling remnant of rays and sheets, not a contained
+    // fireball. The camera pulls WAY back across the blast (see the zoom story in
+    // frame()), so the cloud can fill far more world-space and still sit inside the
+    // frame. The reach magnitude is a CONTINUOUS field over blastDir (a smooth
+    // low-frequency speed lobe × the jet lanes) — NOT a per-particle aSeed term —
+    // so neighbouring particles share a velocity and the cloud expands as coherent
+    // membranes & filaments. Bulk lands ~0.4–0.7 rOut; the fastest jets spike past
+    // rOut into long spikes.
+    float spdLobe = 0.78 + 0.55*fbm(blastDir*1.3 + 31.0);  // smooth spatial speed field
+    float speed   = uRout * 0.42 * spdLobe * jet;          // neighbour-coherent reach
+    float reach   = pow(flare, 0.55);                      // fast launch, easing
+    // LIVING blast: the ejecta isn't frozen at a held scroll position — it slowly
+    // BREATHES in and out over time so the remnant reads as turbulent plasma, not a
+    // static frame. The pulse phase comes from blastDir (a smooth spatial field), so
+    // whole lobes swell and ebb TOGETHER (neighbour-coherent) — sheets billowing,
+    // not per-grain shimmer. Two octaves: a slow global heave + a faster regional
+    // ripple. Gated by flare so it only animates once the blast has launched (the
+    // hero black hole and the seed stay perfectly still).
+    float pulsePhase = fbm(blastDir*1.7 + 5.0) * 6.2831;       // spatial phase per lobe
+    float breathe = 0.16 * sin(uTime*0.55 + pulsePhase)        // slow heave (±16%)
+                  + 0.07 * sin(uTime*1.30 + pulsePhase*2.3);   // faster regional ripple
+    reach *= 1.0 + breathe * flare;                           // grow/shrink over time
     float ejectaR = coreR + speed * reach;
 
     r = mix(rImplode, ejectaR, step(0.46, uMorph));
-    r = max(r, uRin*0.12);                          // off the singularity (tiny seed ok)
+    r = max(r, uRin*0.03);                          // off the singularity (true speck ok)
 
-    // orbits spin up as they fall in (angular-momentum feel, accelerating into
-    // the flash), then the flung-out cloud keeps only a slow residual tumble.
-    float spinUp = mix(1.0, 3.6, implodeE) * mix(1.0, 0.30, flare);
+    // orbits spin up HARD as they fall in (angular-momentum feel, accelerating
+    // into the flash) so the debris visibly WHIPS around the tiny seed — the
+    // accretion read — then the flung-out cloud keeps only a slow residual tumble.
+    float spinUp = mix(1.0, 5.5, implodeE) * mix(1.0, 0.30, flare);
 
     // Keplerian orbit (spun up during the implosion)
     float omega = uOmega0 * pow(r0, -1.5) * spinUp;
@@ -395,13 +432,49 @@ const diskVertexShader = /* glsl */ `
     // the other half of the whiteout fix). It then continues straight out as the
     // ejecta rays emanating from the core.
     vec3 blastPos = blastDir * r;
-    float toRay = smoothstep(0.12, 0.50, uMorph);   // 3D well before the flash
+    // Hand off to the radial blast LATER so a residual orbital swirl persists at
+    // the seed — debris reads as ACCRETING around the tiny core (not a static
+    // collapse) — then goes fully radial as the blast launches.
+    float toRay = smoothstep(0.20, 0.52, uMorph);
     vec3 pos = mix(orbitPos, blastPos, toRay);
 
-    // a little persistent turbulence so the rays aren't glassy-straight: a low
-    // perpendicular-ish jitter that grows with the blast (reuses fbm).
-    float wob = fbm(blastDir*3.0 + aSeed*7.0) - 0.5;
-    pos += blastDir.yzx * wob * uRin * 0.6 * flare;
+    // --- subtle accretion pull toward the dark seed -------------------------
+    // In the seed window the dark core exerts a gentle inward tug on nearby
+    // debris: radius eased inward along a slightly-spiral path (a touch of extra
+    // tangential lead), strongest just outside the core and only while the seed
+    // exists. This is a small GEOMETRIC nudge — not a glow — so matter reads as
+    // being aspirated into the point. Vanishes by the blast (toRay→1 → pull→0),
+    // and is a no-op at the hero (pullWin≈0 at uMorph=0).
+    float pullWin   = exp(-pow((uMorph-0.49)/0.07, 2.0));            // seed window
+    float nearCore  = 1.0 - smoothstep(coreR, coreR + uRin*1.6, r);  // 1 near seed
+    float pullAmt   = pullWin * nearCore * (1.0 - toRay) * 0.22;     // subtle
+    float rPull     = r * (1.0 - 0.5*pullAmt);
+    float phiPull   = phi + uSpinDir * pullAmt * 1.4;               // tangential lead
+    vec3 spiralPos  = vec3(rPull*cos(phiPull), thick*(1.0-0.4*pullAmt), rPull*sin(phiPull));
+    pos = mix(pos, spiralPos, pullWin);
+    // strained-stream light: passed to the lighting block, where it adds light
+    // ONLY on the infalling stream (∝ inward strain), never on the dark core.
+    float infallGlow = pullAmt * 4.0;
+
+    // organic billowing so the rays aren't glassy-straight. A SMOOTH transverse
+    // displacement field over blastDir (three decorrelated fbm channels → a
+    // curl-like vector), built ONLY from the spatial direction (no aSeed), so
+    // neighbouring particles are pushed the SAME way → the ejecta folds into
+    // coherent rolling sheets and lobes instead of per-grain fuzz. Scaled by the
+    // distance flung out so the deformation grows organically with the expansion.
+    // The sample point DRIFTS with uTime, so the sheets slowly roll and re-fold
+    // over time (living turbulence) rather than holding one frozen shape — the
+    // drift is a shared offset, so coherence between neighbours is preserved.
+    vec3 swDrift = vec3(0.0, uTime*0.06, 0.0);
+    vec3 swirl = vec3(
+      fbm(blastDir*3.4 +  7.0 + swDrift),
+      fbm(blastDir*3.4 + 19.0 + swDrift),
+      fbm(blastDir*3.4 + 41.0 + swDrift)
+    ) - 0.5;
+    // project onto the plane perpendicular to the ray so it reads as sideways
+    // billowing, not extra radial reach.
+    swirl -= blastDir * dot(swirl, blastDir);
+    pos += swirl * (r * 0.45 + uRin * 0.5) * flare;
 
     // === Transition 2: remnant cloud → a detailed Sun =======================
     // As uGiant goes 0→1 the scattered remnant GATHERS into a textured star.
@@ -436,12 +509,103 @@ const diskVertexShader = /* glsl */ `
       float giantR = uGiantR * relief;
       vec3 giantPos = sphere * giantR;
 
-      // ease the gather aggressively (remnant is scattered over a huge volume)
-      float g = smoothstep(0.0, 0.6, uGiant);
-      g = g*g*(3.0-2.0*g);
-      vec3 surfacePos = giantPos;
+      // ================= UNIFIED NON-HOMOGENEOUS SURFACE COLLAPSE ============
+      // THE explosion. There is no separate radial blast — the spiky "explosion"
+      // IS this red-giant surface caving in unevenly. Each patch of the sphere
+      // collapses inward at its OWN rate; the laggard patches stay near full radius
+      // (and extend PAST it) while their neighbours shrink, so they read as long
+      // radial finger-spikes streaming off a churning core (ref Image-3). It is
+      // always ONE connected surface — never a big shell + a small core at once.
+      //
+      // Driven by uCollapse (0 = full red-giant sphere, 1 = collapsed to the point,
+      // where the legacy supernova flash fires). ALL the motion fields are fbm over
+      // the spatial dir (no aSeed term), so neighbouring particles share their
+      // timers → the fingers move as COHERENT groups, not per-grain shimmer.
+      vec3 dir = sphere;
 
-      pos = mix(pos, surfacePos, g);
+      // per-region remap of the global collapse progress -----------------------
+      float bias = fbm(dir*1.6 + 23.0)*2.0 - 1.0;     // broad lobes: lead / lag
+      float lump = fbm(dir*4.0 +  9.0);               // patch-scale lumpiness
+      float fil  = fbm(dir*7.5 +  4.0);               // fine sub-filament detail
+      float regOffset = bias*0.30;                    // some regions start earlier/later
+      float regSlope  = 1.0 + bias*0.55 + (lump-0.5)*0.4;  // …and collapse faster/slower
+      // sparse LAGGARD field: the high tail of a sharpened lobe → a minority of
+      // regions that resist the collapse the longest. These become the fingers.
+      float lagField = pow(smoothstep(0.45, 0.92, fbm(dir*2.2 + 11.0)), 2.2);
+      lagField = clamp(lagField + 0.25*fil*lagField, 0.0, 1.5);  // split into threads
+
+      // per-region collapse 0→1. The per-region offset/slope/hold are all gated by
+      // a window that is 0 at BOTH ends (uCollapse·(1-uCollapse)), so the endpoints
+      // pin EXACTLY: uCollapse=0 → kReg=0 (full sphere, every region) and
+      // uCollapse=1 → kReg=1 (the point, every region). Only the MIDDLE desyncs →
+      // the non-homogeneous caving-in, with laggards trailing the bulk into fingers.
+      float desync = uCollapse*(1.0 - uCollapse)*4.0;  // 0 at ends, 1 at mid
+      float kReg = uCollapse + (regOffset + uCollapse*(regSlope - 1.0))*desync*0.5;
+      kReg = kReg - lagField*desync*0.9;               // laggards trail the bulk
+      kReg = clamp(kReg, 0.0, 1.0);
+
+      // independent per-region LIFE timer: even at a held scroll position the
+      // fingers extend / retract on their own clocks → a living, churning core.
+      // Phase from dir (spatial) so whole lobes pulse together; uTime=0 under
+      // reduced motion → perfectly static.
+      float fphase = fbm(dir*1.7 + 5.0)*6.2831;
+      float fingerLife = 0.18*sin(uTime*0.5 + fphase) + 0.08*sin(uTime*1.2 + fphase*2.3);
+
+      // collapseScale: per-region radial scale, NORMALISED so 1.0 = the full giant
+      // surface radius. The bulk shrinks toward ~0 (collapseLo) while LAGGARD regions
+      // stay near 1 and EXTEND past it (>1) → the finger-spikes. This factor is
+      // applied to whatever radius the surface renderer uses (the sun/red-giant
+      // branch below), so the actual photosphere caves in and spikes — there is no
+      // separate blast and never a two-scale frame.
+      float collapseLo = 0.04;                                  // bulk near-point
+      float baseScale  = mix(1.0, collapseLo, kReg);            // the COLLAPSING bulk
+      // FINGER scale: the laggard regions HOLD near the full giant radius while the
+      // bulk caves in — that radial CONTRAST is what makes the long streaming spikes
+      // (ref Image-3). The fingers are CAPPED at the original sphere surface (scale
+      // 1.0) and never punch past it (user constraint). They reach UP toward the
+      // surface as the collapse deepens, then taper back toward the bulk near the
+      // point so everything reaches the seed for the flash. fingerLife only modulates
+      // how far UP toward 1.0 a finger reaches (always ≤ 1.0), never beyond.
+      float extendWin = smoothstep(0.0, 0.30, uCollapse) * (1.0 - smoothstep(0.80, 1.0, uCollapse));
+      // how close to the full surface this finger reaches (0..1), per region + life.
+      float fingerReach = clamp(extendWin * (0.7 + 0.5*lagField) * (0.85 + 0.15*fingerLife), 0.0, 1.0);
+      // finger tip scale: between the collapsing bulk and the original surface (1.0),
+      // never above it. max() so a finger can only stick OUT relative to the bulk.
+      float fingerScale = max(baseScale, mix(baseScale, 1.0, fingerReach));
+      // only the sparse laggard regions become fingers; everything else is the bulk.
+      float fingerMask = smoothstep(0.10, 0.5, lagField);
+      float collapseScale = mix(baseScale, fingerScale, fingerMask);
+
+      // STREAK the fingers: a finger isn't a displaced shell — it's a long trail of
+      // matter from the core out to the tip. Spread each finger particle's radius
+      // across [bulk core .. finger tip] using a stable per-particle parameter
+      // (aThickN, ~[-1,1] → 0..1), so the laggard regions read as long radial streaks
+      // populated along their whole length, not stubs. Non-finger (bulk) particles
+      // are unaffected (fingerMask≈0 → streakScale==collapseScale==baseScale).
+      float along = 0.5 + 0.5*aThickN;                 // 0..1 stable per particle
+      along = pow(along, 0.7);                          // bias toward the tip a little
+      // streak radius runs from the bulk surface up to this finger's full reach.
+      float streakScale = mix(baseScale, collapseScale, mix(1.0, along, fingerMask));
+
+      // tangential curl so the fingers STREAM rather than sit glassy-radial: a
+      // curl-like vector (3 decorrelated fbm channels) projected onto the plane
+      // perpendicular to dir, drifting slowly with uTime. In UNIT-radius space
+      // (multiplied by the surface radius where it's applied). Only on the spikes
+      // (scaled by lagField) and only once the collapse is underway.
+      vec3 dr = vec3(
+        fbm(dir*3.4 +  7.0 + vec3(0.0, uTime*0.05, 0.0)),
+        fbm(dir*3.4 + 19.0 + vec3(0.0, uTime*0.05, 0.0)),
+        fbm(dir*3.4 + 41.0 + vec3(0.0, uTime*0.05, 0.0))
+      ) - 0.5;
+      dr -= dir*dot(dr, dir);
+      // small TANGENTIAL sway (perpendicular to dir → barely affects radius, so the
+      // surface cap holds) just to keep the fingers from being glassy-straight.
+      vec3 curlOff = dr*(collapseScale*0.22)*lagField*smoothstep(0.05, 0.5, uCollapse);
+
+      // default position for the (rare) case the surface renderer below is inactive:
+      // the unit sphere scaled by the (streaked) collapse. The sun/red-giant branch
+      // re-applies streakScale + curlOff to its own textured surface radius.
+      pos = dir*(giantR*streakScale) + curlOff*giantR;
 
       // === REVIEW PLACEHOLDERS (no real morph) ===========================
       // Minimal stand-ins for the three new states so their slot + look can be
@@ -510,7 +674,14 @@ const diskVertexShader = /* glsl */ `
         vSunDark = dark;
 
         float sunRelief = 1.0 + 0.05*(m - 0.55);
-        vec3 surf = sphere * (uGiantR * sunRadFac) * sunRelief;
+        // collapseScale / curlOff (from the unified surface-collapse block) make the
+        // red-giant photosphere cave in non-homogeneously: the bulk shrinks toward the
+        // point while laggard regions extend into the finger-spikes. At the full red
+        // giant (uCollapse=0) collapseScale=1 and curlOff=0 → the sphere is unchanged.
+        float sunR0 = uGiantR * sunRadFac;
+        // streakScale spreads finger particles along [core..surface] so the spikes
+        // are long populated trails; capped at the surface so they never exceed it.
+        vec3 surf = sphere * (sunR0 * sunRelief * streakScale) + curlOff*sunR0;
         pos  = surf;
         heat = m;
 
@@ -519,7 +690,9 @@ const diskVertexShader = /* glsl */ `
         // uTime → identity is fixed, so a loop stays a loop frame to frame). The
         // red giant is cooler and far less magnetically active than the yellow
         // sun, so it gets noticeably FEWER, softer features.
-        float sunR  = uGiantR * sunRadFac;                 // actual surface radius
+        // atmosphere anchored to the (collapsing) surface radius so loops/jets ride
+        // the photosphere inward as it caves in rather than hanging in empty space.
+        float sunR  = uGiantR * sunRadFac * collapseScale;  // actual (collapsed) radius
         float atmoThresh = (redGiant > 0.5) ? 0.955 : 0.91;
         float pick = h31(vec3(aSeed*53.1, aPhase*11.7, aU*7.3));
         if(pick > atmoThresh){
@@ -580,17 +753,106 @@ const diskVertexShader = /* glsl */ `
           }
         }
       }
-      // -- nebula: scatter the surface into a diffuse, puffy cloud -----------
+      // -- nebula: a sprawling, filamentary supernova remnant (Crab-like) -----
+      // Abstracted from the reference: a big, organically-clustered VOLUME — not a
+      // shell of rays. Each particle gets a stable position inside a soft-edged,
+      // slightly-flattened ELLIPSOID (filled, not a sphere surface), then a drifting
+      // 3D domain-warped fbm field carves a tangled WEB of bright filaments against
+      // dark voids. The web (not the geometry) is what reads as the Crab's tendrils,
+      // so there are NO radial spokes — it's a 3D cloud seen from outside. The warp
+      // drifts with uTime ("wave styling") so the whole web slowly rolls and folds
+      // → texture + cohesion (liant). Per-particle size/colour come from the web
+      // density (heat) and the position in the cloud (vNeb), so dense strands are
+      // fat & bright while void dust is tiny & faint. Camera pulls WAY back here.
       if(uNebula > 0.5){
-        vec3 nd = normalize(vec3(
-          h31(vec3(aSeed*91.7, aU*13.3, 7.0)) - 0.5,
-          h31(vec3(aSeed*57.1, aPhase*7.9, 8.0)) - 0.5,
-          h31(vec3(aU*43.7, aSeed*29.3, 9.0)) - 0.5
-        ) + 1e-4);
-        float spread = uGiantR * (1.4 + 2.6*aSeed);  // big loose volume
-        pos = sphere * (uGiantR*0.6) + nd * spread;
-        heat = clamp(0.25 + 0.5*fbm(pos*0.5 + churn), 0.0, 1.0);
-        vPlaceholder = 2.0;
+        // ===== Crab Nebula (M1), ported from the standalone reference render =====
+        // The reference layers THREE point systems: ropey FILAMENT strands, a
+        // centrally-concentrated DIFFUSE synchrotron haze, and a central PULSAR.
+        // We can't run three geometries in one cloud, so each particle is dealt into
+        // one of these LANES by a stable hash and shaped accordingly. The ellipsoid
+        // is squashed on Y (reference ELL ≈ 1.26,1.0,0.84 → a broad oval).
+        float laneH = h31(vec3(aSeed*53.7, aPhase*11.3, 3.0)); // 0..1 lane selector
+        vec3 ELL = vec3(1.26, 0.84, 1.0);                   // oval / flattening (y squashed)
+        float NR = uGiantR * 1.05;                          // overall nebula radius
+        // a wandering drift so the whole remnant slowly rolls/breathes.
+        vec3 nDrift = vec3(uTime*0.020, uTime*0.014, -uTime*0.016);
+
+        if(laneH < 0.46){
+          // ---- FILAMENT LANE: continuous wavy STRANDS (the ropey tendrils) ------
+          // CRITICAL: many particles must SHARE a strand so they form a continuous
+          // rope, not isolated dots. Each particle gets a quantized STRAND ID; all
+          // particles on a strand share its anchor, axis, length and waviness, and
+          // each sits at its own arc position along it. That coherence reads as
+          // filaments — the structure the eye latches onto.
+          float STRANDS = 520.0;
+          float sid = floor(h31(vec3(aSeed*1.7, aPhase*2.3, 0.5)) * STRANDS); // strand id
+          float sH1 = h31(vec3(sid, 11.0, 3.0));           // per-strand hashes
+          float sH2 = h31(vec3(sid, 23.0, 7.0));
+          float sH3 = h31(vec3(sid, 41.0, 9.0));
+          float sH4 = h31(vec3(sid, 67.0, 5.0));
+          // strand anchor: a point on the ellipsoid shell (rim-biased, where the
+          // Crab's filaments live). Even-area direction from the strand hashes.
+          float su = sH1*2.0 - 1.0;                         // cos(theta)
+          float sphi = sH2 * 6.2831;
+          float ssp = sqrt(max(0.0, 1.0 - su*su));
+          vec3 sdir = vec3(ssp*cos(sphi), su, ssp*sin(sphi));
+          float rad = NR * (0.30 + 0.70*pow(sH3, 0.45));
+          vec3 anchor = normalize(vec3(sdir.x*ELL.x, sdir.y*ELL.y, sdir.z*ELL.z)) * rad;
+          // orthonormal frame at the anchor
+          vec3 rn = normalize(anchor);
+          vec3 t1 = abs(rn.y) > 0.9 ? vec3(1.0,0.0,0.0) : vec3(0.0,1.0,0.0);
+          vec3 tA = normalize(cross(rn, t1));
+          vec3 tB = normalize(cross(rn, tA));
+          float ang = sH4 * 6.2831;
+          vec3 along = tA*cos(ang) + tB*sin(ang);          // shared strand axis
+          // arc position of THIS particle along the strand (its own hash → spread)
+          float s = h31(vec3(aSeed*5.0, aPhase*3.0, 13.0)) - 0.5; // -0.5..0.5
+          float len  = NR * mix(0.18, 0.80, sH1);          // strand length (shared)
+          float wAmp = NR * mix(0.03, 0.20, sH2);          // wobble amplitude (shared)
+          float wFrq = mix(2.0, 8.0, sH3);                 // wobble frequency (shared)
+          float wob  = sin(s*wFrq*6.2831 + sH4*6.2831 + uTime*0.2) * wAmp;
+          float bend = (sH2 - 0.5) * NR * 0.20;            // strand bow (shared)
+          pos = anchor + along*(s*len) + tB*wob + rn*(cos(s*3.14159)*bend);
+          // tiny per-particle jitter ACROSS the rope so it has thickness, not a line
+          pos += tB * (h31(vec3(aSeed, 2.0, 8.0))-0.5) * (NR*0.025);
+          pos += rn * (h31(vec3(aSeed, 4.0, 6.0))-0.5) * (NR*0.020);
+          float rN = clamp(length(pos) / NR, 0.0, 1.0);
+          vNeb = rN;
+          heat = 0.85 + 0.5*pow(h31(vec3(aSeed*4.0, sid, 8.0)), 3.0); // bright knots
+          vNebLane = 1.0;                                  // filament strand
+          vPlaceholder = 2.0;
+        } else {
+          // ---- DIFFUSE LANE: centrally-concentrated synchrotron haze -----------
+          // The cloud has ~30x the reference's diffuse density; uncuLLed it stacks
+          // into an opaque white wall. So we cull most of it (keep ~12%, more in the
+          // bright clumps) and carve patchy voids with an fbm field, leaving a thin
+          // coloured veil the filaments read against — not a solid luminous ball.
+          float dist = NR * 0.95 * pow(h31(vec3(aSeed*13.0, aU*17.0, 5.0)), 1.55);
+          vec3 dir = vec3(sphere.x*ELL.x, sphere.y*ELL.y, sphere.z*ELL.z);
+          vec3 p0 = dir * dist;
+          vec3 sway = vec3(
+            fbm(p0*0.18 +  9.0 + nDrift*0.7),
+            fbm(p0*0.18 + 23.0 + nDrift*0.7),
+            fbm(p0*0.18 + 51.0 + nDrift*0.7)
+          ) - 0.5;
+          pos = p0 + sway * (NR * 0.10);
+          float rN = clamp(dist / (NR*0.95), 0.0, 1.0);
+          vNeb = rN;
+          float cloudF = fbm(p0*0.45 + nDrift);            // 0..1 patchy field
+          float clump  = smoothstep(0.42, 0.72, cloudF);   // bright gas pockets
+          heat = mix(0.30, 0.06, rN) * (0.25 + 0.95*clump);
+          vPlaceholder = 2.0;
+          float keep = h31(vec3(aSeed*23.0, aU*5.0, 19.0));
+          if(keep > 0.12 + 0.30*clump) vNebLane = -1.0;    // -1 → culled (sized to 0)
+          // ---- PULSAR: snap a tiny fraction to the bright central core ---------
+          if(laneH > 0.992){
+            pos = sway * (NR*0.015);
+            vNeb = 0.0;
+            vNebLane = 0.0;                                 // un-cull the pulsar
+            heat = 1.6;
+            vPlaceholder = 2.5;                             // pulsar sub-tag (→ white-blue)
+          }
+        }
       }
       // -- pale blue dot: collapse to a small, soft, cool sphere ------------
       if(uDot > 0.5){
@@ -678,6 +940,21 @@ const diskVertexShader = /* glsl */ `
 
     float pv = 0.45 + 0.55*aSeed;
     float bright = 3.3 * uBright * beam * grav * emiss * useMag * pv * coreFade;
+
+    // === center-out feed (scroll-UP: seed → hero disk) =====================
+    // During the transition the disk lights from the CENTER OUTWARD: at high
+    // uMorph only the inner ring glows; as uMorph→0 a front sweeps to the rim so
+    // the full hero disk is lit (the disk "charges up" from a central source).
+    // NO-OP at the hero (uMorph=0): the front sits past the rim → feed=1 for all
+    // aU, so the resting disk is exactly unchanged. Only active for uMorph<0.46,
+    // below the implosion lighting, so it never fights the explosion.
+    float feedActive = smoothstep(0.46, 0.30, uMorph);          // 1 below 0.30 → 0 above 0.46
+    float feedFront  = mix(1.25, 0.0, smoothstep(0.0, 0.45, uMorph)); // aU front: 1.25 @0 → 0 @0.45
+    float feed       = smoothstep(feedFront + 0.22, feedFront, aU);   // inner (aU small) lit first
+    float feedHot    = exp(-pow((aU - feedFront)/0.10, 2.0)) * 0.8;   // traveling feeding point
+    feed = mix(1.0, feed * (1.0 + feedHot), feedActive);        // relax to 1.0 when inactive
+    bright *= feed;
+
     // adjustable asymmetries: top/bottom and left/right (relative to BH centre, screen space)
     float yN = (rFin > 1e-4) ? dFin.y / rFin : 0.0;            // +up / -down
     float xN = (rFin > 1e-4) ? (dFin.x*uAspect) / rFin : 0.0;  // +right / -left
@@ -702,17 +979,36 @@ const diskVertexShader = /* glsl */ `
     // slightly BEFORE the flash (0.44); it darkens the very dense CORE (small
     // absolute radius) while keeping a thin bright rim on the shell just outside,
     // so the seed reads as a compact point with a glowing edge, not a soft blob.
-    float seedDip = exp(-pow((uMorph-0.44)/0.05, 2.0));   // narrow, pre-flash
-    float coreDark = 1.0 - smoothstep(uRin*0.15, uRin*0.5, r); // 1 deep in the core
-    bright *= 1.0 - 0.9*seedDip*coreDark;
+    // The dense core goes genuinely DARK — the light has fallen into the point, so
+    // the seed reads as a real black hole, not a painted glow. Widen the dark zone
+    // (uRin*0.6) and broaden+deepen the dip (σ0.07, 0.97) so the core holds near-
+    // black across the whole seed beat. coreDark is declared ONCE here and reused
+    // by the accretion-stream light and the flash gate below.
+    float coreDark = 1.0 - smoothstep(uRin*0.15, uRin*0.6, r); // 1 deep in the core
+    // centred just BEFORE the flash and narrow, so the core is near-black at the
+    // seed but releases by the breakout (0.50) → the loud flash survives.
+    float seedDip = exp(-pow((uMorph-0.45)/0.04, 2.0));
+    bright *= 1.0 - 0.97*seedDip*coreDark;
     // peak-compression dip — edge-shaping; the JS uBright cut + the ceiling
     // below do the heavy lifting against a whiteout, this softens the burst rim.
     float compress = exp(-pow((uMorph-0.5)/0.15, 2.0));
     bright *= 1.0 - 0.40*compress;
-    // the shock-breakout burst — the one bright beat we DO want, but restrained:
-    // the matter is densely packed at the flash, so a big additive term here
-    // stacks into a whiteout. Keep it a firm, contained glow.
-    bright += uFlash * (0.55 + 0.9*pv) * (0.6 + 0.4*useMag);
+    // the shock-breakout burst — the one bright beat we DO want for the supernova
+    // proper, but GATED so it never paints a glow blob over the dark seed: the
+    // dense core gets almost none of it (it must read black), and the additive
+    // glow is extra-suppressed right in the seed window. The spread-out SHELL and
+    // fingers (coreDark≈0 out there) keep the full loud breakout, so the detonation
+    // is unchanged — only the central blob is removed.
+    // narrow + early so it darkens the seed (≤0.47) but is RELEASED by the flash
+    // peak (0.50) — otherwise it eats the loud breakout the user wants to keep.
+    float seedSuppress = exp(-pow((uMorph-0.45)/0.035, 2.0));   // 1 at seed → 0 by flash
+    float flashGate = (1.0 - 0.92*coreDark) * (1.0 - 0.80*seedSuppress*coreDark);
+    bright += uFlash * (0.85 + 1.1*pv) * (0.6 + 0.4*useMag) * flashGate;
+    // accretion stream: light ONLY on the strained infalling matter just OUTSIDE
+    // the dark core (∝ inward strain), so you see glowing strands spiralling into
+    // a black point — the "aspiration" read — instead of a glow blob. Never lights
+    // the core itself ((1-coreDark)). infallGlow comes from the position block.
+    bright += infallGlow * (0.5 + 0.6*pv) * (1.0 - coreDark);
 
     // -- expanding shock shell -----------------------------------------------
     // A thin bright spherical front sweeps outward AHEAD of the bulk debris
@@ -722,11 +1018,13 @@ const diskVertexShader = /* glsl */ `
     // This bright front is the structural hero of the blast — it stays vivid
     // once the matter has SPREAD (low density) so it can't whiteout. Its radius
     // tracks the (now modest) ejecta so it lights real particles, not empty space.
-    float shellFront = uRout * (0.06 + 0.30*pow(flare, 0.5));  // 0.06→0.36 rOut
+    float shellFront = uRout * (0.06 + 0.55*pow(flare, 0.42)); // 0.06→0.61 rOut, faster
     float shellW     = uRout * 0.05;                            // thin crisp band
     float band       = exp(-pow((r - shellFront)/shellW, 2.0));
-    float shellLight = band * (1.0 - 0.4*flare) * 3.2 * smoothstep(0.5, 0.62, uMorph);
-    bright += shellLight * (0.6 + 1.0*pv);
+    // brighter, launches earlier — a wall of light sweeping outward. The shell is
+    // LOW-density (matter has spread), so it can be bright without a whiteout.
+    float shellLight = band * (1.0 - 0.3*flare) * 5.2 * smoothstep(0.49, 0.60, uMorph);
+    bright += shellLight * (0.6 + 1.2*pv);
 
     // remnant: a HOLLOW expanding shell of radial rays. The matter has left the
     // centre, so brightness peaks out at the shell front and falls toward the
@@ -744,11 +1042,16 @@ const diskVertexShader = /* glsl */ `
     bright = mix(bright, remnant, morphFlare);
 
     // -- whiteout ceiling: while matter is still dense (implosion → just past the
-    // flash) clamp per-particle emission so ~1.2M additively-blended overlapping
-    // dots cannot stack into an edge-to-edge white plate. The ceiling lifts as
-    // the ejecta spreads out (density falls) so the shell/jets keep their punch.
+    // flash, AND the surface collapsing to its point) clamp per-particle emission so
+    // ~1.2M additively-blended overlapping dots cannot stack into an edge-to-edge
+    // white plate. The ceiling lifts as the matter spreads out (density falls) so
+    // the shell/jets/fingers keep their punch.
     float dense = exp(-pow((uMorph-0.48)/0.12, 2.0));     // 1 at the flash → 0 away
-    float ceil  = mix(40.0, 2.4, dense);                  // tight cap at the flash
+    // also clamp the packed point of the surface collapse — but ONLY while the giant
+    // surface model is active (uGiant>0). At the hero (uGiant=0) uCollapse is pinned
+    // at 1, so without this gate it would wrongly dim the black-hole disk.
+    dense = max(dense, smoothstep(0.6, 1.0, uCollapse) * step(0.001, uGiant));
+    float ceil  = mix(40.0, 3.4, dense);                  // cap at the flash (a touch higher → louder)
     bright = min(bright, ceil);
 
     // -- explosion HEAT proxy (drives the colour ramp) -----------------------
@@ -800,7 +1103,14 @@ const diskVertexShader = /* glsl */ `
       // overall scale — warm and richly lit but not a blinding white disc
       float giantBright = photo * 0.7;
 
+      // Hold the photosphere lighting on through the COLLAPSE so the shrinking,
+      // spiking surface stays a lit (red→warm) surface rather than greying into the
+      // dark ember ramp early. g rides uGiant for the gather/red-giant, but is
+      // floored to ~1 across the collapse window (1-uCollapse only releases it right
+      // at the point, where the legacy flash/ember ramp takes over). At uGiant=0 it
+      // is 0 → the hero/seed disk is untouched.
       float g = smoothstep(0.0, 1.0, uGiant);
+      g = max(g, smoothstep(0.04, 0.30, uGiant) * (1.0 - smoothstep(0.85, 1.0, uCollapse)));
       bright = mix(bright, giantBright, g);
 
       // heat channel for the colour ramp: deep red base, hot plage highlights.
@@ -838,6 +1148,33 @@ const diskVertexShader = /* glsl */ `
           vHeat = m;
         }
       }
+      // --- nebula lighting: glowing filament gas, not a lit surface -----------
+      // The giant photosphere lighting above is meaningless for a scattered cloud,
+      // so override it. Emission tracks the strand density (heat=dens from the
+      // geometry block): bright filament cores, faint void dust. The radial factor
+      // (vNeb) dims the rusty outer rim a touch so the teal core reads as the hot
+      // heart of the remnant. Kept LOW per-particle because the big overlapping
+      // grains accumulate additively — the bloom/grade supply the overall glow.
+      if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
+        float dens = clamp(heat, 0.0, 1.7);
+        if(vNebLane > 0.5){
+          // FILAMENT strands: the bright ropey web — the structure the eye reads.
+          // Crisp and luminous with brighter knots. The INNER ends are dimmed so the
+          // blue/cyan heart survives instead of saturating to white (the outer
+          // red/gold tendrils carry the brightness).
+          bright = 0.35 + 1.35*dens*dens;
+          bright *= 0.45 + 0.55*smoothstep(0.10, 0.55, vNeb); // dim the blue core ends
+        } else {
+          // DIFFUSE haze: kept DIM so it reads as soft coloured gas the blue→red
+          // ramp survives on, NOT a bright wall that clips to cream. The heart is
+          // only modestly brighter than the rim (no hard center boost).
+          bright = 0.04 + 0.20*dens;
+          bright *= 1.0 + 0.30*(1.0 - vNeb);
+        }
+        if(vPlaceholder > 2.4) bright = 3.0;     // pulsar: bright point (not a blowout)
+        vHeat = dens;                            // keep density for the colour ramp
+        vGiant = 1.0;                            // (unused by the nebula tint path)
+      }
     } else {
       vHeat = 0.5;
       vGiant = 0.0;
@@ -872,6 +1209,20 @@ const diskVertexShader = /* glsl */ `
     } else if(vSunFlare > 0.5){
       gl_PointSize = clamp(baseSize * 0.8, 0.6, 2.4);    // loop / jet thread
     }
+    // nebula: DIFFERENT sizing per lane. Filament strands get fat soft grains that
+    // overlap into glowing ropes; the sparse surviving diffuse haze gets big soft
+    // puffs that melt into continuous nebulosity. Culled diffuse grains
+    // (vNebLane < 0) are sized to 0 so the haze stays thin and the structure reads.
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
+      float sizeRand = 0.5 + 0.9*aSeed;                  // per-particle variety
+      if(vNebLane > 0.5){
+        gl_PointSize = clamp(baseSize * (0.8 + 1.6*vHeat) * sizeRand, 0.8, 5.0); // filament rope
+      } else {
+        gl_PointSize = clamp(baseSize * (1.2 + 1.8*vHeat) * sizeRand, 0.8, 7.0); // soft gas puff
+      }
+      if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize*4.0, 4.0, 22.0); // pulsar: big bright point
+      if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
+    }
     if(drop) gl_PointSize = 0.0;
   }
 `;
@@ -885,6 +1236,8 @@ const diskFragmentShader = /* glsl */ `
   varying float vHeat;
   varying float vExplode;
   varying float vPlaceholder; // REVIEW: 0 none, 1 yellow, 2 nebula, 3 dot
+  varying float vNeb;    // nebula radial factor (0 hot core → 1 rusty rim)
+  varying float vNebLane;// nebula lane: 0 = diffuse haze, 1 = filament strand
   varying float vSunM;    // warm photosphere field for the yellow-sun ramp
   varying float vSunLimb; // limb factor → bright gold rim glow
   varying float vSunDark; // sunspot/network darkening
@@ -902,6 +1255,11 @@ const diskFragmentShader = /* glsl */ `
     // field of hard little discs — this is what kills the sandy speckle.
     if(vPlaceholder > 0.5 && vPlaceholder < 1.5){
       a = (vSunFlare < 0.5) ? exp(-d*d*7.0) : exp(-d*d*9.0);
+    }
+    // nebula: a soft wide gaussian so the big varied grains melt into continuous
+    // glowing gas with no hard edges (cloud, not confetti).
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.5){
+      a = exp(-d*d*4.5);
     }
 
     // --- ember / black-hole ramp (near-monochrome, warm highlights) ---
@@ -995,9 +1353,36 @@ const diskFragmentShader = /* glsl */ `
 
           pcol = mix(sc, rc, vSunRed);
         }
-      } else if(vPlaceholder < 2.5){
-        // nebula: soft violet/magenta cloud with cooler blue voids.
-        pcol = mix(vec3(0.32, 0.16, 0.52), vec3(0.85, 0.45, 0.78), smoothstep(0.2, 0.9, vHeat));
+      } else if(vPlaceholder < 2.9){
+        // nebula (Crab M1): the reference's blue-core → red-rim RAMP, walked by the
+        // radial factor vNeb (0 hot blue heart → 1 cooler red filaments). vHeat is
+        // the per-lane density. Ramp: deep-blue → blue → cyan → green → yellow →
+        // gold → orange → red — exactly the reference palette.
+        float rr = clamp(vNeb, 0.0, 1.0);
+        vec3 cBlue  = vec3(0.30, 0.46, 1.00);  // 0.00 deep blue (hot heart)
+        vec3 cAzure = vec3(0.30, 0.76, 1.00);  // 0.14 blue
+        vec3 cCyan  = vec3(0.34, 0.96, 0.86);  // 0.30 cyan
+        vec3 cGreen = vec3(0.55, 1.00, 0.55);  // 0.46 green
+        vec3 cLime  = vec3(0.95, 1.00, 0.46);  // 0.62 yellow-green
+        vec3 cGold  = vec3(1.00, 0.80, 0.36);  // 0.76 gold
+        vec3 cOrange= vec3(1.00, 0.50, 0.22);  // 0.88 orange
+        vec3 cRed   = vec3(1.00, 0.28, 0.18);  // 1.00 red (rim filaments)
+        vec3 ncol = mix(cBlue,  cAzure, smoothstep(0.00, 0.14, rr));
+        ncol = mix(ncol, cCyan,  smoothstep(0.14, 0.30, rr));
+        ncol = mix(ncol, cGreen, smoothstep(0.30, 0.46, rr));
+        ncol = mix(ncol, cLime,  smoothstep(0.46, 0.62, rr));
+        ncol = mix(ncol, cGold,  smoothstep(0.62, 0.76, rr));
+        ncol = mix(ncol, cOrange,smoothstep(0.76, 0.88, rr));
+        ncol = mix(ncol, cRed,   smoothstep(0.88, 1.00, rr));
+        // a faint central PINK wash over the hot heart (reference cPink heart)
+        ncol = mix(ncol, vec3(0.92, 0.62, 0.95), (1.0 - smoothstep(0.0, 0.22, rr))*0.30);
+        // bright filament knots brighten toward a COOL white so the spine glows
+        // without erasing the ramp hue (a small, cool-tinted lift, not a blowout).
+        float spine = smoothstep(1.05, 1.55, vHeat);
+        ncol = mix(ncol, vec3(0.80, 0.95, 1.00), spine*0.22);
+        // PULSAR: the central neutron-star point reads blue-white, not on the ramp.
+        ncol = mix(ncol, vec3(0.85, 0.92, 1.00), step(2.4, vPlaceholder));
+        pcol = ncol;
       } else {
         // pale blue dot: the famous faint blue point.
         pcol = vec3(0.55, 0.72, 0.95);
@@ -1020,6 +1405,20 @@ const diskFragmentShader = /* glsl */ `
         // per-grain intensity low so the disc stays in gamut and the cells show.
         inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3));
       }
+    }
+    // nebula: keep per-grain intensity LOW so the many overlapping soft grains
+    // accumulate additively into luminous gas WITHOUT clipping to white — the
+    // colour ramp (blue heart → red rim) must survive. Filaments read bright enough
+    // to show structure but low enough to keep their hue; the diffuse haze is a
+    // faint coloured veil. Bloom adds the glow on top. The pulsar keeps full punch.
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.4){
+      if(vNebLane > 0.5){
+        inten = a * (0.07 + 0.30*clamp(vBright, 0.0, 2.2));   // filament: reads, keeps hue
+      } else {
+        inten = a * (0.015 + 0.10*clamp(vBright, 0.0, 1.0));  // diffuse: faint coloured veil
+      }
+    } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
+      inten = a * clamp(vBright, 0.0, 4.0);          // pulsar: blazing point
     }
     gl_FragColor = vec4(col * inten, 1.0);
   }
@@ -1950,6 +2349,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uBright: { value: 1.25 }, // disk brightness multiplier (brightened)
     uMorph: { value: 0 }, // transition 1: reverse supernova (scroll-driven)
     uFlash: { value: 0 }, // central burst envelope (peaks mid-morph)
+    uCollapse: { value: 0 }, // red-giant surface collapse (0 sphere → 1 point)
     uGiant: { value: 0 }, // transition 2: remnant cloud → sun
     uGiantR: { value: 4.2 }, // sun radius (world units) — a contained orb
     uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
@@ -2250,20 +2650,38 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const dbg = (window as unknown as { __bhMorph?: number }).__bhMorph;
     if (typeof dbg === 'number') stage = dbg;
     const morph = Math.min(1, stage);              // transition 1 progress (0..1)
-    // Transition 2 (gather into a star) overlaps the END of transition 1 so the
-    // dispersing remnant flows straight into the forming star — no empty frame at
-    // the stage boundary. Gather ramps over stage 0.7 → 1.3 (mostly done by 1.3).
-    const giant = Math.min(1, Math.max(0, (stage - 0.7) / 0.6));
+    // --- the unified surface collapse ---------------------------------------
+    // The red-giant SURFACE collapse is one continuous beat: the textured sphere
+    // shrinks non-homogeneously and its laggard regions stream off as the finger-
+    // spikes (the "explosion" is the surface caving in, not a separate blast). It
+    // runs across stage 1.05 (full red giant) → 0.5 (the surface reaches the point,
+    // where the legacy supernova FLASH fires and the seed/black-hole machinery
+    // below takes over). kCollapse drives the shader's per-region shrink.
+    const COLLAPSE_HI = 1.05; // stage where the surface is still the full sphere
+    const COLLAPSE_LO = 0.5;  // stage where the surface has shrunk to the point
+    const kCollapse = Math.min(1, Math.max(0, (COLLAPSE_HI - stage) / (COLLAPSE_HI - COLLAPSE_LO)));
+    // `giant` now means "the sphere-identity model is active" — it must be 1 across
+    // the ENTIRE collapse window so the unified surface block owns the geometry (no
+    // co-existing radial blast → no two-scale artifact). It rises as we leave the
+    // black-hole side (stage 0.5 → 1.05) and stays 1 for the red giant and above.
+    const giant = Math.min(1, Math.max(0, (stage - COLLAPSE_LO) / (COLLAPSE_HI - COLLAPSE_LO)));
 
     // --- transition 1: reverse supernova ---
     diskMatPrimary.uniforms.uMorph.value = morph;
     diskMatSecondary.uniforms.uMorph.value = morph;
     ringMat.uniforms.uMorph.value = morph;
-    // flash envelope: a sharp, narrow, BRIGHT shock-breakout burst centred on
-    // the compression peak (the one blinding beat of the explosion).
-    const flash = 1.15 * Math.exp(-Math.pow((morph - 0.5) / 0.06, 2.0));
+    // flash envelope: a sharp, BRIGHT shock-breakout burst centred on the
+    // compression peak (the one blinding beat of the explosion) — loud, but
+    // ASYMMETRIC: a quick rise (σ 0.055) and a FASTER decay (σ 0.04) so the glow
+    // clears soon after the peak and the dispersing debris rays get a clean dark
+    // beat to read against before the gather, instead of staying washed out.
+    const flashSigma = morph <= 0.5 ? 0.055 : 0.04;
+    const flash = 1.45 * Math.exp(-Math.pow((morph - 0.5) / flashSigma, 2.0));
     diskMatPrimary.uniforms.uFlash.value = flash;
     diskMatSecondary.uniforms.uFlash.value = flash;
+    // surface-collapse progress (0 full red-giant sphere → 1 collapsed to the point)
+    diskMatPrimary.uniforms.uCollapse.value = kCollapse;
+    diskMatSecondary.uniforms.uCollapse.value = kCollapse;
 
     // --- transitions 3-5: yellow star → nebula → pale blue dot ---
     // REVIEW MODE (placeholders, no real morph): the new states HARD-SWAP — each
@@ -2311,8 +2729,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // The sun is a SOLID, opaque sphere (like the reference). The starfield draws
     // additively with depthTest OFF, so it would otherwise bleed THROUGH the sun's
     // body and read as transparent. Hide it during the sun window so nothing shows
-    // through the disc; it returns for every other state. (starSecPts stays off.)
-    starPts.visible = !sunWindow;
+    // through the disc. ALSO hide it across the nebula (the reference is the remnant
+    // alone against pure black — "no background", and we sit close inside the cloud);
+    // it returns for every other state. (starSecPts stays off.)
+    starPts.visible = !sunWindow && !nebula;
 
     // the star/warp lensing only makes sense while the hole exists — fade it.
     // Once the SUN forms we drop the gravitational-warp background entirely and
@@ -2334,12 +2754,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // Tame the bloom as the remnant inflates; let the flash punch it briefly. The
     // red giant is meant to be DIM, so pull bloom right down once it forms.
     const flareAmt = Math.min(1, Math.max(0, (morph - 0.46) / 0.54));
-    bloom.strength = CFG.bloomStr * (1 - 0.7 * flareAmt) + flash * 0.22;
+    // SEED window (matches the shader's dark-core dip): the collapsed matter must
+    // read as a small DARK point, not a bloomed glow. Narrow + EARLY (centred 0.45)
+    // so it releases by the breakout (0.50) and never dims the loud flash.
+    const seedZone = Math.exp(-Math.pow((morph - 0.45) / 0.035, 2.0));
+    // brief bloom spike at the breakout — the loudest visual beat — but suppressed
+    // inside the seed window so it doesn't re-inflate the dark seed into a glow.
+    bloom.strength = CFG.bloomStr * (1 - 0.7 * flareAmt) + flash * 0.55 * (1 - 0.9 * seedZone);
     bloom.strength = bloom.strength * (1 - 0.6 * giantHeld) + 0.12 * giantHeld;
-    // SEED window: kill bloom hard just before the flash so the collapsed matter
-    // reads as a small, crisp, dim seed point — not a big bloomed glow.
-    const seedZone = Math.exp(-Math.pow((morph - 0.44) / 0.05, 2.0));
-    bloom.strength *= 1 - 0.75 * seedZone;
+    bloom.strength *= 1 - 0.9 * seedZone; // kill bloom hard at the dark seed
     // The imploded core packs the whole disk into a small, dense, additively-
     // blended region — brightness there is enormous. Cut the disk's base emission
     // hard across the compression window so it never clips to an edge-to-edge
@@ -2350,9 +2773,16 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatSecondary.uniforms.uBright.value = baseBright;
     // Auto-exposure: pull down across the flash, dip at the seed (so the tiny
     // black-hole point reads dim and dense), and settle a touch lower for the
-    // dim red giant so it reads warm and matte, not glaring.
+    // dim red giant so it reads warm and matte, not glaring. A VERY NARROW punch
+    // (σ≈0.045 ≪ hotZone σ≈0.15) briefly over-exposes EXACTLY at the breakout and
+    // recovers immediately → the supernova reads as a detonation, not a flat wash.
+    // The punch is suppressed in the seed window so it never undoes the dark-core
+    // dip — the breakout (morph 0.5, where seedZone has fallen off) keeps near-full
+    // punch, so the detonation is intact while the seed stays a dark point.
+    const flashPunch = Math.exp(-Math.pow((morph - 0.5) / 0.045, 2.0));
     gradePass.uniforms.uExposure.value =
-      CFG.exposure * (1 - 0.58 * hotZone) * (1 - 0.18 * giantHeld) * (1 - 0.35 * seedZone);
+      CFG.exposure * (1 - 0.58 * hotZone) * (1 - 0.18 * giantHeld) * (1 - 0.35 * seedZone)
+      * (1 + 0.9 * flashPunch * (1 - 0.7 * seedZone));
     // Grade through the explosion: the blue-white→amber→red debris wants strong
     // warmth & saturation and the olive/green background tint pulled right back,
     // or the blast reads as a grey-green fog. exGrade is a sharp envelope over
@@ -2401,6 +2831,28 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       const rSat = diskMatPrimary.uniforms.uSat.value * (1 - gg) + 1.0 * gg;
       diskMatPrimary.uniforms.uSat.value = rSat;
       diskMatSecondary.uniforms.uSat.value = rSat;
+    } else if (nebula && !dot) {
+      // nebula grade: a soft, luminous gas cloud. Wide bloom so the filament web
+      // glows and the void dust hazes together; no olive cast (the teal/rust hues
+      // must survive); full saturation so the Crab palette reads. Exposure a touch
+      // up so the sprawling, low-density cloud isn't muddy. Eased in as the state
+      // arrives (nebula snaps at 3.5) so the handoff from yellow isn't a hard pop.
+      const ne = smoothstep01((stage - 3.5) / 0.35);
+      // a CONTAINED glow: the reference is mostly dark space with bright filaments,
+      // and here we sit close inside the cloud, so the diffuse haze stacks deep along
+      // each view ray. Keep bloom moderate (a soft halo on the strands, not a frame-
+      // filling wash) and exposure DOWN so the blue→red colour ramp survives instead
+      // of clipping to cream/white. Saturation is pushed UP so the Crab palette reads.
+      bloom.strength = bloom.strength * (1 - ne) + 0.30 * ne;  // soft strand glow
+      bloom.radius = CFG.bloomRad * (1 - ne) + 0.7 * ne;       // wide soft halo
+      gradePass.uniforms.uExposure.value =
+        gradePass.uniforms.uExposure.value * (1 - ne) + 0.50 * ne;
+      gradePass.uniforms.uOlive.value *= 1 - ne;               // no olive cast
+      gradePass.uniforms.uWarmth.value *= 1 - ne;              // no warm cast (let blue/cyan show)
+      gradePass.uniforms.uSat.value = gradePass.uniforms.uSat.value * (1 - ne) + 1.45 * ne; // vivid Crab palette
+      const nSat = diskMatPrimary.uniforms.uSat.value * (1 - ne) + 1.35 * ne;
+      diskMatPrimary.uniforms.uSat.value = nSat;
+      diskMatSecondary.uniforms.uSat.value = nSat;
     } else {
       bloom.radius = CFG.bloomRad;
     }
@@ -2410,26 +2862,45 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const distFactor = NEAR_FACTOR + (1 - NEAR_FACTOR) * intro;
 
     // --- lifecycle zoom choreography (the scale story) ---
-    // A black hole is tiny-but-massive; a star is huge-but-diffuse. To make the
-    // scale read we PUSH IN as the hole shrinks to its tiny seed (so the seed is
-    // still visible), HOLD through the explosion, then PULL BACK as the star
-    // grows so the red giant lands at its resting on-screen size — bigger than
-    // the seed, smaller than the original black hole. Reduced motion stays at 1.
+    // A black hole is tiny-but-massive; a star is huge-but-diffuse. The scale
+    // story is told by the CAMERA: sit CLOSE on the hero black hole so it fills
+    // the frame and reads ENORMOUS, then rocket WAY BACK as the matter collapses
+    // to its speck so the seed is a tiny point in a vast dark field, then ease
+    // back to resting so the red giant lands at a middling on-screen size. The
+    // size ranking reads BH(close) > red giant > seed(far). Reduced motion = 1.
     let zoom = 1.0;
     if (!reduced) {
-      // shrink: push in GENTLY and IN SYNC with the world-space seed collapse
-      // (which happens over morph 0.18 → 0.46). A gentle factor keeps the tiny
-      // seed readable without the still-bright imploding matter washing the frame.
-      const ZOOM_IN = 0.72; // closest factor at the seed (gentle)
+      const ZOOM_HERO = 0.6; // close at the hero BH → dist≈12 (BH fills the frame)
+      const ZOOM_SEED = 2.6; // far at the seed     → dist≈52 (speck in a vast field)
+      const ZOOM_BLAST = 2.0; // pulled back across the blast → dist≈40 (big remnant fits)
+      const ZOOM_OUT = 1.0; // resting at the red giant
+      // hero push-in eases out as the implosion gets underway (stage 0 → 0.18)
+      const heroT = smoothstep01(stage / 0.18);
+      // seed pull-back, IN SYNC with the world-space seed collapse (0.18 → 0.46)
       const shrinkT = smoothstep01((stage - 0.18) / (0.46 - 0.18));
-      // grow: stage 0.7 → 1.3 eases back out to ZOOM_OUT× — pulled WELL past
-      // resting so the red giant lands clearly SMALLER on screen than the
-      // original black hole (a star is huge in reality but here we keep the BH
-      // as the largest object: BH > giant > seed).
-      const ZOOM_OUT = 1.7;
-      const growT = easeOut(Math.min(Math.max((stage - 0.7) / 0.6, 0), 1));
-      const shrunk = 1 + (ZOOM_IN - 1) * shrinkT;          // 1 → 0.72
-      zoom = shrunk + (ZOOM_OUT - shrunk) * growT;          // 0.72 → 1.16
+      // hold WAY back across the blast so the now-much-bigger ejecta (rays reach
+      // past rOut) stays framed — ease from the seed distance to the blast hold as
+      // the shell breaks out (0.46 → 0.62), then keep it wide through the blast.
+      const blastT = smoothstep01((stage - 0.46) / (0.62 - 0.46));
+      // grow back to resting only ABOVE the collapse window (stage 1.05 → 1.5), so
+      // the camera stays pulled WAY back across the whole surface-collapse/spike
+      // window (stage 0.5–1.05) — the finger-spikes reach ~10 units and would clip
+      // the frame at the resting distance, so they need the blast hold to stay framed.
+      const growT = easeOut(Math.min(Math.max((stage - 1.05) / 0.45, 0), 1));
+      const heroZoom = ZOOM_HERO + (1.0 - ZOOM_HERO) * heroT; // 0.6 → 1.0
+      const seedZoom = heroZoom + (ZOOM_SEED - heroZoom) * shrinkT; // → 2.6
+      const blastZoom = seedZoom + (ZOOM_BLAST - seedZoom) * blastT; // 2.6 → 2.0
+      zoom = blastZoom + (ZOOM_OUT - blastZoom) * growT; // → 1.0
+      // nebula: push the camera IN so the remnant fills the frame and its filaments
+      // spill past the edges — we sit close inside the cloud (user ask: "zoomed so we
+      // feel inside it"). Ease in as the nebula arrives (stage 3.1 → 3.7), hold close,
+      // then pull back OUT toward the pale blue dot (4.3 → 4.7) so the dot reads tiny.
+      const ZOOM_NEBULA = 1.0; // dist≈20 → the ~4.4-unit cloud fills the frame, edges spill past
+      const ZOOM_DOT = 2.4;    // pull back out so the pale blue dot is a far speck
+      const nebIn  = smoothstep01((stage - 3.1) / 0.6);
+      const nebOut = smoothstep01((stage - 4.3) / 0.4);
+      zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn;        // ease into the cloud
+      zoom = zoom + (ZOOM_DOT - zoom) * nebOut;          // ease back out for the dot
     }
     const dist = CFG.camDist * distFactor * zoom;
 
