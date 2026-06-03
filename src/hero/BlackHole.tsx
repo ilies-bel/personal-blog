@@ -297,6 +297,10 @@ const diskVertexShader = /* glsl */ `
   //       uNebula: yellow star -> nebula
   //       uDot:    nebula      -> pale blue dot
   uniform float uYellow, uNebula, uDot;
+  // --- yellow star → red giant flash-swap channels (point-cloud only) ---
+  //   uYrMix : 0 = smooth gold sphere (just after the swap), 1 = granular red giant
+  //   uYrGrow: 0 = yellow radius (×0.35), 1 = red-giant radius (×1.0)
+  uniform float uYrMix, uYrGrow;
 
   varying float vBright;
   varying float vSeed;
@@ -313,12 +317,14 @@ const diskVertexShader = /* glsl */ `
   varying float vSunFlare;// 0 photosphere, 1 coronal loop / prominence, 2 footpoint knot
   varying float vSunHot;  // 0..1 white-hot factor along loops / at footpoints
   varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
+  varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
 
   void main(){
     vPlaceholder = 0.0; // REVIEW placeholder tag (set in the giant/placeholder block)
     vSunM = 0.0; vSunLimb = 0.0; vSunDark = 0.0; // sun-photosphere channels (set below)
     vSunFlare = 0.0; vSunHot = 0.0;             // sun atmosphere channels
     vSunRed = 0.0;                              // 0 gold (yellow), 1 red giant
+    vYrMix = 1.0;                               // default: granular red giant (no-op)
     vNeb = 0.0;                                 // nebula radial factor
     vNebLane = 0.0;                             // nebula lane (0 diffuse, 1 filament)
     // radius from the parameter — adjustable radial distribution (uDistrib)
@@ -635,8 +641,14 @@ const diskVertexShader = /* glsl */ `
       if(sunOn > 0.5){
         vPlaceholder = 1.0;
         vSunRed = redGiant;
+        vYrMix = uYrMix;   // 0 = smooth gold cloud sphere (post-swap) → 1 = red giant
         // red giants are BIG and bloated; the yellow sun is a tighter orb.
         float sunRadFac = (redGiant > 0.5) ? 1.45 : 0.92;
+        // yellow → red giant grow: at uYrGrow=0 the cloud is size-matched to the
+        // yellow mesh (×0.35 = SUN_RIG_RADIUS/RED_GIANT_RADIUS), inflating to the
+        // full red-giant radius at uYrGrow=1. No-op (×1.0) everywhere else.
+        // KEEP 0.35 IN SYNC with SUN_RIG_RADIUS's factor so the swap stays seamless.
+        sunRadFac *= mix(0.35, 1.0, uYrGrow);
         float tt = uTime * 0.05;
 
         // === (A) photosphere field ==========================================
@@ -675,7 +687,9 @@ const diskVertexShader = /* glsl */ `
         vSunM    = m;
         vSunDark = dark;
 
-        float sunRelief = 1.0 + 0.05*(m - 0.55);
+        // relief flattens to a perfectly round ball at the gold start (uYrMix→0),
+        // returning to the bumpy red-giant photosphere as it reddens (uYrMix→1).
+        float sunRelief = 1.0 + 0.05*(m - 0.55) * uYrMix;
         // collapseScale / curlOff (from the unified surface-collapse block) make the
         // red-giant photosphere cave in non-homogeneously: the bulk shrinks toward the
         // point while laggard regions extend into the finger-spikes. At the full red
@@ -696,6 +710,10 @@ const diskVertexShader = /* glsl */ `
         // the photosphere inward as it caves in rather than hanging in empty space.
         float sunR  = uGiantR * sunRadFac * collapseScale;  // actual (collapsed) radius
         float atmoThresh = (redGiant > 0.5) ? 0.955 : 0.91;
+        // suppress loops/prominences while the cloud is the smooth gold swap-in
+        // ball: push the pick threshold to ~never (≥1) at low uYrMix, easing the
+        // (rare) red-giant flares back in only as it reddens. No-op at uYrMix=1.
+        atmoThresh = mix(1.01, atmoThresh, smoothstep(0.6, 1.0, uYrMix));
         float pick = h31(vec3(aSeed*53.1, aPhase*11.7, aU*7.3));
         if(pick > atmoThresh){
           // which active region this particle belongs to (a few clustered sites)
@@ -1234,6 +1252,7 @@ const diskVertexShader = /* glsl */ `
 const diskFragmentShader = /* glsl */ `
   precision highp float;
   uniform float uSat;
+  uniform float uYrFlash;   // yellow→red swap flash: whitens the gold cloud sphere
   varying float vBright;
   varying float vSeed;
   varying float vGiant;
@@ -1248,6 +1267,7 @@ const diskFragmentShader = /* glsl */ `
   varying float vSunFlare;// 0 photosphere, 1 loop/jet, 2 footpoint knot
   varying float vSunHot;  // white-hot factor along loops / at footpoints
   varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
+  varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
@@ -1333,7 +1353,13 @@ const diskFragmentShader = /* glsl */ `
           // red-giant ramp stays deep maroon→blood-red→red-orange (no gold/white)
           // so the big star reads unmistakably RED.
           float m = vSunM;
-          // gold (yellow sun)
+          // At the gold swap-in (vYrMix→0) flatten the mottle toward its mean so
+          // the cloud reads as a SMOOTH gold ball (no granulation); it relaxes to
+          // the true grainy field as it reddens (vYrMix→1). vYrMix is 1 (no-op)
+          // for the settled red giant and every other stage.
+          float mEff = mix(0.62, m, vYrMix);
+          // gold (yellow sun) — unchanged; only reached when vSunRed<1 (mesh's job),
+          // so for the cloud (vSunRed=1) this term is mixed out below.
           vec3 sc = vec3(0.20, 0.028, 0.0);
           sc = mix(sc, vec3(0.72, 0.17, 0.01), smoothstep(0.10, 0.34, m));
           sc = mix(sc, vec3(1.00, 0.44, 0.06), smoothstep(0.28, 0.52, m));
@@ -1344,18 +1370,31 @@ const diskFragmentShader = /* glsl */ `
           sc = mix(sc, vec3(1.0, 0.74, 0.30), vSunLimb*0.72);
           sc += vSunLimb * vec3(0.6, 0.32, 0.08);
           sc *= 1.15;
-          // red giant — deep, saturated red photosphere
+          // red giant — deep, saturated red photosphere (built from mEff; dark
+          // veins/limb scaled by vYrMix so the gold ball has no lanes).
           vec3 rc = vec3(0.14, 0.012, 0.004);                   // near-black umbra
-          rc = mix(rc, vec3(0.46, 0.05, 0.012), smoothstep(0.08, 0.34, m)); // dark blood red
-          rc = mix(rc, vec3(0.78, 0.13, 0.02),  smoothstep(0.30, 0.58, m)); // red
-          rc = mix(rc, vec3(0.95, 0.26, 0.04),  smoothstep(0.56, 0.80, m)); // red-orange
-          rc = mix(rc, vec3(1.00, 0.40, 0.10),  smoothstep(0.84, 1.0, m));  // hot orange (rare)
-          rc = mix(rc, vec3(0.12, 0.010, 0.0), vSunDark);       // deep dark spots/veins
+          rc = mix(rc, vec3(0.46, 0.05, 0.012), smoothstep(0.08, 0.34, mEff)); // dark blood red
+          rc = mix(rc, vec3(0.78, 0.13, 0.02),  smoothstep(0.30, 0.58, mEff)); // red
+          rc = mix(rc, vec3(0.95, 0.26, 0.04),  smoothstep(0.56, 0.80, mEff)); // red-orange
+          rc = mix(rc, vec3(1.00, 0.40, 0.10),  smoothstep(0.84, 1.0, mEff));  // hot orange (rare)
+          rc = mix(rc, vec3(0.12, 0.010, 0.0), vSunDark*vYrMix); // deep dark spots/veins
           // cool, dusky red limb (forward-scattered, not bright gold)
-          rc = mix(rc, vec3(0.85, 0.20, 0.05), vSunLimb*0.55);
-          rc += vSunLimb * vec3(0.30, 0.05, 0.01);
+          rc = mix(rc, vec3(0.85, 0.20, 0.05), vSunLimb*0.55*vYrMix);
+          rc += vSunLimb * vec3(0.30, 0.05, 0.01) * vYrMix;
 
-          pcol = mix(sc, rc, vSunRed);
+          // gold swap-in target: a clean warm gold that matches the yellow mesh,
+          // so the flash-masked mesh→cloud handoff is seamless. Lerp gold → red
+          // by vYrMix (single monotonic curve; no red→yellow→red path).
+          vec3 goldC = mix(vec3(0.70, 0.30, 0.04), vec3(1.00, 0.66, 0.20),
+                           smoothstep(0.2, 0.9, mEff));
+          vec3 redBody = mix(goldC, rc, vYrMix);
+          // vSunRed is 1 for the cloud, so this selects redBody; the mesh path
+          // (vSunRed<1, gold sc) is unaffected.
+          pcol = mix(sc, redBody, vSunRed);
+          // whiten under the swap flash so the incoming gold cloud frames bloom to
+          // match the mesh handoff (subtle — a warm brightening, not a white-out).
+          // No-op when uYrFlash=0.
+          pcol = mix(pcol, vec3(1.0, 0.92, 0.78), clamp(uYrFlash, 0.0, 1.0) * 0.15);
         }
       } else if(vPlaceholder < 2.9){
         // nebula (Crab M1): the reference's blue-core → red-rim RAMP, walked by the
@@ -1407,7 +1446,9 @@ const diskFragmentShader = /* glsl */ `
       } else {
         // bigger overlapping photosphere grains accumulate additively → keep
         // per-grain intensity low so the disc stays in gamut and the cells show.
-        inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3));
+        // Lift it for the bright gold swap-in ball (vYrMix→0), settling to the
+        // dim matte red giant (vYrMix=1, no-op everywhere else).
+        inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3)) * mix(1.4, 1.0, vYrMix);
       }
     }
     // nebula: keep per-grain intensity LOW so the many overlapping soft grains
@@ -2543,6 +2584,12 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uYellow: { value: 0 },
     uNebula: { value: 0 },
     uDot: { value: 0 },
+    // --- yellow star → red giant flash-swap (transition 3, scroll 3→2). These
+    //     drive ONLY the point-cloud's gold→red sphere during the yellow⇄red
+    //     slot; all three default to a no-op so every other stage is unchanged.
+    uYrFlash: { value: 0 }, // brief swap flash: whitens the freshly-spawned gold sphere
+    uYrMix: { value: 1 }, // 0 = smooth gold sphere, 1 = granular red giant
+    uYrGrow: { value: 1 }, // 0 = yellow radius (×0.35), 1 = red-giant radius
   };
 
   const diskMatPrimary = new THREE.ShaderMaterial({
@@ -2728,12 +2775,14 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   composer.addPass(gradePass);
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
-  // Sized to be exactly 30% SMALLER than the red giant (the spec for the
-  // red giant → yellow star transition). The red giant is the point cloud at
-  // uGiantR (4.2) × its sunRadFac (1.45) = 6.09 world units, so the yellow star
-  // lands at 6.09 × 0.70 = 4.263 — a clearly tighter orb than the bloated giant.
+  // The yellow star is a small anchor that GROWS into the red giant. The red
+  // giant is the point cloud at uGiantR (4.2) × its sunRadFac (1.45) = 6.09 world
+  // units, so the yellow star lands at 6.09 × 0.35 ≈ 2.13 — a small tight orb that
+  // inflates to the bloated giant. NOTE: the cloud's grow-start factor in the
+  // vertex shader (`mix(0.35, 1.0, uYrGrow)`) MUST equal this 0.35 so the gold
+  // particle sphere is size-matched to the mesh at the swap.
   const RED_GIANT_RADIUS = 4.2 * 1.45; // point-cloud red giant world radius
-  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.7; // yellow star: 30% smaller
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.35; // yellow star: small grow anchor
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- lens uniforms (recomputed each frame from camera geometry) ---
@@ -2918,67 +2967,73 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uDot.value = dot;
     diskMatSecondary.uniforms.uDot.value = dot;
 
-    // --- yellow star ⇄ red giant: GROW / COOL / GROW-PARTICLES transition -----
+    // --- yellow star → red giant: FLASH-SWAP transition ----------------------
     // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
-    // (stage 3, mesh sun rig — tight, gold, bright) INFLATES into the RED GIANT
-    // (stage 2, point cloud — big, deep red, dim, grainy). Scrolling up plays it
-    // forward; scrolling down plays the reverse. There is no shrink-and-pop.
-    //
-    // The mesh rig carries the whole inflation: it GROWS toward the red-giant
-    // radius and COOLS (reddens + dims) via uRed. The grainy red-giant point
-    // cloud is ramped IN on top of the growing surface (uBright 0→full) so the
-    // star gains its particle texture as it bloats; the mesh then fades behind
-    // the now-complete particle giant. "Light leads size": the cool/redden curve
-    // runs slightly AHEAD of the grow curve, so it cools then bloats.
-    //
-    // redAmt: 0 at the settled yellow star (stage ≥2.9) → 1 at the settled red
-    // giant (stage ≤2.1). redColor leads redScale by ~0.08 stage (cool-then-grow).
-    const redAmt   = smoothstep01((2.9 - stage) / 0.8);              // overall progress
-    const redColor = smoothstep01((2.98 - stage) / 0.8);            // dim/redden — LEADS
-    const redScale = smoothstep01((2.82 - stage) / 0.8);           // inflate — TRAILS
-    const inYRWindow = stage > 2.02 && stage < 3.2 && !nebula;      // the yellow⇄red slot
+    // (mesh sun rig — small, gold, textured) becomes the RED GIANT (point cloud —
+    // big, deep red, grainy) as `stage` falls 3 → 2. The two bodies have totally
+    // different textures, so we DON'T crossfade them co-located (that showed two
+    // entities + a colour flicker). Instead:
+    //   1. The yellow MESH owns its whole slot (stage 3.0 → 3.5, up to the nebula
+    //      snap) — nothing red ever shows before it.
+    //   2. A SUBTLE light flash fires at SWAP_STAGE; under it the mesh hands off
+    //      to a smooth GOLD gaussian particle sphere (one short crossfade, hidden
+    //      by the bloom — never two distinct textures on screen at once).
+    //   3. That gold sphere then GROWS (uYrGrow) from the yellow radius to the
+    //      red-giant radius while its colour LERPS gold → red (uYrMix), a single
+    //      monotonic curve — so no red→yellow→red wobble.
+    const SWAP_STAGE = 2.70;                                   // flash peak / mesh↔cloud crossover
+    const inYRWindow = stage > 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot
+    const meshSide   = inYRWindow && stage > SWAP_STAGE;       // 2.70 .. 3.5 → yellow mesh
+    const cloudSide  = inYRWindow && stage <= SWAP_STAGE;      // 2.05 .. 2.70 → particle body
 
-    // mesh grows from yellow radius → red-giant radius (SUN_RIG_RADIUS×(1/0.7))
-    const meshGrow = 1 + (RED_GIANT_RADIUS / SUN_RIG_RADIUS - 1) * redScale;
-    sunRig.group.scale.setScalar(meshGrow);
-    // cool the mesh: redden + dim surface/corona, fade the (quiet-giant) flares,
-    // and cool the inner glow from gold → dim red.
-    sunRig.surfaceMat.uniforms.uRed.value = redColor;
-    sunRig.coronaMat.uniforms.uRed.value = redColor;
-    sunRig.loopMat.uniforms.uFade.value = 1 - smoothstep01(redColor / 0.85); // flares gone by ~0.85
-    (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
-      1.0 - 0.6 * redColor, 0.55 - 0.4 * redColor, 0.16 - 0.13 * redColor,
-    );
-    // corona halo hugs the growing disc (uDiskFrac = discR / coronaHalf, and the
-    // group scale grows both, so the ratio is constant — but keep it explicit).
-    // Mesh visible across the slot; it fades out at the red end as the particle
-    // giant takes over (redAmt 0.82→0.98), and is hidden entirely at the red giant.
-    const meshFade = 1 - smoothstep01((redAmt - 0.82) / 0.16);
-    sunRig.group.visible = inYRWindow && meshFade > 0.001;
-    sunRig.starMat.uniforms.uOpacity.value = (1 - redAmt); // backdrop fades as giant fills in
+    // subtle flash envelope (its own stage-space gaussian, separate from the
+    // supernova uFlash which lives in morph space and is tied to stage 0→1).
+    const YR_FLASH_SIGMA = 0.050;
+    const yrFlash = inYRWindow
+      ? Math.exp(-Math.pow((stage - SWAP_STAGE) / YR_FLASH_SIGMA, 2.0))
+      : 0;
+    diskMatPrimary.uniforms.uYrFlash.value = yrFlash;
+    diskMatSecondary.uniforms.uYrFlash.value = yrFlash;
 
-    // Ramp the grainy point-cloud red giant IN on the growing surface: invisible
-    // at the yellow star, brightening from redAmt 0.25 → 1 so the particle texture
-    // accrues as the body bloats. The cloud renders the red-giant sphere (uYellow
-    // is 0 here, uGiant pinned to 1), so it lands exactly co-located with the mesh.
-    const particleIn = smoothstep01((redAmt - 0.25) / 0.75);
+    // grow + colour curves (single monotonic smoothsteps of the falling stage;
+    // colour LEADS grow slightly so it cools then settles — "light leads size").
+    // Both default to 1 (no-op) outside cloudSide.
+    const yrGrow  = smoothstep01((SWAP_STAGE - stage) / (SWAP_STAGE - 2.20));        // 0@2.70 → 1@2.20
+    const yrColor = smoothstep01((SWAP_STAGE + 0.02 - stage) / (SWAP_STAGE + 0.02 - 2.30)); // → 1@~2.30
+    diskMatPrimary.uniforms.uYrGrow.value  = cloudSide ? yrGrow  : 1;
+    diskMatSecondary.uniforms.uYrGrow.value = cloudSide ? yrGrow  : 1;
+    diskMatPrimary.uniforms.uYrMix.value   = cloudSide ? yrColor : 1;
+    diskMatSecondary.uniforms.uYrMix.value = cloudSide ? yrColor : 1;
+
+    // The MESH holds small + fully gold across its whole side (no early redden,
+    // no early shrink) — all the growing/cooling is the cloud's job now. This
+    // removes the dual-schedule overlap that caused the two-entity + flicker bugs.
+    sunRig.group.scale.setScalar(1.0);
+    sunRig.surfaceMat.uniforms.uRed.value = 0;
+    sunRig.coronaMat.uniforms.uRed.value = 0;
+    sunRig.loopMat.uniforms.uFade.value = 1;
+    (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.55, 0.16);
+    sunRig.starMat.uniforms.uOpacity.value = 1;
+
+    // Mesh visible across its side, plus a short overhang into the bright flash so
+    // the handoff cross-dissolves under the bloom rather than hard-cutting. The
+    // gold particle sphere appears at/just-below the peak (cloudSide) under the
+    // same flash → the two textures are never both clearly visible.
+    sunRig.group.visible = inYRWindow && stage > SWAP_STAGE - 0.05;
     // Outside the yellow⇄red slot the cloud renders the red giant, the nebula AND
-    // the pale-blue-dot (all three live in the cloud's uGiant/uNebula/uDot branches).
-    // Keep it shown there; it's hidden only on the yellow-MESH side of the slot,
-    // where the opaque mesh sun rig owns the body instead.
-    const cloudShown = inYRWindow ? particleIn > 0.001 : true;
+    // the pale-blue-dot. Inside the slot, the cloud body only shows on the cloud
+    // side (the opaque mesh owns the yellow side).
+    const cloudShown = inYRWindow ? cloudSide : true;
     diskPrimary.visible = cloudShown;
     diskSecondary.visible = cloudShown;
     // Hide the lensed background starfield while the opaque mesh body is present
-    // (it would bleed through); restore it as the mesh fades to the particle giant.
-    // ALSO hide it across the NEBULA: the reference is the remnant alone against
-    // pure black ("no background"), and the camera sits close inside the cloud.
-    starPts.visible = (inYRWindow ? meshFade < 0.5 : true) && !nebula;
+    // (it would bleed through); restore it once the cloud body takes over. ALSO
+    // hide it across the NEBULA (the remnant sits alone against pure black).
+    starPts.visible = (inYRWindow ? cloudSide : true) && !nebula;
 
-    // sunWindow drives the bright-gold grade below; keep it on across the yellow
-    // half of the slot (mesh still dominant) and hand to the red-giant grade as
-    // the cloud takes over. Aligns the grade switch with the geometry handoff.
-    const sunWindow = inYRWindow && redAmt < 0.55;
+    // sunWindow drives the bright-gold grade below (mesh side); the cloud side is
+    // handed to the red-giant grade, whose handoff is driven by yrColor.
+    const sunWindow = meshSide;
 
     // the star/warp lensing only makes sense while the hole exists — fade it.
     // Once the SUN forms we drop the gravitational-warp background entirely and
@@ -3014,11 +3069,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // hard across the compression window so it never clips to an edge-to-edge
     // whiteout; the flash term is the one bright beat we DO want, narrow.
     const hotZone = Math.exp(-Math.pow((morph - 0.5) / 0.15, 2.0));
-    // In the yellow⇄red slot, the grainy point-cloud red giant is RAMPED IN on the
-    // growing mesh surface (particleIn 0→1), so its emission fades up as the body
-    // bloats — the "add particles on the surface" read. Outside the slot, full base.
-    const cloudGain = inYRWindow ? particleIn : 1;
-    const baseBright = 1.25 * (1 - 0.92 * hotZone) * cloudGain;
+    // The point-cloud red giant body renders at full base brightness; in the
+    // yellow→red slot it simply appears under the swap flash (no ramp-in — its
+    // gold→red look is driven by uYrMix/uYrFlash in the shader, not by emission).
+    const baseBright = 1.25 * (1 - 0.92 * hotZone);
     diskMatPrimary.uniforms.uBright.value = baseBright * dbgCtl.densityPrimary;
     diskMatSecondary.uniforms.uBright.value = baseBright * dbgCtl.densitySecondary;
     // --- DEV: live layer geometry (delete with the panel) ---
@@ -3062,34 +3116,39 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // restrained bloom (a thin halo, not a frame-filling glow), no olive cast and
     // full saturation so the photosphere colour survives. The red giant is
     // crossfaded in over the gather so the explosion grade hands off cleanly.
-    // redGiantPhase: giant formed, no later state yet.
-    const redGiantPhase = giantHeld > 0.5 && !yellow && !nebula && !dot;
+    // redGiantPhase: the cloud body (the new flash-swap cloud side, OR the settled
+    // red giant below the slot with no later state). A subtle flash punch (yrPunch)
+    // is added in both branches so the mesh→cloud swap reads as a bright beat.
+    const redGiantPhase = cloudSide || (giantHeld > 0.5 && !yellow && !nebula && !dot);
+    const yrPunch = yrFlash; // 0..1 subtle swap-flash envelope
     if (sunWindow) {
       // The yellow star is the MESH sun rig (a bright, opaque, real photosphere),
       // not the dim particle placeholder. The reference renders it blazing gold
       // with a strong glowing limb halo, so push exposure + bloom UP (not down)
       // and keep the grade out of the way: no tone-map crush, no olive, no
-      // desaturation — let the bright gold body and white-hot limb survive.
-      bloom.strength = 0.7;         // bright limb/corona halo, but keep a crisp edge
+      // desaturation — let the bright gold body and white-hot limb survive. The
+      // subtle flash blooms it as it approaches the swap.
+      bloom.strength = 0.7 + 0.12 * yrPunch; // bright limb/corona halo + subtle swap flash
       bloom.radius = 0.5;           // tighter so the solid sphere edge stays defined
-      gradePass.uniforms.uExposure.value = 1.0;   // full exposure (reference ACES was 1.0)
+      gradePass.uniforms.uExposure.value = 1.0 * (1 + 0.05 * yrPunch);
       gradePass.uniforms.uOlive.value = 0.0;
       gradePass.uniforms.uWarmth.value = 0.0;
       gradePass.uniforms.uSat.value = 1.0;   // full saturation → vivid gold
     } else if (redGiantPhase) {
-      // gg eases the red-giant grade in as the star finishes gathering (giant
-      // 0→1), so the blast→giant handoff doesn't snap.
-      const gg = Math.min(1, Math.max(0, (giant - 0.4) / 0.6));
-      bloom.strength = bloom.strength * (1 - gg) + 0.22 * gg; // dim, contained halo
+      // rg crossfades the grade from the bright gold swap-in (rg=0, still flashing)
+      // to the settled dim matte red giant (rg=1). On the cloud side it follows
+      // yrColor (the same monotonic gold→red curve as the body); below the slot it
+      // is pinned to 1 so the settled red giant keeps its final grade.
+      const rg = cloudSide ? yrColor : 1;
+      bloom.strength = (0.7 + 0.12 * yrPunch) * (1 - rg) + 0.22 * rg; // subtle flash → dim halo
       bloom.radius = CFG.bloomRad;
       gradePass.uniforms.uExposure.value =
-        gradePass.uniforms.uExposure.value * (1 - gg) + CFG.exposure * 0.7 * gg;
-      gradePass.uniforms.uOlive.value *= 1 - gg;             // kill the olive cast
-      gradePass.uniforms.uWarmth.value = gradePass.uniforms.uWarmth.value * (1 - gg) + 0.14 * gg;
-      gradePass.uniforms.uSat.value = gradePass.uniforms.uSat.value * (1 - gg) + 1.0 * gg;
-      const rSat = diskMatPrimary.uniforms.uSat.value * (1 - gg) + 1.0 * gg;
-      diskMatPrimary.uniforms.uSat.value = rSat;
-      diskMatSecondary.uniforms.uSat.value = rSat;
+        (1.0 * (1 + 0.05 * yrPunch)) * (1 - rg) + CFG.exposure * 0.7 * rg;
+      gradePass.uniforms.uOlive.value = 0.0;                 // no olive cast on the star
+      gradePass.uniforms.uWarmth.value = 0.14 * rg;          // warm the matte red
+      gradePass.uniforms.uSat.value = 1.0;                   // full saturation throughout
+      diskMatPrimary.uniforms.uSat.value = 1.0;
+      diskMatSecondary.uniforms.uSat.value = 1.0;
     } else if (nebula && !dot) {
       // nebula grade: a soft, luminous gas cloud. Wide bloom so the filament web
       // glows and the void dust hazes together; no olive cast (the teal/rust hues
