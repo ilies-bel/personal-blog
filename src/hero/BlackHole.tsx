@@ -174,6 +174,8 @@ const diskVertexShader = /* glsl */ `
   uniform float uTime, uOmega0, uSpinDir, uBetaScale, uBeamExp, uDoppler;
   uniform float uRin, uRout, uThick, uPixelRatio, uSec, uHole, uVertAsym, uHorizAsym, uDistrib;
   uniform float uBright;
+  // secondary-image (lower band) screen-space nudge — used to close the seam
+  uniform float uSecOffsetX, uSecOffsetY;
   // --- Transition 1: reverse supernova (driven by scroll). 0 = black hole.
   //   uMorph ∈ [0,1]: implosion (0→0.45), flash (~0.5), flare-out (0.55→1).
   //   uFlash is a precomputed 0..1 burst envelope peaking at the flash.
@@ -852,7 +854,9 @@ const diskVertexShader = /* glsl */ `
       vec2 bhN = clipBH.xy / clipBH.w;
       vec2 dN  = ndcL - bhN;
       vec2 dA  = vec2(dN.x*uAspect, dN.y) * uSec;     // isotropic scaling (aspect space)
-      ndcFinal = bhN + vec2(dA.x/uAspect, dA.y);
+      // uSecOffset (aspect-space) nudges the secondary band toward/away from the
+      // primary so the hard seam between the two layers can be closed.
+      ndcFinal = bhN + vec2((dA.x + uSecOffsetX)/uAspect, dA.y + uSecOffsetY);
       float sR = screenR * uSec;                      // radius after scaling
       useMag   = min(mag, 1.8);
       if(sR < uShadowR*1.0) drop = true;              // never inside the shadow
@@ -1481,25 +1485,23 @@ const warpFragmentShader = /* glsl */ `
 const ringVertexShader = /* glsl */ `
   attribute float aAng; attribute float aSeed;
   uniform float uTime, uPixelRatio, uShadowR, uAspect, uHole, uVertAsym, uHorizAsym, uRingBright, uMorph;
+  uniform float uRingScale;
   varying float vB;
   void main(){
     vec4 bhC = projectionMatrix * modelViewMatrix * vec4(0.0,0.0,0.0,1.0);
     vec2 ndcBH = bhC.xy / bhC.w;
-    // LATE-BLOOM REVEAL. At the hero (uMorph≈0) there is NO ring — the hole reads
-    // as pure black, defined only by the void and the lensed star-warp wrapping
-    // around it. The photon ring blooms in LATER in the transition: a slow start
-    // (cubic ease so it lingers near zero), rising to a peak mid-transition, then
-    // fading back out before the shadow collapses to the seed. bloom is the
-    // master 0->1->0 envelope; everything below is gated by it.
-    float rise = smoothstep(0.05, 0.36, uMorph);   // when the ring appears
-    rise = rise*rise*rise;                          // late-bloom: hugs zero, then climbs
-    float fall = 1.0 - smoothstep(0.36, 0.46, uMorph); // gone before the seed/flash
-    float bloom = rise * fall;
-    // As the ring blooms it also tightens onto the rim and slims its band, so its
-    // first appearance is a thin hairline that fills out as it brightens.
-    float tighten = mix(0.92, 1.0, bloom);         // sits closer to the rim early
-    float spread  = mix(0.012, 0.03, bloom);       // thinner radial band early
-    float r = uHole * tighten * (1.0 + (aSeed-0.5)*spread);  // thin ring at the dark-core rim
+    // SIZE-COUPLED RING. The photon ring is BRIGHTEST at the hero (uMorph≈0),
+    // where the black hole is largest, and dims as the hole shrinks toward the
+    // seed during the morph — the rim of light reads as a property of the hole's
+    // size. It is fully gone before the shadow collapses to the seed/flash so the
+    // remnant isn't haloed. bloom is the master 1->0 envelope.
+    float bloom = 1.0 - smoothstep(0.10, 0.42, uMorph); // full at the hero, gone before the seed
+    // As the ring dims it also tightens onto the rim and slims its band, so the
+    // fade reads as the rim collapsing to a finer hairline, not just dropping out.
+    float tighten = mix(1.0, 0.94, bloom);         // a touch tighter as it dims (bloom→0)
+    float spread  = mix(0.012, 0.03, bloom);       // thinner radial band as it dims
+    // uRingScale (dev): radius of the ring relative to the dark-core rim.
+    float r = uHole * uRingScale * tighten * (1.0 + (aSeed-0.5)*spread);  // thin ring at the dark-core rim
     vec2 dir = vec2(cos(aAng), sin(aAng));
     vec2 ndc = ndcBH + vec2(dir.x * r / uAspect, dir.y * r);
     gl_Position = vec4(ndc, 0.0, 1.0);
@@ -1511,8 +1513,8 @@ const ringVertexShader = /* glsl */ `
     // adjustable top/bottom and left/right asymmetries
     vB *= clamp(1.0 + uVertAsym * dir.y, 0.0, 3.0);
     vB *= clamp(1.0 - uHorizAsym * dir.x, 0.0, 3.0);
-    // Gate by the late-bloom envelope: zero at the hero, blooms in mid-transition,
-    // then gone before the shadow collapses. This is the whole reveal.
+    // Gate by the size-coupled envelope: full at the hero, fading as the hole
+    // shrinks, then gone before the shadow collapses.
     vB *= bloom;
     gl_PointSize = uPixelRatio * (0.7 + 0.8*aSeed);
   }
@@ -2280,6 +2282,126 @@ interface SceneHooks {
   getStage: () => number;
 }
 
+// ---------------------------------------------------------------------------
+//  DEV-ONLY tuning panel. Lets the two disk light-layers (primary bright
+//  crescent + secondary lower band) plus the photon ring + interior blackout
+//  sphere be tuned live: per-layer density, secondary scale/offset (seam),
+//  radial spread, thickness, ring size, blackout-sphere size. Live tuning only —
+//  read the values off the panel and bake the ones you like into CFG, then
+//  delete this builder + its call + the dbgCtl block + the writes that read it.
+// ---------------------------------------------------------------------------
+interface DiskTuneState {
+  densityPrimary: number;
+  densitySecondary: number;
+  sec: number;
+  secOffsetX: number;
+  secOffsetY: number;
+  distrib: number;
+  thick: number;
+  ringScale: number;
+  holeScale: number;
+}
+
+interface SliderSpec {
+  key: keyof DiskTuneState;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+}
+
+function buildDebugPanel(state: DiskTuneState): () => void {
+  const sliders: readonly SliderSpec[] = [
+    { key: 'densityPrimary', label: 'density · crescent', min: 0, max: 3, step: 0.01 },
+    { key: 'densitySecondary', label: 'density · lower band', min: 0, max: 3, step: 0.01 },
+    { key: 'sec', label: 'secondary scale', min: 0.3, max: 1.6, step: 0.005 },
+    { key: 'secOffsetX', label: 'secondary X', min: -0.6, max: 0.6, step: 0.002 },
+    { key: 'secOffsetY', label: 'secondary Y (seam)', min: -0.6, max: 0.6, step: 0.002 },
+    { key: 'distrib', label: 'radial spread', min: 0.3, max: 2.5, step: 0.01 },
+    { key: 'thick', label: 'thickness', min: 0, max: 0.8, step: 0.005 },
+    { key: 'ringScale', label: 'ring size', min: 0.3, max: 3, step: 0.01 },
+    { key: 'holeScale', label: 'blackout sphere size', min: 0.3, max: 3, step: 0.01 },
+  ];
+
+  const panel = document.createElement('div');
+  panel.style.cssText = [
+    'position:fixed',
+    'top:12px',
+    'right:12px',
+    'z-index:99999',
+    'width:240px',
+    'padding:12px 14px',
+    'background:rgba(8,10,8,0.82)',
+    'backdrop-filter:blur(6px)',
+    'border:1px solid rgba(255,255,255,0.12)',
+    'border-radius:10px',
+    'font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace',
+    'color:#cfe0c0',
+    'user-select:none',
+  ].join(';');
+
+  const title = document.createElement('div');
+  title.textContent = 'disk layers · dev';
+  title.style.cssText = 'font-weight:600;letter-spacing:0.04em;margin-bottom:10px;opacity:0.7;text-transform:uppercase';
+  panel.appendChild(title);
+
+  for (const spec of sliders) {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:block;margin:8px 0';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:2px';
+    const name = document.createElement('span');
+    name.textContent = spec.label;
+    const val = document.createElement('span');
+    val.style.cssText = 'opacity:0.85;font-variant-numeric:tabular-nums';
+    val.textContent = state[spec.key].toFixed(3);
+    head.appendChild(name);
+    head.appendChild(val);
+
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(spec.min);
+    input.max = String(spec.max);
+    input.step = String(spec.step);
+    input.value = String(state[spec.key]);
+    input.style.cssText = 'width:100%;accent-color:#b9d089;cursor:ew-resize';
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      state[spec.key] = v;
+      val.textContent = v.toFixed(3);
+    });
+
+    row.appendChild(head);
+    row.appendChild(input);
+    panel.appendChild(row);
+  }
+
+  const dump = document.createElement('button');
+  dump.textContent = 'log values';
+  dump.style.cssText = [
+    'margin-top:10px',
+    'width:100%',
+    'padding:6px',
+    'background:rgba(185,208,137,0.16)',
+    'border:1px solid rgba(185,208,137,0.35)',
+    'border-radius:6px',
+    'color:#dcecca',
+    'font:inherit',
+    'cursor:pointer',
+  ].join(';');
+  dump.addEventListener('click', () => {
+    // eslint-disable-next-line no-console
+    console.log('[disk tune]', JSON.stringify(state, null, 2));
+  });
+  panel.appendChild(dump);
+
+  document.body.appendChild(panel);
+  return () => {
+    if (panel.parentNode) panel.parentNode.removeChild(panel);
+  };
+}
+
 function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): () => void {
   const diskParticles = tuneParticlesForDevice();
   const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
@@ -2336,6 +2458,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uImageSign: { value: 1.0 },
     uSat: { value: CFG.saturation },
     uSec: { value: CFG.secScale },
+    uSecOffsetX: { value: 0 }, // dev: nudge secondary band L/R (NDC-aspect units)
+    uSecOffsetY: { value: 0 }, // dev: nudge secondary band up/down to close the seam
     uHole: { value: 0.12 },
     uVertAsym: { value: CFG.vertAsym },
     uHorizAsym: { value: CFG.horizAsym },
@@ -2510,6 +2634,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uVertAsym: { value: CFG.vertAsym },
     uHorizAsym: { value: CFG.horizAsym },
     uRingBright: { value: CFG.ringBright },
+    uRingScale: { value: 1.0 }, // dev: ring radius × (relative to dark-core rim)
     uMorph: { value: 0 },
   };
   const ringMat = new THREE.ShaderMaterial({
@@ -2556,7 +2681,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const shadowAng = CFG.coreSize / D;
     const ndcShadow = shadowAng / Math.tan(fovY / 2);
     const thetaE = ndcShadow * CFG.lens;
-    const holeR = ndcShadow * CFG.holeFactor;
+    // dev: holeScale resizes the interior blackout sphere (the dark shadow disc).
+    // The disk carve, the star/warp inner cutoff and the ring radius all key off
+    // uHole, so this scales the whole void consistently.
+    const holeR = ndcShadow * CFG.holeFactor * dbgCtl.holeScale;
     const starThetaE = holeR * 1.55;
     const pr = renderer.getPixelRatio();
 
@@ -2619,6 +2747,23 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   let raf = 0;
   let stopped = false;
 
+  // --- DEV tuning panel state (delete the panel + this block when done) -------
+  // Live overrides. Density values MULTIPLY the per-layer base brightness (so the
+  // frame's auto-exposure logic is preserved); the rest are written to uniforms.
+  // holeScale resizes the interior blackout sphere; ringScale resizes the photon
+  // ring. Seeded from CFG so the panel opens on the current look.
+  const dbgCtl = {
+    densityPrimary: 1.0, // bright crescent (primary lensed image) brightness ×
+    densitySecondary: 1.0, // lower grainy band (secondary image) brightness ×
+    sec: CFG.secScale, // secondary image scale (uSec)
+    secOffsetX: 0.0, // secondary band L/R nudge (NDC-aspect)
+    secOffsetY: 0.0, // secondary band up/down nudge — closes the seam
+    distrib: CFG.diskDistrib, // radial spread (uDistrib): <1 outer, >1 inner
+    thick: CFG.diskThickness, // vertical thickness (uThick)
+    ringScale: 1.0, // photon-ring radius × (relative to the dark-core rim)
+    holeScale: 1.0, // interior blackout-sphere (shadow disc) radius ×
+  };
+
   // easeOutCubic — fast pull-back that settles softly into the resting pose
   const easeOut = (x: number): number => 1 - Math.pow(1 - x, 3);
   // clamped smoothstep over [0,1] — used for the lifecycle zoom choreography
@@ -2666,6 +2811,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uMorph.value = morph;
     diskMatSecondary.uniforms.uMorph.value = morph;
     ringMat.uniforms.uMorph.value = morph;
+    ringMat.uniforms.uRingScale.value = dbgCtl.ringScale; // dev: live ring size
     // flash envelope: a sharp, BRIGHT shock-breakout burst centred on the
     // compression peak (the one blinding beat of the explosion) — loud, but
     // ASYMMETRIC: a quick rise (σ 0.055) and a FASTER decay (σ 0.04) so the glow
@@ -2804,8 +2950,17 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // bloats — the "add particles on the surface" read. Outside the slot, full base.
     const cloudGain = inYRWindow ? particleIn : 1;
     const baseBright = 1.25 * (1 - 0.92 * hotZone) * cloudGain;
-    diskMatPrimary.uniforms.uBright.value = baseBright;
-    diskMatSecondary.uniforms.uBright.value = baseBright;
+    diskMatPrimary.uniforms.uBright.value = baseBright * dbgCtl.densityPrimary;
+    diskMatSecondary.uniforms.uBright.value = baseBright * dbgCtl.densitySecondary;
+    // --- DEV: live layer geometry (delete with the panel) ---
+    diskMatPrimary.uniforms.uSec.value = dbgCtl.sec;
+    diskMatSecondary.uniforms.uSec.value = dbgCtl.sec;
+    diskMatSecondary.uniforms.uSecOffsetX.value = dbgCtl.secOffsetX;
+    diskMatSecondary.uniforms.uSecOffsetY.value = dbgCtl.secOffsetY;
+    diskMatPrimary.uniforms.uDistrib.value = dbgCtl.distrib;
+    diskMatSecondary.uniforms.uDistrib.value = dbgCtl.distrib;
+    diskMatPrimary.uniforms.uThick.value = dbgCtl.thick;
+    diskMatSecondary.uniforms.uThick.value = dbgCtl.thick;
     // Auto-exposure: pull down across the flash, dip at the seed (so the tiny
     // black-hole point reads dim and dense), and settle a touch lower for the
     // dim red giant so it reads warm and matte, not glaring. A VERY NARROW punch
@@ -2978,10 +3133,14 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   onResize();
   frame();
 
+  // DEV tuning panel (delete this line + buildDebugPanel + dbgCtl when done)
+  const disposeDebugPanel = buildDebugPanel(dbgCtl);
+
   // --- teardown ---
   return () => {
     stopped = true;
     cancelAnimationFrame(raf);
+    disposeDebugPanel();
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointerMove);
 
