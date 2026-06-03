@@ -305,6 +305,7 @@ const diskVertexShader = /* glsl */ `
   varying float vExplode;// explosion heat proxy → blue-white→amber→red ramp
   varying float vPlaceholder; // REVIEW: 0 none, 2 nebula, 3 dot
   varying float vNeb;    // nebula radial factor (0 hot core → 1 rusty rim)
+  varying float vNebLane;// nebula lane: 0 = diffuse haze, 1 = filament strand
   // --- yellow (sun) state channels, ported from the standalone Sun render ---
   varying float vSunM;    // warm photosphere noise field (0..1) → colour ramp
   varying float vSunLimb; // limb factor (0 centre → 1 rim) → bright limb glow
@@ -319,6 +320,7 @@ const diskVertexShader = /* glsl */ `
     vSunFlare = 0.0; vSunHot = 0.0;             // sun atmosphere channels
     vSunRed = 0.0;                              // 0 gold (yellow), 1 red giant
     vNeb = 0.0;                                 // nebula radial factor
+    vNebLane = 0.0;                             // nebula lane (0 diffuse, 1 filament)
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
     float r = r0;
@@ -765,55 +767,94 @@ const diskVertexShader = /* glsl */ `
       // density (heat) and the position in the cloud (vNeb), so dense strands are
       // fat & bright while void dust is tiny & faint. Camera pulls WAY back here.
       if(uNebula > 0.5){
-        // stable per-particle position in a FILLED ellipsoid. Direction from the
-        // even-area sphere map; radius from a cube-root so the volume fills evenly
-        // (not surface-biased). Squashed on Y → a broad oval like the reference.
-        float rrnd = h31(vec3(aSeed*91.7, aU*13.3, 7.0));
-        float fillR = pow(rrnd, 0.40);                     // even volume fill, slight core bias
-        vec3 cell = vec3(sphere.x, sphere.y*0.66, sphere.z); // flattened oval
-        vec3 p0   = cell * (uGiantR * 3.6 * fillR);        // big sprawling volume (~0..15)
-
-        // --- drifting 3D filament web: domain-warped fbm over the WORLD position
-        //     carves ropey, branching lanes (the tendrils). Two warp octaves give
-        //     the tangled look; the drift makes it roll slowly over time.
+        // ===== Crab Nebula (M1), ported from the standalone reference render =====
+        // The reference layers THREE point systems: ropey FILAMENT strands, a
+        // centrally-concentrated DIFFUSE synchrotron haze, and a central PULSAR.
+        // We can't run three geometries in one cloud, so each particle is dealt into
+        // one of these LANES by a stable hash and shaped accordingly. The ellipsoid
+        // is squashed on Y (reference ELL ≈ 1.26,1.0,0.84 → a broad oval).
+        float laneH = h31(vec3(aSeed*53.7, aPhase*11.3, 3.0)); // 0..1 lane selector
+        vec3 ELL = vec3(1.26, 0.84, 1.0);                   // oval / flattening (y squashed)
+        float NR = uGiantR * 1.05;                          // overall nebula radius
+        // a wandering drift so the whole remnant slowly rolls/breathes.
         vec3 nDrift = vec3(uTime*0.020, uTime*0.014, -uTime*0.016);
-        vec3 wp = p0 * 0.34;
-        vec3 wq = vec3(
-          fbm(wp + 3.0 + nDrift),
-          fbm(wp + 17.0 + nDrift),
-          fbm(wp + 41.0 + nDrift)
-        );
-        float web = fbm(wp*1.7 + 2.4*wq + nDrift*1.3);     // 0..1 ropey field
-        float strand = smoothstep(0.46, 0.78, web);        // thin high band → strand
-        float vein   = pow(strand, 1.5);                   // crisp strand cores
-        float voidF  = 1.0 - smoothstep(0.30, 0.48, web);  // dark interior voids
 
-        // --- wave displacement: pull particles TOWARD the nearest filament ridge
-        //     (gradient of the web field) so matter visibly clusters onto the
-        //     strands, and add a slow transverse sway. Both drift with uTime so the
-        //     web breathes. This is a small NUDGE in world space — no radial bias,
-        //     so the cloud stays volumetric (no spokes).
-        float e = uGiantR*0.18;
-        float wx = fbm((p0+vec3(e,0,0))*0.34*1.7 + nDrift*1.3) - fbm((p0-vec3(e,0,0))*0.34*1.7 + nDrift*1.3);
-        float wy = fbm((p0+vec3(0,e,0))*0.34*1.7 + nDrift*1.3) - fbm((p0-vec3(0,e,0))*0.34*1.7 + nDrift*1.3);
-        float wz = fbm((p0+vec3(0,0,e))*0.34*1.7 + nDrift*1.3) - fbm((p0-vec3(0,0,e))*0.34*1.7 + nDrift*1.3);
-        vec3 grad = vec3(wx, wy, wz);                      // points uphill (toward ridges)
-        vec3 toRidge = grad * (uGiantR * 1.1);             // condense onto strands
-        // slow billow so the gas isn't glassy-static (the "wave"/liant motion)
-        vec3 sway = vec3(
-          fbm(p0*0.16 +  9.0 + nDrift*0.7),
-          fbm(p0*0.16 + 23.0 + nDrift*0.7),
-          fbm(p0*0.16 + 51.0 + nDrift*0.7)
-        ) - 0.5;
-        pos = p0 + toRidge + sway * (uGiantR * 0.9);
-
-        // density/brightness proxy for the fragment colour ramp + sizing.
-        float dens = clamp(0.12 + 1.25*vein + 0.18*(1.0-voidF), 0.0, 1.4);
-        // radial factor: hot bluish-teal core → cooler rusty rim (reference palette).
-        float rN = clamp(length(pos) / (uGiantR*3.4), 0.0, 1.0);
-        vNeb  = rN;                                        // 0 core → 1 rim (colour)
-        heat  = dens;                                      // strand density (lum + size)
-        vPlaceholder = 2.0;
+        if(laneH < 0.46){
+          // ---- FILAMENT LANE: continuous wavy STRANDS (the ropey tendrils) ------
+          // CRITICAL: many particles must SHARE a strand so they form a continuous
+          // rope, not isolated dots. Each particle gets a quantized STRAND ID; all
+          // particles on a strand share its anchor, axis, length and waviness, and
+          // each sits at its own arc position along it. That coherence reads as
+          // filaments — the structure the eye latches onto.
+          float STRANDS = 520.0;
+          float sid = floor(h31(vec3(aSeed*1.7, aPhase*2.3, 0.5)) * STRANDS); // strand id
+          float sH1 = h31(vec3(sid, 11.0, 3.0));           // per-strand hashes
+          float sH2 = h31(vec3(sid, 23.0, 7.0));
+          float sH3 = h31(vec3(sid, 41.0, 9.0));
+          float sH4 = h31(vec3(sid, 67.0, 5.0));
+          // strand anchor: a point on the ellipsoid shell (rim-biased, where the
+          // Crab's filaments live). Even-area direction from the strand hashes.
+          float su = sH1*2.0 - 1.0;                         // cos(theta)
+          float sphi = sH2 * 6.2831;
+          float ssp = sqrt(max(0.0, 1.0 - su*su));
+          vec3 sdir = vec3(ssp*cos(sphi), su, ssp*sin(sphi));
+          float rad = NR * (0.30 + 0.70*pow(sH3, 0.45));
+          vec3 anchor = normalize(vec3(sdir.x*ELL.x, sdir.y*ELL.y, sdir.z*ELL.z)) * rad;
+          // orthonormal frame at the anchor
+          vec3 rn = normalize(anchor);
+          vec3 t1 = abs(rn.y) > 0.9 ? vec3(1.0,0.0,0.0) : vec3(0.0,1.0,0.0);
+          vec3 tA = normalize(cross(rn, t1));
+          vec3 tB = normalize(cross(rn, tA));
+          float ang = sH4 * 6.2831;
+          vec3 along = tA*cos(ang) + tB*sin(ang);          // shared strand axis
+          // arc position of THIS particle along the strand (its own hash → spread)
+          float s = h31(vec3(aSeed*5.0, aPhase*3.0, 13.0)) - 0.5; // -0.5..0.5
+          float len  = NR * mix(0.18, 0.80, sH1);          // strand length (shared)
+          float wAmp = NR * mix(0.03, 0.20, sH2);          // wobble amplitude (shared)
+          float wFrq = mix(2.0, 8.0, sH3);                 // wobble frequency (shared)
+          float wob  = sin(s*wFrq*6.2831 + sH4*6.2831 + uTime*0.2) * wAmp;
+          float bend = (sH2 - 0.5) * NR * 0.20;            // strand bow (shared)
+          pos = anchor + along*(s*len) + tB*wob + rn*(cos(s*3.14159)*bend);
+          // tiny per-particle jitter ACROSS the rope so it has thickness, not a line
+          pos += tB * (h31(vec3(aSeed, 2.0, 8.0))-0.5) * (NR*0.025);
+          pos += rn * (h31(vec3(aSeed, 4.0, 6.0))-0.5) * (NR*0.020);
+          float rN = clamp(length(pos) / NR, 0.0, 1.0);
+          vNeb = rN;
+          heat = 0.85 + 0.5*pow(h31(vec3(aSeed*4.0, sid, 8.0)), 3.0); // bright knots
+          vNebLane = 1.0;                                  // filament strand
+          vPlaceholder = 2.0;
+        } else {
+          // ---- DIFFUSE LANE: centrally-concentrated synchrotron haze -----------
+          // The cloud has ~30x the reference's diffuse density; uncuLLed it stacks
+          // into an opaque white wall. So we cull most of it (keep ~12%, more in the
+          // bright clumps) and carve patchy voids with an fbm field, leaving a thin
+          // coloured veil the filaments read against — not a solid luminous ball.
+          float dist = NR * 0.95 * pow(h31(vec3(aSeed*13.0, aU*17.0, 5.0)), 1.55);
+          vec3 dir = vec3(sphere.x*ELL.x, sphere.y*ELL.y, sphere.z*ELL.z);
+          vec3 p0 = dir * dist;
+          vec3 sway = vec3(
+            fbm(p0*0.18 +  9.0 + nDrift*0.7),
+            fbm(p0*0.18 + 23.0 + nDrift*0.7),
+            fbm(p0*0.18 + 51.0 + nDrift*0.7)
+          ) - 0.5;
+          pos = p0 + sway * (NR * 0.10);
+          float rN = clamp(dist / (NR*0.95), 0.0, 1.0);
+          vNeb = rN;
+          float cloudF = fbm(p0*0.45 + nDrift);            // 0..1 patchy field
+          float clump  = smoothstep(0.42, 0.72, cloudF);   // bright gas pockets
+          heat = mix(0.30, 0.06, rN) * (0.25 + 0.95*clump);
+          vPlaceholder = 2.0;
+          float keep = h31(vec3(aSeed*23.0, aU*5.0, 19.0));
+          if(keep > 0.12 + 0.30*clump) vNebLane = -1.0;    // -1 → culled (sized to 0)
+          // ---- PULSAR: snap a tiny fraction to the bright central core ---------
+          if(laneH > 0.992){
+            pos = sway * (NR*0.015);
+            vNeb = 0.0;
+            vNebLane = 0.0;                                 // un-cull the pulsar
+            heat = 1.6;
+            vPlaceholder = 2.5;                             // pulsar sub-tag (→ white-blue)
+          }
+        }
       }
       // -- pale blue dot: collapse to a small, soft, cool sphere ------------
       if(uDot > 0.5){
@@ -1118,16 +1159,23 @@ const diskVertexShader = /* glsl */ `
       // (vNeb) dims the rusty outer rim a touch so the teal core reads as the hot
       // heart of the remnant. Kept LOW per-particle because the big overlapping
       // grains accumulate additively — the bloom/grade supply the overall glow.
-      if(vPlaceholder > 1.5 && vPlaceholder < 2.5){
-        float dens = clamp(heat, 0.0, 1.4);
-        // HIGH-CONTRAST: voids near-dark, strand cores glow. The cloud must read
-        // as a filament web against black (the reference is mostly dark space),
-        // not a uniform luminous blob — so keep the floor very low and let only
-        // the dense strands light up.
-        bright = 0.05 + 0.95*dens*dens;          // strand cores glow, voids near-dark
-        // the cyan HEART glows brightest (an illuminated central region, like the
-        // reference's lit core); the rusty rim falls off.
-        bright *= 1.0 + 0.7*(1.0 - vNeb);        // core brighter than rim
+      if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
+        float dens = clamp(heat, 0.0, 1.7);
+        if(vNebLane > 0.5){
+          // FILAMENT strands: the bright ropey web — the structure the eye reads.
+          // Crisp and luminous with brighter knots. The INNER ends are dimmed so the
+          // blue/cyan heart survives instead of saturating to white (the outer
+          // red/gold tendrils carry the brightness).
+          bright = 0.35 + 1.35*dens*dens;
+          bright *= 0.45 + 0.55*smoothstep(0.10, 0.55, vNeb); // dim the blue core ends
+        } else {
+          // DIFFUSE haze: kept DIM so it reads as soft coloured gas the blue→red
+          // ramp survives on, NOT a bright wall that clips to cream. The heart is
+          // only modestly brighter than the rim (no hard center boost).
+          bright = 0.04 + 0.20*dens;
+          bright *= 1.0 + 0.30*(1.0 - vNeb);
+        }
+        if(vPlaceholder > 2.4) bright = 3.0;     // pulsar: bright point (not a blowout)
         vHeat = dens;                            // keep density for the colour ramp
         vGiant = 1.0;                            // (unused by the nebula tint path)
       }
@@ -1165,15 +1213,19 @@ const diskVertexShader = /* glsl */ `
     } else if(vSunFlare > 0.5){
       gl_PointSize = clamp(baseSize * 0.8, 0.6, 2.4);    // loop / jet thread
     }
-    // nebula: DIFFERENT sizing across the cloud (user ask). Dense filament cores
-    // get fat soft grains that overlap into glowing gas; sparse void dust gets tiny
-    // grains. A per-particle seed adds spread so the cloud isn't uniform. The big
-    // soft grains are what make the scattered points read as continuous nebulosity
-    // rather than a field of sand.
-    if(vPlaceholder > 1.5 && vPlaceholder < 2.5){
+    // nebula: DIFFERENT sizing per lane. Filament strands get fat soft grains that
+    // overlap into glowing ropes; the sparse surviving diffuse haze gets big soft
+    // puffs that melt into continuous nebulosity. Culled diffuse grains
+    // (vNebLane < 0) are sized to 0 so the haze stays thin and the structure reads.
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
       float sizeRand = 0.5 + 0.9*aSeed;                  // per-particle variety
-      float nebSize  = baseSize * (0.8 + 2.6*vHeat) * sizeRand; // strands fat, voids small
-      gl_PointSize = clamp(nebSize, 0.6, 11.0);
+      if(vNebLane > 0.5){
+        gl_PointSize = clamp(baseSize * (0.8 + 1.6*vHeat) * sizeRand, 0.8, 5.0); // filament rope
+      } else {
+        gl_PointSize = clamp(baseSize * (1.2 + 1.8*vHeat) * sizeRand, 0.8, 7.0); // soft gas puff
+      }
+      if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize*4.0, 4.0, 22.0); // pulsar: big bright point
+      if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
     }
     if(drop) gl_PointSize = 0.0;
   }
@@ -1189,6 +1241,7 @@ const diskFragmentShader = /* glsl */ `
   varying float vExplode;
   varying float vPlaceholder; // REVIEW: 0 none, 1 yellow, 2 nebula, 3 dot
   varying float vNeb;    // nebula radial factor (0 hot core → 1 rusty rim)
+  varying float vNebLane;// nebula lane: 0 = diffuse haze, 1 = filament strand
   varying float vSunM;    // warm photosphere field for the yellow-sun ramp
   varying float vSunLimb; // limb factor → bright gold rim glow
   varying float vSunDark; // sunspot/network darkening
@@ -1304,31 +1357,35 @@ const diskFragmentShader = /* glsl */ `
 
           pcol = mix(sc, rc, vSunRed);
         }
-      } else if(vPlaceholder < 2.5){
-        // nebula (Crab-like): a teal/green luminous core grading out to rusty
-        // orange filament edges, exactly the reference palette. vNeb is the radial
-        // factor (0 core → 1 rim); vHeat is the strand density (faint dust → bright
-        // strand core). The hue walks cyan → green → gold → rust as we move out,
-        // and the brightest strands push toward warm white so the web glows.
-        // Palette walks the reference: a luminous teal/cyan HEART filling most of
-        // the cloud, greening through the mid filaments, and only the OUTERMOST
-        // tendrils warming to gold then rust. Teal/green dominate (the bulk); gold
-        // and rust are squeezed into the far rim so the remnant reads cyan-cored.
+      } else if(vPlaceholder < 2.9){
+        // nebula (Crab M1): the reference's blue-core → red-rim RAMP, walked by the
+        // radial factor vNeb (0 hot blue heart → 1 cooler red filaments). vHeat is
+        // the per-lane density. Ramp: deep-blue → blue → cyan → green → yellow →
+        // gold → orange → red — exactly the reference palette.
         float rr = clamp(vNeb, 0.0, 1.0);
-        vec3 cCore = vec3(0.40, 0.86, 0.96);   // hot bluish-cyan heart
-        vec3 cTeal = vec3(0.20, 0.74, 0.66);   // teal-green inner web
-        vec3 cGreen= vec3(0.50, 0.78, 0.34);   // yellow-green mid filaments
-        vec3 cGold = vec3(0.95, 0.64, 0.20);   // amber strand
-        vec3 cRust = vec3(0.82, 0.28, 0.10);   // rusty orange outer tendrils
-        vec3 ncol = mix(cCore, cTeal, smoothstep(0.0, 0.30, rr));
-        ncol = mix(ncol, cGreen, smoothstep(0.30, 0.55, rr));
-        ncol = mix(ncol, cGold,  smoothstep(0.55, 0.76, rr));
-        ncol = mix(ncol, cRust,  smoothstep(0.76, 0.96, rr));
-        // dense strand cores brighten toward warm white (the glowing filament spine)
-        float spine = smoothstep(0.85, 1.35, vHeat);
-        ncol = mix(ncol, vec3(0.85, 0.97, 0.92), spine*0.45);  // cool-white spine, not gold
-        // a faint cool fill in the voids so the whole volume reads as gas, not gaps
-        ncol = mix(vec3(0.05, 0.16, 0.22), ncol, smoothstep(0.04, 0.45, vHeat));
+        vec3 cBlue  = vec3(0.30, 0.46, 1.00);  // 0.00 deep blue (hot heart)
+        vec3 cAzure = vec3(0.30, 0.76, 1.00);  // 0.14 blue
+        vec3 cCyan  = vec3(0.34, 0.96, 0.86);  // 0.30 cyan
+        vec3 cGreen = vec3(0.55, 1.00, 0.55);  // 0.46 green
+        vec3 cLime  = vec3(0.95, 1.00, 0.46);  // 0.62 yellow-green
+        vec3 cGold  = vec3(1.00, 0.80, 0.36);  // 0.76 gold
+        vec3 cOrange= vec3(1.00, 0.50, 0.22);  // 0.88 orange
+        vec3 cRed   = vec3(1.00, 0.28, 0.18);  // 1.00 red (rim filaments)
+        vec3 ncol = mix(cBlue,  cAzure, smoothstep(0.00, 0.14, rr));
+        ncol = mix(ncol, cCyan,  smoothstep(0.14, 0.30, rr));
+        ncol = mix(ncol, cGreen, smoothstep(0.30, 0.46, rr));
+        ncol = mix(ncol, cLime,  smoothstep(0.46, 0.62, rr));
+        ncol = mix(ncol, cGold,  smoothstep(0.62, 0.76, rr));
+        ncol = mix(ncol, cOrange,smoothstep(0.76, 0.88, rr));
+        ncol = mix(ncol, cRed,   smoothstep(0.88, 1.00, rr));
+        // a faint central PINK wash over the hot heart (reference cPink heart)
+        ncol = mix(ncol, vec3(0.92, 0.62, 0.95), (1.0 - smoothstep(0.0, 0.22, rr))*0.30);
+        // bright filament knots brighten toward a COOL white so the spine glows
+        // without erasing the ramp hue (a small, cool-tinted lift, not a blowout).
+        float spine = smoothstep(1.05, 1.55, vHeat);
+        ncol = mix(ncol, vec3(0.80, 0.95, 1.00), spine*0.22);
+        // PULSAR: the central neutron-star point reads blue-white, not on the ramp.
+        ncol = mix(ncol, vec3(0.85, 0.92, 1.00), step(2.4, vPlaceholder));
         pcol = ncol;
       } else {
         // pale blue dot: the famous faint blue point.
@@ -1355,11 +1412,17 @@ const diskFragmentShader = /* glsl */ `
     }
     // nebula: keep per-grain intensity LOW so the many overlapping soft grains
     // accumulate additively into luminous gas WITHOUT clipping to white — the
-    // colour ramp (teal core → rust rim) must survive, not blow out to cream. The
-    // voids stay dark; only the dense strands build up brightness. Bloom adds the
-    // glow on top, so per-grain emission stays well under 1.
-    if(vPlaceholder > 1.5 && vPlaceholder < 2.5){
-      inten = a * (0.16 + 0.62*clamp(vBright, 0.0, 1.6));
+    // colour ramp (blue heart → red rim) must survive. Filaments read bright enough
+    // to show structure but low enough to keep their hue; the diffuse haze is a
+    // faint coloured veil. Bloom adds the glow on top. The pulsar keeps full punch.
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.4){
+      if(vNebLane > 0.5){
+        inten = a * (0.07 + 0.30*clamp(vBright, 0.0, 2.2));   // filament: reads, keeps hue
+      } else {
+        inten = a * (0.015 + 0.10*clamp(vBright, 0.0, 1.0));  // diffuse: faint coloured veil
+      }
+    } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
+      inten = a * clamp(vBright, 0.0, 4.0);          // pulsar: blazing point
     }
     gl_FragColor = vec4(col * inten, 1.0);
   }
@@ -2899,12 +2962,18 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // accrues as the body bloats. The cloud renders the red-giant sphere (uYellow
     // is 0 here, uGiant pinned to 1), so it lands exactly co-located with the mesh.
     const particleIn = smoothstep01((redAmt - 0.25) / 0.75);
-    const cloudShown = inYRWindow ? particleIn > 0.001 : !nebula; // outside slot keep prior behaviour
+    // Outside the yellow⇄red slot the cloud renders the red giant, the nebula AND
+    // the pale-blue-dot (all three live in the cloud's uGiant/uNebula/uDot branches).
+    // Keep it shown there; it's hidden only on the yellow-MESH side of the slot,
+    // where the opaque mesh sun rig owns the body instead.
+    const cloudShown = inYRWindow ? particleIn > 0.001 : true;
     diskPrimary.visible = cloudShown;
     diskSecondary.visible = cloudShown;
     // Hide the lensed background starfield while the opaque mesh body is present
     // (it would bleed through); restore it as the mesh fades to the particle giant.
-    starPts.visible = inYRWindow ? meshFade < 0.5 : true;
+    // ALSO hide it across the NEBULA: the reference is the remnant alone against
+    // pure black ("no background"), and the camera sits close inside the cloud.
+    starPts.visible = (inYRWindow ? meshFade < 0.5 : true) && !nebula;
 
     // sunWindow drives the bright-gold grade below; keep it on across the yellow
     // half of the slot (mesh still dominant) and hand to the red-giant grade as
@@ -3029,17 +3098,18 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       // arrives (nebula snaps at 3.5) so the handoff from yellow isn't a hard pop.
       const ne = smoothstep01((stage - 3.5) / 0.35);
       // a CONTAINED glow: the reference is mostly dark space with bright filaments,
-      // so keep bloom moderate (a soft halo on the strands, not a frame-filling
-      // wash) and exposure near neutral so the teal/rust colour ramp survives
-      // instead of clipping to cream.
-      bloom.strength = bloom.strength * (1 - ne) + 0.45 * ne;  // soft strand glow
+      // and here we sit close inside the cloud, so the diffuse haze stacks deep along
+      // each view ray. Keep bloom moderate (a soft halo on the strands, not a frame-
+      // filling wash) and exposure DOWN so the blue→red colour ramp survives instead
+      // of clipping to cream/white. Saturation is pushed UP so the Crab palette reads.
+      bloom.strength = bloom.strength * (1 - ne) + 0.30 * ne;  // soft strand glow
       bloom.radius = CFG.bloomRad * (1 - ne) + 0.7 * ne;       // wide soft halo
       gradePass.uniforms.uExposure.value =
-        gradePass.uniforms.uExposure.value * (1 - ne) + 0.80 * ne;
+        gradePass.uniforms.uExposure.value * (1 - ne) + 0.50 * ne;
       gradePass.uniforms.uOlive.value *= 1 - ne;               // no olive cast
-      gradePass.uniforms.uWarmth.value *= 1 - ne;
-      gradePass.uniforms.uSat.value = gradePass.uniforms.uSat.value * (1 - ne) + 1.15 * ne;
-      const nSat = diskMatPrimary.uniforms.uSat.value * (1 - ne) + 1.0 * ne;
+      gradePass.uniforms.uWarmth.value *= 1 - ne;              // no warm cast (let blue/cyan show)
+      gradePass.uniforms.uSat.value = gradePass.uniforms.uSat.value * (1 - ne) + 1.45 * ne; // vivid Crab palette
+      const nSat = diskMatPrimary.uniforms.uSat.value * (1 - ne) + 1.35 * ne;
       diskMatPrimary.uniforms.uSat.value = nSat;
       diskMatSecondary.uniforms.uSat.value = nSat;
     } else {
@@ -3080,15 +3150,16 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       const seedZoom = heroZoom + (ZOOM_SEED - heroZoom) * shrinkT; // → 2.6
       const blastZoom = seedZoom + (ZOOM_BLAST - seedZoom) * blastT; // 2.6 → 2.0
       zoom = blastZoom + (ZOOM_OUT - blastZoom) * growT; // → 1.0
-      // nebula: pull WAY back so the sprawling remnant fills the frame as one big
-      // object (user ask: "unzoomed a lot"). Ease out from resting as the nebula
-      // arrives (stage 3.1 → 3.7), hold wide across the nebula, then pull back IN
-      // toward the pale blue dot (stage 4.3 → 4.7) so the dot reads as a tiny point.
-      const ZOOM_NEBULA = 2.7; // dist≈54 → frames a ~14-unit sprawling cloud
+      // nebula: push the camera IN so the remnant fills the frame and its filaments
+      // spill past the edges — we sit close inside the cloud (user ask: "zoomed so we
+      // feel inside it"). Ease in as the nebula arrives (stage 3.1 → 3.7), hold close,
+      // then pull back OUT toward the pale blue dot (4.3 → 4.7) so the dot reads tiny.
+      const ZOOM_NEBULA = 1.0; // dist≈20 → the ~4.4-unit cloud fills the frame, edges spill past
+      const ZOOM_DOT = 2.4;    // pull back out so the pale blue dot is a far speck
       const nebIn  = smoothstep01((stage - 3.1) / 0.6);
       const nebOut = smoothstep01((stage - 4.3) / 0.4);
-      const nebT = nebIn * (1 - nebOut);
-      zoom = zoom + (ZOOM_NEBULA - zoom) * nebT;
+      zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn;        // ease into the cloud
+      zoom = zoom + (ZOOM_DOT - zoom) * nebOut;          // ease back out for the dot
     }
     const dist = CFG.camDist * distFactor * zoom;
 
