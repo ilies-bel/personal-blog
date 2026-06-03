@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { ScrollTracker } from './scroll';
+import { lifecycle, easeOut, smoothstep01 } from './lifecycle';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -2943,13 +2944,9 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     holeScale: 1.0, // interior blackout-sphere (shadow disc) radius ×
   };
 
-  // easeOutCubic — fast pull-back that settles softly into the resting pose
-  const easeOut = (x: number): number => 1 - Math.pow(1 - x, 3);
-  // clamped smoothstep over [0,1] — used for the lifecycle zoom choreography
-  const smoothstep01 = (x: number): number => {
-    const t = x < 0 ? 0 : x > 1 ? 1 : x;
-    return t * t * (3 - 2 * t);
-  };
+  // easeOut (cubic) + smoothstep01 are the single-source-of-truth easings, now
+  // owned by lifecycle.ts (imported above). The stateful clock below still needs
+  // them: easeOut for the intro dezoom ramp, smoothstep01 for the nova rise.
 
   // The lifecycle position is eased toward its scroll target each frame so a
   // flick of the wheel glides through the transitions instead of snapping.
@@ -2986,22 +2983,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // so the explosion can be inspected frame-by-frame from a capture script.
     const dbg = (window as unknown as { __bhMorph?: number }).__bhMorph;
     if (typeof dbg === 'number') stage = dbg;
+    // `morph` (= min(1, stage)) is needed HERE for the stateful nova clock's
+    // breakout-crossing detection below; lifecycle() recomputes it from the same
+    // formula for the look scalars. (Kept local + cheap — it's the clock's input.)
     const morph = Math.min(1, stage);              // transition 1 progress (0..1)
-    // --- the unified surface collapse ---------------------------------------
-    // The red-giant SURFACE collapse is one continuous beat: the textured sphere
-    // shrinks non-homogeneously and its laggard regions stream off as the finger-
-    // spikes (the "explosion" is the surface caving in, not a separate blast). It
-    // runs across stage 1.05 (full red giant) → 0.5 (the surface reaches the point,
-    // where the legacy supernova FLASH fires and the seed/black-hole machinery
-    // below takes over). kCollapse drives the shader's per-region shrink.
-    const COLLAPSE_HI = 1.05; // stage where the surface is still the full sphere
-    const COLLAPSE_LO = 0.5;  // stage where the surface has shrunk to the point
-    const kCollapse = Math.min(1, Math.max(0, (COLLAPSE_HI - stage) / (COLLAPSE_HI - COLLAPSE_LO)));
-    // `giant` now means "the sphere-identity model is active" — it must be 1 across
-    // the ENTIRE collapse window so the unified surface block owns the geometry (no
-    // co-existing radial blast → no two-scale artifact). It rises as we leave the
-    // black-hole side (stage 0.5 → 1.05) and stays 1 for the red giant and above.
-    const giant = Math.min(1, Math.max(0, (stage - COLLAPSE_LO) / (COLLAPSE_HI - COLLAPSE_LO)));
 
     // --- transition 1: reverse supernova ---
     diskMatPrimary.uniforms.uMorph.value = morph;
@@ -3042,53 +3027,66 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const dbgFlash = (window as unknown as { __bhFlash?: number }).__bhFlash;
     if (typeof dbgFlash === 'number') nova = Math.max(0, Math.min(1, dbgFlash));
     novaPass.uniforms.uNova.value = nova;
-    // the particle-side shock-breakout glow now follows the SAME time envelope, so
+
+    // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
+    // This is the second piece of the stateful clock (time-based intro ramp); like
+    // `nova` it is resolved HERE and fed into lifecycle() as an input.
+    const intro = reduced ? 1 : easeOut(Math.min(t / INTRO_DUR, 1));
+
+    // === lifecycle() — the pure choreography ================================
+    // All the per-frame look DECISIONS (the ~48 scalars that used to live inline:
+    // kCollapse, giant, giantHeld, yellow/nebula/dot, flash, the yellow⇄red swap,
+    // gravity teardown, bloom/exposure/grade beats, the zoom story) are computed by
+    // the pure lifecycle() module from the resolved clock inputs (eased `stage`,
+    // `t`, `nova`, `intro`). frame() stays the thin impure shell: it just WRITES the
+    // returned StarState into uniforms / bloom / exposure / grade / camera below.
+    const s = lifecycle({
+      stage,
+      t,
+      reduced,
+      nova,
+      intro,
+      rotateSpeed: ROTATE_SPEED,
+      nearFactor: NEAR_FACTOR,
+      cfg: CFG,
+    });
+
+    // the particle-side shock-breakout glow follows the SAME time envelope, so
     // the additive blast core peaks together with the screen whiteout. The shader's
     // morph gates (smoothstep(0.40,0.50,uMorph), flashGate) still apply, so the seed
     // stays dark before the breakout regardless of `nova`.
-    const flash = 1.45 * nova;
-    diskMatPrimary.uniforms.uFlash.value = flash;
-    diskMatSecondary.uniforms.uFlash.value = flash;
+    diskMatPrimary.uniforms.uFlash.value = s.flash;
+    diskMatSecondary.uniforms.uFlash.value = s.flash;
     // surface-collapse progress (0 full red-giant sphere → 1 collapsed to the point)
-    diskMatPrimary.uniforms.uCollapse.value = kCollapse;
-    diskMatSecondary.uniforms.uCollapse.value = kCollapse;
+    diskMatPrimary.uniforms.uCollapse.value = s.kCollapse;
+    diskMatSecondary.uniforms.uCollapse.value = s.kCollapse;
 
     // --- transitions 3-5: yellow star → nebula → pale blue dot ---
     // REVIEW MODE (placeholders, no real morph): the new states HARD-SWAP — each
-    // slot snaps to that state's stand-in at the stage midpoint so its look + slot
-    // can be reviewed in isolation. Replace this block (and the matching shader
+    // slot snaps to that state's stand-in at the stage midpoint (see lifecycle.ts
+    // for s.yellow/s.nebula/s.dot). Replace this block (and the matching shader
     // placeholders, marked "REVIEW PLACEHOLDER") with the real morphs later; the
     // timeline placement stays the same.
-    //   yellow star  : active across stage 2→3  (snap at 2.5)
-    //   nebula       : active across stage 3→4  (snap at 3.5)
-    //   pale blue dot: active across stage 4→5  (snap at 4.5)
-    const yellow = stage >= 2.5 ? 1 : 0;
-    const nebula = stage >= 3.5 ? 1 : 0;
-    const dot = stage >= 4.5 ? 1 : 0;
-    // Once a later state is active the sphere is held (uGiant pinned to 1) so the
-    // placeholder branch has a sphere to reshape; only the latest-reached state shows.
-    const laterActive = yellow || nebula || dot;
-    const giantHeld = laterActive ? 1 : giant;
 
     // --- transition 2: red giant (held at 1 once a later placeholder takes over) ---
-    diskMatPrimary.uniforms.uGiant.value = giantHeld;
-    diskMatSecondary.uniforms.uGiant.value = giantHeld;
+    diskMatPrimary.uniforms.uGiant.value = s.giantHeld;
+    diskMatSecondary.uniforms.uGiant.value = s.giantHeld;
     // The POINT CLOUD is always the RED GIANT (its grainy body), never the yellow
     // star — the yellow star is the mesh sun rig. So the cloud's uYellow stays 0;
-    // the yellow JS flag below still gates the timeline (laterActive / grade).
+    // the s.yellow flag still gates the timeline (laterActive / grade) inside lifecycle.
     diskMatPrimary.uniforms.uYellow.value = 0;
     diskMatSecondary.uniforms.uYellow.value = 0;
-    diskMatPrimary.uniforms.uNebula.value = nebula;
-    diskMatSecondary.uniforms.uNebula.value = nebula;
-    diskMatPrimary.uniforms.uDot.value = dot;
-    diskMatSecondary.uniforms.uDot.value = dot;
+    diskMatPrimary.uniforms.uNebula.value = s.nebula ? 1 : 0;
+    diskMatSecondary.uniforms.uNebula.value = s.nebula ? 1 : 0;
+    diskMatPrimary.uniforms.uDot.value = s.dot ? 1 : 0;
+    diskMatSecondary.uniforms.uDot.value = s.dot ? 1 : 0;
 
     // --- yellow star → red giant: FLASH-SWAP transition ----------------------
     // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
     // (mesh sun rig — small, gold, textured) becomes the RED GIANT (point cloud —
     // big, deep red, grainy) as `stage` falls 3 → 2. The two bodies have totally
     // different textures, so we DON'T crossfade them co-located (that showed two
-    // entities + a colour flicker). Instead:
+    // entities + a colour flicker). Instead (see lifecycle.ts for the windows):
     //   1. The yellow MESH owns its whole slot (stage 3.0 → 3.5, up to the nebula
     //      snap) — nothing red ever shows before it.
     //   2. A SUBTLE light flash fires at SWAP_STAGE; under it the mesh hands off
@@ -3097,29 +3095,14 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     //   3. That gold sphere then GROWS (uYrGrow) from the yellow radius to the
     //      red-giant radius while its colour LERPS gold → red (uYrMix), a single
     //      monotonic curve — so no red→yellow→red wobble.
-    const SWAP_STAGE = 2.70;                                   // flash peak / mesh↔cloud crossover
-    const inYRWindow = stage > 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot
-    const meshSide   = inYRWindow && stage > SWAP_STAGE;       // 2.70 .. 3.5 → yellow mesh
-    const cloudSide  = inYRWindow && stage <= SWAP_STAGE;      // 2.05 .. 2.70 → particle body
+    diskMatPrimary.uniforms.uYrFlash.value = s.yrFlash;
+    diskMatSecondary.uniforms.uYrFlash.value = s.yrFlash;
 
-    // subtle flash envelope (its own stage-space gaussian, separate from the
-    // supernova uFlash which lives in morph space and is tied to stage 0→1).
-    const YR_FLASH_SIGMA = 0.050;
-    const yrFlash = inYRWindow
-      ? Math.exp(-Math.pow((stage - SWAP_STAGE) / YR_FLASH_SIGMA, 2.0))
-      : 0;
-    diskMatPrimary.uniforms.uYrFlash.value = yrFlash;
-    diskMatSecondary.uniforms.uYrFlash.value = yrFlash;
-
-    // grow + colour curves (single monotonic smoothsteps of the falling stage;
-    // colour LEADS grow slightly so it cools then settles — "light leads size").
-    // Both default to 1 (no-op) outside cloudSide.
-    const yrGrow  = smoothstep01((SWAP_STAGE - stage) / (SWAP_STAGE - 2.20));        // 0@2.70 → 1@2.20
-    const yrColor = smoothstep01((SWAP_STAGE + 0.02 - stage) / (SWAP_STAGE + 0.02 - 2.30)); // → 1@~2.30
-    diskMatPrimary.uniforms.uYrGrow.value  = cloudSide ? yrGrow  : 1;
-    diskMatSecondary.uniforms.uYrGrow.value = cloudSide ? yrGrow  : 1;
-    diskMatPrimary.uniforms.uYrMix.value   = cloudSide ? yrColor : 1;
-    diskMatSecondary.uniforms.uYrMix.value = cloudSide ? yrColor : 1;
+    // grow + colour curves default to 1 (no-op) outside cloudSide.
+    diskMatPrimary.uniforms.uYrGrow.value  = s.cloudSide ? s.yrGrow  : 1;
+    diskMatSecondary.uniforms.uYrGrow.value = s.cloudSide ? s.yrGrow  : 1;
+    diskMatPrimary.uniforms.uYrMix.value   = s.cloudSide ? s.yrColor : 1;
+    diskMatSecondary.uniforms.uYrMix.value = s.cloudSide ? s.yrColor : 1;
 
     // The MESH holds small + fully gold across its whole side (no early redden,
     // no early shrink) — all the growing/cooling is the cloud's job now. This
@@ -3135,62 +3118,37 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // the handoff cross-dissolves under the bloom rather than hard-cutting. The
     // gold particle sphere appears at/just-below the peak (cloudSide) under the
     // same flash → the two textures are never both clearly visible.
-    sunRig.group.visible = inYRWindow && stage > SWAP_STAGE - 0.05;
+    sunRig.group.visible = s.sunRigVisible;
     // Outside the yellow⇄red slot the cloud renders the red giant, the nebula AND
     // the pale-blue-dot. Inside the slot, the cloud body only shows on the cloud
     // side (the opaque mesh owns the yellow side).
-    const cloudShown = inYRWindow ? cloudSide : true;
-    diskPrimary.visible = cloudShown;
-    diskSecondary.visible = cloudShown;
+    diskPrimary.visible = s.cloudShown;
+    diskSecondary.visible = s.cloudShown;
     // Hide the lensed background starfield while the opaque mesh body is present
     // (it would bleed through); restore it once the cloud body takes over. ALSO
     // hide it across the NEBULA (the remnant sits alone against pure black).
-    starPts.visible = (inYRWindow ? cloudSide : true) && !nebula;
+    starPts.visible = s.starPtsVisible;
 
-    // sunWindow drives the bright-gold grade below (mesh side); the cloud side is
-    // handed to the red-giant grade, whose handoff is driven by yrColor.
-    const sunWindow = meshSide;
-
-    // the star/warp lensing only makes sense while the hole exists — fade it.
-    // Once the SUN forms we drop the gravitational-warp background entirely and
-    // restore the plain starfield to full brightness behind the star.
-    const lensLive = 1 - Math.min(1, Math.max(0, (morph - 0.1) / 0.4));
-    starMat.uniforms.uStarBright.value =
-      CFG.starBright * (0.4 + 0.6 * lensLive) * (1 - 0.45 * giantHeld) + CFG.starBright * 0.45 * giantHeld;
-    // Completely remove ALL gravity once the star forms: the warp arcs, the
-    // secondary (lensed) disk image, and the photon ring are switched off — a
-    // star has no event horizon bending light around it. The plain (un-lensed)
-    // starfield behind it is restored via uStarBright above. Below ~giant 0.02
-    // these are gone entirely.
-    const gravityGone = giantHeld > 0.02;
-    warpSeg.visible = !gravityGone;
-    warpSeg2.visible = !gravityGone;
-    diskSecondary.visible = !gravityGone;   // no lensed disk ghost behind the star
-    ringPts.visible = !gravityGone;          // no photon ring around the star
+    // the star/warp lensing only makes sense while the hole exists — fade it (the
+    // s.lensLive ramp + s.starBright are computed in lifecycle()). Once the SUN
+    // forms we drop the gravitational-warp background entirely and restore the plain
+    // starfield to full brightness (s.starBright) behind the star.
+    starMat.uniforms.uStarBright.value = s.starBright;
+    // Completely remove ALL gravity once the star forms (s.gravityGone): the warp
+    // arcs, the secondary (lensed) disk image, and the photon ring are switched off
+    // — a star has no event horizon bending light around it. The plain (un-lensed)
+    // starfield behind it is restored via uStarBright above. Below ~giant 0.02 these
+    // are gone entirely.
+    warpSeg.visible = !s.gravityGone;
+    warpSeg2.visible = !s.gravityGone;
+    diskSecondary.visible = !s.gravityGone;   // no lensed disk ghost behind the star
+    ringPts.visible = !s.gravityGone;          // no photon ring around the star
     starSecPts.visible = false;              // secondary lensed star image stays off
-    // Tame the bloom as the remnant inflates; let the flash punch it briefly. The
-    // red giant is meant to be DIM, so pull bloom right down once it forms.
-    const flareAmt = Math.min(1, Math.max(0, (morph - 0.46) / 0.54));
-    // SEED window (matches the shader's dark-core dip): the collapsed matter must
-    // read as a small DARK point, not a bloomed glow. Narrow + EARLY (centred 0.45)
-    // so it releases by the breakout (0.50) and never dims the loud flash.
-    const seedZone = Math.exp(-Math.pow((morph - 0.45) / 0.035, 2.0));
-    // brief bloom spike at the breakout — the loudest visual beat — but suppressed
-    // inside the seed window so it doesn't re-inflate the dark seed into a glow.
-    bloom.strength = CFG.bloomStr * (1 - 0.7 * flareAmt) + nova * 0.55 * (1 - 0.9 * seedZone);
-    bloom.strength = bloom.strength * (1 - 0.6 * giantHeld) + 0.12 * giantHeld;
-    bloom.strength *= 1 - 0.9 * seedZone; // kill bloom hard at the dark seed
-    // The imploded core packs the whole disk into a small, dense, additively-
-    // blended region — brightness there is enormous. Cut the disk's base emission
-    // hard across the compression window so it never clips to an edge-to-edge
-    // whiteout; the flash term is the one bright beat we DO want, narrow.
-    const hotZone = Math.exp(-Math.pow((morph - 0.5) / 0.15, 2.0));
     // The point-cloud red giant body renders at full base brightness; in the
     // yellow→red slot it simply appears under the swap flash (no ramp-in — its
     // gold→red look is driven by uYrMix/uYrFlash in the shader, not by emission).
-    const baseBright = 1.25 * (1 - 0.92 * hotZone);
-    diskMatPrimary.uniforms.uBright.value = baseBright * dbgCtl.densityPrimary;
-    diskMatSecondary.uniforms.uBright.value = baseBright * dbgCtl.densitySecondary;
+    diskMatPrimary.uniforms.uBright.value = s.baseBright * dbgCtl.densityPrimary;
+    diskMatSecondary.uniforms.uBright.value = s.baseBright * dbgCtl.densitySecondary;
     // --- DEV: live layer geometry (delete with the panel) ---
     diskMatPrimary.uniforms.uSec.value = dbgCtl.sec;
     diskMatSecondary.uniforms.uSec.value = dbgCtl.sec;
@@ -3200,157 +3158,38 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatSecondary.uniforms.uDistrib.value = dbgCtl.distrib;
     diskMatPrimary.uniforms.uThick.value = dbgCtl.thick;
     diskMatSecondary.uniforms.uThick.value = dbgCtl.thick;
-    // Auto-exposure: pull down across the flash, dip at the seed (so the tiny
-    // black-hole point reads dim and dense), and settle a touch lower for the
-    // dim red giant so it reads warm and matte, not glaring. The over-exposure
-    // punch now rides the TIME envelope (`nova`) so the under-white scene over-
-    // exposes for the full blast, in lockstep with the whiteout — not a 1-frame
-    // morph spike. It's still suppressed in the seed window so it never undoes the
-    // dark-core dip (seedZone is morph-keyed and ≈0 by the breakout, so the punch
-    // is intact while the seed stays a dark point).
-    const flashPunch = nova;
-    gradePass.uniforms.uExposure.value =
-      CFG.exposure * (1 - 0.58 * hotZone) * (1 - 0.18 * giantHeld) * (1 - 0.35 * seedZone)
-      * (1 + 0.9 * flashPunch * (1 - 0.7 * seedZone));
-    // Grade through the explosion: the blue-white→amber→red debris wants strong
-    // warmth & saturation and the olive/green background tint pulled right back,
-    // or the blast reads as a grey-green fog. exGrade is a sharp envelope over
-    // the actual blast window (morph ~0.5–0.9), decaying as the giant takes over.
-    const exGrade = Math.exp(-Math.pow((morph - 0.66) / 0.2, 2.0)) * (1 - giantHeld);
-    gradePass.uniforms.uOlive.value = CFG.olive * (1 - 0.85 * giantHeld) * (1 - 0.92 * exGrade);
-    gradePass.uniforms.uWarmth.value = CFG.warmth + 0.06 * giantHeld + 0.12 * exGrade;
-    gradePass.uniforms.uSat.value = CFG.saturation + 0.5 * giantHeld + 0.7 * exGrade;
-    // lift the disk's IN-SHADER saturation across the blast so the explosion ramp
-    // colours (warm amber/red, hot blue-white) survive instead of being crushed
-    // toward grey by the global desaturation.
-    const exSat = CFG.saturation + 0.55 * exGrade + 0.5 * giantHeld;
-    diskMatPrimary.uniforms.uSat.value = exSat;
-    diskMatSecondary.uniforms.uSat.value = exSat;
-
-    // --- sun grade: bold, saturated, un-washed. The yellow star reads as vivid
-    // gold; the RED GIANT reads as a big, deep, matte red star. Both use the same
-    // restrained bloom (a thin halo, not a frame-filling glow), no olive cast and
-    // full saturation so the photosphere colour survives. The red giant is
-    // crossfaded in over the gather so the explosion grade hands off cleanly.
-    // redGiantPhase: the cloud body (the new flash-swap cloud side, OR the settled
-    // red giant below the slot with no later state). A subtle flash punch (yrPunch)
-    // is added in both branches so the mesh→cloud swap reads as a bright beat.
-    const redGiantPhase = cloudSide || (giantHeld > 0.5 && !yellow && !nebula && !dot);
-    const yrPunch = yrFlash; // 0..1 subtle swap-flash envelope
-    if (sunWindow) {
-      // The yellow star is the MESH sun rig (a bright, opaque, real photosphere),
-      // not the dim particle placeholder. The reference renders it blazing gold
-      // with a strong glowing limb halo, so push exposure + bloom UP (not down)
-      // and keep the grade out of the way: no tone-map crush, no olive, no
-      // desaturation — let the bright gold body and white-hot limb survive. The
-      // subtle flash blooms it as it approaches the swap.
-      bloom.strength = 0.7 + 0.12 * yrPunch; // bright limb/corona halo + subtle swap flash
-      bloom.radius = 0.5;           // tighter so the solid sphere edge stays defined
-      gradePass.uniforms.uExposure.value = 1.0 * (1 + 0.05 * yrPunch);
-      gradePass.uniforms.uOlive.value = 0.0;
-      gradePass.uniforms.uWarmth.value = 0.0;
-      gradePass.uniforms.uSat.value = 1.0;   // full saturation → vivid gold
-    } else if (redGiantPhase) {
-      // rg crossfades the grade from the bright gold swap-in (rg=0, still flashing)
-      // to the settled dim matte red giant (rg=1). On the cloud side it follows
-      // yrColor (the same monotonic gold→red curve as the body); below the slot it
-      // is pinned to 1 so the settled red giant keeps its final grade.
-      const rg = cloudSide ? yrColor : 1;
-      bloom.strength = (0.7 + 0.12 * yrPunch) * (1 - rg) + 0.22 * rg; // subtle flash → dim halo
-      bloom.radius = CFG.bloomRad;
-      gradePass.uniforms.uExposure.value =
-        (1.0 * (1 + 0.05 * yrPunch)) * (1 - rg) + CFG.exposure * 0.7 * rg;
-      gradePass.uniforms.uOlive.value = 0.0;                 // no olive cast on the star
-      gradePass.uniforms.uWarmth.value = 0.14 * rg;          // warm the matte red
-      gradePass.uniforms.uSat.value = 1.0;                   // full saturation throughout
-      diskMatPrimary.uniforms.uSat.value = 1.0;
-      diskMatSecondary.uniforms.uSat.value = 1.0;
-    } else if (nebula && !dot) {
-      // nebula grade: a soft, luminous gas cloud. Wide bloom so the filament web
-      // glows and the void dust hazes together; no olive cast (the teal/rust hues
-      // must survive); full saturation so the Crab palette reads. Exposure a touch
-      // up so the sprawling, low-density cloud isn't muddy. Eased in as the state
-      // arrives (nebula snaps at 3.5) so the handoff from yellow isn't a hard pop.
-      const ne = smoothstep01((stage - 3.5) / 0.35);
-      // a CONTAINED glow: the reference is mostly dark space with bright filaments,
-      // and here we sit close inside the cloud, so the diffuse haze stacks deep along
-      // each view ray. Keep bloom moderate (a soft halo on the strands, not a frame-
-      // filling wash) and exposure DOWN so the blue→red colour ramp survives instead
-      // of clipping to cream/white. Saturation is pushed UP so the Crab palette reads.
-      bloom.strength = bloom.strength * (1 - ne) + 0.30 * ne;  // soft strand glow
-      bloom.radius = CFG.bloomRad * (1 - ne) + 0.7 * ne;       // wide soft halo
-      gradePass.uniforms.uExposure.value =
-        gradePass.uniforms.uExposure.value * (1 - ne) + 0.50 * ne;
-      gradePass.uniforms.uOlive.value *= 1 - ne;               // no olive cast
-      gradePass.uniforms.uWarmth.value *= 1 - ne;              // no warm cast (let blue/cyan show)
-      gradePass.uniforms.uSat.value = gradePass.uniforms.uSat.value * (1 - ne) + 1.45 * ne; // vivid Crab palette
-      const nSat = diskMatPrimary.uniforms.uSat.value * (1 - ne) + 1.35 * ne;
-      diskMatPrimary.uniforms.uSat.value = nSat;
-      diskMatSecondary.uniforms.uSat.value = nSat;
-    } else {
-      bloom.radius = CFG.bloomRad;
-    }
-
-    // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
-    const intro = reduced ? 1 : easeOut(Math.min(t / INTRO_DUR, 1));
-    const distFactor = NEAR_FACTOR + (1 - NEAR_FACTOR) * intro;
+    // Bloom + auto-exposure + grade + disk-saturation are all resolved by
+    // lifecycle() (including the sun / red-giant / nebula branch overrides), so the
+    // shell just assigns the finals. See lifecycle.ts for the per-beat reasoning.
+    bloom.strength = s.bloomStrength;
+    bloom.radius = s.bloomRadius;
+    gradePass.uniforms.uExposure.value = s.exposure;
+    gradePass.uniforms.uOlive.value = s.olive;
+    gradePass.uniforms.uWarmth.value = s.warmth;
+    gradePass.uniforms.uSat.value = s.gradeSat;
+    diskMatPrimary.uniforms.uSat.value = s.diskSat;
+    diskMatSecondary.uniforms.uSat.value = s.diskSat;
 
     // --- lifecycle zoom choreography (the scale story) ---
     // A black hole is tiny-but-massive; a star is huge-but-diffuse. The scale
-    // story is told by the CAMERA: sit CLOSE on the hero black hole so it fills
-    // the frame and reads ENORMOUS, then rocket WAY BACK as the matter collapses
-    // to its speck so the seed is a tiny point in a vast dark field, then ease
-    // back to resting so the red giant lands at a middling on-screen size. The
-    // size ranking reads BH(close) > red giant > seed(far). Reduced motion = 1.
-    let zoom = 1.0;
-    if (!reduced) {
-      const ZOOM_HERO = 0.6; // close at the hero BH → dist≈12 (BH fills the frame)
-      const ZOOM_SEED = 2.6; // far at the seed     → dist≈52 (speck in a vast field)
-      const ZOOM_BLAST = 2.0; // pulled back across the blast → dist≈40 (big remnant fits)
-      const ZOOM_OUT = 1.0; // resting at the red giant
-      // hero push-in eases out as the implosion gets underway (stage 0 → 0.18)
-      const heroT = smoothstep01(stage / 0.18);
-      // seed pull-back, IN SYNC with the world-space seed collapse (0.18 → 0.46)
-      const shrinkT = smoothstep01((stage - 0.18) / (0.46 - 0.18));
-      // hold WAY back across the blast so the now-much-bigger ejecta (rays reach
-      // past rOut) stays framed — ease from the seed distance to the blast hold as
-      // the shell breaks out (0.46 → 0.62), then keep it wide through the blast.
-      const blastT = smoothstep01((stage - 0.46) / (0.62 - 0.46));
-      // grow back to resting only ABOVE the collapse window (stage 1.05 → 1.5), so
-      // the camera stays pulled WAY back across the whole surface-collapse/spike
-      // window (stage 0.5–1.05) — the finger-spikes reach ~10 units and would clip
-      // the frame at the resting distance, so they need the blast hold to stay framed.
-      const growT = easeOut(Math.min(Math.max((stage - 1.05) / 0.45, 0), 1));
-      const heroZoom = ZOOM_HERO + (1.0 - ZOOM_HERO) * heroT; // 0.6 → 1.0
-      const seedZoom = heroZoom + (ZOOM_SEED - heroZoom) * shrinkT; // → 2.6
-      const blastZoom = seedZoom + (ZOOM_BLAST - seedZoom) * blastT; // 2.6 → 2.0
-      zoom = blastZoom + (ZOOM_OUT - blastZoom) * growT; // → 1.0
-      // nebula: push the camera IN so the remnant fills the frame and its filaments
-      // spill past the edges — we sit close inside the cloud (user ask: "zoomed so we
-      // feel inside it"). Ease in as the nebula arrives (stage 3.1 → 3.7), hold close,
-      // then pull back OUT toward the pale blue dot (4.3 → 4.7) so the dot reads tiny.
-      const ZOOM_NEBULA = 1.0; // dist≈20 → the ~4.4-unit cloud fills the frame, edges spill past
-      const ZOOM_DOT = 2.4;    // pull back out so the pale blue dot is a far speck
-      const nebIn  = smoothstep01((stage - 3.1) / 0.6);
-      const nebOut = smoothstep01((stage - 4.3) / 0.4);
-      zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn;        // ease into the cloud
-      zoom = zoom + (ZOOM_DOT - zoom) * nebOut;          // ease back out for the dot
-    }
-    // a subtle outward shove timed to the blast (rides the TIME envelope, so a
-    // fast scroller still feels the world recoil from the detonation). Kept tiny
-    // so the scroll-coupled zoom choreography above stays the primary camera language.
-    const novaKick = 1 + 0.06 * nova;
-    const dist = CFG.camDist * distFactor * zoom * novaKick;
+    // story is told by the CAMERA (computed in lifecycle()): sit CLOSE on the hero
+    // black hole so it fills the frame, rocket WAY BACK as the matter collapses to
+    // its speck, then ease back to resting for the red giant. distFactor folds in
+    // the intro dezoom; zoom is the lifecycle scale story.
+    // distFactor folds in the intro dezoom; zoom is the lifecycle scale story; the
+    // novaKick is a subtle outward shove timed to the blast (rides the TIME envelope,
+    // so a fast scroller still feels the world recoil from the detonation).
+    const dist = CFG.camDist * s.distFactor * s.zoom * s.novaKick;
 
     const incl = THREE.MathUtils.degToRad(CFG.inclDeg);
     const horiz = dist * Math.cos(incl);
     const camY0 = dist * Math.sin(incl);
 
-    // azimuth: a small extra sweep during the intro, then steady rotation
+    // azimuth: a small extra sweep during the intro, then steady rotation (both
+    // shaped in lifecycle()). The pointer parallax (mouseX) rides on top here, in
+    // the impure shell, since it is DOM input rather than lifecycle state.
     const baseAz = THREE.MathUtils.degToRad(CFG.rotation);
-    const introSweep = reduced ? 0 : (1 - intro) * 0.45; // eases out as we settle
-    const rotation = reduced ? 0 : t * ROTATE_SPEED;
-    const a = baseAz + introSweep + rotation + mouseX * 0.1;
+    const a = baseAz + s.introSweep + s.rotation + mouseX * 0.1;
     const yWobble = (reduced ? 0 : Math.sin(t * 0.055) * 0.5) + -mouseY * 0.8;
 
     camera.position.set(Math.sin(a) * horiz, camY0 + yWobble, Math.cos(a) * horiz);
