@@ -1,0 +1,149 @@
+---
+// ============================================================================
+//  PROTOTYPE — THROWAWAY. Delete or absorb once it has answered its question.
+// ----------------------------------------------------------------------------
+//  Question: "What does the redesigned nebula (Hubble/SHO emission cloud) look
+//  like on its own, isolated from the rest of the scroll lifecycle?"
+//
+//  This route mounts the real <BlackHole> island and PINS it to the nebula
+//  stage via the existing `window.__bhMorph` debug hook (the same mechanism the
+//  scratchpad capture scripts use, documented in CLAUDE.md). There is NO scroll
+//  track here, so the page can't drift off the nebula — you land on it and a
+//  floating bar lets you scrub the nebula sub-range (arrival → hold → exit).
+//
+//  It forks NOTHING in the hero: same component, same layout. When done, just
+//  delete this file (and nothing else depends on it).
+//
+//  Run:  npm run dev   →   http://localhost:4321/personal-blog/proto-nebula
+// ============================================================================
+import BaseLayout from '../layouts/BaseLayout.astro';
+import BlackHole from '../hero/BlackHole.tsx';
+
+// Nebula lives across stage 3.5 (snap-in) → ~4.6 (pulling out to the pale blue
+// dot). 4.0 is the full, settled cloud — a good default landing frame.
+const NEB_MIN = 3.5;
+const NEB_MAX = 4.6;
+const NEB_DEFAULT = 4.0;
+---
+
+<BaseLayout title="PROTOTYPE · Nebula" description="Throwaway nebula preview" type="website" bare>
+  <BlackHole client:only="react" />
+
+  {/* Floating control bar — scrub the nebula stage in isolation. */}
+  <div id="proto-bar" aria-label="nebula prototype controls">
+    <span class="proto-tag">PROTOTYPE · nebula</span>
+    <div class="proto-jumps">
+      <button type="button" data-stage="3.6">arrive</button>
+      <button type="button" data-stage="4.0">full</button>
+      <button type="button" data-stage="4.2">hold</button>
+      <button type="button" data-stage="4.5">exit</button>
+    </div>
+    <input
+      id="proto-range"
+      type="range"
+      min={NEB_MIN}
+      max={NEB_MAX}
+      step="0.01"
+      value={NEB_DEFAULT}
+    />
+    <output id="proto-val">stage {NEB_DEFAULT.toFixed(2)}</output>
+  </div>
+
+  <script define:vars={{ NEB_DEFAULT }}>
+    // Pin the hero to the nebula stage. The render loop reads window.__bhMorph
+    // every frame (no scroll, no easing), so setting it is enough to hold a frame.
+    const range = document.getElementById('proto-range');
+    const val = document.getElementById('proto-val');
+    const apply = (s) => {
+      const n = Number(s);
+      window.__bhMorph = n;
+      if (range) range.value = String(n);
+      if (val) val.textContent = `stage ${n.toFixed(2)}`;
+    };
+    // The hero appends a DEV "disk layers" tuning panel to <body>; it's clutter on
+    // this throwaway preview, so hide it once it shows up.
+    const hideDevPanel = () => {
+      document.querySelectorAll('body > div').forEach((d) => {
+        if (d.id === 'proto-bar') return;
+        if (d.textContent && d.textContent.includes('disk layers')) d.style.display = 'none';
+      });
+    };
+
+    // Apply on load and keep re-applying briefly while the island mounts, so the
+    // pin wins even if React hydrates a moment after this script runs.
+    apply(NEB_DEFAULT);
+    let t = 0;
+    const warm = setInterval(() => {
+      apply(Number(range?.value ?? NEB_DEFAULT));
+      hideDevPanel();
+      if (++t > 20) clearInterval(warm); // ~2s of nudging, then trust the value
+    }, 100);
+
+    range?.addEventListener('input', (e) => apply(e.target.value));
+    document.querySelectorAll('#proto-bar .proto-jumps button').forEach((b) => {
+      b.addEventListener('click', () => apply(b.dataset.stage));
+    });
+  </script>
+
+  <style>
+    /* This page is a pinned, non-scrolling viewport of the hero. */
+    :global(html.is-bare),
+    :global(body.bare) {
+      height: 100%;
+      overflow: hidden;
+    }
+    #proto-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: rgba(10, 12, 16, 0.72);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.85);
+      font:
+        500 12px/1.2 ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        monospace;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    }
+    .proto-tag {
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.55;
+      white-space: nowrap;
+    }
+    .proto-jumps {
+      display: flex;
+      gap: 6px;
+    }
+    #proto-bar button {
+      padding: 5px 9px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    #proto-bar button:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+    #proto-range {
+      width: 220px;
+      accent-color: #57d9c8;
+    }
+    #proto-val {
+      min-width: 92px;
+      text-align: right;
+      opacity: 0.85;
+    }
+  </style>
+</BaseLayout>

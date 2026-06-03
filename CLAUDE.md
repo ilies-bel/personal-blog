@@ -63,6 +63,11 @@ Scroll progress (0..1) maps to a fractional `stage` (0..5):
   `__bhMorph` alone won't show it — set `__bhMorph≈0.5` AND `__bhFlash` (e.g. `1.0` = peak
   whiteout) to inspect a flash frame. The whiteout itself is `NovaShader`, a fullscreen pass
   composited **after** the grade pass (so the grade tone-map/vignette can't swallow the white).
+- **`window.__bhNebLight`** (a number 0..1) pins the **nebula light model** strength (`uNebLight`)
+  — `0` = flat self-emission (every grain full bright), `1` = full ambient+depth+self-occlusion
+  (front gas brighter, far/buried gas dimmer & bluer → 3D volume). There is no star inside the
+  cloud, so the "light" is the gas occluding itself toward the camera plus a depth fade, not a
+  point source. Set `__bhMorph≈4.0` (full nebula) AND `__bhNebLight` to A/B the look.
 - **`scratchpad/*.mjs`** — Playwright capture scripts that spin up the dev server, scroll or
   force `__bhMorph`/`__bhFlash`, and save screenshots (`scratchpad/state-N-*.png`, `nova-*.png`,
   `live-*.png`, etc.) for reviewing each state. `scratchpad/` is a workspace for probes/
