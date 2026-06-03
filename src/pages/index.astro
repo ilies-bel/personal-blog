@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
+import { BEATS } from '../hero/beats';
 import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -21,41 +22,34 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       give the page real scrollable height so the pinned scene can be scrubbed.
       Each "stage" is one viewport tall; the BlackHole island reads window scroll
       progress and morphs the object accordingly. */}
+  {/* One full-viewport stage per lifecycle beat. Mapping over BEATS means the
+      stage count can never disagree with STAGE_COUNT (= BEATS.length) — the
+      number that drives the morph timeline in the island. */}
   <div class="scene-track" aria-hidden="true">
-    <div class="scene-stage"></div>
-    <div class="scene-stage"></div>
-    <div class="scene-stage"></div>
-    <div class="scene-stage"></div>
-    <div class="scene-stage"></div>
-    <div class="scene-stage"></div>
+    {BEATS.map(() => <div class="scene-stage"></div>)}
   </div>
 
   {/* The manifesto copy is rendered by the island so it can fade per-state in
       lockstep with the morph and swap its big line on scroll direction. The
       static fallback below mirrors that copy (down-arc big lines + whispers) so
       the page stays meaningful and indexable for crawlers / no-JS. */}
+  {/* The static no-JS / crawler fallback mirrors the live overlay's "down"
+      (rewind-arc) big line + whisper for every beat, mapped over the same BEATS
+      so the SSR copy can never drift from the live copy. The first beat is the
+      page's <h1> (black hole, top of page); the rest are <h2>. The state label
+      and the "up" line are island-only flourishes and stay out of the fallback,
+      exactly as before. The CTA tail is fixed chrome, not per-beat. */}
   <noscript>
     <div class="scene-fallback measure">
       <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
       <p class="scene-fallback-role">Software Engineer</p>
 
-      <h1>every project ends. eventually.</h1>
-      <p>the part nobody sees is what holds it together.</p>
-
-      <h2>doomed to explode?</h2>
-      <p>fast to build. faster to fall apart.</p>
-
-      <h2>bigger isn't the same as lasting.</h2>
-      <p>the ai keeps adding. nobody's left who understands it.</p>
-
-      <h2>or could it just burn steady?</h2>
-      <p>the part that's still up at 3am. that's engineering.</p>
-
-      <h2>everything starts here.</h2>
-      <p>stars are born from what the last one left behind.</p>
-
-      <h2>in the beginning.</h2>
-      <p>every line you'll ever ship fits on that dot. worth doing properly, then.</p>
+      {BEATS.map((beat, i) => (
+        <Fragment>
+          {i === 0 ? <h1>{beat.down}</h1> : <h2>{beat.down}</h2>}
+          <p>{beat.whisper}</p>
+        </Fragment>
+      ))}
 
       <p>Make it last, or don't make it. Sounds interesting?
         <a href={`${href('about')}#get-in-touch`}>Let's connect.</a></p>
