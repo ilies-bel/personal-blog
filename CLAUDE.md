@@ -56,9 +56,17 @@ Scroll progress (0..1) maps to a fractional `stage` (0..5):
 
 - **`window.__bhMorph`** (a number) force-sets `stage` in the render loop (no scroll, no
   easing) so a specific morph/explosion frame can be inspected. Used by the capture scripts.
+- **`window.__bhFlash`** (a number 0..1) pins the **supernova whiteout envelope** (`nova`).
+  The supernova flash is **time-based, decoupled from scroll** (it fires when `morph` crosses
+  the breakout ≈0.5 in either direction, then runs its own ~1.6s rise→hold→decay clock so a
+  fast scroller still sees the full blinding blast). Because it no longer tracks `morph`,
+  `__bhMorph` alone won't show it — set `__bhMorph≈0.5` AND `__bhFlash` (e.g. `1.0` = peak
+  whiteout) to inspect a flash frame. The whiteout itself is `NovaShader`, a fullscreen pass
+  composited **after** the grade pass (so the grade tone-map/vignette can't swallow the white).
 - **`scratchpad/*.mjs`** — Playwright capture scripts that spin up the dev server, scroll or
-  force `__bhMorph`, and save screenshots (`scratchpad/state-N-*.png`, `*-full.png`, etc.) for
-  reviewing each state. `scratchpad/` is a workspace for probes/screenshots, not shipped code.
+  force `__bhMorph`/`__bhFlash`, and save screenshots (`scratchpad/state-N-*.png`, `nova-*.png`,
+  `live-*.png`, etc.) for reviewing each state. `scratchpad/` is a workspace for probes/
+  screenshots, not shipped code.
 
 ## Commands
 

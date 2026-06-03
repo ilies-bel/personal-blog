@@ -1687,6 +1687,65 @@ const GradeShader = {
 };
 
 // ===========================================================================
+//  NOVA SHADER — the supernova whiteout, composited AFTER the grade pass.
+//
+//  The reverse-supernova's defining beat is a blinding flash that bleaches the
+//  WHOLE screen. The grade pass above can't produce that: its tone-map
+//  (col/(col+0.78)), warm/olive tints, vignette and final clamp all conspire to
+//  keep the frame filmic and the corners dark. So the whiteout is a dedicated
+//  fullscreen pass that runs on the ALREADY-GRADED image and mixes it toward
+//  white by `uNova` (a time-based 0..1 envelope, driven from the frame loop,
+//  decoupled from scroll so a fast scroller still sees the full blast).
+//
+//  Structure (user-chosen): a radial hot-center that grows outward with the
+//  envelope, a temperature tint that runs blue-white at the peak and cools to
+//  amber as it fades (handing off into the warm debris grade beneath), and a
+//  FILMIC cap (uPeak ≈ 0.94) so even peak white stays a touch under pure #FFF
+//  to match the rest of the tone-mapped scene.
+// ===========================================================================
+const NovaShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uNova: { value: 0 },                                  // 0..1 master envelope
+    uAspect: { value: 1 },                                // round (not elliptical) falloff
+    uCenter: { value: new THREE.Vector2(0.5, 0.5) },      // blast origin in screen UV
+    uPeak: { value: 0.94 },                               // filmic cap (NOT pure white)
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+  `,
+  fragmentShader: /* glsl */ `
+    precision highp float;
+    uniform sampler2D tDiffuse;
+    uniform float uNova, uAspect, uPeak;
+    uniform vec2 uCenter;
+    varying vec2 vUv;
+    void main(){
+      vec3 col = texture2D(tDiffuse, vUv).rgb;
+      // distance from the blast origin, aspect-corrected so the front is a
+      // circle, not an ellipse on a wide viewport.
+      vec2 q = (vUv - uCenter); q.x *= uAspect;
+      float d = length(q);
+      // a hot core whose white front expands outward as the envelope grows; the
+      // 0.45 softens the falloff so it reads as light, not a hard disc.
+      float front = smoothstep(uNova * 1.4, uNova * 1.4 - 0.45, d);
+      // near the peak (top ~20% of the envelope) force the corners white too, so
+      // the bleach is genuinely edge-to-edge and the grade's vignette is overridden.
+      float corner = smoothstep(0.80, 1.0, uNova);
+      float bleach = max(uNova * front, corner) * uPeak;
+      // temperature: blue-white when hot (high uNova) → warm amber as it cools.
+      vec3 cold = vec3(0.90, 0.95, 1.0);   // ~#E6F2FF blue-white shock front
+      vec3 warm = vec3(1.0, 0.90, 0.74);   // ~#FFE6BD cooling amber
+      vec3 tint = mix(warm, cold, smoothstep(0.35, 0.85, uNova));
+      vec3 white = mix(vec3(1.0), tint, 0.6); // mostly white, a slight temperature cast
+      col = mix(col, white, clamp(bleach, 0.0, 1.0));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+
+// ===========================================================================
 //  YELLOW-STAR SUN RIG (the standalone "The Sun · Three.js" render, ported)
 //
 //  The yellow lifecycle stage swaps the particle cloud out for a faithful port
@@ -2771,8 +2830,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   gradePass.uniforms.uWarmth.value = CFG.warmth;
   gradePass.uniforms.uSat.value = CFG.saturation;
   gradePass.uniforms.uOlive.value = CFG.olive;
-  gradePass.renderToScreen = true;
+  gradePass.renderToScreen = false; // the nova whiteout is now the final pass
   composer.addPass(gradePass);
+  // The supernova whiteout MUST composite AFTER grade — the grade tone-map +
+  // vignette + clamp would otherwise swallow the white to muddy grey. This pass
+  // takes over renderToScreen and mixes the graded frame toward (capped) white
+  // by the time-based `uNova` envelope driven each frame in frame().
+  const novaPass = new ShaderPass(NovaShader);
+  novaPass.renderToScreen = true;
+  composer.addPass(novaPass);
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor that GROWS into the red giant. The red
@@ -2835,6 +2901,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     gradePass.uniforms.uResolution.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
+    novaPass.uniforms.uAspect.value = w / h;
     updateLensUniforms();
   }
   window.addEventListener('resize', onResize);
@@ -2889,6 +2956,23 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   // stage 0→1 = reverse supernova; 1→2 = red giant.
   let stage = 0;
 
+  // --- supernova whiteout: a TIME-based flash envelope, decoupled from scroll ---
+  // The old flash was a Gaussian in `morph` (scroll position) ~0.1 wide, so a fast
+  // scroll skipped it entirely. Instead we TRIGGER on the breakout crossing and run
+  // our own clock to completion, so the blast is always seen at full length no
+  // matter how fast the visitor scrolls. `nova` (0..1) is the master envelope that
+  // drives the whiteout pass + the particle/bloom/exposure beats.
+  let novaStart = -1;     // performance.now() ms at fire; -1 = idle
+  let novaArmed = true;   // hysteresis latch: re-arm only after leaving the band
+  let prevMorph = 0;      // previous-frame morph, for crossing detection
+  const NOVA_TRIGGER = 0.5;  // breakout (where the legacy flash fired)
+  const NOVA_ARM = 0.12;     // must move |morph-0.5| beyond this to re-arm
+  const NOVA_RISE = 0.12;    // s: dark → blinding peak
+  const NOVA_HOLD = 0.22;    // s: hold at peak white
+  const NOVA_DECAY = 1.2;    // s: cool-out, reveal the remnant
+  const NOVA_DUR = NOVA_RISE + NOVA_HOLD + NOVA_DECAY; // 1.54 s total
+  const NOVA_COOLDOWN = 900; // ms minimum between fires (anti-strobe backstop)
+
   function frame(): void {
     if (stopped) return;
     raf = requestAnimationFrame(frame);
@@ -2924,13 +3008,45 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatSecondary.uniforms.uMorph.value = morph;
     ringMat.uniforms.uMorph.value = morph;
     ringMat.uniforms.uRingScale.value = dbgCtl.ringScale; // dev: live ring size
-    // flash envelope: a sharp, BRIGHT shock-breakout burst centred on the
-    // compression peak (the one blinding beat of the explosion) — loud, but
-    // ASYMMETRIC: a quick rise (σ 0.055) and a FASTER decay (σ 0.04) so the glow
-    // clears soon after the peak and the dispersing debris rays get a clean dark
-    // beat to read against before the gather, instead of staying washed out.
-    const flashSigma = morph <= 0.5 ? 0.055 : 0.04;
-    const flash = 1.45 * Math.exp(-Math.pow((morph - 0.5) / flashSigma, 2.0));
+    // --- supernova flash: time-based envelope, fired on the breakout crossing ---
+    // Detect a crossing of the breakout (morph through 0.5) in EITHER scroll
+    // direction. Fire once, then latch: re-arm only after morph has clearly left
+    // the band (so parking on 0.5 or jittering at the edge can't machine-gun it),
+    // with a hard cooldown as an anti-strobe backstop. Reduced-motion never fires.
+    const crossed = (prevMorph < NOVA_TRIGGER) !== (morph < NOVA_TRIGGER);
+    if (
+      crossed && novaArmed && !reduced &&
+      (novaStart < 0 || now - novaStart > NOVA_COOLDOWN)
+    ) {
+      novaStart = now;
+      novaArmed = false;
+    }
+    if (!novaArmed && Math.abs(morph - NOVA_TRIGGER) > NOVA_ARM) novaArmed = true;
+    prevMorph = morph;
+    // evaluate the envelope on its OWN clock (rise → hold → ease-out decay), so it
+    // always plays to completion regardless of where scroll has gone meanwhile.
+    let nova = 0;
+    if (novaStart >= 0) {
+      const te = (now - novaStart) / 1000; // seconds since fire
+      if (te >= NOVA_DUR) novaStart = -1; // expired → idle
+      else if (te < NOVA_RISE) nova = smoothstep01(te / NOVA_RISE);
+      else if (te < NOVA_RISE + NOVA_HOLD) nova = 1.0;
+      else {
+        const p = (te - NOVA_RISE - NOVA_HOLD) / NOVA_DECAY; // 0..1 across the tail
+        nova = 1.0 - p * p * (3.0 - 2.0 * p); // smoothstep ease-out (light dissipating)
+      }
+    }
+    // DEBUG: window.__bhFlash pins the envelope to a held value so capture scripts
+    // can screenshot the rise/peak/decay (the time-based flash would otherwise
+    // expire during their settle wait). Pairs with __bhMorph (which pins stage).
+    const dbgFlash = (window as unknown as { __bhFlash?: number }).__bhFlash;
+    if (typeof dbgFlash === 'number') nova = Math.max(0, Math.min(1, dbgFlash));
+    novaPass.uniforms.uNova.value = nova;
+    // the particle-side shock-breakout glow now follows the SAME time envelope, so
+    // the additive blast core peaks together with the screen whiteout. The shader's
+    // morph gates (smoothstep(0.40,0.50,uMorph), flashGate) still apply, so the seed
+    // stays dark before the breakout regardless of `nova`.
+    const flash = 1.45 * nova;
     diskMatPrimary.uniforms.uFlash.value = flash;
     diskMatSecondary.uniforms.uFlash.value = flash;
     // surface-collapse progress (0 full red-giant sphere → 1 collapsed to the point)
@@ -3061,7 +3177,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const seedZone = Math.exp(-Math.pow((morph - 0.45) / 0.035, 2.0));
     // brief bloom spike at the breakout — the loudest visual beat — but suppressed
     // inside the seed window so it doesn't re-inflate the dark seed into a glow.
-    bloom.strength = CFG.bloomStr * (1 - 0.7 * flareAmt) + flash * 0.55 * (1 - 0.9 * seedZone);
+    bloom.strength = CFG.bloomStr * (1 - 0.7 * flareAmt) + nova * 0.55 * (1 - 0.9 * seedZone);
     bloom.strength = bloom.strength * (1 - 0.6 * giantHeld) + 0.12 * giantHeld;
     bloom.strength *= 1 - 0.9 * seedZone; // kill bloom hard at the dark seed
     // The imploded core packs the whole disk into a small, dense, additively-
@@ -3086,13 +3202,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatSecondary.uniforms.uThick.value = dbgCtl.thick;
     // Auto-exposure: pull down across the flash, dip at the seed (so the tiny
     // black-hole point reads dim and dense), and settle a touch lower for the
-    // dim red giant so it reads warm and matte, not glaring. A VERY NARROW punch
-    // (σ≈0.045 ≪ hotZone σ≈0.15) briefly over-exposes EXACTLY at the breakout and
-    // recovers immediately → the supernova reads as a detonation, not a flat wash.
-    // The punch is suppressed in the seed window so it never undoes the dark-core
-    // dip — the breakout (morph 0.5, where seedZone has fallen off) keeps near-full
-    // punch, so the detonation is intact while the seed stays a dark point.
-    const flashPunch = Math.exp(-Math.pow((morph - 0.5) / 0.045, 2.0));
+    // dim red giant so it reads warm and matte, not glaring. The over-exposure
+    // punch now rides the TIME envelope (`nova`) so the under-white scene over-
+    // exposes for the full blast, in lockstep with the whiteout — not a 1-frame
+    // morph spike. It's still suppressed in the seed window so it never undoes the
+    // dark-core dip (seedZone is morph-keyed and ≈0 by the breakout, so the punch
+    // is intact while the seed stays a dark point).
+    const flashPunch = nova;
     gradePass.uniforms.uExposure.value =
       CFG.exposure * (1 - 0.58 * hotZone) * (1 - 0.18 * giantHeld) * (1 - 0.35 * seedZone)
       * (1 + 0.9 * flashPunch * (1 - 0.7 * seedZone));
@@ -3220,7 +3336,11 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn;        // ease into the cloud
       zoom = zoom + (ZOOM_DOT - zoom) * nebOut;          // ease back out for the dot
     }
-    const dist = CFG.camDist * distFactor * zoom;
+    // a subtle outward shove timed to the blast (rides the TIME envelope, so a
+    // fast scroller still feels the world recoil from the detonation). Kept tiny
+    // so the scroll-coupled zoom choreography above stays the primary camera language.
+    const novaKick = 1 + 0.06 * nova;
+    const dist = CFG.camDist * distFactor * zoom * novaKick;
 
     const incl = THREE.MathUtils.degToRad(CFG.inclDeg);
     const horiz = dist * Math.cos(incl);
