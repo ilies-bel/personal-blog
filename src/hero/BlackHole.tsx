@@ -1759,25 +1759,28 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
     CUR.dir = Math.random() < 0.5 ? 0 : 1;
   };
 
-  const NA = 16; // loop arcades
+  // More PROMINENT flares for the yellow star: more loop arcades, more of them
+  // "big", and noticeably more (and taller) erupting prominences than the ported
+  // reference — so the active yellow sun reads as energetic, not calm.
+  const NA = 22; // loop arcades (was 16)
   for (let i = 0; i < NA; i++) {
     setLife();
-    const big = i < 4;
+    const big = i < 7; // more big arcades (was 4)
     buildLoops({
       c: randDir(),
-      sep: 0.13 + Math.random() * (big ? 0.17 : 0.11),
-      nArch: big ? 12 + Math.floor(Math.random() * 7) : 5 + Math.floor(Math.random() * 6),
-      kBase: (big ? 0.34 : 0.2) + Math.random() * 0.16,
+      sep: 0.13 + Math.random() * (big ? 0.19 : 0.12),
+      nArch: big ? 14 + Math.floor(Math.random() * 8) : 6 + Math.floor(Math.random() * 6),
+      kBase: (big ? 0.4 : 0.22) + Math.random() * 0.18, // arch higher off the limb
       archLean: (Math.random() * 2 - 1) * (big ? 0.7 : 0.5),
       fan: 0.07 + Math.random() * 0.06,
       spanAz: Math.random() * Math.PI * 2,
     });
   }
-  const NP = 9; // erupting prominences / jets
+  const NP = 15; // erupting prominences / jets (was 9)
   for (let i = 0; i < NP; i++) {
     setLife();
     CUR.dir = 0; // prominences always spray base -> tip
-    buildProminence(randDir(), 0.5 + Math.random() * 0.7);
+    buildProminence(randDir(), 0.7 + Math.random() * 0.8); // taller/denser (was 0.5+0.7)
   }
 
   const loopGeo = new THREE.BufferGeometry();
@@ -2146,10 +2149,12 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   composer.addPass(gradePass);
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
-  // Radius matches the particle sun's resting size: the placeholder used the
-  // uGiantR uniform (4.2) scaled by sunRadFac (0.92) ≈ 3.86 world units, so the
-  // rig lands at the same on-screen scale as the surrounding lifecycle.
-  const SUN_RIG_RADIUS = 4.2 * 0.92;
+  // Sized to be exactly 30% SMALLER than the red giant (the spec for the
+  // red giant → yellow star transition). The red giant is the point cloud at
+  // uGiantR (4.2) × its sunRadFac (1.45) = 6.09 world units, so the yellow star
+  // lands at 6.09 × 0.70 = 4.263 — a clearly tighter orb than the bloated giant.
+  const RED_GIANT_RADIUS = 4.2 * 1.45; // point-cloud red giant world radius
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.7; // yellow star: 30% smaller
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- lens uniforms (recomputed each frame from camera geometry) ---
@@ -2292,27 +2297,38 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uDot.value = dot;
     diskMatSecondary.uniforms.uDot.value = dot;
 
-    // --- yellow stage: swap the particle cloud for the mesh sun rig ---
-    // The yellow star is the one state rendered by the standalone-Sun rig (mesh
-    // photosphere + glow + corona + animated loops) instead of the point cloud.
-    // The `yellow` flag has no upper bound (stage >= 2.5), so window it to the
-    // yellow slot ONLY (>= 2.5 and < 3.5): once nebula takes over, hand the cloud
-    // back. Hide the disk Points only during that window so the two suns don't
-    // overlap; red giant, nebula and dot keep the cloud, so neighbours are intact.
+    // --- red giant → yellow star: SOFT cross-fade swap (Option B) ------------
+    // The yellow star is rendered by the mesh sun rig (photosphere + glow +
+    // corona + animated loops), the red giant by the point cloud. A per-particle
+    // morph between the two is impossible (different geometry systems), so the
+    // handoff is a SCALE cross-fade across a short window centred on stage 2.5:
+    // the rig grows in from a seed while the cloud red giant is held behind it,
+    // then the cloud hides once the (opaque) rig is big enough to occlude it. The
+    // reverse plays at the nebula edge (3.5). This replaces the old hard pop.
     const sunWindow = !!yellow && !nebula; // dot implies nebula, so this is the yellow slot
-    sunRig.group.visible = sunWindow;
-    diskPrimary.visible = !sunWindow;
-    diskSecondary.visible = !sunWindow;
-    // Dedicated star backdrop behind the opaque sun: ease its brightness in across
-    // the entry into the yellow slot (2.5→2.75) and back out as nebula approaches
-    // (3.25→3.5), so the field swells in with the star rather than hard-popping.
-    sunRig.starMat.uniforms.uOpacity.value =
-      smoothstep01((stage - 2.5) / 0.25) * (1 - smoothstep01((stage - 3.25) / 0.25));
+    // entry: rig 0→1 over 2.40→2.62; exit: rig 1→0 over 3.40→3.50 (nebula edge).
+    const rigIn = smoothstep01((stage - 2.4) / 0.22);
+    const rigOut = 1 - smoothstep01((stage - 3.4) / 0.1);
+    const rigGrow = rigIn * rigOut; // 0 outside the slot, 1 across the settled middle
+    // grow the whole rig from a small seed → full size (eased), so it swells in
+    // rather than popping. Kept >0 so it never collapses to a degenerate point.
+    const rigScale = 0.12 + 0.88 * rigGrow;
+    sunRig.group.scale.setScalar(rigScale);
+    sunRig.group.visible = rigGrow > 0.001;
+    // Hold the cloud red giant behind the rig until the rig has grown enough to
+    // cover it (rigGrow ~0.6), then hand off. During the overlap the rig's opaque
+    // photosphere occludes the cloud, so the swap reads as the giant contracting
+    // into the tighter yellow star instead of one object blinking out.
+    const cloudHidden = rigGrow > 0.6;
+    diskPrimary.visible = !cloudHidden;
+    diskSecondary.visible = !cloudHidden;
+    // Dedicated star backdrop behind the opaque sun: track the rig grow envelope
+    // so the field swells in with the star rather than hard-popping.
+    sunRig.starMat.uniforms.uOpacity.value = rigGrow;
     // The sun is a SOLID, opaque sphere (like the reference). The starfield draws
     // additively with depthTest OFF, so it would otherwise bleed THROUGH the sun's
-    // body and read as transparent. Hide it during the sun window so nothing shows
-    // through the disc; it returns for every other state. (starSecPts stays off.)
-    starPts.visible = !sunWindow;
+    // body and read as transparent. Hide it once the rig covers the frame.
+    starPts.visible = !cloudHidden;
 
     // the star/warp lensing only makes sense while the hole exists — fade it.
     // Once the SUN forms we drop the gravitational-warp background entirely and
