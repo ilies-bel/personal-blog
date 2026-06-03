@@ -31,7 +31,7 @@ try {
   for (const t of targets) {
     const url = `${BASE}${t}`.replace(/([^:]\/)\/+/g, '$1');
     await page.goto(url, { waitUntil: 'networkidle' });
-    // Give client islands (the hero) a beat to hydrate + personalize.
+    // Give client islands (the hero) a beat to hydrate.
     await page.waitForTimeout(1500);
     const file = resolve(OUT, `${slug(t)}.png`);
     await page.screenshot({ path: file, fullPage: true });
