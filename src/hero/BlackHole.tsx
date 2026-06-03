@@ -2566,26 +2566,33 @@ function buildDebugPanel(state: DiskTuneState): () => void {
   };
 }
 
-function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): () => void {
-  const diskParticles = tuneParticlesForDevice();
-  const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
-  void bCritShadow;
+// ---------------------------------------------------------------------------
+//  Inline-renderer factories. Each build*() owns one piece of the scene's
+//  geometry construction, material/shader wiring, attribute loops and its own
+//  disposal — mirroring buildSunRig/SunRig above (the canonical pattern). They
+//  return a small "rig" object that createScene wires into resize/frame, and a
+//  dispose() that tears the rig down (construction + disposal co-located). No
+//  shader source, uniform value or geometry math changes here vs the old inline
+//  blocks — this is a pure split-out of what createScene used to build by hand.
+// ---------------------------------------------------------------------------
 
-  // --- renderer / scene / camera ---
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x000000, 1);
-  renderer.toneMapping = THREE.NoToneMapping;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  container.appendChild(renderer.domElement);
+// The 1.2M-point GPU accretion-disk cloud. Two lensed images share ONE geometry
+// + ONE shared `uniforms` object: the PRIMARY (uImageSign +1) bright crescent
+// and the SECONDARY (uImageSign -1) lower band, whose material clones the
+// uniforms so its sign can flip independently. The cloud also doubles as the
+// red-giant / nebula / dot body later in the lifecycle (driven by uGiant/etc).
+interface DiskRig {
+  primary: THREE.ShaderMaterial; // bright crescent (primary lensed image)
+  secondary: THREE.ShaderMaterial; // lower grainy band (secondary image, sign -1)
+  primaryPts: THREE.Points; // the primary Points object (frame toggles .visible)
+  secondaryPts: THREE.Points; // the secondary Points object (.visible too)
+  geo: THREE.BufferGeometry;
+  uniforms: Uniforms; // shared uniform block (primary's; secondary clones it)
+  dispose: () => void;
+}
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(CFG.fovDeg, window.innerWidth / window.innerHeight, 0.1, 4000);
-  const lookTarget = new THREE.Vector3(lookOffsetX, lookOffsetY, 0);
-
-  // ---- disk ----
-  const N = Math.floor(diskParticles);
+function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number): DiskRig {
+  const N = Math.floor(particleCount);
   const aU = new Float32Array(N);
   const aPhase = new Float32Array(N);
   const aThickN = new Float32Array(N);
@@ -2597,15 +2604,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     aThickN[i] = th * th * th;
     aSeed[i] = Math.random();
   }
-  const diskGeo = new THREE.BufferGeometry();
-  diskGeo.setAttribute('aU', new THREE.BufferAttribute(aU, 1));
-  diskGeo.setAttribute('aPhase', new THREE.BufferAttribute(aPhase, 1));
-  diskGeo.setAttribute('aThickN', new THREE.BufferAttribute(aThickN, 1));
-  diskGeo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
-  diskGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
-  diskGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e4);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('aU', new THREE.BufferAttribute(aU, 1));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(aPhase, 1));
+  geo.setAttribute('aThickN', new THREE.BufferAttribute(aThickN, 1));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e4);
 
-  const diskUniforms: Uniforms = {
+  const uniforms: Uniforms = {
     uTime: { value: 0 },
     uOmega0: { value: CFG.omega0 },
     uSpinDir: { value: CFG.spinDir },
@@ -2615,7 +2622,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uRin: { value: CFG.rIn },
     uRout: { value: CFG.rOut },
     uThick: { value: CFG.diskThickness },
-    uPixelRatio: { value: renderer.getPixelRatio() },
+    uPixelRatio: { value: pixelRatio },
     uThetaE: { value: 0.1 },
     uShadowR: { value: 0.1 },
     uAspect: { value: 1.0 },
@@ -2652,8 +2659,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uYrGrow: { value: 1 }, // 0 = yellow radius (×0.35), 1 = red-giant radius
   };
 
-  const diskMatPrimary = new THREE.ShaderMaterial({
-    uniforms: diskUniforms,
+  const primary = new THREE.ShaderMaterial({
+    uniforms,
     vertexShader: diskVertexShader,
     fragmentShader: diskFragmentShader,
     transparent: true,
@@ -2661,19 +2668,44 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     depthWrite: false,
     depthTest: false,
   });
-  const diskMatSecondary = diskMatPrimary.clone();
-  diskMatSecondary.uniforms = THREE.UniformsUtils.clone(diskUniforms);
-  diskMatSecondary.uniforms.uImageSign.value = -1.0;
+  const secondary = primary.clone();
+  secondary.uniforms = THREE.UniformsUtils.clone(uniforms);
+  secondary.uniforms.uImageSign.value = -1.0;
 
-  const diskPrimary = new THREE.Points(diskGeo, diskMatPrimary);
-  const diskSecondary = new THREE.Points(diskGeo, diskMatSecondary);
-  diskPrimary.frustumCulled = false;
-  diskSecondary.frustumCulled = false;
-  scene.add(diskPrimary);
-  scene.add(diskSecondary);
+  const primaryPts = new THREE.Points(geo, primary);
+  const secondaryPts = new THREE.Points(geo, secondary);
+  primaryPts.frustumCulled = false;
+  secondaryPts.frustumCulled = false;
+  scene.add(primaryPts);
+  scene.add(secondaryPts);
 
-  // ---- stars ----
-  const starN = Math.max(2500, Math.floor(diskParticles * 0.11 * CFG.starDensity));
+  const dispose = (): void => {
+    scene.remove(primaryPts);
+    scene.remove(secondaryPts);
+    geo.dispose();
+    primary.dispose();
+    secondary.dispose();
+  };
+
+  return { primary, secondary, primaryPts, secondaryPts, geo, uniforms, dispose };
+}
+
+// The lensed background starfield: a spherical shell of points bent by the same
+// gravitational lens as the disk. PRIMARY (uImageSign +1) is the only visible
+// image; the SECONDARY (sign -1) image piles into a hot caustic point and is
+// kept hidden, but built so the lensing math has its counterpart available.
+interface StarRig {
+  pts: THREE.Points; // primary lensed starfield (frame toggles .visible)
+  secPts: THREE.Points; // secondary image (kept hidden — caustic pile-up)
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  matSec: THREE.ShaderMaterial; // secondary material (cloned uniforms, sign -1)
+  uniforms: Uniforms; // primary's shared block (matSec clones it)
+  dispose: () => void;
+}
+
+function buildStarfield(scene: THREE.Scene, particleCount: number, pixelRatio: number): StarRig {
+  const starN = Math.max(2500, Math.floor(particleCount * 0.11 * CFG.starDensity));
   const starPos = new Float32Array(starN * 3);
   const starSeed = new Float32Array(starN);
   for (let i = 0; i < starN; i++) {
@@ -2686,14 +2718,14 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     starPos[i * 3 + 2] = r * s * Math.sin(t);
     starSeed[i] = Math.random();
   }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-  starGeo.setAttribute('aSeed', new THREE.BufferAttribute(starSeed, 1));
-  starGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(starSeed, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
-  const starUniforms: Uniforms = {
+  const uniforms: Uniforms = {
     uTime: { value: 0 },
-    uPixelRatio: { value: renderer.getPixelRatio() },
+    uPixelRatio: { value: pixelRatio },
     uShadowR: { value: 0.1 },
     uThetaE: { value: 0.15 },
     uAspect: { value: 1.0 },
@@ -2701,8 +2733,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uStarBright: { value: CFG.starBright },
     uHole: { value: 0.12 },
   };
-  const starMat = new THREE.ShaderMaterial({
-    uniforms: starUniforms,
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
     vertexShader: starVertexShader,
     fragmentShader: starFragmentShader,
     transparent: true,
@@ -2710,20 +2742,44 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     depthWrite: false,
     depthTest: false,
   });
-  const starMatSec = starMat.clone();
-  starMatSec.uniforms = THREE.UniformsUtils.clone(starUniforms);
-  starMatSec.uniforms.uImageSign.value = -1.0;
+  const matSec = mat.clone();
+  matSec.uniforms = THREE.UniformsUtils.clone(uniforms);
+  matSec.uniforms.uImageSign.value = -1.0;
 
-  const starPts = new THREE.Points(starGeo, starMat);
-  starPts.frustumCulled = false;
-  scene.add(starPts);
-  const starSecPts = new THREE.Points(starGeo, starMatSec);
-  starSecPts.frustumCulled = false;
-  starSecPts.visible = false; // secondary point image piles into a hot point near the caustic
-  scene.add(starSecPts);
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  scene.add(pts);
+  const secPts = new THREE.Points(geo, matSec);
+  secPts.frustumCulled = false;
+  secPts.visible = false; // secondary point image piles into a hot point near the caustic
+  scene.add(secPts);
 
-  // ---- warp arcs ----
-  const WARP_STARS = Math.max(2000, Math.floor(diskParticles * 0.02));
+  const dispose = (): void => {
+    scene.remove(pts);
+    scene.remove(secPts);
+    geo.dispose();
+    mat.dispose();
+    matSec.dispose();
+  };
+
+  return { pts, secPts, geo, mat, matSec, uniforms, dispose };
+}
+
+// The warp arcs: short line segments that trace each background star's lensed
+// arc, intensifying the "spacetime bent around the hole" read. Like the disk
+// and starfield they carry a PRIMARY (+1) and SECONDARY (-1) image off one geo.
+interface WarpRig {
+  seg: THREE.LineSegments; // primary arc image
+  seg2: THREE.LineSegments; // secondary arc image
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  matSec: THREE.ShaderMaterial; // secondary material (cloned uniforms, sign -1)
+  uniforms: Uniforms; // primary's shared block (matSec clones it)
+  dispose: () => void;
+}
+
+function buildWarp(scene: THREE.Scene, particleCount: number): WarpRig {
+  const WARP_STARS = Math.max(2000, Math.floor(particleCount * 0.02));
   const K = 7;
   const V = WARP_STARS * K * 2;
   const warpPos = new Float32Array(V * 3);
@@ -2746,13 +2802,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       warpPos[v * 3] = x; warpPos[v * 3 + 1] = y; warpPos[v * 3 + 2] = z; warpSeed[v] = sd; warpSPar[v] = a1; v++;
     }
   }
-  const warpGeo = new THREE.BufferGeometry();
-  warpGeo.setAttribute('position', new THREE.BufferAttribute(warpPos, 3));
-  warpGeo.setAttribute('aSeed', new THREE.BufferAttribute(warpSeed, 1));
-  warpGeo.setAttribute('aS', new THREE.BufferAttribute(warpSPar, 1));
-  warpGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(warpPos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(warpSeed, 1));
+  geo.setAttribute('aS', new THREE.BufferAttribute(warpSPar, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
-  const warpUniforms: Uniforms = {
+  const uniforms: Uniforms = {
     uTime: { value: 0 },
     uShadowR: { value: 0.1 },
     uThetaE: { value: 0.15 },
@@ -2761,8 +2817,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uWarp: { value: CFG.warp },
     uHole: { value: 0.12 },
   };
-  const warpMat = new THREE.ShaderMaterial({
-    uniforms: warpUniforms,
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
     vertexShader: warpVertexShader,
     fragmentShader: warpFragmentShader,
     transparent: true,
@@ -2770,18 +2826,39 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     depthWrite: false,
     depthTest: false,
   });
-  const warpMatSec = warpMat.clone();
-  warpMatSec.uniforms = THREE.UniformsUtils.clone(warpUniforms);
-  warpMatSec.uniforms.uImageSign.value = -1.0;
+  const matSec = mat.clone();
+  matSec.uniforms = THREE.UniformsUtils.clone(uniforms);
+  matSec.uniforms.uImageSign.value = -1.0;
 
-  const warpSeg = new THREE.LineSegments(warpGeo, warpMat);
-  warpSeg.frustumCulled = false;
-  scene.add(warpSeg);
-  const warpSeg2 = new THREE.LineSegments(warpGeo, warpMatSec);
-  warpSeg2.frustumCulled = false;
-  scene.add(warpSeg2);
+  const seg = new THREE.LineSegments(geo, mat);
+  seg.frustumCulled = false;
+  scene.add(seg);
+  const seg2 = new THREE.LineSegments(geo, matSec);
+  seg2.frustumCulled = false;
+  scene.add(seg2);
 
-  // ---- photon ring ----
+  const dispose = (): void => {
+    scene.remove(seg);
+    scene.remove(seg2);
+    geo.dispose();
+    mat.dispose();
+    matSec.dispose();
+  };
+
+  return { seg, seg2, geo, mat, matSec, uniforms, dispose };
+}
+
+// The photon ring: a single dense Points band sitting just outside the shadow
+// rim (the bright lensed-light circle). One image only — no secondary sign.
+interface RingRig {
+  pts: THREE.Points; // the ring band (frame toggles .visible)
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  uniforms: Uniforms;
+  dispose: () => void;
+}
+
+function buildRing(scene: THREE.Scene, pixelRatio: number): RingRig {
   const ringN = 64000;
   const ringAng = new Float32Array(ringN);
   const ringSeed = new Float32Array(ringN);
@@ -2789,15 +2866,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     ringAng[i] = Math.random() * Math.PI * 2;
     ringSeed[i] = Math.random();
   }
-  const ringGeo = new THREE.BufferGeometry();
-  ringGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ringN * 3), 3));
-  ringGeo.setAttribute('aAng', new THREE.BufferAttribute(ringAng, 1));
-  ringGeo.setAttribute('aSeed', new THREE.BufferAttribute(ringSeed, 1));
-  ringGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ringN * 3), 3));
+  geo.setAttribute('aAng', new THREE.BufferAttribute(ringAng, 1));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(ringSeed, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
 
-  const ringUniforms: Uniforms = {
+  const uniforms: Uniforms = {
     uTime: { value: 0 },
-    uPixelRatio: { value: renderer.getPixelRatio() },
+    uPixelRatio: { value: pixelRatio },
     uShadowR: { value: 0.1 },
     uAspect: { value: 1.0 },
     uHole: { value: 0.12 },
@@ -2807,8 +2884,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     uRingScale: { value: 1.0 }, // dev: ring radius × (relative to dark-core rim)
     uMorph: { value: 0 },
   };
-  const ringMat = new THREE.ShaderMaterial({
-    uniforms: ringUniforms,
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
     vertexShader: ringVertexShader,
     fragmentShader: ringFragmentShader,
     transparent: true,
@@ -2816,11 +2893,38 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     depthWrite: false,
     depthTest: false,
   });
-  const ringPts = new THREE.Points(ringGeo, ringMat);
-  ringPts.frustumCulled = false;
-  scene.add(ringPts);
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  scene.add(pts);
 
-  // --- post ---
+  const dispose = (): void => {
+    scene.remove(pts);
+    geo.dispose();
+    mat.dispose();
+  };
+
+  return { pts, geo, mat, uniforms, dispose };
+}
+
+// The post chain: EffectComposer wrapping RenderPass → UnrealBloomPass →
+// GradePass (tone-map/grade/vignette, NOT rendered to screen) → NovaPass (the
+// supernova whiteout, the FINAL pass to screen so the grade can't swallow the
+// white). frame() drives bloom.strength/radius + grade/nova uniforms each tick.
+interface PostRig {
+  composer: EffectComposer;
+  bloom: UnrealBloomPass;
+  gradePass: ShaderPass;
+  novaPass: ShaderPass;
+  render: () => void;
+  setSize: (w: number, h: number) => void;
+  dispose: () => void;
+}
+
+function buildPostChain(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+): PostRig {
   const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), CFG.bloomStr, CFG.bloomRad, 0.55);
@@ -2840,6 +2944,79 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   const novaPass = new ShaderPass(NovaShader);
   novaPass.renderToScreen = true;
   composer.addPass(novaPass);
+
+  const setSize = (w: number, h: number): void => {
+    composer.setSize(w, h);
+    bloom.setSize(w, h);
+  };
+  const render = (): void => {
+    composer.render();
+  };
+  const dispose = (): void => {
+    composer.dispose();
+    gradePass.material.dispose();
+    bloom.dispose();
+  };
+
+  return { composer, bloom, gradePass, novaPass, render, setSize, dispose };
+}
+
+function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): () => void {
+  const diskParticles = tuneParticlesForDevice();
+  const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
+  void bCritShadow;
+
+  // --- renderer / scene / camera ---
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 1);
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(CFG.fovDeg, window.innerWidth / window.innerHeight, 0.1, 4000);
+  const lookTarget = new THREE.Vector3(lookOffsetX, lookOffsetY, 0);
+
+  // ---- renderers ----
+  // Each piece (disk / starfield / warp arcs / photon ring / post chain) is now
+  // built by its own build*() factory above (mirroring buildSunRig). The rigs own
+  // their geometry, materials and disposal; createScene just wires them into the
+  // resize/frame loops below. The shared uniform blocks + sub-objects are pulled
+  // out into the same local names the loop already used, so the per-frame writes
+  // and updateLensUniforms() stay byte-for-byte identical.
+  const pr0 = renderer.getPixelRatio();
+
+  const diskRig = buildDisk(scene, diskParticles, pr0);
+  const diskMatPrimary = diskRig.primary;
+  const diskMatSecondary = diskRig.secondary;
+  const diskPrimary = diskRig.primaryPts;
+  const diskSecondary = diskRig.secondaryPts;
+
+  const starRig = buildStarfield(scene, diskParticles, pr0);
+  const starUniforms = starRig.uniforms; // updateLensUniforms() writes through this
+  const starMat = starRig.mat;
+  const starMatSec = starRig.matSec;
+  const starPts = starRig.pts;
+  const starSecPts = starRig.secPts;
+
+  const warpRig = buildWarp(scene, diskParticles);
+  const warpUniforms = warpRig.uniforms; // updateLensUniforms() writes through this
+  const warpMat = warpRig.mat;
+  const warpMatSec = warpRig.matSec;
+  const warpSeg = warpRig.seg;
+  const warpSeg2 = warpRig.seg2;
+
+  const ringRig = buildRing(scene, pr0);
+  const ringUniforms = ringRig.uniforms; // updateLensUniforms() writes through this
+  const ringMat = ringRig.mat;
+  const ringPts = ringRig.pts;
+
+  const postRig = buildPostChain(renderer, scene, camera);
+  const bloom = postRig.bloom;
+  const gradePass = postRig.gradePass;
+  const novaPass = postRig.novaPass;
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor that GROWS into the red giant. The red
@@ -2897,8 +3074,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const w = window.innerWidth;
     const h = window.innerHeight;
     renderer.setSize(w, h);
-    composer.setSize(w, h);
-    bloom.setSize(w, h);
+    postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     gradePass.uniforms.uResolution.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
@@ -3216,7 +3392,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     }
 
     updateLensUniforms();
-    composer.render();
+    postRig.render();
   }
 
   onResize();
@@ -3233,21 +3409,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointerMove);
 
-    composer.dispose();
-    for (const g of [diskGeo, starGeo, warpGeo, ringGeo]) g.dispose();
-    for (const m of [
-      diskMatPrimary,
-      diskMatSecondary,
-      starMat,
-      starMatSec,
-      warpMat,
-      warpMatSec,
-      ringMat,
-      gradePass.material,
-    ])
-      m.dispose();
+    // Each rig disposes its own geos + materials (and, for post, the composer +
+    // bloom + grade material) — construction and teardown are now co-located in
+    // the build*() factories, so this just calls each rig's dispose().
+    postRig.dispose();
+    diskRig.dispose();
+    starRig.dispose();
+    warpRig.dispose();
+    ringRig.dispose();
     sunRig.dispose();
-    bloom.dispose();
     renderer.dispose();
     if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
   };
