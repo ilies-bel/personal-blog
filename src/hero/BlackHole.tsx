@@ -1668,6 +1668,10 @@ const sunSurfaceVert = /* glsl */ `
   }`;
 const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   uniform float uTime;
+  // uRed ∈ [0,1]: 0 = yellow star (gold, bright), 1 = red giant (deep red, dim).
+  // Drives the photosphere from a hot gold palette toward a cool, matte, deep-red
+  // one and pulls overall brightness down — the COOLING half of the inflation.
+  uniform float uRed;
   varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
   void main(){
     vec3 p = vObj * 2.4;
@@ -1679,15 +1683,34 @@ const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     float n = fbm(p + 3.2*q + t*0.5);
     float m = clamp(n*0.5+0.5, 0.0, 1.0);
 
-    vec3 col = vec3(0.24,0.035,0.0);
-    col = mix(col, vec3(0.72,0.17,0.01), smoothstep(0.14,0.40,m));
-    col = mix(col, vec3(1.00,0.44,0.06), smoothstep(0.34,0.58,m));
-    col = mix(col, vec3(1.00,0.64,0.16), smoothstep(0.55,0.78,m));
-    col = mix(col, vec3(1.00,0.84,0.40), smoothstep(0.80,0.96,m));
+    // gold (yellow-star) photosphere ramp
+    vec3 g0 = vec3(0.24,0.035,0.0);
+    vec3 g1 = vec3(0.72,0.17,0.01);
+    vec3 g2 = vec3(1.00,0.44,0.06);
+    vec3 g3 = vec3(1.00,0.64,0.16);
+    vec3 g4 = vec3(1.00,0.84,0.40);
+    // red-giant ramp: deep maroon → blood red → red-orange (never gold/white)
+    vec3 r0 = vec3(0.10,0.008,0.003);
+    vec3 r1 = vec3(0.42,0.04,0.01);
+    vec3 r2 = vec3(0.72,0.11,0.02);
+    vec3 r3 = vec3(0.90,0.22,0.04);
+    vec3 r4 = vec3(1.00,0.34,0.08);
+    // cross-fade each stop from gold → red as uRed rises (linear recolour)
+    vec3 c0 = mix(g0, r0, uRed);
+    vec3 c1 = mix(g1, r1, uRed);
+    vec3 c2 = mix(g2, r2, uRed);
+    vec3 c3 = mix(g3, r3, uRed);
+    vec3 c4 = mix(g4, r4, uRed);
+
+    vec3 col = c0;
+    col = mix(col, c1, smoothstep(0.14,0.40,m));
+    col = mix(col, c2, smoothstep(0.34,0.58,m));
+    col = mix(col, c3, smoothstep(0.55,0.78,m));
+    col = mix(col, c4, smoothstep(0.80,0.96,m));
 
     float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
     float chMask = smoothstep(0.12, -0.05, ch);
-    col = mix(col, vec3(0.20,0.030,0.0), chMask*0.55);
+    col = mix(col, mix(vec3(0.20,0.030,0.0), vec3(0.08,0.006,0.0), uRed), chMask*0.55);
 
     float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.45,0.2,m);
     col = mix(col, vec3(0.06,0.01,0.0), spot*0.6);
@@ -1695,16 +1718,20 @@ const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     float gran = fbm(p*7.0 + t*1.0);
     col *= 0.86 + 0.26*(gran*0.5+0.5);
 
-    float ar = smoothstep(0.88, 0.99, m);
+    // bright active-region speckle fades out toward the (quiet) red giant
+    float ar = smoothstep(0.88, 0.99, m) * (1.0 - 0.85*uRed);
     col += ar * vec3(0.5,0.28,0.07);
 
     vec3 vd = normalize(-vViewPos);
     float fres = 1.0 - max(dot(vd, vViewN), 0.0);
     float limb = pow(fres, 2.0);
-    col = mix(col, vec3(1.0,0.74,0.30), limb*0.72);
-    col += limb * vec3(0.6,0.32,0.08);
+    // gold limb → dusky red limb; weaken it for the red giant
+    vec3 limbCol = mix(vec3(1.0,0.74,0.30), vec3(0.78,0.18,0.04), uRed);
+    col = mix(col, limbCol, limb*mix(0.72, 0.5, uRed));
+    col += limb * mix(vec3(0.6,0.32,0.08), vec3(0.26,0.05,0.01), uRed);
 
-    col *= 1.15;
+    // overall luminance: bright gold sun → dim matte red giant (light leads size)
+    col *= mix(1.15, 0.5, uRed);
     gl_FragColor = vec4(col, 1.0);
   }`;
 
@@ -1726,6 +1753,10 @@ const sunCoronaVert = /* glsl */ `
     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
 const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
   uniform float uTime; uniform float uDiskFrac; varying vec2 vUv;
+  // uRed ∈ [0,1]: redden + fade the corona as the yellow star inflates into the
+  // (magnetically quiet, coronae-poor) red giant. uDiskFrac is updated per frame
+  // so the halo tracks the growing disc.
+  uniform float uRed;
   void main(){
     vec2 pp = (vUv-0.5)*2.0;
     float r = length(pp);
@@ -1739,7 +1770,8 @@ const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     corona *= smoothstep(df-0.02, df+0.04, r);
     corona *= smoothstep(1.0, df+0.05, r);
     vec3 c = mix(vec3(1.0,0.56,0.16), vec3(1.0,0.78,0.38), st*0.7);
-    gl_FragColor = vec4(c*corona*0.6, 1.0);
+    c = mix(c, vec3(0.85,0.20,0.05), uRed);          // gold corona → dim red haze
+    gl_FragColor = vec4(c*corona*0.6*mix(1.0, 0.35, uRed), 1.0);
   }`;
 
 // --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
@@ -1824,18 +1856,21 @@ const sunLoopVert = /* glsl */ `
   }`;
 const sunLoopFrag = /* glsl */ `
   varying vec3 vCol; varying float vB; varying float vHot;
+  // uFade ∈ [0,1]: dims the loops/prominences toward the (quiet) red giant.
+  uniform float uFade;
   void main(){
     float d = length(gl_PointCoord-0.5);
     float a = smoothstep(0.5,0.0,d);
     a = pow(a,1.25);              // soft core -> overlapping points form a line
     vec3 col = mix(vCol, vec3(1.0,0.96,0.86), clamp(vHot,0.0,0.85));  // white-hot leading edge
-    gl_FragColor = vec4(col*a*vB*1.3, a);
+    gl_FragColor = vec4(col*a*vB*1.3*uFade, a*uFade);
   }`;
 
 // Handles the render loop needs to drive + tear down the sun rig.
 interface SunRig {
   group: THREE.Group;
   surfaceMat: THREE.ShaderMaterial;
+  glowMat: THREE.ShaderMaterial;
   coronaMat: THREE.ShaderMaterial;
   loopMat: THREE.ShaderMaterial;
   starMat: THREE.ShaderMaterial;
@@ -1853,8 +1888,9 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   group.visible = false;
 
   // --- (A) photosphere mesh ---
+  // uRed (0 yellow → 1 red giant) reddens + dims the surface for the inflation.
   const surfaceMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uRed: { value: 0 } },
     vertexShader: sunSurfaceVert,
     fragmentShader: sunSurfaceFrag,
   });
@@ -1862,6 +1898,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   group.add(surface);
 
   // --- (B) inner chromosphere glow (BackSide additive) ---
+  // uColor is driven per frame (gold → dim red) so the glow cools with the star.
   const glowMat = new THREE.ShaderMaterial({
     uniforms: { uColor: { value: new THREE.Color(1.0, 0.55, 0.16) } },
     vertexShader: sunGlowVert,
@@ -1875,9 +1912,11 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   group.add(glow);
 
   // --- (C) soft corona haze (camera-facing billboard) ---
+  // uDiskFrac is the disc radius as a fraction of the billboard half-size; it is
+  // updated per frame as the rig scales so the halo hugs the growing photosphere.
   const coronaHalf = R * 4.0;
   const coronaMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf } },
+    uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf }, uRed: { value: 0 } },
     vertexShader: sunCoronaVert,
     fragmentShader: sunCoronaFrag,
     transparent: true,
@@ -2151,7 +2190,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   loopGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), R * 8);
 
   const loopMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uPix: { value: pixelRatio }, uPS: { value: 70.0 } },
+    uniforms: { uTime: { value: 0 }, uPix: { value: pixelRatio }, uPS: { value: 70.0 }, uFade: { value: 1 } },
     vertexShader: sunLoopVert,
     fragmentShader: sunLoopFrag,
     transparent: true,
@@ -2226,7 +2265,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
     starMat.dispose();
   };
 
-  return { group, surfaceMat, coronaMat, loopMat, starMat, corona, dispose };
+  return { group, surfaceMat, glowMat, coronaMat, loopMat, starMat, corona, dispose };
 }
 
 // ---------------------------------------------------------------------------
@@ -2660,45 +2699,71 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // --- transition 2: red giant (held at 1 once a later placeholder takes over) ---
     diskMatPrimary.uniforms.uGiant.value = giantHeld;
     diskMatSecondary.uniforms.uGiant.value = giantHeld;
-    diskMatPrimary.uniforms.uYellow.value = yellow;
-    diskMatSecondary.uniforms.uYellow.value = yellow;
+    // The POINT CLOUD is always the RED GIANT (its grainy body), never the yellow
+    // star — the yellow star is the mesh sun rig. So the cloud's uYellow stays 0;
+    // the yellow JS flag below still gates the timeline (laterActive / grade).
+    diskMatPrimary.uniforms.uYellow.value = 0;
+    diskMatSecondary.uniforms.uYellow.value = 0;
     diskMatPrimary.uniforms.uNebula.value = nebula;
     diskMatSecondary.uniforms.uNebula.value = nebula;
     diskMatPrimary.uniforms.uDot.value = dot;
     diskMatSecondary.uniforms.uDot.value = dot;
 
-    // --- red giant → yellow star: SOFT cross-fade swap (Option B) ------------
-    // The yellow star is rendered by the mesh sun rig (photosphere + glow +
-    // corona + animated loops), the red giant by the point cloud. A per-particle
-    // morph between the two is impossible (different geometry systems), so the
-    // handoff is a SCALE cross-fade across a short window centred on stage 2.5:
-    // the rig grows in from a seed while the cloud red giant is held behind it,
-    // then the cloud hides once the (opaque) rig is big enough to occlude it. The
-    // reverse plays at the nebula edge (3.5). This replaces the old hard pop.
-    const sunWindow = !!yellow && !nebula; // dot implies nebula, so this is the yellow slot
-    // entry: rig 0→1 over 2.40→2.62; exit: rig 1→0 over 3.40→3.50 (nebula edge).
-    const rigIn = smoothstep01((stage - 2.4) / 0.22);
-    const rigOut = 1 - smoothstep01((stage - 3.4) / 0.1);
-    const rigGrow = rigIn * rigOut; // 0 outside the slot, 1 across the settled middle
-    // grow the whole rig from a small seed → full size (eased), so it swells in
-    // rather than popping. Kept >0 so it never collapses to a degenerate point.
-    const rigScale = 0.12 + 0.88 * rigGrow;
-    sunRig.group.scale.setScalar(rigScale);
-    sunRig.group.visible = rigGrow > 0.001;
-    // Hold the cloud red giant behind the rig until the rig has grown enough to
-    // cover it (rigGrow ~0.6), then hand off. During the overlap the rig's opaque
-    // photosphere occludes the cloud, so the swap reads as the giant contracting
-    // into the tighter yellow star instead of one object blinking out.
-    const cloudHidden = rigGrow > 0.6;
-    diskPrimary.visible = !cloudHidden;
-    diskSecondary.visible = !cloudHidden;
-    // Dedicated star backdrop behind the opaque sun: track the rig grow envelope
-    // so the field swells in with the star rather than hard-popping.
-    sunRig.starMat.uniforms.uOpacity.value = rigGrow;
-    // The sun is a SOLID, opaque sphere (like the reference). The starfield draws
-    // additively with depthTest OFF, so it would otherwise bleed THROUGH the sun's
-    // body and read as transparent. Hide it once the rig covers the frame.
-    starPts.visible = !cloudHidden;
+    // --- yellow star ⇄ red giant: GROW / COOL / GROW-PARTICLES transition -----
+    // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
+    // (stage 3, mesh sun rig — tight, gold, bright) INFLATES into the RED GIANT
+    // (stage 2, point cloud — big, deep red, dim, grainy). Scrolling up plays it
+    // forward; scrolling down plays the reverse. There is no shrink-and-pop.
+    //
+    // The mesh rig carries the whole inflation: it GROWS toward the red-giant
+    // radius and COOLS (reddens + dims) via uRed. The grainy red-giant point
+    // cloud is ramped IN on top of the growing surface (uBright 0→full) so the
+    // star gains its particle texture as it bloats; the mesh then fades behind
+    // the now-complete particle giant. "Light leads size": the cool/redden curve
+    // runs slightly AHEAD of the grow curve, so it cools then bloats.
+    //
+    // redAmt: 0 at the settled yellow star (stage ≥2.9) → 1 at the settled red
+    // giant (stage ≤2.1). redColor leads redScale by ~0.08 stage (cool-then-grow).
+    const redAmt   = smoothstep01((2.9 - stage) / 0.8);              // overall progress
+    const redColor = smoothstep01((2.98 - stage) / 0.8);            // dim/redden — LEADS
+    const redScale = smoothstep01((2.82 - stage) / 0.8);           // inflate — TRAILS
+    const inYRWindow = stage > 2.02 && stage < 3.2 && !nebula;      // the yellow⇄red slot
+
+    // mesh grows from yellow radius → red-giant radius (SUN_RIG_RADIUS×(1/0.7))
+    const meshGrow = 1 + (RED_GIANT_RADIUS / SUN_RIG_RADIUS - 1) * redScale;
+    sunRig.group.scale.setScalar(meshGrow);
+    // cool the mesh: redden + dim surface/corona, fade the (quiet-giant) flares,
+    // and cool the inner glow from gold → dim red.
+    sunRig.surfaceMat.uniforms.uRed.value = redColor;
+    sunRig.coronaMat.uniforms.uRed.value = redColor;
+    sunRig.loopMat.uniforms.uFade.value = 1 - smoothstep01(redColor / 0.85); // flares gone by ~0.85
+    (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
+      1.0 - 0.6 * redColor, 0.55 - 0.4 * redColor, 0.16 - 0.13 * redColor,
+    );
+    // corona halo hugs the growing disc (uDiskFrac = discR / coronaHalf, and the
+    // group scale grows both, so the ratio is constant — but keep it explicit).
+    // Mesh visible across the slot; it fades out at the red end as the particle
+    // giant takes over (redAmt 0.82→0.98), and is hidden entirely at the red giant.
+    const meshFade = 1 - smoothstep01((redAmt - 0.82) / 0.16);
+    sunRig.group.visible = inYRWindow && meshFade > 0.001;
+    sunRig.starMat.uniforms.uOpacity.value = (1 - redAmt); // backdrop fades as giant fills in
+
+    // Ramp the grainy point-cloud red giant IN on the growing surface: invisible
+    // at the yellow star, brightening from redAmt 0.25 → 1 so the particle texture
+    // accrues as the body bloats. The cloud renders the red-giant sphere (uYellow
+    // is 0 here, uGiant pinned to 1), so it lands exactly co-located with the mesh.
+    const particleIn = smoothstep01((redAmt - 0.25) / 0.75);
+    const cloudShown = inYRWindow ? particleIn > 0.001 : !nebula; // outside slot keep prior behaviour
+    diskPrimary.visible = cloudShown;
+    diskSecondary.visible = cloudShown;
+    // Hide the lensed background starfield while the opaque mesh body is present
+    // (it would bleed through); restore it as the mesh fades to the particle giant.
+    starPts.visible = inYRWindow ? meshFade < 0.5 : true;
+
+    // sunWindow drives the bright-gold grade below; keep it on across the yellow
+    // half of the slot (mesh still dominant) and hand to the red-giant grade as
+    // the cloud takes over. Aligns the grade switch with the geometry handoff.
+    const sunWindow = inYRWindow && redAmt < 0.55;
 
     // the star/warp lensing only makes sense while the hole exists — fade it.
     // Once the SUN forms we drop the gravitational-warp background entirely and
@@ -2734,7 +2799,11 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // hard across the compression window so it never clips to an edge-to-edge
     // whiteout; the flash term is the one bright beat we DO want, narrow.
     const hotZone = Math.exp(-Math.pow((morph - 0.5) / 0.15, 2.0));
-    const baseBright = 1.25 * (1 - 0.92 * hotZone);
+    // In the yellow⇄red slot, the grainy point-cloud red giant is RAMPED IN on the
+    // growing mesh surface (particleIn 0→1), so its emission fades up as the body
+    // bloats — the "add particles on the surface" read. Outside the slot, full base.
+    const cloudGain = inYRWindow ? particleIn : 1;
+    const baseBright = 1.25 * (1 - 0.92 * hotZone) * cloudGain;
     diskMatPrimary.uniforms.uBright.value = baseBright;
     diskMatSecondary.uniforms.uBright.value = baseBright;
     // Auto-exposure: pull down across the flash, dip at the seed (so the tiny
