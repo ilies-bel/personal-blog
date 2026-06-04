@@ -57,6 +57,7 @@ export interface LifecycleConfig {
   olive: number;
   warmth: number;
   saturation: number;
+  grain: number;
   camDist: number;
 }
 
@@ -103,10 +104,25 @@ export interface StarState {
   // --- later-state activation flags (review-mode hard swaps) ---
   /** yellow-star slot active (stage ≥ 2.5). */
   yellow: boolean;
-  /** nebula slot active (stage ≥ 3.5). uNebula. */
+  /** nebula slot active (stage ≥ 3.5). Gates the timeline/grade. */
   nebula: boolean;
+  /** the shader's nebula geometry is active (the real nebula OR the collapse window). uNebula. */
+  nebulaShader: boolean;
   /** pale-blue-dot slot active (stage ≥ 4.5). uDot. */
   dot: boolean;
+
+  // --- nebula → yellow star: GPGPU gravitational collapse ---
+  // Scrolling UP from the nebula (stage 3.5) toward the star (≈3.05), the gas
+  // particles collapse inward under gravity and feed the mesh star. These drive
+  // the stateful sim + the mesh handoff; they are pure functions of `stage`.
+  /** collapse drive: 0 dispersed nebula (≥3.5) → 1 fully collapsed (≤3.05). uCollapseDrive. */
+  collapse: number;
+  /** how much the disk reads the sim position vs the analytic nebula. uSimBlend. */
+  simBlend: number;
+  /** mesh star reveal: 0 (no mesh) → 1 (full star) as the cloud finishes feeding it. */
+  starFormed: number;
+  /** cloud brightness multiplier across the collapse (bright infall → fade out). 1 outside. */
+  cloudBright: number;
 
   // --- supernova flash (rides the time-based nova envelope) ---
   /** particle-side shock-breakout glow: 1.45 * nova. uFlash. */
@@ -131,6 +147,16 @@ export interface StarState {
   cloudShown: boolean;
   /** the lensed background starfield is shown this frame. */
   starPtsVisible: boolean;
+  /** the plain twinkling star backdrop (sun-rig dome) is shown this frame. It sits
+   *  behind BOTH the yellow star and the red giant — the two states share one
+   *  starfield background — and is hidden for the black hole (which keeps the
+   *  warping lensed starfield), the nebula, the dot, and the collapse window. */
+  starBackVisible: boolean;
+  /** brightness multiplier for the shared star backdrop dome (sun-rig `uBright`).
+   *  The red giant runs the post grade at a LOWER exposure than the yellow star, so
+   *  the dim dome stars would crush to black behind it. We brighten the dome to
+   *  compensate so the backdrop reads the SAME behind both star states. */
+  starBackBright: number;
 
   // --- gravity teardown (a star bends no light) ---
   /** lens/warp fade as the hole exists → 0. */
@@ -171,6 +197,8 @@ export interface StarState {
   warmth: number;
   /** final grade saturation. uSat (grade). */
   gradeSat: number;
+  /** final film-grain amount; per-state seam (e.g. 0 in the nebula). uGrain. */
+  grain: number;
   /** final disk in-shader saturation (after sun/nebula overrides). uSat (disk). */
   diskSat: number;
 
@@ -232,6 +260,55 @@ export function lifecycle(input: LifecycleInput): StarState {
   const laterActive = yellow || nebula || dot;
   const giantHeld = laterActive ? 1 : giant;
 
+  // --- nebula → yellow star: gravitational collapse window (scrolling UP) ----
+  // The collapse runs across stage 3.5 (dispersed nebula) → 3.05 (fully-fed star).
+  // `collapse` drives the GPGPU well/spring; `simBlend` morphs the disk from the
+  // analytic nebula placement to the sim positions; `starFormed` reveals the mesh
+  // star; `cloudBright` brightens then fades the converging cloud.
+  //
+  // CRITICAL: these are monotonic smoothsteps of the FALLING stage, so they
+  // saturate to 1 for every stage BELOW the window — which would wrongly turn the
+  // red giant / yellow star / dot into "collapsing nebula". So everything here is
+  // hard-GATED to the window [NEB_COLLAPSE_LO, NEB_COLLAPSE_HI]: `inWindow` is 1
+  // only inside it, and every scalar is multiplied by it → EXACTLY 0/1 (no-op)
+  // outside. Below the window the normal yellow-mesh slot owns the geometry.
+  const NEB_COLLAPSE_HI = 3.5; // dispersed nebula
+  const NEB_COLLAPSE_LO = 3.0; // window floor (the yellow-mesh slot already owns 2.7–3.5)
+  const inWindow = stage > NEB_COLLAPSE_LO && stage < NEB_COLLAPSE_HI ? 1 : 0;
+  // ONE smooth window progress drives everything so density and star size move on
+  // a single INVERTED scale (no field racing ahead of another): prog = 0 at the
+  // dispersed nebula (3.5) → 1 right at the window floor (3.0). Spanning the WHOLE
+  // window (not a narrow sub-band) makes the transition fluid — the star grows
+  // gradually and the gas thins gradually across the entire scroll, in lockstep.
+  const prog = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
+  // `collapse` is the GPGPU drive. It LEADS the star growth (prog^0.7 ramps faster
+  // than prog) so the gas physically falls inward and piles onto the core BEFORE
+  // the star reaches full size — the inflow visibly FEEDS the star rather than the
+  // star appearing and the gas catching up.
+  const collapse = Math.pow(prog, 0.7);
+  // star GROWTH is deliberately SLOW: prog^2.4 keeps the star tiny through the
+  // first ~two-thirds of the window and grows it mostly in the final stretch, so
+  // you watch a small seed being fed for a long time before it inflates. Visual
+  // size is `0.05 + 0.95*starFormed` in frame() (small → full).
+  const starFormed = Math.pow(prog, 2.4);
+  // sim owns the disk just inside the window; fades as the mesh takes the core.
+  const simBlend = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.1) * (1 - 0.85 * prog);
+  // cloud DENSITY/brightness is the INVERSE of star size: as the star grows
+  // (prog→1) the gas thins to almost nothing (mass moved INTO the star). The fade
+  // is shaped (1-prog)^1.5 so the gas stays present through the first half (you see
+  // it fall) then clears decisively in the second half so the forming blue star
+  // reveals instead of being washed by additive gas in front. A small mid-window
+  // glow bump reads as light pouring in. 1 (no-op) outside the window.
+  const feedBump = 4 * prog * (1 - prog); // 0→1→0, peaks mid-window
+  // gas stays visibly present LONGER (^1.6, not ^2.2) so you watch MORE particles
+  // stream inward and feed the star before the cloud finally clears.
+  const invDensity = Math.pow(1 - prog, 1.6); // 1 → 0
+  const cloudBright = 1 + inWindow * ((1 + 0.55 * feedBump) * invDensity - 1);
+  // the shader runs its nebula geometry across the real nebula AND the collapse
+  // window, so `pos` holds the analytic nebula placement (the sim's seed/home)
+  // whenever the sim blend is active.
+  const nebulaShader = nebula || simBlend > 0.001;
+
   // --- yellow star → red giant: FLASH-SWAP transition ----------------------
   // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
   // (mesh sun rig — small, gold, textured) becomes the RED GIANT (point cloud —
@@ -254,15 +331,33 @@ export function lifecycle(input: LifecycleInput): StarState {
   const yrGrow = smoothstep01((SWAP_STAGE - stage) / (SWAP_STAGE - 2.2)); // 0@2.70 → 1@2.20
   const yrColor = smoothstep01((SWAP_STAGE + 0.02 - stage) / (SWAP_STAGE + 0.02 - 2.3)); // → 1@~2.30
 
+  // During the gravitational collapse (stage 3.05..3.5) the CLOUD shows the
+  // nebula particles falling inward, and the mesh star fades IN via starFormed as
+  // they reach the core — so this window overrides the plain yellow→red mesh slot
+  // (which would otherwise hide the cloud and show the full mesh from 3.5 down).
+  // Bounded to the window's lower edge so BELOW it (stage ≤ 3.04) the normal
+  // yellow-mesh slot resumes (mesh at full size, cloud hidden) — clean handoff.
+  const collapsing = inWindow === 1 && (simBlend > 0.001 || starFormed > 0.001);
+
   // Mesh visible across its side, plus a short overhang into the bright flash so
-  // the handoff cross-dissolves under the bloom rather than hard-cutting.
-  const sunRigVisible = inYRWindow && stage > SWAP_STAGE - 0.05;
+  // the handoff cross-dissolves under the bloom rather than hard-cutting. In the
+  // collapse window the mesh only shows once the cloud has started feeding it.
+  const sunRigVisible = collapsing ? starFormed > 0.01 : inYRWindow && stage > SWAP_STAGE - 0.05;
   // Inside the slot, the cloud body only shows on the cloud side (the opaque mesh
-  // owns the yellow side); outside the slot the cloud renders everything.
-  const cloudShown = inYRWindow ? cloudSide : true;
+  // owns the yellow side); outside the slot the cloud renders everything. During
+  // the collapse the cloud is ALWAYS shown (it IS the infalling gas feeding the star).
+  const cloudShown = collapsing ? true : inYRWindow ? cloudSide : true;
+  // The RED GIANT phase: the cloud-rendered big red star. It owns the shared star
+  // dome (see starBackVisible), so the lensed/warp starfield (`starPts` — the BLACK
+  // HOLE's background) must be OFF here, or its olive/red-graded speckle bleeds
+  // through and the red giant ends up on the black hole's background. Defined here
+  // (ahead of the grade block, which redeclares the same predicate) so the lensed-
+  // starfield gate below can exclude it.
+  const redGiantActive = cloudSide || (giantHeld > 0.5 && !yellow && !nebula && !dot);
   // Hide the lensed background starfield while the opaque mesh body is present;
-  // ALSO hide it across the NEBULA (the remnant sits alone against pure black).
-  const starPtsVisible = (inYRWindow ? cloudSide : true) && !nebula;
+  // ALSO hide it across the NEBULA, the collapse, and the RED GIANT (the gas / red
+  // giant sit on the clean dome or pure black, never on the warping lensed field).
+  const starPtsVisible = (inYRWindow ? cloudSide : true) && !nebula && !collapsing && !redGiantActive;
 
   // sunWindow drives the bright-gold grade below (mesh side); the cloud side is
   // handed to the red-giant grade, whose handoff is driven by yrColor.
@@ -318,15 +413,33 @@ export function lifecycle(input: LifecycleInput): StarState {
   // colours survive instead of being crushed toward grey by the global desaturation.
   const exSat = cfg.saturation + 0.55 * exGrade + 0.5 * giantHeld;
   let diskSat = exSat;
+  // film grain: per-state seam. Defaults to the configured amount; a state branch
+  // below can dial it (the nebula zeroes it so the immersed gas reads smooth).
+  let grain = cfg.grain;
 
   // bloom radius defaults to the resting value; the branches below override it.
   let bloomRadius = cfg.bloomRad;
 
+  // shared-backdrop brightness: 1 = the dome's tuned base (set for the bright yellow
+  // grade). The red-giant branch raises it to cancel that state's dimmer exposure so
+  // the same star field reads identically behind both star states.
+  let starBackBright = 1;
+
   // --- sun grade: bold, saturated, un-washed. The yellow star reads as vivid
   // gold; the RED GIANT reads as a big, deep, matte red star. The red giant is
   // crossfaded in over the gather so the explosion grade hands off cleanly.
-  const redGiantPhase = cloudSide || (giantHeld > 0.5 && !yellow && !nebula && !dot);
+  const redGiantPhase = redGiantActive; // (same predicate, defined above for the starfield gate)
   const yrPunch = yrFlash; // 0..1 subtle swap-flash envelope
+
+  // --- shared star backdrop (yellow star + red giant) ----------------------
+  // The twinkling far star dome (the sun rig's dome) is the BACKGROUND for the
+  // two star states. The yellow star always showed it (it rides the mesh rig);
+  // the RED GIANT is drawn by the point cloud and so used to sit on flat black.
+  // We now show the SAME dome behind both, so the red giant gets the yellow
+  // star's background. It stays HIDDEN for: the black hole (it keeps the warping
+  // lensed starfield), the nebula and the dot (gas/speck alone on black), and the
+  // gravitational-collapse window (the infalling gas sits alone on black).
+  const starBackVisible = (sunWindow || redGiantPhase) && !nebula && !dot && !collapsing;
   if (sunWindow) {
     // The yellow star is the MESH sun rig (bright, opaque, real photosphere). Push
     // exposure + bloom UP and keep the grade out of the way: no tone-map crush, no
@@ -344,11 +457,19 @@ export function lifecycle(input: LifecycleInput): StarState {
     const rg = cloudSide ? yrColor : 1;
     bloomStrength = (0.7 + 0.12 * yrPunch) * (1 - rg) + 0.22 * rg; // subtle flash → dim halo
     bloomRadius = cfg.bloomRad;
-    exposure = 1.0 * (1 + 0.05 * yrPunch) * (1 - rg) + cfg.exposure * 0.7 * rg;
+    const yellowExposure = 1.0 * (1 + 0.05 * yrPunch);
+    const redExposure = cfg.exposure * 0.7;
+    exposure = yellowExposure * (1 - rg) + redExposure * rg;
     olive = 0.0; // no olive cast on the star
     warmth = 0.14 * rg; // warm the matte red
     gradeSat = 1.0; // full saturation throughout
     diskSat = 1.0;
+    // The dome was tuned to read at the bright yellow grade; the red giant grades
+    // DARKER (redExposure < yellowExposure), which would crush the dim backdrop
+    // stars to black. Brighten the dome by the inverse exposure ratio so the SAME
+    // star field survives behind the red giant exactly as it does behind the yellow
+    // star. Ramps with rg (the swap-in is still bright → no boost needed there).
+    starBackBright = 1 + ((yellowExposure / redExposure) - 1) * rg;
   } else if (nebula && !dot) {
     // nebula grade: a soft, luminous gas cloud. Eased in as the state arrives
     // (nebula snaps at 3.5) so the handoff from yellow isn't a hard pop. We view the
@@ -364,6 +485,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     warmth *= 1 - ne; // no warm cast (let teal/cyan show)
     gradeSat = gradeSat * (1 - ne) + 1.55 * ne; // vivid SHO palette
     diskSat = diskSat * (1 - ne) + 1.4 * ne;
+    grain = grain * (1 - ne); // fade film grain out → smooth immersed gas (no speckle)
   } else {
     bloomRadius = cfg.bloomRad;
   }
@@ -399,13 +521,14 @@ export function lifecycle(input: LifecycleInput): StarState {
     const seedZoom = heroZoom + (ZOOM_SEED - heroZoom) * shrinkT; // → 2.6
     const blastZoom = seedZoom + (ZOOM_BLAST - seedZoom) * blastT; // 2.6 → 2.0
     zoom = blastZoom + (ZOOM_OUT - blastZoom) * growT; // → 1.0
-    // nebula: view the sprawling cloud from OUTSIDE so it reads as a SHAPE sitting in
-    // the frame (like a real Eagle/Carina image) rather than radiating from the centre
-    // — sitting inside it made every wisp read as a spoke. Pull back a touch so the
-    // whole irregular cloud is framed with dark space around it. Ease in as the nebula
-    // arrives (3.1 → 3.7), hold, then pull further OUT toward the pale blue dot
-    // (4.3 → 4.7) so the dot reads tiny.
-    const ZOOM_NEBULA = 1.32; // dist≈26 → the sprawling cloud fills most of the frame
+    // nebula: fly the camera DEEP INSIDE the cloud so the gas fills the whole frame
+    // and wraps past every edge — immersed, like flying through it. (The old radial-
+    // spoke problem that once forced us back outside is gone: the geometry is now a
+    // fully-hashed, domain-warped volume with no radial banding, so from inside it
+    // reads as turbulent gas all around, not spokes.) Ease in as the nebula arrives
+    // (3.1 → 3.7), hold immersed, then pull WAY back out toward the pale blue dot
+    // (4.3 → 4.7) so the dot reads as a tiny speck.
+    const ZOOM_NEBULA = 0.65; // dist≈13 → camera sits inside the cloud, gas fills the frame
     const ZOOM_DOT = 2.4; // pull back out so the pale blue dot is a far speck
     const nebIn = smoothstep01((stage - 3.1) / 0.6);
     const nebOut = smoothstep01((stage - 4.3) / 0.4);
@@ -428,7 +551,12 @@ export function lifecycle(input: LifecycleInput): StarState {
     giantHeld,
     yellow,
     nebula,
+    nebulaShader,
     dot,
+    collapse,
+    simBlend,
+    starFormed,
+    cloudBright,
     flash,
     inYRWindow,
     meshSide,
@@ -439,6 +567,8 @@ export function lifecycle(input: LifecycleInput): StarState {
     sunRigVisible,
     cloudShown,
     starPtsVisible,
+    starBackVisible,
+    starBackBright,
     lensLive,
     starBright,
     gravityGone,
@@ -454,6 +584,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     olive,
     warmth,
     gradeSat,
+    grain,
     diskSat,
     distFactor,
     zoom,

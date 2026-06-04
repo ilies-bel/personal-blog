@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { ScrollTracker } from './scroll';
 import { BEATS, STAGE_COUNT, BUILT_STAGES } from './beats';
 import { lifecycle, easeOut, smoothstep01 } from './lifecycle';
+import { buildGravitySim, simDimensions, NEBULA_PLACE_FN, type GravitySim } from './gravitySim';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -172,6 +173,8 @@ const diskVertexShader = /* glsl */ `
   attribute float aPhase;
   attribute float aThickN;
   attribute float aSeed;
+  // per-particle texel UV into the GPGPU sim position texture (nebula↔star window)
+  attribute vec2 aSimUV;
 
   uniform float uTime, uOmega0, uSpinDir, uBetaScale, uBeamExp, uDoppler;
   uniform float uRin, uRout, uThick, uPixelRatio, uSec, uHole, uVertAsym, uHorizAsym, uDistrib;
@@ -290,6 +293,11 @@ const diskVertexShader = /* glsl */ `
     return v;
   }
 
+  // nebula placement — SHARED VERBATIM with the GPGPU collapse sim's seed pass
+  // (gravitySim.ts) so the sim starts looking exactly like the analytic nebula.
+  // Depends on h31()/fbm() declared above.
+  ${NEBULA_PLACE_FN}
+
   uniform float uGiant;     // 0 = remnant, 1 = sun (transition 2)
   uniform float uGiantR;    // sun radius in world units
   uniform float uGranScale;     // granulation cell frequency across the surface
@@ -305,6 +313,11 @@ const diskVertexShader = /* glsl */ `
   //   uYrMix : 0 = smooth gold sphere (just after the swap), 1 = granular red giant
   //   uYrGrow: 0 = yellow radius (×0.35), 1 = red-giant radius (×1.0)
   uniform float uYrMix, uYrGrow;
+  // --- GPGPU gravitational collapse (nebula → yellow star) ---
+  //   uSimPos  : sim position texture (xyz = world pos, w = life). Sampled at aSimUV.
+  //   uSimBlend: 0 = analytic placement, 1 = fully sim-driven. Ramps in over 3.5→3.4.
+  uniform sampler2D uSimPos;
+  uniform float uSimBlend;
 
   varying float vBright;
   varying float vSeed;
@@ -323,9 +336,11 @@ const diskVertexShader = /* glsl */ `
   varying float vSunHot;  // 0..1 white-hot factor along loops / at footpoints
   varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
   varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
+  varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
 
   void main(){
     vPlaceholder = 0.0; // REVIEW placeholder tag (set in the giant/placeholder block)
+    vSimLife = 1.0;     // default: free gas (no-op outside the collapse window)
     vSunM = 0.0; vSunLimb = 0.0; vSunDark = 0.0; // sun-photosphere channels (set below)
     vSunFlare = 0.0; vSunHot = 0.0;             // sun atmosphere channels
     vSunRed = 0.0;                              // 0 gold (yellow), 1 red giant
@@ -804,32 +819,11 @@ const diskVertexShader = /* glsl */ `
         // a slow wandering drift so the whole cloud rolls/breathes (not frozen).
         vec3 nDrift = vec3(uTime*0.016, uTime*0.011, -uTime*0.013);
 
-        // -- base position: a FULLY-HASHED point in the volume (NOT dir*dist). The old
-        // dir*dist form made particles that shared an angle but differed in radius line
-        // up into RADIAL STREAKS — the "starburst" look. Three independent hashes give
-        // a box-fill with no angular banding; we shape it into the irregular ellipsoid
-        // and bias slightly toward the centre with a soft falloff (a cloud, not a shell).
-        vec3 hh = vec3(
-          h31(vec3(aSeed*13.0, aU*17.0,  5.0)),
-          h31(vec3(aSeed*7.0,  aPhase*9.0, 23.0)),
-          h31(vec3(aU*29.0,    aPhase*3.0, 41.0))
-        );
-        vec3 box = hh*2.0 - 1.0;                            // [-1,1]^3
-        // soft radial bias: lift the magnitude toward centre so it's denser in the
-        // middle and feathers out — but keep it gentle so the cloud stays sprawling.
-        float bmag = pow(length(box), 0.85);
-        vec3 p0 = normalize(box + 1e-4) * bmag * NR;
-        p0 *= ELL;                                          // squash to the oval
-
-        // -- DOMAIN WARP: push sample coords around with their own fbm so the cloud
-        // and its voids are organic and turbulent, never spherically symmetric. Strong
-        // warp so the structure is genuinely cloud-like, not a fuzzed sphere.
-        vec3 warp = vec3(
-          fbm(p0*0.42 +  3.0 + nDrift),
-          fbm(p0*0.42 + 17.0 + nDrift),
-          fbm(p0*0.42 + 41.0 + nDrift)
-        ) - 0.5;
-        vec3 wp = p0 + warp * (NR * 0.75);                  // warped sample point
+        // -- base + warped position: a FULLY-HASHED point in the volume shaped into
+        // the irregular ellipsoid and domain-warped into organic cloud + voids. This
+        // is now the SHARED nebulaPlace() (above), used VERBATIM by the GPGPU collapse
+        // sim's seed pass so the sim starts identical to this analytic placement.
+        vec3 wp = nebulaPlace(aSeed, aU, aPhase, uTime, uGiantR);
 
         // -- DENSITY field: bright gas where fbm is high, DARK DUST LANES where it's
         // low. A WIDE gas band so most of the cloud is filled, continuous nebulosity;
@@ -842,13 +836,16 @@ const diskVertexShader = /* glsl */ `
         float lane = smoothstep(0.26, 0.40, gas);           // 0 in a dust lane → 1 in gas
         dens *= lane;
 
-        // -- EMISSION field (drives colour, INDEPENDENT of radius). A separate noise
-        // field: the densest/most-shocked knots glow rust (SII), the thinner energetic
-        // gas glows teal (OIII), with gold Hα between. Biased COOL (toward teal) so the
-        // cloud reads as a nebula, not a fireball — only the dense shock knots go warm.
-        float emi = fbm(wp*0.80 + 61.0 + nDrift*0.4);       // 0..1 emission selector
-        emi = clamp(emi*0.60 + dens*0.40, 0.0, 1.0);        // thin gas → teal, dense knots → rust
-        emi = pow(emi, 1.55);                               // bias the whole cloud cooler (more teal/green)
+        // -- EMISSION field (drives the BLUE ramp + brightness, INDEPENDENT of radius).
+        // For the smoky-blue look the cloud is near-monochrome: hue stays in navy→cyan
+        // and only the DENSE gas climbs toward the bright cyan/white end. So we drive
+        // emission mostly from local DENSITY (smoke reads as brightness variation, not
+        // a hue map), with a little independent noise for organic patchiness. Biased
+        // hard COOL so the bulk of the cloud sits navy/blue and only the piled-up dense
+        // pockets reach bright cyan — the white-hot cores come from vHeat in the frag.
+        float emi = fbm(wp*0.80 + 61.0 + nDrift*0.4);       // 0..1 patchiness noise
+        emi = clamp(dens*0.72 + emi*0.28, 0.0, 1.0);        // brightness follows the gas
+        emi = pow(emi, 1.85);                               // bias hard cool → mostly navy/blue haze
 
         // -- LIGHT MODEL: diffuse ambient + depth (no star inside; the gas is self-
         // luminous). Two cheap effects give the flat glow a sense of 3D VOLUME:
@@ -885,10 +882,10 @@ const diskVertexShader = /* glsl */ `
         vNebLight = nebLight;                                // depth/occlusion brightness factor
         vPlaceholder = 2.0;
 
-        if(laneH < 0.085){
-          // ---- FILAMENT LANE: a FEW bright wisps threading the densest gas (the
-          // accents the eye latches onto). Rare (~8% of points) so they don't form a
-          // radial spoke halo. Each strand starts at a random interior point and
+        if(laneH < 0.045){
+          // ---- FILAMENT LANE: a FEW soft lit threads in the smoke (subtle accents,
+          // not hard ropes). Rare (~4.5% of points) so the cloud reads as continuous
+          // smoke, not a web of strands. Each strand starts at a random interior point
           // drifts in a random direction, gently bent, crossing the cloud organically.
           float STRANDS = 160.0;
           float sid = floor(h31(vec3(aSeed*1.7, aPhase*2.3, 0.5)) * STRANDS);
@@ -920,11 +917,12 @@ const diskVertexShader = /* glsl */ `
           // thickness across the rope
           pos += tA*(h31(vec3(aSeed,2.0,8.0))-0.5)*(NR*0.025);
           pos += tB*(h31(vec3(aSeed,4.0,6.0))-0.5)*(NR*0.025);
-          // colour from local emission, but biased a touch warm (filaments are the
-          // shock-front wisps → gold/rust).
-          float femi = clamp(fbm(pos*0.80 + 61.0 + nDrift*0.4)*0.7 + 0.35, 0.0, 1.0);
+          // colour from local emission, biased toward the BRIGHT-CYAN end (the wisps
+          // are the lit threads in the smoke, not warm shock fronts). Kept cool — the
+          // ramp tops out at icy cyan, never gold/rust.
+          float femi = clamp(fbm(pos*0.80 + 61.0 + nDrift*0.4)*0.5 + 0.50, 0.0, 1.0);
           vNeb = femi;
-          heat = 0.80 + 0.6*pow(h31(vec3(aSeed*4.0, sid, 8.0)), 2.5); // bright knots
+          heat = 0.55 + 0.5*pow(h31(vec3(aSeed*4.0, sid, 8.0)), 2.5); // soft lit threads
           vNebLane = 1.0;                                   // filament wisp
         } else {
           // ---- DIFFUSE GAS LANE: the dominant nebulosity (~90% of points). CULL by
@@ -934,7 +932,10 @@ const diskVertexShader = /* glsl */ `
           // starfield) and cull almost everything where dens≈0 (the dark lanes).
           float keep = h31(vec3(aSeed*23.0, aU*5.0, 19.0));
           if(keep > 0.18 + 0.78*smoothstep(0.0, 0.5, dens)) vNebLane = -1.0; // -1 → culled
-          heat = 0.16 + 1.05*dens;                          // emission ∝ local gas density
+          // emission ∝ local gas density, but the DENSEST pockets push hard toward the
+          // white-hot end so they bloom into glowing cores (the lit smoke in the
+          // reference); thin gas stays a dim navy haze.
+          heat = 0.10 + 0.85*dens + 0.85*smoothstep(0.55, 0.95, dens);
         }
         // ---- ionising young-star knots: a tiny fraction become small blue-white
         // points scattered through the gas (the cluster lighting the cloud). Spread,
@@ -952,6 +953,18 @@ const diskVertexShader = /* glsl */ `
         heat = 0.5;
         vPlaceholder = 3.0;
       }
+    }
+
+    // === GPGPU gravitational collapse override (nebula -> yellow star) ========
+    // During the nebula<->star window the particles are driven by the stateful
+    // gravity sim instead of the analytic placement. pos already holds the
+    // analytic nebula wp from the uNebula block above, and the sim is SEEDED
+    // from that same placement, so at uSimBlend~0 simP.xyz~pos -> no pop. As the
+    // collapse drive rises, uSimBlend->1 and the cloud falls inward toward the star.
+    if(uSimBlend > 0.0){
+      vec4 simP = texture2D(uSimPos, aSimUV);   // xyz = world pos, w = life
+      pos = mix(pos, simP.xyz, uSimBlend);
+      vSimLife = simP.w;                          // → frag brightens/dims accreting matter
     }
 
     vec4 viewP  = modelViewMatrix * vec4(pos, 1.0);
@@ -1306,11 +1319,13 @@ const diskVertexShader = /* glsl */ `
     // be large to overlap into sheets rather than read as a grainy starfield).
     // Culled diffuse grains (vNebLane < 0) are sized to 0 so the voids stay black.
     if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
-      float sizeRand = 0.5 + 0.9*aSeed;                  // per-particle variety
+      float sizeRand = 0.7 + 0.6*aSeed;                  // per-particle variety (tighter → smoother overlap)
       if(vNebLane > 0.5){
-        gl_PointSize = clamp(baseSize * (1.1 + 1.8*vHeat) * sizeRand, 1.0, 7.0); // filament wisp
+        gl_PointSize = clamp(baseSize * (1.3 + 1.8*vHeat) * sizeRand, 1.2, 8.0); // soft lit thread
       } else {
-        gl_PointSize = clamp(baseSize * (2.2 + 3.0*vHeat) * sizeRand, 1.2, 13.0); // soft gas puff
+        // BIG soft puffs so ~1M grains overlap into continuous smoke (not a grainy
+        // starfield). Larger floor/cap than before → fewer hard gaps between grains.
+        gl_PointSize = clamp(baseSize * (3.0 + 3.2*vHeat) * sizeRand, 1.8, 16.0); // soft smoke puff
       }
       if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize*3.0, 2.5, 9.0); // young-star knot (small bright point)
       if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
@@ -1339,6 +1354,7 @@ const diskFragmentShader = /* glsl */ `
   varying float vSunHot;  // white-hot factor along loops / at footpoints
   varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
   varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
+  varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
@@ -1468,32 +1484,35 @@ const diskFragmentShader = /* glsl */ `
           pcol = mix(pcol, vec3(1.0, 0.92, 0.78), clamp(uYrFlash, 0.0, 1.0) * 0.15);
         }
       } else if(vPlaceholder < 2.9){
-        // nebula (Hubble/SHO palette): vNeb is the EMISSION field, NOT a radius —
-        // it walks the narrowband palette so teal and rust interleave through the
-        // whole volume (the defining nebula contrast), instead of a center→rim ramp.
-        // Ramp: deep teal (OIII, hot gas) → cyan → green (Hα) → gold → orange →
-        // crimson (SII, shock fronts). A magenta bias sits at the cool end so the
-        // rust isn't a flat red. This is the Eagle/Carina narrowband look.
+        // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from
+        // within — deep navy in the thin gas, climbing through teal/cyan as the gas
+        // gets denser/hotter, blowing out to a cool WHITE in the bright cores. This is
+        // a near-monochrome BLUE cloud (the iStock/Hubble blue-nebula reference), not
+        // the multi-hue SHO rainbow: hue barely shifts, BRIGHTNESS carries the form.
+        // vNeb walks the cool ramp; the hottest gas (vHeat) pushes toward white.
         float rr = clamp(vNeb, 0.0, 1.0);
-        vec3 cTeal   = vec3(0.10, 0.78, 0.82);  // 0.00 deep teal (OIII)
-        vec3 cCyan   = vec3(0.26, 0.92, 0.78);  // 0.18 cyan
-        vec3 cGreen  = vec3(0.52, 0.96, 0.50);  // 0.36 green (Hα)
-        vec3 cGold   = vec3(0.98, 0.84, 0.40);  // 0.56 gold
-        vec3 cOrange = vec3(1.00, 0.54, 0.26);  // 0.74 orange
-        vec3 cCrimson= vec3(0.96, 0.24, 0.34);  // 0.90 crimson/rust (SII)
-        vec3 cMagenta= vec3(0.78, 0.22, 0.52);  // 1.00 magenta dust edge
-        vec3 ncol = mix(cTeal,   cCyan,    smoothstep(0.00, 0.24, rr));
-        ncol = mix(ncol, cGreen,  smoothstep(0.24, 0.44, rr));
-        ncol = mix(ncol, cGold,   smoothstep(0.44, 0.62, rr));
-        ncol = mix(ncol, cOrange, smoothstep(0.62, 0.78, rr));
-        ncol = mix(ncol, cCrimson,smoothstep(0.78, 0.91, rr));
-        ncol = mix(ncol, cMagenta,smoothstep(0.91, 1.00, rr));
-        // bright filament knots brighten toward a COOL white so the spine glows
-        // without erasing the ramp hue (a small, cool-tinted lift, not a blowout).
-        float spine = smoothstep(1.05, 1.55, vHeat);
-        ncol = mix(ncol, vec3(0.82, 0.96, 1.00), spine*0.25);
-        // central STAR cluster: the ionising young stars read blue-white, off-ramp.
+        vec3 cNavy = vec3(0.04, 0.10, 0.30);  // 0.00 deep navy (thin outer haze)
+        vec3 cBlue = vec3(0.10, 0.34, 0.72);  // 0.35 mid blue
+        vec3 cCyan = vec3(0.34, 0.72, 0.96);  // 0.70 bright cyan (dense gas)
+        vec3 cIce  = vec3(0.78, 0.92, 1.00);  // 1.00 icy near-white (hot cores)
+        vec3 ncol = mix(cNavy, cBlue, smoothstep(0.00, 0.40, rr));
+        ncol = mix(ncol, cCyan, smoothstep(0.35, 0.78, rr));
+        ncol = mix(ncol, cIce,  smoothstep(0.74, 1.00, rr));
+        // MASS → HEAT → COLOUR: the densest gas clusters carry the most mass, so
+        // they read HOTTER — pushed hard toward hot blue-white (the same heat
+        // language as the young forming star). vHeat already tracks local density
+        // (dens), so high vHeat = dense = hot. The bright cores bloom to blue-white.
+        float core = smoothstep(0.85, 1.70, vHeat);              // dense/hot cores
+        ncol = mix(ncol, vec3(0.62, 0.80, 1.00), core*0.55);     // hot azure
+        ncol = mix(ncol, vec3(0.92, 0.97, 1.00), smoothstep(1.25, 1.75, vHeat)*0.7); // white-hot peak
+        // scattered young stars read crisp blue-white, off-ramp.
         ncol = mix(ncol, vec3(0.85, 0.92, 1.00), step(2.4, vPlaceholder));
+        // GRAVITATIONAL COLLAPSE: as gas accretes onto the forming star (vSimLife
+        // 1→0) it is COMPRESSED → heats up → drives toward hot blue-white, matching
+        // the young blue star it feeds (mass→heat). The star then cools blue→yellow
+        // as it grows. No-op for free gas (vSimLife=1).
+        float accreteHeat = 1.0 - clamp(vSimLife, 0.0, 1.0);
+        ncol = mix(ncol, vec3(0.80, 0.90, 1.00), smoothstep(0.1, 0.85, accreteHeat));
         pcol = ncol;
       } else {
         // pale blue dot: the famous faint blue point.
@@ -1527,14 +1546,24 @@ const diskFragmentShader = /* glsl */ `
     // continuous nebulosity; filaments are the brighter wisps. Bloom glows on top.
     if(vPlaceholder > 1.5 && vPlaceholder < 2.4){
       if(vNebLane > 0.5){
-        inten = a * (0.10 + 0.34*clamp(vBright, 0.0, 2.2));   // filament wisp: reads, keeps hue
+        inten = a * (0.10 + 0.34*clamp(vBright, 0.0, 2.2));   // soft lit thread
       } else {
-        inten = a * (0.05 + 0.30*clamp(vBright, 0.0, 1.3));   // diffuse gas: glowing nebulosity
+        // diffuse smoke: thin haze stays DIM, but the dense pockets (high vHeat) bloom
+        // into bright lit cores → the strong dim↔bright contrast of backlit smoke.
+        float coreBoost = smoothstep(0.7, 1.4, vHeat);        // 0 in haze → 1 in dense cores
+        inten = a * (0.04 + 0.26*clamp(vBright, 0.0, 1.3)) * (1.0 + 2.2*coreBoost);
       }
       inten *= vNebLight;   // ambient+depth light model: dim far / self-occluded gas
     } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
       inten = a * clamp(vBright, 0.0, 4.0);          // young-star knot: bright point
     }
+    // GPGPU collapse glow: as gas accretes onto the core (vSimLife 1→0) give it a
+    // GENTLE brightening as it heats/compresses, then fade it OUT as it parks so the
+    // opaque mesh star owns the core (the gas in front must not wash the blue star).
+    // Kept subtle (≤1.4×) so the forming star reads cleanly. No-op for free gas.
+    float accrete = 1.0 - clamp(vSimLife, 0.0, 1.0);   // 0 free gas → 1 fully parked
+    inten *= 1.0 + 0.4*accrete*(1.0 - accrete)*4.0;     // gentle heat brightening
+    inten *= mix(1.0, 0.0, smoothstep(0.55, 0.9, accrete)); // fade out as it parks
     gl_FragColor = vec4(col * inten, 1.0);
   }
 `;
@@ -1907,6 +1936,10 @@ const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   // Drives the photosphere from a hot gold palette toward a cool, matte, deep-red
   // one and pulls overall brightness down — the COOLING half of the inflation.
   uniform float uRed;
+  // uBlue ∈ [0,1]: 0 = settled yellow/gold star, 1 = HOT young blue-white star.
+  // "Mass induces heat": while the star is still forming/small it is blue-white
+  // hot; as it grows to full mass it cools to yellow. Driven by (1 - starFormed).
+  uniform float uBlue;
   varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
   void main(){
     vec3 p = vObj * 2.4;
@@ -1967,6 +2000,24 @@ const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
 
     // overall luminance: bright gold sun → dim matte red giant (light leads size)
     col *= mix(1.15, 0.5, uRed);
+
+    // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
+    // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
+    // the same surface field m, and lerp gold->blue-white by uBlue. Cools to the
+    // gold ramp above as it grows (uBlue->0). No-op for the settled yellow sun.
+    vec3 b0 = vec3(0.06, 0.12, 0.30);  // cool deep blue (umbral)
+    vec3 b1 = vec3(0.18, 0.34, 0.72);  // mid blue
+    vec3 b2 = vec3(0.42, 0.62, 0.95);  // bright azure
+    vec3 b3 = vec3(0.72, 0.86, 1.00);  // pale blue-white
+    vec3 b4 = vec3(0.92, 0.97, 1.00);  // hot white core
+    vec3 bcol = b0;
+    bcol = mix(bcol, b1, smoothstep(0.14,0.40,m));
+    bcol = mix(bcol, b2, smoothstep(0.34,0.58,m));
+    bcol = mix(bcol, b3, smoothstep(0.55,0.78,m));
+    bcol = mix(bcol, b4, smoothstep(0.80,0.96,m));
+    bcol += limb * vec3(0.30, 0.45, 0.70);   // cool limb glow
+    bcol *= 1.25;                             // young star is luminous
+    col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
     gl_FragColor = vec4(col, 1.0);
   }`;
 
@@ -1992,6 +2043,9 @@ const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
   // (magnetically quiet, coronae-poor) red giant. uDiskFrac is updated per frame
   // so the halo tracks the growing disc.
   uniform float uRed;
+  // uFade ∈ [0,1]: overall corona presence. Driven to 0 WHILE the star is growing
+  // (the corona/atmosphere only blooms AFTER the star is fully sized) → 1 once full.
+  uniform float uFade;
   void main(){
     vec2 pp = (vUv-0.5)*2.0;
     float r = length(pp);
@@ -2006,7 +2060,7 @@ const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     corona *= smoothstep(1.0, df+0.05, r);
     vec3 c = mix(vec3(1.0,0.56,0.16), vec3(1.0,0.78,0.38), st*0.7);
     c = mix(c, vec3(0.85,0.20,0.05), uRed);          // gold corona → dim red haze
-    gl_FragColor = vec4(c*corona*0.6*mix(1.0, 0.35, uRed), 1.0);
+    gl_FragColor = vec4(c*corona*0.6*mix(1.0, 0.35, uRed)*uFade, 1.0);
   }`;
 
 // --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
@@ -2015,6 +2069,10 @@ const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
 // far-away dome of twinkling stars rendered with real depth testing, so the
 // solid photosphere occludes the stars behind it. It only exists for the yellow
 // stage and rides inside the sun rig group, so it shows/hides with the sun.
+// Base brightness of the shared star backdrop, tuned to read at the bright yellow-
+// star grade. The render loop scales it by s.starBackBright so the same field also
+// survives the red giant's dimmer grade (the two states share one backdrop).
+const STAR_BACK_BASE_BRIGHT = 2.2;
 const sunStarVert = /* glsl */ `
   attribute float aSeed;
   attribute float aMag;            // 0..1 magnitude → size + base brightness
@@ -2109,6 +2167,12 @@ interface SunRig {
   coronaMat: THREE.ShaderMaterial;
   loopMat: THREE.ShaderMaterial;
   starMat: THREE.ShaderMaterial;
+  // The twinkling star backdrop dome. It is a SEPARATE scene object (NOT a child
+  // of `group`) so the render loop can show it behind BOTH the yellow star and the
+  // red giant (which is drawn by the point cloud, not this rig) and so the rig's
+  // forming-scale never shrinks the far star field. Visibility is toggled on its
+  // own (s.starBackVisible), independent of group.visible.
+  starBack: THREE.Points;
   corona: THREE.Mesh;
   dispose: () => void;
 }
@@ -2125,7 +2189,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   // --- (A) photosphere mesh ---
   // uRed (0 yellow → 1 red giant) reddens + dims the surface for the inflation.
   const surfaceMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uRed: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uRed: { value: 0 }, uBlue: { value: 0 } },
     vertexShader: sunSurfaceVert,
     fragmentShader: sunSurfaceFrag,
   });
@@ -2151,7 +2215,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   // updated per frame as the rig scales so the halo hugs the growing photosphere.
   const coronaHalf = R * 4.0;
   const coronaMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf }, uRed: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf }, uRed: { value: 0 }, uFade: { value: 1 } },
     vertexShader: sunCoronaVert,
     fragmentShader: sunCoronaFrag,
     transparent: true,
@@ -2439,10 +2503,13 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
 
   // --- (E) dedicated star backdrop ---------------------------------------
   // A far, dense dome of twinkling stars sitting BEHIND the opaque photosphere.
-  // It's a child of the rig group (R-independent radius), so the sun naturally
-  // occludes the stars it covers (real depth test) while the rest fill the empty
-  // black space around it. Distributed on a thick spherical shell so parallax
-  // from the slow camera drift gives the field a touch of depth.
+  // It is a SEPARATE scene object (centred at the origin, like the rig), NOT a
+  // child of `group` — so the render loop can reveal it behind the RED GIANT too
+  // (which is drawn by the point cloud, not this rig) and so the rig's forming-
+  // scale never shrinks the far field. Real depth test → the opaque photosphere
+  // occludes the stars it covers while the rest fill the black space around it.
+  // Distributed on a thick spherical shell so parallax from the slow camera drift
+  // gives the field a touch of depth.
   const STAR_BACK_N = 4200;
   const STAR_BACK_R = R * 165; // ~640 world units: far behind the sun, well inside the camera far plane
   const sbPos = new Float32Array(STAR_BACK_N * 3);
@@ -2471,7 +2538,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
       uTime: { value: 0 },
       uPixelRatio: { value: pixelRatio },
       uOpacity: { value: 1.0 }, // faded in/out by the render loop at the stage edges
-      uBright: { value: 2.2 }, // overall scale so points survive the post grade
+      uBright: { value: STAR_BACK_BASE_BRIGHT }, // overall scale so points survive the post grade
     },
     vertexShader: sunStarVert,
     fragmentShader: sunStarFrag,
@@ -2482,12 +2549,14 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
   });
   const starBack = new THREE.Points(starGeo, starMat);
   starBack.frustumCulled = false;
-  group.add(starBack);
+  starBack.visible = false; // shown by the render loop behind the yellow star + red giant
+  scene.add(starBack);
 
   scene.add(group);
 
   const dispose = (): void => {
     scene.remove(group);
+    scene.remove(starBack);
     surface.geometry.dispose();
     glow.geometry.dispose();
     corona.geometry.dispose();
@@ -2500,7 +2569,7 @@ function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig 
     starMat.dispose();
   };
 
-  return { group, surfaceMat, glowMat, coronaMat, loopMat, starMat, corona, dispose };
+  return { group, surfaceMat, glowMat, coronaMat, loopMat, starMat, starBack, corona, dispose };
 }
 
 // ---------------------------------------------------------------------------
@@ -2657,6 +2726,12 @@ interface DiskRig {
   secondaryPts: THREE.Points; // the secondary Points object (.visible too)
   geo: THREE.BufferGeometry;
   uniforms: Uniforms; // shared uniform block (primary's; secondary clones it)
+  // per-particle identity arrays — handed to the GPGPU collapse sim so its seed
+  // pass reproduces the exact analytic nebula placement for these same particles.
+  aSeed: Float32Array;
+  aU: Float32Array;
+  aPhase: Float32Array;
+  count: number;
   dispose: () => void;
 }
 
@@ -2673,11 +2748,21 @@ function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number
     aThickN[i] = th * th * th;
     aSeed[i] = Math.random();
   }
+  // per-particle texel UV into the GPGPU collapse sim's position texture. Maps
+  // vertex index i → texel-center UV in the (width × height) sim grid, matching
+  // buildGravitySim's row-major seed layout. (No-op unless uSimBlend > 0.)
+  const sim = simDimensions(N);
+  const aSimUV = new Float32Array(N * 2);
+  for (let i = 0; i < N; i++) {
+    aSimUV[i * 2 + 0] = ((i % sim.width) + 0.5) / sim.width;
+    aSimUV[i * 2 + 1] = (Math.floor(i / sim.width) + 0.5) / sim.height;
+  }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('aU', new THREE.BufferAttribute(aU, 1));
   geo.setAttribute('aPhase', new THREE.BufferAttribute(aPhase, 1));
   geo.setAttribute('aThickN', new THREE.BufferAttribute(aThickN, 1));
   geo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
+  geo.setAttribute('aSimUV', new THREE.BufferAttribute(aSimUV, 2));
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e4);
 
@@ -2727,6 +2812,9 @@ function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number
     uYrFlash: { value: 0 }, // brief swap flash: whitens the freshly-spawned gold sphere
     uYrMix: { value: 1 }, // 0 = smooth gold sphere, 1 = granular red giant
     uYrGrow: { value: 1 }, // 0 = yellow radius (×0.35), 1 = red-giant radius
+    // --- GPGPU gravitational collapse (nebula → yellow star) ---
+    uSimPos: { value: null }, // sim position texture (set per-frame from the sim)
+    uSimBlend: { value: 0 }, // 0 = analytic nebula, 1 = fully sim-driven collapse
   };
 
   const primary = new THREE.ShaderMaterial({
@@ -2757,7 +2845,7 @@ function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number
     secondary.dispose();
   };
 
-  return { primary, secondary, primaryPts, secondaryPts, geo, uniforms, dispose };
+  return { primary, secondary, primaryPts, secondaryPts, geo, uniforms, aSeed, aU, aPhase, count: N, dispose };
 }
 
 // The lensed background starfield: a spherical shell of points bent by the same
@@ -3099,6 +3187,26 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.35; // yellow star: small grow anchor
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
+  // --- GPGPU gravitational collapse (nebula → yellow star) ---
+  // A stateful gravity sim that collapses the nebula particles inward to feed the
+  // mesh star (see gravitySim.ts). Seeded from the SAME analytic nebula placement
+  // the disk shader uses, so it starts pop-free. Skipped under reduced motion;
+  // returns a no-op {available:false} if float targets are unsupported → the
+  // hero degrades to the analytic hard-swap. The accretion core matches the star
+  // photosphere (SUN_RIG_RADIUS); uGgiantR (4.2) is the nebula extent scale.
+  const gravitySim: GravitySim = reduced
+    ? { available: false, step: () => {}, getPosTexture: () => null, dispose: () => {} }
+    : buildGravitySim({
+        renderer,
+        count: diskRig.count,
+        aSeed: diskRig.aSeed,
+        aU: diskRig.aU,
+        aPhase: diskRig.aPhase,
+        giantR: diskMatPrimary.uniforms.uGiantR.value as number,
+        coreR: SUN_RIG_RADIUS,
+        halfFloat: diskParticles <= 240_000,
+      });
+
   // --- lens uniforms (recomputed each frame from camera geometry) ---
   function updateLensUniforms(): void {
     const aspect = window.innerWidth / window.innerHeight;
@@ -3198,6 +3306,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   // flick of the wheel glides through the transitions instead of snapping.
   // stage 0→1 = reverse supernova; 1→2 = red giant.
   let stage = 0;
+  // previous-frame stage for the gravity sim (more substeps on a fast scroll).
+  let prevSimStage = 0;
 
   // --- supernova whiteout: a TIME-based flash envelope, decoupled from scroll ---
   // The old flash was a Gaussian in `morph` (scroll position) ~0.1 wide, so a fast
@@ -3322,10 +3432,32 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // the s.yellow flag still gates the timeline (laterActive / grade) inside lifecycle.
     diskMatPrimary.uniforms.uYellow.value = 0;
     diskMatSecondary.uniforms.uYellow.value = 0;
-    diskMatPrimary.uniforms.uNebula.value = s.nebula ? 1 : 0;
-    diskMatSecondary.uniforms.uNebula.value = s.nebula ? 1 : 0;
+    // uNebula is 1 across the real nebula AND the gravitational-collapse window so
+    // the cloud holds the analytic nebula placement (the sim's seed/home) while the
+    // sim collapses it inward via uSimBlend below.
+    diskMatPrimary.uniforms.uNebula.value = s.nebulaShader ? 1 : 0;
+    diskMatSecondary.uniforms.uNebula.value = s.nebulaShader ? 1 : 0;
     diskMatPrimary.uniforms.uDot.value = s.dot ? 1 : 0;
     diskMatSecondary.uniforms.uDot.value = s.dot ? 1 : 0;
+
+    // --- GPGPU gravitational collapse: step the sim + feed its texture to the cloud ---
+    // The sim collapses the nebula particles inward to form the yellow star. It's
+    // stepped only inside the window (s.collapse / s.simBlend > 0); otherwise the
+    // home-spring would idle. uSimBlend morphs the disk from analytic → sim positions.
+    let simBlend = 0;
+    if (gravitySim.available && (s.simBlend > 0.001 || s.collapse > 0.001)) {
+      // more substeps on a fast scroll so a flick still visibly collapses.
+      const dStage = Math.abs(stage - prevSimStage);
+      const substeps = 1 + Math.min(3, Math.floor(dStage / 0.05));
+      gravitySim.step(s.collapse, t, substeps);
+      const tex = gravitySim.getPosTexture();
+      diskMatPrimary.uniforms.uSimPos.value = tex;
+      diskMatSecondary.uniforms.uSimPos.value = tex;
+      simBlend = s.simBlend;
+    }
+    prevSimStage = stage;
+    diskMatPrimary.uniforms.uSimBlend.value = simBlend;
+    diskMatSecondary.uniforms.uSimBlend.value = simBlend;
     // nebula light model strength (ambient+depth+self-occlusion). Always full; the
     // factor only touches nebula particles. DEBUG: window.__bhNebLight pins it (0 =
     // flat self-emission, 1 = full light model) so the look can be A/B'd live.
@@ -3360,11 +3492,35 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // The MESH holds small + fully gold across its whole side (no early redden,
     // no early shrink) — all the growing/cooling is the cloud's job now. This
     // removes the dual-schedule overlap that caused the two-entity + flicker bugs.
-    sunRig.group.scale.setScalar(1.0);
+    // GRAVITATIONAL-COLLAPSE handoff: while the nebula collapses to feed the star
+    // (s.starFormed 0→1) the mesh GROWS from a tiny core to full size as the gas
+    // accretes onto it (the star is fed into existence), hidden under the bloom +
+    // the bright converging cloud. Outside the window it sits at full size.
+    const growing = s.starFormed > 0 && s.starFormed < 1;
+    sunRig.group.scale.setScalar(s.starFormed > 0 ? 0.05 + 0.95 * s.starFormed : 1.0);
+    // HOT YOUNG STAR: blue-white while still small/forming (mass→heat), cooling to
+    // gold as it reaches full size. Stays blue through most of the growth and only
+    // cools to gold near full size (1 - starFormed² holds the blue longer) so the
+    // young-star colour actually reads before it settles.
+    sunRig.surfaceMat.uniforms.uBlue.value = s.starFormed > 0 ? 1 - s.starFormed * s.starFormed : 0;
     sunRig.surfaceMat.uniforms.uRed.value = 0;
     sunRig.coronaMat.uniforms.uRed.value = 0;
-    sunRig.loopMat.uniforms.uFade.value = 1;
-    (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.55, 0.16);
+    // FLARES (coronal loops + corona haze) only AFTER the star is fully sized:
+    // suppressed entirely while growing, ramping in over the last 3% of growth so
+    // the young forming star is a clean orb, not a flaring one. 1 outside the window.
+    const flarePresence = s.starFormed > 0 ? smoothstep01((s.starFormed - 0.97) / 0.03) : 1;
+    sunRig.loopMat.uniforms.uFade.value = flarePresence;
+    sunRig.coronaMat.uniforms.uFade.value = flarePresence;
+    // the glow shell cools blue→gold with the star as it grows.
+    if (growing) {
+      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
+        0.35 + 0.65 * s.starFormed,
+        0.55 * s.starFormed + 0.55 * (1 - s.starFormed),
+        0.16 + 0.74 * (1 - s.starFormed),
+      );
+    } else {
+      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.55, 0.16);
+    }
     sunRig.starMat.uniforms.uOpacity.value = 1;
 
     // Mesh visible across its side, plus a short overhang into the bright flash so
@@ -3372,6 +3528,15 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // gold particle sphere appears at/just-below the peak (cloudSide) under the
     // same flash → the two textures are never both clearly visible.
     sunRig.group.visible = s.sunRigVisible;
+    // The twinkling star backdrop dome is a SEPARATE scene object, so it can sit
+    // behind BOTH the yellow star (mesh rig) and the RED GIANT (point cloud) — the
+    // two states share one star field — while staying hidden for the black hole
+    // (which keeps the warping lensed starfield), the nebula, the dot and the
+    // collapse window. See s.starBackVisible in lifecycle().
+    sunRig.starBack.visible = s.starBackVisible;
+    // Compensate the dome's brightness for the red giant's dimmer post grade so the
+    // shared star field reads the SAME behind both star states (see starBackBright).
+    sunRig.starMat.uniforms.uBright.value = STAR_BACK_BASE_BRIGHT * s.starBackBright;
     // Outside the yellow⇄red slot the cloud renders the red giant, the nebula AND
     // the pale-blue-dot. Inside the slot, the cloud body only shows on the cloud
     // side (the opaque mesh owns the yellow side).
@@ -3400,8 +3565,11 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // The point-cloud red giant body renders at full base brightness; in the
     // yellow→red slot it simply appears under the swap flash (no ramp-in — its
     // gold→red look is driven by uYrMix/uYrFlash in the shader, not by emission).
-    diskMatPrimary.uniforms.uBright.value = s.baseBright * dbgCtl.densityPrimary;
-    diskMatSecondary.uniforms.uBright.value = s.baseBright * dbgCtl.densitySecondary;
+    // Collapse cloud brightness (s.cloudBright): inside the collapse window it
+    // brightens the converging infall (light pouring into the star) then fades the
+    // cloud out as the mesh star forms — clean handoff. Exactly 1 outside the window.
+    diskMatPrimary.uniforms.uBright.value = s.baseBright * dbgCtl.densityPrimary * s.cloudBright;
+    diskMatSecondary.uniforms.uBright.value = s.baseBright * dbgCtl.densitySecondary * s.cloudBright;
     // --- DEV: live layer geometry (delete with the panel) ---
     diskMatPrimary.uniforms.uSec.value = dbgCtl.sec;
     diskMatSecondary.uniforms.uSec.value = dbgCtl.sec;
@@ -3421,6 +3589,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     gradePass.uniforms.uOlive.value = s.olive;
     gradePass.uniforms.uWarmth.value = s.warmth;
     gradePass.uniforms.uSat.value = s.gradeSat;
+    gradePass.uniforms.uGrain.value = s.grain; // per-state film grain (0 in the nebula)
     diskMatPrimary.uniforms.uSat.value = s.diskSat;
     diskMatSecondary.uniforms.uSat.value = s.diskSat;
 
@@ -3464,8 +3633,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       sunRig.surfaceMat.uniforms.uTime.value = ut;
       sunRig.coronaMat.uniforms.uTime.value = ut;
       sunRig.loopMat.uniforms.uTime.value = ut;
-      sunRig.starMat.uniforms.uTime.value = ut;
       sunRig.corona.quaternion.copy(camera.quaternion);
+    }
+    // The star backdrop dome twinkles behind both the yellow star and the red
+    // giant, so advance its clock whenever IT is visible (the mesh group is hidden
+    // for the red giant), independent of the rest of the rig.
+    if (sunRig.starBack.visible) {
+      sunRig.starMat.uniforms.uTime.value = ut;
     }
 
     updateLensUniforms();
@@ -3495,6 +3669,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     warpRig.dispose();
     ringRig.dispose();
     sunRig.dispose();
+    gravitySim.dispose();
     renderer.dispose();
     if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
   };
