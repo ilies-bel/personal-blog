@@ -25,6 +25,13 @@
 export interface ManifestoBeat {
   /** Scroll-progress centre of the beat (it owns a ~1/6 slot around this). */
   at: number;
+  /** Explicit scroll band for the live overlay copy. */
+  text: {
+    inStart: number;
+    inEnd: number;
+    outStart: number;
+    outEnd: number;
+  };
   /** The lifecycle state this beat narrates (for the label / a11y). */
   state: string;
   /** Big line shown while scrolling DOWN (rewind / hopeful arc). */
@@ -41,6 +48,7 @@ export interface ManifestoBeat {
 export const BEATS: ManifestoBeat[] = [
   {
     at: 0.02,
+    text: { inStart: 0.0, inEnd: 0.0, outStart: 0.045, outEnd: 0.075 },
     state: 'black hole',
     down: 'every project ends. eventually.',
     up: 'every project ends. eventually.',
@@ -48,6 +56,7 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 1 / 6,
+    text: { inStart: 0.120, inEnd: 0.135, outStart: 0.195, outEnd: 0.220 },
     state: 'dying star',
     down: 'uncertain. still holding.',
     up: 'and one day it gives way.',
@@ -55,6 +64,7 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 2 / 6,
+    text: { inStart: 0.260, inEnd: 0.280, outStart: 0.345, outEnd: 0.370 },
     state: 'red giant',
     down: "bigger isn't the same as lasting.",
     up: 'then it grows faster than anyone can hold.',
@@ -62,6 +72,7 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 3 / 6,
+    text: { inStart: 0.485, inEnd: 0.500, outStart: 0.555, outEnd: 0.580 },
     state: 'dying star',
     down: 'small enough to doubt.',
     up: 'for a while, it just works.',
@@ -69,6 +80,7 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 0.72,
+    text: { inStart: 0.625, inEnd: 0.650, outStart: 0.745, outEnd: 0.785 },
     state: 'nebula',
     down: 'everything starts here.',
     up: "a few more, and it's a real thing.",
@@ -76,6 +88,7 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 0.89,
+    text: { inStart: 0.810, inEnd: 0.835, outStart: 0.900, outEnd: 0.930 },
     state: 'beginning',
     down: 'in the beginning.',
     up: 'it starts with one good decision.',

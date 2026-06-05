@@ -1,0 +1,78 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_TITLE } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+
+const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const [latest, ...archive] = posts;
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sort();
+---
+
+<BaseLayout
+  title="Writing"
+  description={`Technical essays and notes by ${SITE_TITLE} on Astro, frontend systems, deployment, and software craft.`}
+  type="website"
+  bodyClass="writing-page"
+>
+  <section class="writing-hero" aria-labelledby="writing-title">
+    <p class="writing-kicker">Writing</p>
+    <h1 id="writing-title">Notes on software that keeps working.</h1>
+    <p>
+      Short technical essays on content sites, frontend systems, deployment, and
+      the small decisions that make software easier to own.
+    </p>
+  </section>
+
+  {latest && (
+    <section class="writing-featured" aria-labelledby="latest-title">
+      <a class="writing-featured-card" href={href(`posts/${latest.id}/`)}>
+        <span class="writing-featured-label">Latest note</span>
+        <h2 id="latest-title">{latest.data.title}</h2>
+        <p>{latest.data.description}</p>
+        <span class="writing-featured-meta">{fmt(latest.data.pubDate)}</span>
+      </a>
+
+      <aside class="writing-index-card" aria-label="Writing index">
+        <dl>
+          <div>
+            <dt>Published</dt>
+            <dd>{posts.length} notes</dd>
+          </div>
+          <div>
+            <dt>Topics</dt>
+            <dd>{allTags.slice(0, 5).join(' / ')}</dd>
+          </div>
+          <div>
+            <dt>Newest</dt>
+            <dd>{fmt(latest.data.pubDate)}</dd>
+          </div>
+        </dl>
+      </aside>
+    </section>
+  )}
+
+  <section class="writing-list" aria-label="All writing">
+    {(latest ? [latest, ...archive] : posts).map((post) => (
+      <a class="writing-row" href={href(`posts/${post.id}/`)}>
+        <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+        <span class="writing-row-copy">
+          <span class="writing-row-title">{post.data.title}</span>
+          <span class="writing-row-description">{post.data.description}</span>
+          {post.data.tags.length > 0 && (
+            <span class="writing-tags" aria-label="Tags">
+              {post.data.tags.map((tag) => <span>{tag}</span>)}
+            </span>
+          )}
+        </span>
+      </a>
+    ))}
+  </section>
+</BaseLayout>

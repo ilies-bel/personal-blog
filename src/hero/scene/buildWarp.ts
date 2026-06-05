@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { warpVertexShader, warpFragmentShader } from '../shaders/warp.glsl';
+import type { Uniforms } from './types';
 
 export interface WarpRig {
   seg: THREE.LineSegments; // primary arc image

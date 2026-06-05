@@ -7,7 +7,29 @@ export const starVertexShader = /* glsl */ `
   attribute float aSeed;
   uniform float uTime, uPixelRatio, uShadowR, uThetaE, uAspect, uImageSign, uStarBright, uHole;
   varying float vB;
+  varying vec3 vTint;   // per-star colour family (warm-graphite / near-white / cool accent)
+
+  // small hash so each star rolls an independent family without a new attribute.
+  float starHash(float n){ return fract(sin(n*78.233)*43758.5453); }
+
   void main(){
+    // --- STAR COLOUR FAMILIES -------------------------------------------------
+    // Not one uniform tint (that reads dusty); a weighted palette so the field has
+    // depth. Majority warm-graphite/bone to sit with the warm grade, a slice of
+    // crisp near-white for the bright points, and a RARE cool accent so the scene
+    // never goes fully beige. Brighter stars (high aSeed) bias toward near-white,
+    // faint ones toward bone — bright = crisp, faint = warm (the reference look).
+    float fam = starHash(aSeed*131.71 + 4.0);             // family roll 0..1
+    vec3 warmGraphite = mix(vec3(0.47,0.45,0.41),         // faint bone
+                            vec3(0.78,0.73,0.59), aSeed); // brighter warm
+    vec3 nearWhite    = vec3(0.97,0.96,0.92);             // crisp, slightly warm
+    vec3 coolAccent   = vec3(0.72,0.78,0.92);             // faint cobalt depth
+    float roll = clamp(fam*0.78 + aSeed*0.22, 0.0, 1.0);  // bright points bias white
+    vec3 tint = warmGraphite;
+    tint = mix(tint, nearWhite,  step(0.74, roll));       // ~18% near-white (the bright)
+    tint = mix(tint, coolAccent, step(0.92, roll));       // ~8% cool accent (rare depth)
+    vTint = tint;
+
     vec4 clip = projectionMatrix * modelViewMatrix * vec4(position,1.0);
     vec4 bhC  = projectionMatrix * modelViewMatrix * vec4(0.0,0.0,0.0,1.0);
     bool drop = (clip.w <= 0.0);
@@ -47,11 +69,12 @@ export const starVertexShader = /* glsl */ `
 `;
 
 export const starFragmentShader = /* glsl */ `
-  precision highp float; varying float vB;
+  precision highp float; varying float vB; varying vec3 vTint;
   void main(){
     vec2 c = gl_PointCoord-0.5; if(length(c)>0.5) discard;
     float a = smoothstep(0.5,0.0,length(c));
-    gl_FragColor = vec4(vec3(0.95,0.96,0.98)*vB*a*1.05, 1.0);
+    // per-star family tint (warm-graphite majority / crisp near-white / rare cool).
+    gl_FragColor = vec4(vTint*vB*a*1.05, 1.0);
   }
 `;
 
@@ -64,7 +87,7 @@ export const starFragmentShader = /* glsl */ `
 export const distantStarVertexShader = /* glsl */ `
   attribute float aShard;
   attribute float aSeed;
-  uniform float uTime, uPixelRatio, uShadowR, uThetaE, uAspect, uHole, uPresence;
+  uniform float uTime, uPixelRatio, uHole, uPresence;
   varying float vB;
 
   ${LENS_GLSL}

@@ -23,10 +23,10 @@ export const DIRECTION_DEADZONE = 0.0008;
 /** Past this scroll fraction the opening chrome (name + menu) fades out; small
  *  enough that the very first wheel nudge begins the hide. */
 export const CHROME_HIDE_AT = 0.015;
-/** Scroll fraction at which the final exploration HUD arms. */
-export const EXPLORATION_TRIGGER_AT = 0.972;
-/** Delay before the HUD reveals after the trigger (instant under reduced motion). */
-export const EXPLORATION_REVEAL_DELAY_MS = 1500;
+/** Scroll fraction at which the final selected-work HUD arms. */
+export const EXPLORATION_TRIGGER_AT = 0.895;
+/** Delay before the HUD reveals after the trigger; kept scroll-immediate. */
+export const EXPLORATION_REVEAL_DELAY_MS = 0;
 
 // --- per-beat opacity trapezoid --------------------------------------------
 /** Half-width of a beat's fully-shown plateau. */
@@ -44,6 +44,7 @@ export const DEBUG_WINDOW_KEYS = {
   nebulaFlash: '__bhNebulaFlash',
   nebLight: '__bhNebLight',
   backdropStage: '__bhBackdropStage',
+  streak: '__bhStreak',
 } as const;
 
 /** Read a numeric debug-hook override off window, or undefined if unset. */

@@ -39,6 +39,9 @@ const year = new Date().getFullYear();
 const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
 const norm = (p: string) => p.replace(/\/+$/, '') || '/';
 const isActive = (p: string) => norm(href(p)) === path;
+const writingRoot = norm(href('writing'));
+const postsRoot = norm(href('posts'));
+const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`);
 ---
 
 <!doctype html>
@@ -60,7 +63,7 @@ const isActive = (p: string) => norm(href(p)) === path;
           {/* The blog micro-graphic, top-right: a tiny constellation mark that
               opens the About / Writing routes. Small, quiet, always reachable. */}
           <nav class="overlay-blog" aria-label="Sections">
-            <a class="overlay-blog-mark" href={href('about')} aria-label="About and writing">
+            <a class="overlay-blog-mark" href={href('writing')} aria-label="Writing">
               <svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true">
                 <circle cx="6" cy="8" r="1.6" />
                 <circle cx="20" cy="6" r="1.2" />
@@ -72,7 +75,7 @@ const isActive = (p: string) => norm(href(p)) === path;
             </a>
             <div class="overlay-blog-links">
               <a href={href('about')}>About</a>
-              <a href={href('about')}>Writing</a>
+              <a href={href('writing')}>Writing</a>
             </div>
           </nav>
 
@@ -95,7 +98,11 @@ const isActive = (p: string) => norm(href(p)) === path;
               >
                 Home
               </a>
-              <a href={href('')} class={undefined}>
+              <a
+                href={href('writing')}
+                class={isWritingActive ? 'is-active' : undefined}
+                aria-current={isWritingActive ? 'page' : undefined}
+              >
                 Writing
               </a>
               <a

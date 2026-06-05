@@ -11,6 +11,7 @@
 @import './tokens.css';   /* design tokens (the single source of custom properties) */
 @import './base.css';     /* reset, document defaults, layout primitives, global reduced-motion */
 @import './chrome.css';   /* reading-page header pill + footer */
+@import './writing.css';  /* writing index */
 @import './scene.css';    /* bare-page shell, scroll track, corner overlay, no-JS fallback */
 @import './hero.css';     /* the black-hole hero canvas + manifesto beats + cinematic chrome */
 @import './hud.css';      /* the final exploration HUD */

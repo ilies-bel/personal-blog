@@ -23,8 +23,27 @@ export interface ScrollState {
 
 type Listener = (s: ScrollState) => void;
 
-function clamp01(x: number): number {
+export function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+export function segment(globalProgress: number, start: number, end: number): number {
+  if (end === start) return globalProgress >= end ? 1 : 0;
+  return clamp01((globalProgress - start) / (end - start));
+}
+
+export function band(progress: number, start: number, end: number): number {
+  return progress >= start && progress <= end ? 1 : 0;
+}
+
+export function fadeInOut(
+  progress: number,
+  inStart: number,
+  inEnd: number,
+  outStart: number,
+  outEnd: number,
+): number {
+  return segment(progress, inStart, inEnd) * (1 - segment(progress, outStart, outEnd));
 }
 
 /**
@@ -34,7 +53,8 @@ function clamp01(x: number): number {
 export class ScrollTracker {
   private readonly listeners = new Set<Listener>();
   private state: ScrollState;
-  private rafPending = false;
+  private rafId: number | null = null;
+  private active = false;
   private readonly onScroll = (): void => this.schedule();
   private readonly onResize = (): void => this.schedule();
 
@@ -44,6 +64,7 @@ export class ScrollTracker {
 
   /** Begin listening to scroll/resize. Returns the current state immediately. */
   start(): ScrollState {
+    this.active = true;
     this.measure();
     window.addEventListener('scroll', this.onScroll, { passive: true });
     window.addEventListener('resize', this.onResize, { passive: true });
@@ -51,8 +72,13 @@ export class ScrollTracker {
   }
 
   stop(): void {
+    this.active = false;
     window.removeEventListener('scroll', this.onScroll);
     window.removeEventListener('resize', this.onResize);
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
   }
 
   subscribe(fn: Listener): () => void {
@@ -66,10 +92,10 @@ export class ScrollTracker {
   }
 
   private schedule(): void {
-    if (this.rafPending) return;
-    this.rafPending = true;
-    requestAnimationFrame(() => {
-      this.rafPending = false;
+    if (this.rafId !== null || !this.active) return;
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = null;
+      if (!this.active) return;
       this.measure();
     });
   }

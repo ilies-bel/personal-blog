@@ -100,41 +100,57 @@ body.bare.is-scrolled .overlay-blog {
   pointer-events: none;
   transition: opacity 0.5s var(--ease-out-quint);
 }
+.bh-overlay::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: min(58rem, 100vw);
+  height: min(40rem, 72vh);
+  background:
+    radial-gradient(80% 72% at 10% 86%,
+      rgba(0, 0, 0, 0.82) 0%,
+      rgba(0, 0, 0, 0.50) 38%,
+      rgba(0, 0, 0, 0.18) 62%,
+      transparent 100%);
+  opacity: 0.78;
+}
 .bh-root[data-exploring='true'] .bh-overlay,
 .bh-overlay[data-exploring='true'] {
   opacity: 0.28;
 }
 .bh-beat {
   position: absolute;
+  z-index: 1;
   left: clamp(1.25rem, 5vw, 5rem);
   right: clamp(1.25rem, 5vw, 5rem);
   bottom: clamp(2rem, 8vh, 5rem);
   max-width: min(40rem, 84vw);
-  transition: opacity 0.45s var(--ease-out-quint);
-  will-change: opacity;
+  will-change: opacity, transform;
 }
 
 /* Big line: both directions stacked in the same box, crossfaded by [data-active]. */
 .bh-beat-big {
   position: relative;
+  display: grid;
   margin: 0 0 1.1rem;
-  min-height: 1.08em;                    /* reserve the line box so the whisper doesn't jump on swap */
 }
 .bh-beat-line {
   display: block;
+  grid-area: 1 / 1;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: clamp(2rem, 6vw, 4rem);
   line-height: 1.04;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: var(--fg);
   text-wrap: balance;
   text-shadow: 0 0 26px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.7);
   opacity: 0;
   transform: translateY(0.18em);
-  transition: opacity 0.4s var(--ease-out-quint), transform 0.4s var(--ease-out-quint);
+  transition: opacity 0.18s linear, transform 0.18s var(--ease-out-quint);
 }
-.bh-beat-line--up { position: absolute; inset: 0; }
+.bh-beat-line--up { grid-area: 1 / 1; }
 .bh-beat-line[data-active='true'] {
   opacity: 1;
   transform: translateY(0);
@@ -151,15 +167,6 @@ body.bare.is-scrolled .overlay-blog {
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
-.bh-beat-state {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--highlight);
-}
-
 @media (max-width: 34rem) {
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
   .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
@@ -168,24 +175,47 @@ body.bare.is-scrolled .overlay-blog {
   .bh-overlay[data-exploring='true'] { opacity: 0 !important; }
 }
 
-/* A faint scroll hint, shown only at the very top, fades on first scroll. */
+/* A faint affordance, shown only at the very top, fades on first scroll. It
+   eases in once on first paint to catch the eye, then rests — no perpetual
+   pulse (motion is spent introducing the hint, not looping forever). */
 .bh-hint {
   position: fixed;
   left: 50%;
   bottom: 1.5rem;
   transform: translateX(-50%);
   z-index: 10;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--fg-faint);
   pointer-events: none;
-  animation: bh-hint-pulse 2.4s ease-in-out infinite;
+  opacity: 0.7;
+  animation: bh-hint-in 0.9s var(--ease-out-quint) both;
 }
-@keyframes bh-hint-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.85; }
+.bh-hint-label {
+  display: block;
+  line-height: 1;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+}
+.bh-hint-line {
+  display: block;
+  width: 1px;
+  height: 2.2rem;
+  background: linear-gradient(180deg, var(--fg-faint), transparent);
+  transform-origin: 50% 0;
+  animation: bh-hint-line 2.2s ease-in-out infinite;
+}
+@keyframes bh-hint-in {
+  from { opacity: 0; transform: translate(-50%, 0.4rem); }
+  to { opacity: 0.7; transform: translate(-50%, 0); }
+}
+@keyframes bh-hint-line {
+  0%, 100% { transform: scaleY(0.42); opacity: 0.45; }
+  45% { transform: scaleY(1); opacity: 0.95; }
 }
 
 /* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must

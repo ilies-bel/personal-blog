@@ -1,7 +1,6 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { HUD_NAV_BY_ID, type HudTargetId } from '../HudNavigation';
-import { CFG, lookOffsetX, lookOffsetY, tuneParticlesForDevice } from '../lib/config';
+import { CFG, lookOffsetX, lookOffsetY, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
@@ -9,6 +8,7 @@ import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
 import { buildStarfield, buildDistantStar } from './buildStarfield';
 import { buildWarp } from './buildWarp';
+import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
 import type { SceneHooks } from './types';
@@ -20,7 +20,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
   // --- renderer / scene / camera ---
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 1);
   renderer.toneMapping = THREE.NoToneMapping;
@@ -63,6 +63,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const warpMatSec = warpRig.matSec;
   const warpSeg = warpRig.seg;
   const warpSeg2 = warpRig.seg2;
+
+  // hyperspace streak rig: the nebula's own gas grains trail into Star Wars lanes
+  // during the dezoom out to the beginning dot (off outside that window).
+  const streakRig = buildStreak(scene, diskParticles, pixelRatio);
+  const streakUniforms = streakRig.uniforms;
+  const streakMat = streakRig.mat;
+  const streakSeg = streakRig.seg;
 
   const ringRig = buildRing(scene, pixelRatio);
   const ringUniforms = ringRig.uniforms; // updateLensUniforms() writes through this
@@ -149,11 +156,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       u.uHole.value = holeR;
       u.uAspect.value = aspect;
     }
+    streakUniforms.uAspect.value = aspect;
+    streakUniforms.uPixelRatio.value = pixelRatio;
   }
 
   function onResize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
     renderer.setSize(w, h);
     postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
     camera.aspect = w / h;
@@ -178,7 +188,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     mouseX = e.clientX / window.innerWidth - 0.5;
     mouseY = e.clientY / window.innerHeight - 0.5;
   };
-  window.addEventListener('pointermove', onPointerMove);
+  if (!reduced) window.addEventListener('pointermove', onPointerMove);
 
   const t0 = performance.now();
   let raf = 0;
@@ -195,6 +205,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let focusGlow = 0;
   // previous-frame stage for the gravity sim (more substeps on a fast scroll).
   let prevSimStage = 0;
+  // previous-frame stage for the hyperspace-streak flow direction (latched on a
+  // deadzone so sub-pixel jitter at rest never flips the lightspeed streak flow).
+  let prevStreakStage = 0;
+  let streakDir = 1;
 
   // --- supernova whiteout: a TIME-based flash envelope, decoupled from scroll ---
   // The old flash was a Gaussian in `morph` (scroll position) ~0.1 wide, so a fast
@@ -213,26 +227,34 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let novaDir = 1;
   const NOVA_TRIGGER = 0.5;  // breakout (where the legacy flash fired)
   const NOVA_ARM = 0.12;     // must move |morph-0.5| beyond this to re-arm
-  const NOVA_RISE = 0.12;    // s: dark → blinding peak
-  const NOVA_HOLD = 0.22;    // s: hold at peak white
-  const NOVA_DECAY = 1.2;    // s: cool-out, reveal the remnant
-  const NOVA_DUR = NOVA_RISE + NOVA_HOLD + NOVA_DECAY; // 1.54 s total
-  const NOVA_COOLDOWN = 900; // ms minimum between fires (anti-strobe backstop)
+  const NOVA_RISE = 0.08;    // s: dark → peak accent
+  const NOVA_HOLD = 0.08;    // s: brief peak, not a white loading screen
+  const NOVA_DECAY = 0.68;   // s: cool-out, reveal the remnant
+  const NOVA_DUR = NOVA_RISE + NOVA_HOLD + NOVA_DECAY;
+  const NOVA_COOLDOWN = 1200; // ms minimum between fires (anti-strobe backstop)
   let nebulaFlashStart = -1;
   let nebulaFlashArmed = true;
   let prevNebulaStage = 0;
   const NEBULA_FLASH_TRIGGER = 3.5;
   const NEBULA_FLASH_ARM = 0.18;
-  const NEBULA_FLASH_RISE = 0.08;
-  const NEBULA_FLASH_HOLD = 0.18;
-  const NEBULA_FLASH_DECAY = 1.55;
+  const NEBULA_FLASH_RISE = 0.06;
+  const NEBULA_FLASH_HOLD = 0.05;
+  const NEBULA_FLASH_DECAY = 0.62;
   const NEBULA_FLASH_DUR = NEBULA_FLASH_RISE + NEBULA_FLASH_HOLD + NEBULA_FLASH_DECAY;
-  const NEBULA_FLASH_COOLDOWN = 1200;
+  const NEBULA_FLASH_COOLDOWN = 1600;
   const frameLookTarget = new THREE.Vector3();
   const flashOrigin = new THREE.Vector3();
+  const onVisibilityChange = (): void => {
+    if (!document.hidden && !stopped && raf === 0) frame();
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   function frame(): void {
     if (stopped) return;
+    if (document.hidden) {
+      raf = 0;
+      return;
+    }
     raf = requestAnimationFrame(frame);
     const now = performance.now();
     const t = (now - t0) / 1000;
@@ -318,10 +340,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const nebulaFlashOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebulaFlash);
     if (typeof nebulaFlashOverride === 'number') nebulaFlash = Math.max(0, Math.min(1, nebulaFlashOverride));
 
-    const screenNova = Math.max(nova * 0.82, nebulaFlash);
-    const nebulaFlashOwnsScreen = nebulaFlash >= nova * 0.82;
+    const novaScreen = nova * 0.72;
+    const nebulaScreen = nebulaFlash * 0.62;
+    const screenNova = Math.max(novaScreen, nebulaScreen);
+    const nebulaFlashOwnsScreen = nebulaScreen >= novaScreen;
     novaPass.uniforms.uNova.value = screenNova;
-    novaPass.uniforms.uPeak.value = nebulaFlashOwnsScreen ? 0.985 : 0.88;
+    novaPass.uniforms.uPeak.value = nebulaFlashOwnsScreen ? 0.76 : 0.82;
     // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
     // so a capture script can inspect either variant without scrolling to trigger it.
     const flashDirOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flashDir);
@@ -511,14 +535,38 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskSecondary.visible = !look.gravityGone;   // no lensed disk ghost behind the star
     ringPts.visible = !look.gravityGone;          // no photon ring around the star
     starSecPts.visible = false;              // secondary lensed star image stays off
+
+    // --- hyperspace streaks: the nebula → beginning-dot jump to lightspeed ----
+    // The nebula's own gas grains trail into long radial Star Wars lanes during the
+    // dezoom out to the beginning dot. look.streak is the intensity hump over the
+    // window (0 elsewhere), so the streak rig is only present while it's hot. The
+    // trail DIRECTION (rushing OUT toward the dot vs pulling IN toward the nebula) is
+    // latched from the eased-stage velocity on a deadzone, so a fast scroll either
+    // way flows the lanes the matching way and a parked frame holds the last flow
+    // instead of stuttering (mirrors the supernova blast-direction latch).
+    const dStreakStage = stage - prevStreakStage;
+    if (Math.abs(dStreakStage) > 0.0006) streakDir = dStreakStage > 0 ? 1 : -1;
+    prevStreakStage = stage;
+    // DEBUG: window.__bhStreak pins the jump intensity (0..1) so a capture script
+    // can inspect the lightspeed lanes at a held frame (the rig is forced on).
+    const streakOverride = readDebugNumber(DEBUG_WINDOW_KEYS.streak);
+    const streakValue = typeof streakOverride === 'number' ? streakOverride : look.streak;
+    streakSeg.visible = streakValue > 0.001;
+    streakUniforms.uStreak.value = streakValue;
+    streakUniforms.uStreakDir.value = streakDir;
+    // HYPERSPACE gas recede: as the jump engages, dim the nebula gas so the streak
+    // LANES take over the frame (the gas dissolves into the lightspeed lines rather
+    // than the lanes sitting on a full-bright blob). Held to ~0.4 floor so the cloud
+    // still reads underneath the lanes, not pitch black. 1 (no-op) outside the jump.
+    const streakGasDim = 1 - 0.6 * streakValue;
     // The point-cloud red giant body renders at full base brightness; in the
     // yellow→red slot it simply appears under the swap flash (no ramp-in — its
     // gold→red look is driven by uYrMix/uYrFlash in the shader, not by emission).
     // Collapse cloud brightness (look.cloudBright): inside the collapse window it
     // brightens the converging infall (light pouring into the star) then fades the
     // cloud out as the mesh star forms — clean handoff. Exactly 1 outside the window.
-    diskMatPrimary.uniforms.uBright.value = look.baseBright * look.cloudBright * focusEmission;
-    diskMatSecondary.uniforms.uBright.value = look.baseBright * look.cloudBright * focusEmission;
+    diskMatPrimary.uniforms.uBright.value = look.baseBright * look.cloudBright * focusEmission * streakGasDim;
+    diskMatSecondary.uniforms.uBright.value = look.baseBright * look.cloudBright * focusEmission * streakGasDim;
     // Bloom + auto-exposure + grade + disk-saturation are all resolved by
     // lifecycle() (including the sun / red-giant / nebula branch overrides), so the
     // shell just assigns the finals. See lifecycle.ts for the per-beat reasoning
@@ -565,19 +613,22 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // than lifecycle state.
     const baseAz = THREE.MathUtils.degToRad(CFG.rotation);
     const idleSway = reduced ? 0 : Math.sin(t * 0.041 + 0.6) * 0.0025; // sub-degree drift
-    const azimuth = baseAz + look.introSweep + look.rotation + idleSway + mouseX * 0.04;
-    const yWobble = idleBob + -mouseY * 0.25;
+    const azimuth = baseAz + look.introSweep + look.rotation + idleSway + (reduced ? 0 : mouseX * 0.04);
+    const yWobble = idleBob + (reduced ? 0 : -mouseY * 0.25);
 
     camera.position.set(Math.sin(azimuth) * horiz, camY0 + yWobble, Math.cos(azimuth) * horiz);
     const redFrame =
-      smoothstep01((stage - 1.58) / 0.42) *
-      (1 - smoothstep01((stage - 2.86) / 0.34));
+      smoothstep01((stage - 1.44) / 0.22) *
+      (1 - smoothstep01((stage - 2.22) / 0.18));
+    const redWipeFrame =
+      smoothstep01((stage - 2.22) / 0.18) *
+      (1 - smoothstep01((stage - 2.72) / 0.14));
     const dyingFrame =
       smoothstep01((stage - 2.72) / 0.20) *
       (1 - smoothstep01((stage - 3.44) / 0.20));
     frameLookTarget.copy(lookTarget);
-    frameLookTarget.x += redFrame * -2.25 + dyingFrame * 0.72;
-    frameLookTarget.y += redFrame * 0.42 + dyingFrame * -0.18;
+    frameLookTarget.x += redFrame * -4.00 + redWipeFrame * -0.45 + dyingFrame * 0.72;
+    frameLookTarget.y += redFrame * -1.35 + redWipeFrame * 0.08 + dyingFrame * -0.18;
     camera.lookAt(frameLookTarget);
 
     flashOrigin.set(0, 0, 0).project(camera);
@@ -643,6 +694,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     warpMatSec.uniforms.uTime.value = ut;
     ringMat.uniforms.uTime.value = ut;
     gradePass.uniforms.uTime.value = ut;
+    if (streakSeg.visible) streakMat.uniforms.uTime.value = ut; // flow the lanes only while jumping
 
     // sun rig: animate the photosphere flow, corona streamers and loop jets only
     // while it is visible; keep the corona plane facing the camera (billboard).
@@ -672,6 +724,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     cancelAnimationFrame(raf);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
 
     // Each rig disposes its own geos + materials (and, for post, the composer +
     // bloom + grade material) — construction and teardown are now co-located in
@@ -681,6 +734,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     starRig.dispose();
     distantStarRig.dispose();
     warpRig.dispose();
+    streakRig.dispose();
     ringRig.dispose();
     sunRig.dispose();
     gravitySim.dispose();

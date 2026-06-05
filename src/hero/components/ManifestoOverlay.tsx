@@ -3,26 +3,9 @@
 // up = forward/tragic); the active one is chosen by scroll direction. Copy + the
 // timeline live in ../beats (shared with index.astro's SSR fallback).
 import { BEATS } from '../beats';
-import { SCROLL_DOWN, SCROLL_UP, BEAT_HOLD, BEAT_FADE, type BeatEdge } from '../lib/constants';
+import { SCROLL_DOWN, SCROLL_UP } from '../lib/constants';
+import { fadeInOut, segment } from '../scroll';
 import { useSceneState } from './SceneStateContext';
-
-function clamp01(value: number): number {
-  return value < 0 ? 0 : value > 1 ? 1 : value;
-}
-
-// Per-beat opacity: a trapezoid centred on `at` — ramp in, hold across a flat top,
-// ramp out — so neighbouring beats cross-dissolve. `edge` pins the open side so the
-// first/last beats never leave a dead band at the page extremes: 'leading' holds
-// full opacity before the centre (the opening black-hole beat sits at the very
-// top), 'trailing' holds it after (so the closing beat stays reachable at the end).
-function beatOpacity(progress: number, at: number, edge?: BeatEdge): number {
-  if (edge === 'leading' && progress <= at) return 1;
-  if (edge === 'trailing' && progress >= at) return 1;
-  const distance = Math.abs(progress - at);
-  if (distance <= BEAT_HOLD) return 1;
-  if (distance >= BEAT_HOLD + BEAT_FADE) return 0;
-  return clamp01((BEAT_HOLD + BEAT_FADE - distance) / BEAT_FADE);
-}
 
 export default function ManifestoOverlay() {
   const { progress, direction, reduced, explorationMode } = useSceneState();
@@ -33,15 +16,23 @@ export default function ManifestoOverlay() {
       style={{ opacity: explorationMode && !reduced ? 0 : undefined }}
     >
       {BEATS.map((beat, i) => {
-        // Under reduced motion every beat is shown (so all copy is reachable);
-        // otherwise the trapezoid fade reveals one beat at a time. The first and
-        // last beats pin their outer edge so nothing goes blank at progress 0/1.
-        const isLast = i === BEATS.length - 1;
-        const edge: BeatEdge | undefined = i === 0 ? 'leading' : isLast ? 'trailing' : undefined;
-        const opacity = reduced ? 1 : beatOpacity(progress, beat.at, edge);
-        const visible = opacity > 0.5;
+        // Under reduced motion every beat is shown (so all copy is reachable).
+        // Otherwise each line owns a non-overlapping explicit band: fade in, hold,
+        // fade out, then leave visual-only space before the next headline arrives.
+        const opacity = reduced
+          ? 1
+          : fadeInOut(progress, beat.text.inStart, beat.text.inEnd, beat.text.outStart, beat.text.outEnd);
+        const enter = reduced ? 1 : segment(progress, beat.text.inStart, beat.text.inEnd);
+        const exit = reduced ? 0 : segment(progress, beat.text.outStart, beat.text.outEnd);
+        const y = (1 - enter) * 12 - exit * 16;
+        const visible = opacity > 0.05;
         return (
-          <div className="bh-beat" key={i} style={{ opacity }} aria-hidden={!reduced && !visible}>
+          <div
+            className="bh-beat"
+            key={i}
+            style={reduced ? { opacity } : { opacity, transform: `translate3d(0, ${y}px, 0)` }}
+            aria-hidden={!reduced && !visible}
+          >
             {/* Big line: both directions rendered, crossfaded by `direction`.
                 Under reduced motion both are shown stacked (no crossfade). */}
             <h2 className="bh-beat-big">
@@ -60,8 +51,11 @@ export default function ManifestoOverlay() {
               </span>
             </h2>
 
+            {/* The lifecycle state names what's on screen — the canvas already
+                shows it, so it isn't rendered as visible chrome. Kept in the
+                a11y tree so a screen reader still gets the state per beat. */}
             <p className="bh-beat-whisper">
-              <span className="bh-beat-state">{beat.state}</span>
+              <span className="sr-only">{beat.state}. </span>
               {beat.whisper}
             </p>
           </div>

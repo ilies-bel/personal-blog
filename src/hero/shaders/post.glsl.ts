@@ -34,10 +34,13 @@ export const GradeShader = {
       col = mix(vec3(luma), col, uSat);
       // slight warm tint in the highlights
       col *= vec3(1.0 + uWarmth, 1.0, 1.0 - uWarmth*0.85);
-      // dark OLIVE tint of the background + halo falloff
+      // warm-GRAPHITE tint of the background + halo falloff. Red sits highest and
+      // blue is pulled DOWN (never green-above-red, which is what read as olive):
+      // the shadows go warm charcoal/bone, matching the engraving reference, not moss.
+      // (uOlive kept as the uniform name for back-compat; it now drives the warm grade.)
       float shW = 1.0 - smoothstep(0.0, 0.5, luma);          // weight in the shadows
-      col *= mix(vec3(1.0), vec3(1.02, 1.08, 0.55), uOlive*shW);
-      col += vec3(0.020, 0.024, 0.010) * uOlive;             // dark olive floor
+      col *= mix(vec3(1.0), vec3(1.06, 1.00, 0.82), uOlive*shW);
+      col += vec3(0.022, 0.018, 0.012) * uOlive;             // warm-graphite floor
       col += vec3(0.005);                                     // slight neutral floor
       // fine grain
       float g = hash(vUv*uResolution + fract(uTime)*97.0);
@@ -119,11 +122,11 @@ export const NovaShader = {
       float front = implode
         ? smoothstep((1.0 - uNova) * 1.4, (1.0 - uNova) * 1.4 + 0.45, d)
         : smoothstep(uNova * 1.4, uNova * 1.4 - 0.45, d);
-      // near the peak (top ~20% of the envelope) force the corners white too, so
-      // the bleach is genuinely edge-to-edge and the grade's vignette is overridden
-      // — identical at the peak for both directions, so the handoff matches.
-      float corner = smoothstep(0.80, 1.0, uNova);
-      float bleach = max(uNova * front, corner) * uPeak;
+      // Keep the flash radial and cinematic: bright around the origin/front, with
+      // the corners protected so the beat never reads as a flat loading whiteout.
+      float edgeGuard = smoothstep(1.12, 0.24, d);
+      float coreBloom = smoothstep(0.88, 1.0, uNova) * smoothstep(0.62, 0.0, d) * 0.18;
+      float bleach = max(uNova * front * edgeGuard, coreBloom) * uPeak;
       // TEMPERATURE.
       //  explode: blue-white when hot (high uNova) → warm amber as it cools.
       //  implode: time-reversed — gathers cool/amber, SNAPS blue-white at the peak

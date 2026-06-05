@@ -91,7 +91,6 @@ body.bare {
 body.bare .overlay-brand { display: none; }
 body.bare.about-page .overlay-brand { display: inline-flex; }
 body.bare.about-page .overlay-blog { display: none; }
-body.bare:not(.about-page) .overlay-blog { display: none; }
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page

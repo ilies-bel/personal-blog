@@ -18,7 +18,7 @@ const OUT = resolve(root, 'screenshots');
 
 // Pages to capture (relative to BASE). Override by passing args.
 const pages = process.argv.slice(2);
-const targets = pages.length ? pages : ['/', '/about', '/posts/why-astro-islands'];
+const targets = pages.length ? pages : ['/', '/writing', '/about', '/posts/why-astro-islands/'];
 
 const slug = (p) => (p === '/' ? 'home' : p.replace(/^\/+|\/+$/g, '').replace(/\//g, '-'));
 

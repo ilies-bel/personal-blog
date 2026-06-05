@@ -51,6 +51,7 @@ export function buildPostChain(
   const dispose = (): void => {
     composer.dispose();
     gradePass.material.dispose();
+    novaPass.material.dispose();
     bloom.dispose();
   };
 

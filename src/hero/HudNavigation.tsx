@@ -42,6 +42,7 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
     object: 'red giant',
     stage: 2.2,
     body: 'Notes on code, interfaces, tooling, and the systems around them.',
+    href: 'writing',
   },
   {
     id: 'rebirth',
@@ -70,6 +71,14 @@ export const HUD_NAV_BY_ID = HUD_NAV_ITEMS.reduce<Record<HudTargetId, HudNavItem
   acc[item.id] = item;
   return acc;
 }, {} as Record<HudTargetId, HudNavItem>);
+
+const WORK_REVEAL = {
+  index: '01 / 03',
+  label: 'Selected work',
+  title: 'Selected builds under pressure',
+  meta: 'Projects / interfaces / resilient systems',
+  body: HUD_NAV_BY_ID.collapse.body,
+};
 
 // Items in ascending `stage` order — the source list happens to already be sorted,
 // but the scroll-spy mapping below depends on it, so make that contract explicit
@@ -195,6 +204,21 @@ export default function HudNavigation({
           <span>{readoutItem.destination}</span>
         </p>
       )}
+
+      <aside className="hud-work-reveal" aria-hidden={!visible}>
+        <p className="hud-work-kicker">
+          <span>{WORK_REVEAL.label}</span>
+          <span>{WORK_REVEAL.index}</span>
+        </p>
+        <h2>{WORK_REVEAL.title}</h2>
+        <p className="hud-work-meta">{WORK_REVEAL.meta}</p>
+        <p className="hud-work-body">{WORK_REVEAL.body}</p>
+        <div className="hud-work-index" aria-hidden="true">
+          <span data-active="true" />
+          <span />
+          <span />
+        </div>
+      </aside>
 
       {selectedItem?.href && (
         <a className="hud-nav-panel-link hud-nav-inline-link" href={resolveHref(base, selectedItem.href)}>

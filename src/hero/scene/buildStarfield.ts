@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { starVertexShader, starFragmentShader, distantStarVertexShader, distantStarFragmentShader } from '../shaders/star.glsl';
+import type { Uniforms } from './types';
 
 export interface StarRig {
   pts: THREE.Points; // primary lensed starfield (frame toggles .visible)

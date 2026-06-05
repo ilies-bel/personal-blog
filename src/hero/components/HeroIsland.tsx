@@ -59,6 +59,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
   const [reduced, setReduced] = useState(false);
+  const [motionPreferenceVersion, setMotionPreferenceVersion] = useState(0);
   const [explorationMode, setExplorationMode] = useState(false);
   const [previewHudId, setPreviewHudId] = useState<HudTargetId | null>(null);
   const [selectedHudId, setSelectedHudId] = useState<HudTargetId | null>(() => {
@@ -76,6 +77,14 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
   // Whether the opening chrome (name + menu) is currently shown. Tracked in a ref
   // so the scroll callback only touches the DOM on an actual transition.
   const chromeVisibleRef = useRef(true);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = (): void => setMotionPreferenceVersion((version) => version + 1);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -174,7 +183,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
       // Leave the body in a clean state if the island unmounts mid-scroll.
       document.body.classList.remove(SCROLLED_BODY_CLASS);
     };
-  }, []);
+  }, [backdrop, backdropStage, motionPreferenceVersion]);
 
   const base = import.meta.env.BASE_URL ?? '/';
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the

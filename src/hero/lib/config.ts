@@ -76,7 +76,7 @@ export const CFG: Config = {
   grain: 0.16,
   warmth: 0.01,
   saturation: 0.38,
-  olive: 1.6,
+  olive: 1.3, // warm-graphite grade strength at the black hole (was olive-green 1.6)
   warp: 0.76,
   starBright: 3.6, // ref: 3.0
   starDensity: 5.2,
@@ -89,6 +89,17 @@ export const lookOffsetY = 0.16;
 export function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function tuneRenderPixelRatio(reduced = false): number {
+  if (typeof window === 'undefined') return 1;
+  const dpr = window.devicePixelRatio || 1;
+  const width = window.innerWidth;
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
+  if (reduced) return Math.min(dpr, 1.25);
+  if (isMobile) return Math.min(dpr, 1.4);
+  if (width < 1280) return Math.min(dpr, 1.6);
+  return Math.min(dpr, 1.85);
 }
 
 // Particle count tuned down for smaller / mobile devices.

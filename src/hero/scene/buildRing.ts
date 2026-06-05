@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { ringVertexShader, ringFragmentShader } from '../shaders/ring.glsl';
+import type { Uniforms } from './types';
 
 export interface RingRig {
   pts: THREE.Points; // the ring band (frame toggles .visible)

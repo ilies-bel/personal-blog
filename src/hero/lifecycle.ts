@@ -202,6 +202,12 @@ export interface StarState {
   /** final disk in-shader saturation (after sun/nebula overrides). uSat (disk). */
   diskSat: number;
 
+  // --- hyperspace streaks (nebula → beginning dot) ---
+  /** Star Wars "lightspeed jump" intensity (0..1) — the nebula's own particles
+   *  smear into radial starlines across the dezoom, zero elsewhere. uStreak on the
+   *  disk material. (The trail DIRECTION is latched in frame() from scroll velocity.) */
+  streak: number;
+
   // --- camera scale story ---
   /** dezoom distance factor (NEAR_FACTOR → 1 across the intro). */
   distFactor: number;
@@ -320,20 +326,24 @@ export function lifecycle(input: LifecycleInput): StarState {
   // different textures, so they DON'T crossfade co-located. Instead a subtle
   // light flash fires at SWAP_STAGE and the mesh hands off to a gold particle
   // sphere that grows + cools to the red giant.
-  const SWAP_STAGE = 2.7; // flash peak / mesh↔cloud crossover
+  const SWAP_STAGE = 2.74; // flash peak / mesh↔cloud crossover
   const inYRWindow = stage > 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot
-  const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.70 .. 3.5 → yellow mesh
-  const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.70 → particle body
+  const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.74 .. 3.5 → yellow mesh
+  const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.74 → particle body
 
   // subtle flash envelope (its own stage-space gaussian, separate from the
   // supernova flash which lives in morph space and is tied to stage 0→1).
   const YR_FLASH_SIGMA = 0.05;
   const yrFlash = inYRWindow ? Math.exp(-Math.pow((stage - SWAP_STAGE) / YR_FLASH_SIGMA, 2.0)) : 0;
 
-  // grow + colour curves (single monotonic smoothsteps of the falling stage;
-  // colour LEADS grow slightly so it cools then settles — "light leads size").
-  const yrGrow = smoothstep01((SWAP_STAGE - stage) / (SWAP_STAGE - 2.2)); // 0@2.70 → 1@2.20
-  const yrColor = smoothstep01((SWAP_STAGE + 0.02 - stage) / (SWAP_STAGE + 0.02 - 2.3)); // → 1@~2.30
+  // grow + colour curves. On scroll-down the red giant must HOLD as a composed
+  // sphere while its copy is readable, then shrink/cool into the yellow handoff
+  // only after the red text has left. The close-up transition can therefore use a
+  // full red sphere as the wipe instead of racing the copy.
+  const RED_EXIT_START = 2.56;
+  const RED_COLOR_EXIT_START = 2.60;
+  const yrGrow = 1 - smoothstep01((stage - RED_EXIT_START) / (SWAP_STAGE - RED_EXIT_START));
+  const yrColor = 1 - smoothstep01((stage - RED_COLOR_EXIT_START) / (SWAP_STAGE - RED_COLOR_EXIT_START));
 
   // During the gravitational collapse (stage 3.05..3.5) the CLOUD shows the
   // nebula particles falling inward, and the mesh star fades IN via starFormed as
@@ -516,7 +526,8 @@ export function lifecycle(input: LifecycleInput): StarState {
     const ZOOM_HERO = 0.56; // close at the hero BH → dist≈11 (BH fills the frame)
     const ZOOM_SEED = 2.6; // far at the seed     → dist≈52 (speck in a vast field)
     const ZOOM_BLAST = 2.0; // pulled back across the blast → dist≈40 (big remnant fits)
-    const ZOOM_OUT = 0.72; // close on the red giant so it exceeds the viewport
+    const ZOOM_RED_HOLD = 4.10; // composed red giant hold with room for lower-left copy
+    const ZOOM_RED_WIPE = 1.15; // close transition after red copy has faded
     // hero push-in eases out as the implosion gets underway (stage 0 → 0.18)
     const heroT = smoothstep01(stage / 0.18);
     // seed pull-back, IN SYNC with the world-space seed collapse (0.18 → 0.46)
@@ -525,28 +536,34 @@ export function lifecycle(input: LifecycleInput): StarState {
     // ease from the seed distance to the blast hold as the shell breaks out
     // (0.46 → 0.62), then keep it wide through the blast.
     const blastT = smoothstep01((stage - 0.46) / (0.62 - 0.46));
-    // grow back to resting only ABOVE the collapse window (stage 1.05 → 1.5), so the
-    // camera stays pulled WAY back across the whole surface-collapse/spike window
-    // (stage 0.5–1.05) — the finger-spikes reach ~10 units and would clip the frame
-    // at the resting distance, so they need the blast hold to stay framed.
-    const growT = easeOut(Math.min(Math.max((stage - 1.05) / 0.45, 0), 1));
+    // Above the collapse window, pull farther back into a stable, composed red-giant
+    // hold. Only after the red copy fades do we push in for a short texture wipe.
+    const growT = easeOut(Math.min(Math.max((stage - 1.05) / 0.50, 0), 1));
+    const redWipeT = smoothstep01((stage - 2.30) / (2.56 - 2.30));
     const heroZoom = ZOOM_HERO + (1.0 - ZOOM_HERO) * heroT; // 0.6 → 1.0
     const seedZoom = heroZoom + (ZOOM_SEED - heroZoom) * shrinkT; // → 2.6
     const blastZoom = seedZoom + (ZOOM_BLAST - seedZoom) * blastT; // 2.6 → 2.0
-    zoom = blastZoom + (ZOOM_OUT - blastZoom) * growT; // → 1.0
+    const redHoldZoom = blastZoom + (ZOOM_RED_HOLD - blastZoom) * growT;
+    zoom = redHoldZoom + (ZOOM_RED_WIPE - redHoldZoom) * redWipeT;
     // nebula: fly the camera DEEP INSIDE the cloud so the gas fills the whole frame
     // and wraps past every edge — immersed, like flying through it. (The old radial-
     // spoke problem that once forced us back outside is gone: the geometry is now a
     // fully-hashed, domain-warped volume with no radial banding, so from inside it
     // reads as turbulent gas all around, not spokes.) Ease in as the nebula arrives
-    // (3.1 → 3.7), hold immersed, then pull WAY back out toward the pale blue dot
-    // (4.3 → 4.7) so the dot reads as a tiny speck.
+    // (3.1 → 3.7), hold immersed, then make a HYPERSPACE JUMP out to the dot.
     const ZOOM_NEBULA = 0.72; // slower, calmer immersion; gas still fills the frame
     const ZOOM_DOT = 4.6; // pull far out so the beginning is nearly a single pixel
     const nebIn = smoothstep01((stage - 3.1) / 0.6);
-    const nebOut = smoothstep01((stage - 4.3) / 0.4);
     zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn; // ease into the cloud
-    zoom = zoom + (ZOOM_DOT - zoom) * nebOut; // ease back out for the dot
+    // The jump to the dot is an AGGRESSIVE dezoom (Star Wars lightspeed): instead
+    // of a gentle late ease, the pull-back ENGAGES as we leave the nebula (≈3.6)
+    // and ACCELERATES — a cubic ease-in (jumpRaw²·…) front-loads almost no motion
+    // then whips outward, so the camera's velocity peaks together with the streak
+    // field (lifecycle.streak), selling the punch into lightspeed. It tops out a
+    // touch before the dot (4.4) so the final speck rests still, not still flying.
+    const jumpRaw = Math.min(Math.max((stage - 3.6) / (4.4 - 3.6), 0), 1);
+    const jumpT = jumpRaw * jumpRaw * (3.0 - 2.0 * jumpRaw) * jumpRaw; // smoothstep × extra ease-in → whip
+    zoom = zoom + (ZOOM_DOT - zoom) * jumpT; // jump out for the dot
   }
   // --- detonation recoil: anticipation → kick → overshoot-settle -------------
   // A restrained three-act recoil on the blast (distance multiplier on top of the
@@ -583,6 +600,21 @@ export function lifecycle(input: LifecycleInput): StarState {
   // a faint blast-wave cue. Rides the same reveal-timed hump as the shake (peaks
   // as the whiteout clears, not behind it) so the breath is seen on the reveal.
   const fovKick = reduced ? 0 : 3.0 * shakeAmp;
+
+  // --- hyperspace streaks (nebula → beginning dot) --------------------------
+  // The dezoom from the immersed nebula (stage 3.5) out to the tiny pale-blue dot
+  // (stage 4.5) is staged as a Star Wars "jump to lightspeed": radial light
+  // streaks rush past a central vanishing point. The intensity is a hump over the
+  // window — it punches IN fast as we leave the gas (the jump engages), holds
+  // through the fastest stretch of the pull-back, then eases out as the dot
+  // arrives and the field settles to stillness. Zero (rig hidden) everywhere else.
+  // Reduced motion never jumps. Direction (in/out) is latched in frame() from the
+  // scroll velocity, since it needs history this pure function doesn't carry.
+  const STREAK_LO = 3.5; // immersed nebula (jump engages just as we leave it)
+  const STREAK_HI = 4.5; // beginning dot (smear gone before the dot snaps in)
+  const streakIn = smoothstep01((stage - STREAK_LO) / 0.32); // engage: fast ramp up
+  const streakOut = smoothstep01((stage - (STREAK_HI - 0.42)) / 0.42); // disengage near the dot
+  const streak = reduced ? 0 : streakIn * (1 - streakOut);
 
   // azimuth: a small extra sweep during the intro, then steady rotation.
   const introSweep = reduced ? 0 : (1 - intro) * 0.45; // eases out as we settle
@@ -630,6 +662,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     gradeSat,
     grain,
     diskSat,
+    streak,
     distFactor,
     zoom,
     novaKick,

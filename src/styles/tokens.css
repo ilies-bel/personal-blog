@@ -25,6 +25,9 @@
 
   --max: 46rem;                          /* readable measure for prose / lists (.measure) */
   --gutter: clamp(1.5rem, 5vw, 5rem);    /* full-bleed edge gutters */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-pill: 999px;
 
   /* Type stacks (faces in fonts.css). One sans drives display + body — weight is
      the only difference — so --font-display and --font-sans point at the same stack. */
