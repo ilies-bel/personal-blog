@@ -1,0 +1,139 @@
+// Accretion-disk GPU-particle rig (1.2M points; two lensed images share one geometry).
+import * as THREE from 'three';
+import { CFG } from '../lib/config';
+import { simDimensions } from '../gravitySim';
+import { diskVertexShader, diskFragmentShader } from '../shaders/disk.glsl';
+import type { Uniforms } from './types';
+
+export interface DiskRig {
+  primary: THREE.ShaderMaterial; // bright crescent (primary lensed image)
+  secondary: THREE.ShaderMaterial; // lower grainy band (secondary image, sign -1)
+  primaryPts: THREE.Points; // the primary Points object (frame toggles .visible)
+  secondaryPts: THREE.Points; // the secondary Points object (.visible too)
+  geo: THREE.BufferGeometry;
+  uniforms: Uniforms; // shared uniform block (primary's; secondary clones it)
+  // per-particle identity arrays — handed to the GPGPU collapse sim so its seed
+  // pass reproduces the exact analytic nebula placement for these same particles.
+  aSeed: Float32Array;
+  aU: Float32Array;
+  aPhase: Float32Array;
+  count: number;
+  dispose: () => void;
+}
+export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number): DiskRig {
+  const N = Math.floor(particleCount);
+  const aU = new Float32Array(N);
+  const aPhase = new Float32Array(N);
+  const aThickN = new Float32Array(N);
+  const aSeed = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    aU[i] = Math.random();
+    aPhase[i] = Math.random() * Math.PI * 2.0;
+    const th = Math.random() * 2.0 - 1.0;
+    aThickN[i] = th * th * th;
+    aSeed[i] = Math.random();
+  }
+  // per-particle texel UV into the GPGPU collapse sim's position texture. Maps
+  // vertex index i → texel-center UV in the (width × height) sim grid, matching
+  // buildGravitySim's row-major seed layout. (No-op unless uSimBlend > 0.)
+  const sim = simDimensions(N);
+  const aSimUV = new Float32Array(N * 2);
+  for (let i = 0; i < N; i++) {
+    aSimUV[i * 2 + 0] = ((i % sim.width) + 0.5) / sim.width;
+    aSimUV[i * 2 + 1] = (Math.floor(i / sim.width) + 0.5) / sim.height;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('aU', new THREE.BufferAttribute(aU, 1));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(aPhase, 1));
+  geo.setAttribute('aThickN', new THREE.BufferAttribute(aThickN, 1));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
+  geo.setAttribute('aSimUV', new THREE.BufferAttribute(aSimUV, 2));
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e4);
+
+  const uniforms: Uniforms = {
+    uTime: { value: 0 },
+    uOmega0: { value: CFG.omega0 },
+    uSpinDir: { value: CFG.spinDir },
+    uBetaScale: { value: CFG.betaScale },
+    uBeamExp: { value: CFG.beamExp },
+    uDoppler: { value: CFG.doppler },
+    uRin: { value: CFG.rIn },
+    uRout: { value: CFG.rOut },
+    uThick: { value: CFG.diskThickness },
+    uPixelRatio: { value: pixelRatio },
+    uThetaE: { value: 0.1 },
+    uShadowR: { value: 0.1 },
+    uAspect: { value: 1.0 },
+    uImageSign: { value: 1.0 },
+    uSat: { value: CFG.saturation },
+    uSec: { value: CFG.secScale },
+    uSecOffsetX: { value: 0 }, // dev: nudge secondary band L/R (NDC-aspect units)
+    uSecOffsetY: { value: 0 }, // dev: nudge secondary band up/down to close the seam
+    uHole: { value: 0.12 },
+    uVertAsym: { value: CFG.vertAsym },
+    uHorizAsym: { value: CFG.horizAsym },
+    uDistrib: { value: CFG.diskDistrib },
+    uBright: { value: 1.25 }, // disk brightness multiplier (brightened)
+    uMorph: { value: 0 }, // transition 1: reverse supernova (scroll-driven)
+    uFlash: { value: 0 }, // central burst envelope (peaks mid-morph)
+    uCollapse: { value: 0 }, // red-giant surface collapse (0 sphere → 1 point)
+    uGiant: { value: 0 }, // transition 2: remnant cloud → sun
+    uGiantR: { value: 4.2 }, // sun radius (world units) — a contained orb
+    uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
+    // --- Later lifecycle transitions (scroll-driven 0..1 each). The scroll
+    //     timeline drives these per frame; the shader body consumes them to morph
+    //     the star onward. They sit on the timeline AFTER the red giant:
+    //       uYellow: red giant → yellow (sun-like) star   (transition 3)
+    //       uNebula: yellow star → nebula                 (transition 4)
+    //       uDot:    nebula → pale blue dot               (transition 5)
+    uYellow: { value: 0 },
+    uNebula: { value: 0 },
+    uDot: { value: 0 },
+    uNebLight: { value: 1 }, // nebula ambient+depth light model strength (0 flat → 1 full)
+    // --- yellow star → red giant flash-swap (transition 3, scroll 3→2). These
+    //     drive ONLY the point-cloud's gold→red sphere during the yellow⇄red
+    //     slot; all three default to a no-op so every other stage is unchanged.
+    uYrFlash: { value: 0 }, // brief swap flash: whitens the freshly-spawned gold sphere
+    uYrMix: { value: 1 }, // 0 = smooth gold sphere, 1 = granular red giant
+    uYrGrow: { value: 1 }, // 0 = yellow radius (×0.35), 1 = red-giant radius
+    // --- GPGPU gravitational collapse (nebula → yellow star) ---
+    uSimPos: { value: null }, // sim position texture (set per-frame from the sim)
+    uSimBlend: { value: 0 }, // 0 = analytic nebula, 1 = fully sim-driven collapse
+  };
+
+  const primary = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: diskVertexShader,
+    fragmentShader: diskFragmentShader,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const secondary = primary.clone();
+  secondary.uniforms = THREE.UniformsUtils.clone(uniforms);
+  secondary.uniforms.uImageSign.value = -1.0;
+
+  const primaryPts = new THREE.Points(geo, primary);
+  const secondaryPts = new THREE.Points(geo, secondary);
+  primaryPts.frustumCulled = false;
+  secondaryPts.frustumCulled = false;
+  scene.add(primaryPts);
+  scene.add(secondaryPts);
+
+  const dispose = (): void => {
+    scene.remove(primaryPts);
+    scene.remove(secondaryPts);
+    geo.dispose();
+    primary.dispose();
+    secondary.dispose();
+  };
+
+  return { primary, secondary, primaryPts, secondaryPts, geo, uniforms, aSeed, aU, aPhase, count: N, dispose };
+}
+
+// The lensed background starfield: a spherical shell of points bent by the same
+// gravitational lens as the disk. PRIMARY (uImageSign +1) is the only visible
+// image; the SECONDARY (sign -1) image piles into a hot caustic point and is
+// kept hidden, but built so the lensing math has its counterpart available.
