@@ -1,0 +1,304 @@
+// Sun / red-giant mesh-rig shaders (photosphere, glow, corona, star dome, loops).
+// Extracted verbatim from BlackHole.tsx — GLSL is byte-identical.
+
+export const SUN_NOISE_GLSL = /* glsl */ `
+vec3 mod289(vec3 x){return x - floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x - floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i  = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute( permute( permute(
+            i.z + vec4(0.0, i1.z, i2.z, 1.0))
+          + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+          + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0)*2.0 + 1.0;
+  vec4 s1 = floor(b1)*2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m*m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+float fbm(vec3 p){
+  float v = 0.0; float a = 0.5;
+  for(int i=0;i<6;i++){ v += a*snoise(p); p*=2.02; a*=0.5; }
+  return v;
+}
+`;
+
+// --- photosphere mesh (high-contrast mottled gold surface) ---
+
+export const sunSurfaceVert = /* glsl */ `
+  varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
+  void main(){
+    vObj = normalize(position);
+    vViewN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position,1.0);
+    vViewPos = mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }`;
+
+export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
+  uniform float uTime;
+  // uRed ∈ [0,1]: 0 = yellow star (gold, bright), 1 = red giant (deep red, dim).
+  // Drives the photosphere from a hot gold palette toward a cool, matte, deep-red
+  // one and pulls overall brightness down — the COOLING half of the inflation.
+  uniform float uRed;
+  // uBlue ∈ [0,1]: 0 = settled yellow/gold star, 1 = HOT young blue-white star.
+  // "Mass induces heat": while the star is still forming/small it is blue-white
+  // hot; as it grows to full mass it cools to yellow. Driven by (1 - starFormed).
+  uniform float uBlue;
+  varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
+  void main(){
+    vec3 p = vObj * 2.4;
+    float t = uTime * 0.05;
+    vec3 q;
+    q.x = fbm(p + vec3(0.0,0.0,t));
+    q.y = fbm(p + vec3(5.2,1.3,2.7) + t);
+    q.z = fbm(p + vec3(1.7,9.2,3.4) - t);
+    float n = fbm(p + 3.2*q + t*0.5);
+    float m = clamp(n*0.5+0.5, 0.0, 1.0);
+
+    // gold (yellow-star) photosphere ramp
+    vec3 g0 = vec3(0.24,0.035,0.0);
+    vec3 g1 = vec3(0.72,0.17,0.01);
+    vec3 g2 = vec3(1.00,0.44,0.06);
+    vec3 g3 = vec3(1.00,0.64,0.16);
+    vec3 g4 = vec3(1.00,0.84,0.40);
+    // red-giant ramp: deep maroon → blood red → red-orange (never gold/white)
+    vec3 r0 = vec3(0.10,0.008,0.003);
+    vec3 r1 = vec3(0.42,0.04,0.01);
+    vec3 r2 = vec3(0.72,0.11,0.02);
+    vec3 r3 = vec3(0.90,0.22,0.04);
+    vec3 r4 = vec3(1.00,0.34,0.08);
+    // cross-fade each stop from gold → red as uRed rises (linear recolour)
+    vec3 c0 = mix(g0, r0, uRed);
+    vec3 c1 = mix(g1, r1, uRed);
+    vec3 c2 = mix(g2, r2, uRed);
+    vec3 c3 = mix(g3, r3, uRed);
+    vec3 c4 = mix(g4, r4, uRed);
+
+    vec3 col = c0;
+    col = mix(col, c1, smoothstep(0.14,0.40,m));
+    col = mix(col, c2, smoothstep(0.34,0.58,m));
+    col = mix(col, c3, smoothstep(0.55,0.78,m));
+    col = mix(col, c4, smoothstep(0.80,0.96,m));
+
+    float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
+    float chMask = smoothstep(0.12, -0.05, ch);
+    col = mix(col, mix(vec3(0.20,0.030,0.0), vec3(0.08,0.006,0.0), uRed), chMask*0.55);
+
+    float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.45,0.2,m);
+    col = mix(col, vec3(0.06,0.01,0.0), spot*0.6);
+
+    float gran = fbm(p*7.0 + t*1.0);
+    col *= 0.86 + 0.26*(gran*0.5+0.5);
+
+    // bright active-region speckle fades out toward the (quiet) red giant
+    float ar = smoothstep(0.88, 0.99, m) * (1.0 - 0.85*uRed);
+    col += ar * vec3(0.5,0.28,0.07);
+
+    vec3 vd = normalize(-vViewPos);
+    float fres = 1.0 - max(dot(vd, vViewN), 0.0);
+    float limb = pow(fres, 2.0);
+    // gold limb → dusky red limb; weaken it for the red giant
+    vec3 limbCol = mix(vec3(1.0,0.74,0.30), vec3(0.78,0.18,0.04), uRed);
+    col = mix(col, limbCol, limb*mix(0.72, 0.5, uRed));
+    col += limb * mix(vec3(0.6,0.32,0.08), vec3(0.26,0.05,0.01), uRed);
+
+    // overall luminance: bright gold sun → dim matte red giant (light leads size)
+    col *= mix(1.15, 0.5, uRed);
+
+    // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
+    // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
+    // the same surface field m, and lerp gold->blue-white by uBlue. Cools to the
+    // gold ramp above as it grows (uBlue->0). No-op for the settled yellow sun.
+    vec3 b0 = vec3(0.06, 0.12, 0.30);  // cool deep blue (umbral)
+    vec3 b1 = vec3(0.18, 0.34, 0.72);  // mid blue
+    vec3 b2 = vec3(0.42, 0.62, 0.95);  // bright azure
+    vec3 b3 = vec3(0.72, 0.86, 1.00);  // pale blue-white
+    vec3 b4 = vec3(0.92, 0.97, 1.00);  // hot white core
+    vec3 bcol = b0;
+    bcol = mix(bcol, b1, smoothstep(0.14,0.40,m));
+    bcol = mix(bcol, b2, smoothstep(0.34,0.58,m));
+    bcol = mix(bcol, b3, smoothstep(0.55,0.78,m));
+    bcol = mix(bcol, b4, smoothstep(0.80,0.96,m));
+    bcol += limb * vec3(0.30, 0.45, 0.70);   // cool limb glow
+    bcol *= 1.25;                             // young star is luminous
+    col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+
+// --- inner chromosphere glow (BackSide additive shell) ---
+
+export const sunGlowVert = /* glsl */ `
+  varying vec3 vN; varying vec3 vP;
+  void main(){ vN=normalize(normalMatrix*normal);
+    vec4 mv=modelViewMatrix*vec4(position,1.0); vP=mv.xyz;
+    gl_Position=projectionMatrix*mv; }`;
+
+export const sunGlowFrag = /* glsl */ `
+  uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
+  void main(){ vec3 vd=normalize(-vP);
+    float i=pow(1.0-max(dot(vd,vN),0.0), 2.2);
+    gl_FragColor=vec4(uColor*i*1.6, 1.0); }`;
+
+// --- soft corona haze (camera-facing additive billboard) ---
+
+export const sunCoronaVert = /* glsl */ `
+  varying vec2 vUv; void main(){ vUv=uv;
+    gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
+
+export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
+  uniform float uTime; uniform float uDiskFrac; varying vec2 vUv;
+  // uRed ∈ [0,1]: redden + fade the corona as the yellow star inflates into the
+  // (magnetically quiet, coronae-poor) red giant. uDiskFrac is updated per frame
+  // so the halo tracks the growing disc.
+  uniform float uRed;
+  // uFade ∈ [0,1]: overall corona presence. Driven to 0 WHILE the star is growing
+  // (the corona/atmosphere only blooms AFTER the star is fully sized) → 1 once full.
+  uniform float uFade;
+  void main(){
+    vec2 pp = (vUv-0.5)*2.0;
+    float r = length(pp);
+    float a = atan(pp.y, pp.x);
+    float df = uDiskFrac;
+    float halo = exp(-max(r-df,0.0)*7.0);
+    float st = fbm(vec3(cos(a)*0.8, sin(a)*0.8, uTime*0.02));
+    st = st*0.5+0.5;
+    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*2.0);
+    float corona = halo*0.50 + streamer*0.22;
+    corona *= smoothstep(df-0.02, df+0.04, r);
+    corona *= smoothstep(1.0, df+0.05, r);
+    vec3 c = mix(vec3(1.0,0.56,0.16), vec3(1.0,0.78,0.38), st*0.7);
+    c = mix(c, vec3(0.85,0.20,0.05), uRed);          // gold corona → dim red haze
+    gl_FragColor = vec4(c*corona*0.6*mix(1.0, 0.35, uRed)*uFade, 1.0);
+  }`;
+
+// --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
+// Unlike the lensed starfield (which warps around the dead black hole and draws
+// with depthTest OFF so it bleeds through the opaque sun), this is a simple
+// far-away dome of twinkling stars rendered with real depth testing, so the
+// solid photosphere occludes the stars behind it. It only exists for the yellow
+// stage and rides inside the sun rig group, so it shows/hides with the sun.
+// Base brightness of the shared star backdrop, tuned to read at the bright yellow-
+// star grade. The render loop scales it by s.starBackBright so the same field also
+// survives the red giant's dimmer grade (the two states share one backdrop).
+
+export const sunStarVert = /* glsl */ `
+  attribute float aSeed;
+  attribute float aMag;            // 0..1 magnitude → size + base brightness
+  uniform float uTime, uPixelRatio, uOpacity, uBright;
+  varying float vB;
+  varying float vTint;
+  void main(){
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    // slow, per-star twinkle (a few stars shimmer, most hold steady)
+    float tw = 0.78 + 0.22 * sin(uTime * (0.4 + 0.9*aSeed) + aSeed * 39.0);
+    // brighter, larger stars are rarer (aMag near 1). The overall scale (uBright)
+    // is pushed up so the points survive the tone-map + olive grade + vignette.
+    float lum = mix(0.55, 2.4, aMag*aMag);
+    vB = lum * tw * uOpacity * uBright;
+    vTint = fract(aSeed * 17.0);   // 0..1 → cool/neutral/warm star colour
+    // size scales with magnitude; the dome sits ~640u out, so the world→pixel
+    // factor keeps stars as crisp pinpoints with a few larger standouts.
+    float dist = -mv.z;
+    gl_PointSize = clamp(uPixelRatio * (1.3 + 4.5*aMag*aMag) * (640.0/dist), 1.0, 6.0);
+  }
+`;
+
+export const sunStarFrag = /* glsl */ `
+  precision highp float;
+  varying float vB;
+  varying float vTint;
+  void main(){
+    vec2 c = gl_PointCoord - 0.5;
+    float d = length(c);
+    if(d > 0.5) discard;
+    float a = smoothstep(0.5, 0.0, d);
+    // subtle stellar colour: cool blue-white → neutral → warm gold
+    vec3 cool = vec3(0.80, 0.88, 1.00);
+    vec3 warm = vec3(1.00, 0.92, 0.78);
+    vec3 col = mix(cool, warm, smoothstep(0.35, 0.85, vTint));
+    gl_FragColor = vec4(col * vB * a, a);
+  }
+`;
+
+// --- coronal loops / prominences / footpoints (animated Points) ---
+
+export const sunLoopVert = /* glsl */ `
+  attribute vec3 aColor; attribute float aSize; attribute float aSeed;
+  attribute float aU; attribute float aBright;
+  attribute vec3 aSeedPos; attribute float aLifeOff; attribute float aLifePer;
+  attribute float aOn; attribute float aSweep; attribute float aSeq;
+  uniform float uPix; uniform float uTime; uniform float uPS;
+  varying vec3 vCol; varying float vB; varying float vHot;
+  void main(){
+    vCol = aColor;
+    float phase = fract(uTime/aLifePer + aLifeOff);
+    float a     = phase / aOn;                       // 0..1 across active window
+    float inWin = step(phase, aOn);
+
+    // arches fire in sequence (lowest first): this arch begins at aSeq and its
+    // jet whips fast from one foot to the other like a fountain stream A -> B.
+    float JET   = 0.12;                              // per-arch crossing time (fast)
+    float la    = (a - aSeq) / JET;                  // local jet progress for this arch
+    float started = step(aSeq, a);
+    float d     = la - aSweep;                       // >0 once the jet head passed this particle
+    float emerge= smoothstep(0.0, 0.10, d) * started;
+    float fade  = 1.0 - smoothstep(0.80, 1.0, a);    // whole flare cools at the very end
+    float flash = exp(-pow(max(d,0.0)/0.05, 2.0)) * step(0.0,d) * started * inWin * fade;
+
+    float grow  = emerge * (1.0 + 0.08*smoothstep(0.5,1.0,a));   // seed -> final
+    vec3 wp     = mix(aSeedPos, position, clamp(grow, 0.0, 1.06));
+
+    float flick = 0.85 + 0.15*sin(uTime*3.0 + aSeed*6.2831);
+    vB   = aBright*flick*emerge*fade*inWin + 1.7*flash;
+    vHot = flash;
+
+    vec4 mv = modelViewMatrix*vec4(wp,1.0);
+    gl_PointSize = aSize*uPix*(uPS/-mv.z) * (0.5 + 0.5*emerge + 0.9*flash);
+    gl_Position = projectionMatrix*mv;
+  }`;
+
+export const sunLoopFrag = /* glsl */ `
+  varying vec3 vCol; varying float vB; varying float vHot;
+  // uFade ∈ [0,1]: dims the loops/prominences toward the (quiet) red giant.
+  uniform float uFade;
+  void main(){
+    float d = length(gl_PointCoord-0.5);
+    float a = smoothstep(0.5,0.0,d);
+    a = pow(a,1.25);              // soft core -> overlapping points form a line
+    vec3 col = mix(vCol, vec3(1.0,0.96,0.86), clamp(vHot,0.0,0.85));  // white-hot leading edge
+    gl_FragColor = vec4(col*a*vB*1.3*uFade, a*uFade);
+  }`;
