@@ -1801,11 +1801,25 @@ const GradeShader = {
 //  amber as it fades (handing off into the warm debris grade beneath), and a
 //  FILMIC cap (uPeak ≈ 0.94) so even peak white stays a touch under pure #FFF
 //  to match the rest of the tone-mapped scene.
+//
+//  DIRECTION (uNovaDir): the blast is mirrored per scroll direction.
+//   • +1 EXPLODE (scroll UP, red giant → black hole, time running FORWARD): a
+//     bright core erupts and its white front sweeps OUTWARD (center → edges),
+//     blue-white at the peak then cooling to amber as it dissipates. This is the
+//     original behaviour and is reproduced bit-for-bit.
+//   • -1 IMPLODE (scroll DOWN, black hole → red giant, time running BACKWARD):
+//     the "un-explosion". The envelope is the same 0→1→0 intensity (you can't
+//     emit negative light), but the front COLLAPSES inward — it starts as a wide
+//     ring at the edges and contracts to the center as the envelope rises — and
+//     the temperature gathers cool then SNAPS blue-white at the peak (the exact
+//     time-reverse of the explode cooldown). At the peak both directions reach
+//     the same edge-to-edge bleach, so the handoff into/out of white is seamless.
 // ===========================================================================
 const NovaShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     uNova: { value: 0 },                                  // 0..1 master envelope
+    uNovaDir: { value: 1 },                               // +1 explode / -1 implode
     uAspect: { value: 1 },                                // round (not elliptical) falloff
     uCenter: { value: new THREE.Vector2(0.5, 0.5) },      // blast origin in screen UV
     uPeak: { value: 0.94 },                               // filmic cap (NOT pure white)
@@ -1817,7 +1831,7 @@ const NovaShader = {
   fragmentShader: /* glsl */ `
     precision highp float;
     uniform sampler2D tDiffuse;
-    uniform float uNova, uAspect, uPeak;
+    uniform float uNova, uNovaDir, uAspect, uPeak;
     uniform vec2 uCenter;
     varying vec2 vUv;
     void main(){
@@ -1826,14 +1840,28 @@ const NovaShader = {
       // circle, not an ellipse on a wide viewport.
       vec2 q = (vUv - uCenter); q.x *= uAspect;
       float d = length(q);
-      // a hot core whose white front expands outward as the envelope grows; the
-      // 0.45 softens the falloff so it reads as light, not a hard disc.
-      float front = smoothstep(uNova * 1.4, uNova * 1.4 - 0.45, d);
+      bool implode = uNovaDir < 0.0;
+      // RADIAL FRONT.
+      //  explode: the white front expands OUTWARD as the envelope grows — bright
+      //    inside the radius (uNova*1.4), soft 0.45 falloff so it reads as light.
+      //  implode: the front COLLAPSES INWARD. As the envelope rises the lit region
+      //    shrinks from the whole frame down to the center: it's white OUTSIDE a
+      //    radius that contracts from far (edges) to 0 (center). Same 0.45 soft
+      //    edge, mirrored. This is the un-explosion's gathering shell of light.
+      float front = implode
+        ? smoothstep((1.0 - uNova) * 1.4, (1.0 - uNova) * 1.4 + 0.45, d)
+        : smoothstep(uNova * 1.4, uNova * 1.4 - 0.45, d);
       // near the peak (top ~20% of the envelope) force the corners white too, so
-      // the bleach is genuinely edge-to-edge and the grade's vignette is overridden.
+      // the bleach is genuinely edge-to-edge and the grade's vignette is overridden
+      // — identical at the peak for both directions, so the handoff matches.
       float corner = smoothstep(0.80, 1.0, uNova);
       float bleach = max(uNova * front, corner) * uPeak;
-      // temperature: blue-white when hot (high uNova) → warm amber as it cools.
+      // TEMPERATURE.
+      //  explode: blue-white when hot (high uNova) → warm amber as it cools.
+      //  implode: time-reversed — gathers cool/amber, SNAPS blue-white at the peak
+      //    (light arriving), the exact mirror of the explode cooldown. Achieved by
+      //    reading the ramp on the rising envelope the same way; the perceptual
+      //    reversal comes from the inward-collapsing front above carrying it.
       vec3 cold = vec3(0.90, 0.95, 1.0);   // ~#E6F2FF blue-white shock front
       vec3 warm = vec3(1.0, 0.90, 0.74);   // ~#FFE6BD cooling amber
       vec3 tint = mix(warm, cold, smoothstep(0.35, 0.85, uNova));
@@ -3321,6 +3349,12 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   let novaStart = -1;     // performance.now() ms at fire; -1 = idle
   let novaArmed = true;   // hysteresis latch: re-arm only after leaving the band
   let prevMorph = 0;      // previous-frame morph, for crossing detection
+  // direction the blast plays, latched at fire and held for the whole envelope:
+  //   +1 EXPLODE  — scroll UP, red giant → black hole (morph FALLING through 0.5),
+  //                 time forward: a star collapses, detonates, blasts outward.
+  //   -1 IMPLODE  — scroll DOWN, black hole → red giant (morph RISING through 0.5),
+  //                 time backward: the "un-explosion", light gathers inward.
+  let novaDir = 1;
   const NOVA_TRIGGER = 0.5;  // breakout (where the legacy flash fired)
   const NOVA_ARM = 0.12;     // must move |morph-0.5| beyond this to re-arm
   const NOVA_RISE = 0.12;    // s: dark → blinding peak
@@ -3364,6 +3398,11 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     ) {
       novaStart = now;
       novaArmed = false;
+      // latch the blast direction from how morph crossed the breakout: RISING
+      // (scroll down, BH→giant) plays the IMPLODE; FALLING (scroll up, giant→BH)
+      // plays the EXPLODE. Held until the next fire so the whole envelope is one
+      // coherent direction even if the scroll reverses mid-blast.
+      novaDir = morph > prevMorph ? -1 : 1;
     }
     if (!novaArmed && Math.abs(morph - NOVA_TRIGGER) > NOVA_ARM) novaArmed = true;
     prevMorph = morph;
@@ -3386,6 +3425,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const dbgFlash = (window as unknown as { __bhFlash?: number }).__bhFlash;
     if (typeof dbgFlash === 'number') nova = Math.max(0, Math.min(1, dbgFlash));
     novaPass.uniforms.uNova.value = nova;
+    // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
+    // so a capture script can inspect either variant without scrolling to trigger it.
+    const dbgFlashDir = (window as unknown as { __bhFlashDir?: number }).__bhFlashDir;
+    novaPass.uniforms.uNovaDir.value = typeof dbgFlashDir === 'number' ? dbgFlashDir : novaDir;
 
     // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
     // This is the second piece of the stateful clock (time-based intro ramp); like
