@@ -1,11 +1,11 @@
 ---
 import BaseHead from '../components/BaseHead.astro';
 import { SITE_TITLE, SITE_LANG, SOCIALS } from '../consts';
-// Geist powers the whole site: the display/body sans and the instrument-readout
-// mono (labels, dates, tags). Self-hosted + bundled by Astro — no render-blocking
-// CDN request. Applied sitewide via --font-sans / --font-mono in global.css.
-import '@fontsource-variable/geist';
-import '@fontsource-variable/geist-mono';
+// The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
+// (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
+// Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
+// live in fonts.css; they're applied sitewide via the --font-* tokens in global.css.
+import '../styles/fonts.css';
 import '../styles/global.css';
 
 interface Props {
@@ -19,10 +19,16 @@ interface Props {
   // only the fixed corner overlay: brand top-left, the blog micro-nav top-right.
   // Used by the home page, whose whole canvas is the scroll-scrubbed scene.
   bare?: boolean;
+  // Optional extra class on <body>. Lets a bare page (e.g. About) opt into its
+  // own chrome variant — see body.bare.about-page in global.css, which shows the
+  // top-left wordmark and hides the home-only micro-nav so Close can own the
+  // top-right corner.
+  bodyClass?: string;
 }
 
 const props = Astro.props;
-const { bare = false } = props;
+const { bare = false, bodyClass } = props;
+const bodyClasses = [bare ? 'bare' : null, bodyClass].filter(Boolean).join(' ') || undefined;
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 const year = new Date().getFullYear();
@@ -40,7 +46,7 @@ const isActive = (p: string) => norm(href(p)) === path;
   <head>
     <BaseHead {...props} />
   </head>
-  <body class={bare ? 'bare' : undefined}>
+  <body class={bodyClasses}>
     {
       bare ? (
         <Fragment>

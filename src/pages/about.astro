@@ -1,39 +1,68 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import BlackHole from '../hero/BlackHole.tsx';
 import { SITE_TITLE, SOCIALS } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+const home = href('').replace(/\/+$/, '') || '/';
 ---
 
+{/* About reads as an overlay panel floating in the same room as the hero: the
+    signature 3D object sits dimmed and pushed back behind a single calm reading
+    column, with the persistent brand top-left and a bracket-framed Close
+    top-right. `bare` strips the standard reading chrome so this composition
+    owns the viewport — see BaseLayout's bare branch and .about-* in global.css. */}
 <BaseLayout
   title="About"
   description={`About ${SITE_TITLE}: engineer, writer, and builder of small clever things on the web.`}
   type="website"
+  bare
+  bodyClass="about-page"
 >
-  <article class="prose">
-    <p class="section-label">About</p>
-    <p class="about-lead">
-      Hi, I’m {SITE_TITLE}, an engineer who likes building things on the web and
-      writing about how they work.
-    </p>
+  {/* Our signature object, pinned to its calm nebula frame and dimmed by CSS —
+     the same asset as the hero, here as quiet atmosphere, not the showpiece. */}
+  <BlackHole client:only="react" backdrop />
 
-    <p>
-      This is my corner of the internet: a place for technical articles, notes
-      from rabbit holes, and the occasional opinion about tooling. I care about
-      fast, accessible, well-crafted software and the small details that make it
-      feel good to use.
-    </p>
+  {/* Close: returns to the hero scene this panel floats over. Bracket framing
+     echoes a viewfinder readout; it replaces the standard nav for this page. */}
+  <a class="about-close" href={home} aria-label="Close and return to the home scene">
+    <span class="about-close-bracket" aria-hidden="true"></span>
+    <span class="about-close-label">Close</span>
+    <span class="about-close-bracket about-close-bracket--end" aria-hidden="true"></span>
+  </a>
 
-    <p>
-      And yes, the homepage greets you a little differently depending on when,
-      where, and how you’re visiting. It’s all done in your browser; nothing
-      about you is stored on a server or sent anywhere. It’s just a fun way to
-      say hello.
-    </p>
+  <main class="about-shell">
+    <article class="about-panel">
+      <p class="about-kicker">About</p>
 
-    <h2 id="get-in-touch">Get in touch</h2>
-    <ul>
-      {SOCIALS.github && <li><a href={SOCIALS.github}>GitHub</a></li>}
-      {SOCIALS.twitter && <li><a href={SOCIALS.twitter}>Twitter / X</a></li>}
-      {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`}>Email</a></li>}
-    </ul>
-  </article>
+      <p class="about-lead">
+        Hi, I’m {SITE_TITLE}, an engineer who likes building things on the web and
+        writing about how they work.
+      </p>
+
+      <p class="about-body">
+        This is my corner of the internet: a place for technical articles, notes
+        from rabbit holes, and the occasional opinion about tooling. I care about
+        fast, accessible, well-crafted software and the small details that make it
+        feel good to use.
+      </p>
+
+      <p class="about-body">
+        And yes, the homepage greets you a little differently depending on when,
+        where, and how you’re visiting. It’s all done in your browser; nothing
+        about you is stored on a server or sent anywhere. It’s just a fun way to
+        say hello.
+      </p>
+
+      <section class="about-contact" id="get-in-touch">
+        <h2 class="about-contact-title">Get in touch</h2>
+        <ul class="about-contact-list">
+          {SOCIALS.github && <li><a href={SOCIALS.github}>GitHub</a></li>}
+          {SOCIALS.twitter && <li><a href={SOCIALS.twitter}>Twitter / X</a></li>}
+          {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`}>Email</a></li>}
+        </ul>
+      </section>
+    </article>
+  </main>
 </BaseLayout>

@@ -4,13 +4,14 @@
    display, with one warm amber light. The HERO is the showpiece (it reads the
    visitor and reports back like a navigational instrument); the reading
    experience (header, post list, prose, footer) is the calm after, lit by the
-   SAME palette in the SAME Geist. There is no separate hero world anymore — the
-   hero shares the global tokens below, so the page reads as one room, not two
+   SAME palette in the SAME type system. There is no separate hero world anymore —
+   the hero shares the global tokens below, so the page reads as one room, not two
    sites stitched together. See DESIGN.md for the documented system.
 
    Palette: OKLCH, cobalt seed oklch(0.478 0.136 251.8). Dark everywhere; every
    neutral is tinted toward the cobalt hue (252°). Body text runs 7–16:1.
-   Type: Geist (display/body) + Geist Mono (labels/dates/tags).
+   Type: Space Grotesk (display 700 / body 400) + IBM Plex Mono (labels/dates/tags)
+         + Instrument Serif italic (occasional quote / manifesto). See fonts.css.
    =========================================================================== */
 
 :root {
@@ -33,9 +34,16 @@
   --max: 46rem;            /* readable measure for prose / lists (.measure) */
   --gutter: clamp(1.5rem, 5vw, 5rem);  /* full-bleed edge gutters */
 
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Type system (see fonts.css for the @font-face faces):
+       --font-display / --font-sans : Space Grotesk — H1 (700) + body (400)
+       --font-mono                  : IBM Plex Mono — labels, metadata, dates, tags
+       --font-quote                 : Instrument Serif italic — occasional quote/manifesto
+     One sans family drives both display and body (weight is the only difference),
+     so --font-display and --font-sans intentionally point at the same stack. */
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: var(--font-sans);
-  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-quote: "Instrument Serif", Georgia, "Times New Roman", serif;
 
   /* Cobalt as an RGB triple — for the hero bloom + reveal hairlines at low alpha. */
   --accent-rgb: 99, 142, 240;
@@ -138,7 +146,9 @@ body {
 a { color: var(--link); text-underline-offset: 0.2em; }
 a:hover { color: var(--fg); }
 
-h1, h2, h3 { line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; }
+/* Display weight tops out at 700 — that's Space Grotesk's bold master, so the
+   heading bold is real, never a synthesized faux-bold (computed weight 700). */
+h1, h2, h3 { line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; }
 
 /* --- Header ---------------------------------------------------------------- */
 .site-header {
@@ -154,7 +164,7 @@ h1, h2, h3 { line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; }
 }
 .site-header .brand {
   font-family: var(--font-display);
-  font-weight: 900;
+  font-weight: 700;
   font-size: 1.25rem;
   letter-spacing: -0.03em;
   color: var(--fg);
@@ -209,10 +219,13 @@ body.bare {
 }
 .bare-main { display: block; }
 
-/* The scroll track: N viewport-tall stages that exist only to give the page
-   scrollable height. They render nothing — the pinned canvas reads scrollY. */
+/* The scroll track: N stages that exist only to give the page scrollable height.
+   They render nothing — the pinned canvas reads scrollY. Each stage is taller than
+   one viewport so a lifecycle step takes more scrolling to reach: the scroll→stage
+   map (scroll.ts) is purely proportional (stageF = scrolled-fraction × stageCount),
+   so the taller the track, the more pixels each step costs — pacing lives here. */
 .scene-track { position: relative; z-index: 0; }
-.scene-stage { height: 100svh; }
+.scene-stage { height: 160svh; }
 
 /* --- Fixed corner overlay -------------------------------------------------- */
 /* Identity top-left, the blog micro-graphic top-right. Both sit above the
@@ -223,7 +236,7 @@ body.bare {
   left: clamp(1rem, 4vw, 3rem);
   z-index: 20;
   font-family: var(--font-display);
-  font-weight: 900;
+  font-weight: 700;
   font-size: clamp(1.05rem, 1.4vw, 1.35rem);
   letter-spacing: -0.03em;
   color: var(--fg);
@@ -300,7 +313,7 @@ body.bare {
 }
 .bh-identity-name {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(1.05rem, 2.2vw, 1.6rem);
   letter-spacing: 0.02em;
   line-height: 1;
@@ -320,6 +333,12 @@ body.bare {
 
 /* On the bare home the manifesto identity replaces the small wordmark. */
 body.bare .overlay-brand { display: none; }
+
+/* About is bare too, but its island runs in backdrop mode (no .bh-identity), so
+   the small wordmark owns the top-left corner here. The home-only micro-nav is
+   hidden so the bracket Close can own the top-right. */
+body.bare.about-page .overlay-brand { display: inline-flex; }
+body.bare.about-page .overlay-blog { display: none; }
 
 /* --- Cinematic chrome: hide the name + menu once scrolling starts ----------- */
 /* The opening frame shows the name (.bh-identity) top-left and the menu
@@ -399,7 +418,7 @@ body.bare.is-scrolled .overlay-blog {
 .bh-beat-line {
   display: block;
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(2rem, 6vw, 4rem);
   line-height: 1.04;
   letter-spacing: -0.03em;
@@ -572,7 +591,7 @@ body.bare.is-scrolled .overlay-blog {
 .statement-text {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(1.75rem, 4.6vw, 2.85rem);
   line-height: 1.12;
   letter-spacing: -0.03em;
@@ -762,8 +781,13 @@ body.bare.is-scrolled .overlay-blog {
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--fg-dim);
+  /* The occasional quote runs in the serif accent (Instrument Serif italic). It
+     ships as an italic-only face, so the italic comes from the font, not a
+     synthesized slant. Bumped a touch in size — the serif sets smaller. */
+  font-family: var(--font-quote);
   font-style: italic;
-  font-size: 1.12rem;
+  font-size: 1.3rem;
+  line-height: 1.4;
 }
 .prose blockquote p:first-child { margin-top: 0; }
 .prose blockquote p:last-child { margin-bottom: 0; }
@@ -822,6 +846,205 @@ body.bare.is-scrolled .overlay-blog {
 }
 .bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
 
+/* Backdrop mode (reading pages): the SAME pinned scene, pushed back so the copy
+   in front stays the focus. Dimmed and slightly desaturated, with a vignette
+   wash that deepens the room toward the edges so text never fights the canvas.
+   This is the only place the signature object plays a supporting role instead of
+   the lead — atmosphere, not showpiece. */
+.bh-backdrop {
+  opacity: 0.42;
+  filter: saturate(0.82) brightness(0.9);
+}
+.bh-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* A soft cobalt-room vignette: brightest off-centre where the object sits,
+     deepening to the room colour at the edges so text reads cleanly over it. */
+  background:
+    radial-gradient(120% 90% at 50% 42%,
+      transparent 0%,
+      color-mix(in oklch, var(--bg) 88%, transparent) 78%,
+      var(--bg) 100%);
+}
+
 /* Reduced motion: the scene freezes at its settled black-hole frame (the JS
    render loop lands there) and the narrative beats are still scroll-reachable —
    we just don't animate the morph smoothing. Nothing strobes. */
+
+/* ===========================================================================
+   About — an overlay panel floating in the hero's room.
+   The dimmed signature object (.bh-backdrop) sits behind a single calm reading
+   column. Composition: lots of dark negative space, the panel held off-centre
+   like a viewfinder readout, persistent brand top-left (layout), a bracket Close
+   top-right. No nav pill, no footer here — `bare` owns the viewport.
+   =========================================================================== */
+
+/* The Close affordance: a viewfinder-style bracketed label, fixed top-right,
+   mirroring the hero's corner chrome. Returns to the home scene. */
+.about-close {
+  position: fixed;
+  top: clamp(1rem, 3vw, 2rem);
+  right: clamp(1rem, 4vw, 3rem);
+  z-index: 21;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.2rem;
+  font-family: var(--font-mono);
+  font-size: clamp(0.78rem, 1.1vw, 0.92rem);
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  text-decoration: none;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
+  transition: color 0.18s ease;
+}
+/* The brackets: two short L-shaped corners drawn with borders, flanking the
+   label. They tighten inward on hover — a small viewfinder "focus" gesture. */
+.about-close-bracket {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid var(--line);
+  border-right: none;
+  border-bottom: none;
+  transition: border-color 0.18s ease, transform 0.24s var(--ease-out-quint);
+}
+.about-close-bracket--end {
+  border: 1px solid var(--line);
+  border-left: none;
+  border-top: none;
+}
+.about-close:hover { color: var(--fg); }
+.about-close:hover .about-close-bracket {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}
+.about-close:hover .about-close-bracket--end {
+  border-color: var(--accent);
+  transform: translateX(-2px);
+}
+.about-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+/* The shell centres the panel and guarantees the dark negative space around it.
+   It sits above the fixed backdrop canvas (z-0) and below the corner chrome. */
+.about-shell {
+  position: relative;
+  z-index: 10;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(5rem, 14vh, 9rem) var(--gutter) clamp(3rem, 8vh, 5rem);
+}
+
+/* The reading panel: a calm column held by faint bracket corners (drawn with
+   pseudo-elements), not a boxed card. The corners anchor it as a floating
+   readout in space; the body stays Geist sans so reading stays comfortable. */
+.about-panel {
+  position: relative;
+  max-width: 40rem;
+  width: 100%;
+  padding: clamp(1.75rem, 5vw, 3.25rem) clamp(1.5rem, 4vw, 2.75rem);
+}
+/* Top-left + bottom-right bracket corners framing the column. Two pseudo-
+   elements, each an L drawn from two adjacent borders at low-alpha cobalt. */
+.about-panel::before,
+.about-panel::after {
+  content: '';
+  position: absolute;
+  width: clamp(1.4rem, 3vw, 2.2rem);
+  height: clamp(1.4rem, 3vw, 2.2rem);
+  border: 1px solid color-mix(in oklch, var(--accent) 34%, transparent);
+  pointer-events: none;
+}
+.about-panel::before {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+}
+.about-panel::after {
+  right: 0;
+  bottom: 0;
+  border-left: none;
+  border-top: none;
+}
+
+/* The single section marker. One quiet mono label, sitewide-consistent with
+   .section-label — used once at the head of the panel, never per paragraph. */
+.about-kicker {
+  margin: 0 0 1.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+/* The lead sits larger and brighter; the body steps down to muted. Rhythm comes
+   from this size/weight drop plus the generous gap before the contact block. */
+.about-panel .about-lead {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.about-body {
+  margin: 0 0 1.2rem;
+  font-size: 1.075rem;
+  line-height: 1.75;
+  color: var(--fg-dim);
+  text-wrap: pretty;
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+}
+.about-body:last-of-type { margin-bottom: 0; }
+
+/* Generous separation marks the gear-change from voice to action. The contact
+   block is its own grouping, set off by space, not a rule or a card. */
+.about-contact {
+  margin-top: clamp(2.5rem, 7vh, 4rem);
+}
+.about-contact-title {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+.about-contact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.5rem;
+}
+.about-contact-list a {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  padding-bottom: 2px;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+.about-contact-list a:hover { color: var(--fg); border-bottom-color: var(--fg); }
+.about-contact-list a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Reduced motion: nothing here animates beyond the backdrop freeze and hover
+   transitions (already covered by the global reduce block). The panel is static
+   and fully visible at rest, so there is nothing extra to disable. */

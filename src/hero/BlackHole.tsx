@@ -2582,6 +2582,9 @@ interface SceneHooks {
    *  0→1 = transition 1 (black hole → reverse supernova remnant),
    *  1→2 = transition 2 (remnant → red giant). Later stages extend the range. */
   getStage: () => number;
+  /** Suppress the DEV disk-tuning panel. Backdrop mode (reading pages) sets this
+   *  so the slider panel never floats over page copy. */
+  noDebugPanel?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -2637,7 +2640,7 @@ function buildDebugPanel(state: DiskTuneState): () => void {
     'backdrop-filter:blur(6px)',
     'border:1px solid rgba(255,255,255,0.12)',
     'border-radius:10px',
-    'font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace',
+    'font:11px/1.5 var(--font-mono, ui-monospace,SFMono-Regular,Menlo,monospace)',
     'color:#cfe0c0',
     'user-select:none',
   ].join(';');
@@ -3607,15 +3610,72 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const horiz = dist * Math.cos(incl);
     const camY0 = dist * Math.sin(incl);
 
+    // --- idle liveliness: layered "breathing" so the resting camera never reads
+    // as locked-off. Three incommensurate octaves on the vertical bob (their
+    // periods don't share a common multiple, so the motion never visibly loops),
+    // plus the pointer parallax. Folded together as yWobble below.
+    const idleBob = reduced
+      ? 0
+      : Math.sin(t * 0.055) * 0.42 + Math.sin(t * 0.13 + 1.7) * 0.1 + Math.sin(t * 0.31 + 4.1) * 0.035;
+
     // azimuth: a small extra sweep during the intro, then steady rotation (both
-    // shaped in lifecycle()). The pointer parallax (mouseX) rides on top here, in
-    // the impure shell, since it is DOM input rather than lifecycle state.
+    // shaped in lifecycle()). A slow lateral handheld sway + the pointer parallax
+    // ride on top here, in the impure shell, since they are DOM/time input rather
+    // than lifecycle state.
     const baseAz = THREE.MathUtils.degToRad(CFG.rotation);
-    const a = baseAz + s.introSweep + s.rotation + mouseX * 0.1;
-    const yWobble = (reduced ? 0 : Math.sin(t * 0.055) * 0.5) + -mouseY * 0.8;
+    const idleSway = reduced ? 0 : Math.sin(t * 0.041 + 0.6) * 0.006; // sub-degree drift
+    const a = baseAz + s.introSweep + s.rotation + idleSway + mouseX * 0.1;
+    const yWobble = idleBob + -mouseY * 0.8;
 
     camera.position.set(Math.sin(a) * horiz, camY0 + yWobble, Math.cos(a) * horiz);
     camera.lookAt(lookTarget);
+
+    // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
+    // lookAt rewrites the camera's orientation every frame, so the roll + local
+    // translations below are self-clearing — they never accumulate. Two layers:
+    //
+    //   • idle roll: a barely-there, slow view-axis tilt so the horizon breathes
+    //     even at rest (handheld feel). Sub-0.1°.
+    //   • blast shake: when s.shakeAmp is hot, a SUBTLE rumble — multi-axis local-
+    //     space jitter (screen-relative shudder) + a small view-axis roll. Driven
+    //     by layered high-frequency sines at incommensurate rates so it reads as
+    //     organic rumble, not a clean wobble. Amplitude is shakeAmp, a hump that
+    //     peaks as the whiteout CLEARS (see lifecycle.ts), so the rattle lands on
+    //     the reveal, not behind the white.
+    //
+    // The positional shudder is scaled by `dist` so it's a constant ANGULAR shake
+    // (same on-screen amplitude whether we're close on the BH or way back at the
+    // remnant — a fixed world offset would vanish at the far blast distance).
+    if (!reduced) {
+      const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016; // rad, ~0.09°
+      const sh = s.shakeAmp;
+      if (sh > 0.0001) {
+        const f = t * 47.0; // fast carrier for the rumble
+        const amp = dist * 0.009 * sh; // angular shudder scale (≈0.9% of frame at peak)
+        // local-space positional shudder (X = screen horizontal, Y = vertical)
+        const jx = (Math.sin(f * 1.00) + Math.sin(f * 2.30 + 1.3)) * 0.5 * amp;
+        const jy = (Math.sin(f * 1.37 + 0.7) + Math.sin(f * 2.90 + 3.1)) * 0.5 * amp;
+        const jz = Math.sin(f * 0.83 + 2.0) * amp * 0.6; // dolly punch in/out
+        camera.translateX(jx);
+        camera.translateY(jy);
+        camera.translateZ(jz);
+        // view-axis roll: a soft "blast" cue — the horizon eases off level.
+        // ~1.6° at peak (0.028 rad) so the tilt is felt, not jarring.
+        const shakeRoll = (Math.sin(f * 0.91 + 0.4) + Math.sin(f * 1.70 + 2.6)) * 0.5 * 0.028 * sh;
+        camera.rotateZ(idleRoll + shakeRoll);
+      } else {
+        camera.rotateZ(idleRoll);
+      }
+    }
+
+    // --- FOV breath on the detonation -----------------------------------------
+    // The lens widens a touch on the blast then settles. fovKick is 0 at rest,
+    // so the projection matrix is only rebuilt while the kick is live.
+    const fov = CFG.fovDeg + s.fovKick;
+    if (camera.fov !== fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
 
     const ut = reduced ? 0 : t;
     diskMatPrimary.uniforms.uTime.value = ut;
@@ -3649,8 +3709,9 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   onResize();
   frame();
 
-  // DEV tuning panel (delete this line + buildDebugPanel + dbgCtl when done)
-  const disposeDebugPanel = buildDebugPanel(dbgCtl);
+  // DEV tuning panel (delete this line + buildDebugPanel + dbgCtl when done).
+  // Backdrop mode suppresses it so the sliders never float over reading-page copy.
+  const disposeDebugPanel = hooks.noDebugPanel ? () => {} : buildDebugPanel(dbgCtl);
 
   // --- teardown ---
   return () => {
@@ -3722,7 +3783,20 @@ function beatOpacity(progress: number, at: number, edge?: 'leading' | 'trailing'
 //  Public component — a thin React shell that owns the canvas container, the
 //  scroll tracker, and the manifesto overlay.
 // ---------------------------------------------------------------------------
-export default function BlackHole() {
+interface BlackHoleProps {
+  /** Backdrop mode: render only the scene canvas (no manifesto beats, no chrome,
+   *  no scroll subscription) pinned to a fixed lifecycle frame. Used by reading
+   *  pages (about, …) that want the signature object as a dimmed, static backdrop
+   *  behind their copy — the same room as the hero, pushed back. */
+  backdrop?: boolean;
+  /** The lifecycle frame to pin in backdrop mode, in getStage transition-space
+   *  (0 = black hole … 5 = the smoky-blue nebula at the end of the rewind). The
+   *  nebula is the calmest, coolest, most on-palette still — cobalt room, no warm
+   *  sphere — so reading copy sits over atmosphere, not a hot disk. */
+  backdropStage?: number;
+}
+
+export default function BlackHole({ backdrop = false, backdropStage = 5 }: BlackHoleProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Live scroll progress (0..1) drives both the morph (via a ref the render loop
   // reads) and the manifesto opacities (via React state, updated on scroll).
@@ -3743,6 +3817,26 @@ export default function BlackHole() {
     if (!host) return;
     const isReduced = prefersReducedMotion();
     setReduced(isReduced);
+
+    // Backdrop mode: no scroll, no morph timeline. The scene is pinned to a fixed
+    // lifecycle frame and rendered as a static, dimmed atmosphere behind page
+    // copy (reading pages). None of the scroll wiring, beat opacities, or the
+    // `is-scrolled` chrome toggle apply here.
+    if (backdrop) {
+      const fallback = Math.min(BUILT_STAGES, Math.max(0, backdropStage));
+      // window.__bhBackdropStage lets a capture script A/B the pinned frame live
+      // (mirrors the home's __bhMorph debug hook). Defaults to the prop.
+      const pinnedStage = (): number => {
+        const o = (window as unknown as { __bhBackdropStage?: number }).__bhBackdropStage;
+        const v = typeof o === 'number' ? o : fallback;
+        return Math.min(BUILT_STAGES, Math.max(0, v));
+      };
+      const dispose = createScene(host, isReduced, {
+        getStage: pinnedStage,
+        noDebugPanel: true,
+      });
+      return () => dispose();
+    }
 
     const tracker = new ScrollTracker(STAGE_COUNT);
     const unsub = tracker.subscribe((s) => {
@@ -3788,6 +3882,16 @@ export default function BlackHole() {
 
   const base = import.meta.env.BASE_URL ?? '/';
   const contactHref = `${base}/about#get-in-touch`.replace(/\/+/g, '/');
+
+  // Backdrop mode renders only the scene canvas — the reading page owns its own
+  // chrome and copy, and dims this layer via CSS (.bh-backdrop).
+  if (backdrop) {
+    return (
+      <div className="bh-root bh-root--backdrop">
+        <div className="bh-stage bh-backdrop" ref={hostRef} aria-hidden="true" />
+      </div>
+    );
+  }
 
   return (
     <div className="bh-root">

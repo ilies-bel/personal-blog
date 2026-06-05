@@ -207,8 +207,12 @@ export interface StarState {
   distFactor: number;
   /** lifecycle zoom choreography multiplier. */
   zoom: number;
-  /** subtle outward shove timed to the blast (rides nova). */
+  /** detonation recoil: anticipation pull-in → hard kick → overshoot-settle (rides nova + morph). */
   novaKick: number;
+  /** camera-shake "trauma" envelope (0..1) for the blast; frame() turns it into jitter+roll. */
+  shakeAmp: number;
+  /** transient FOV punch (degrees, added to base fov) on the detonation. */
+  fovKick: number;
   /** extra azimuth sweep during the intro (eases out). */
   introSweep: number;
   /** resting azimuth rotation (t * rotateSpeed). */
@@ -535,10 +539,41 @@ export function lifecycle(input: LifecycleInput): StarState {
     zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn; // ease into the cloud
     zoom = zoom + (ZOOM_DOT - zoom) * nebOut; // ease back out for the dot
   }
-  // a subtle outward shove timed to the blast (rides the TIME envelope, so a fast
-  // scroller still feels the world recoil from the detonation). Kept tiny so the
-  // scroll-coupled zoom choreography stays the primary camera language.
-  const novaKick = 1 + 0.06 * nova;
+  // --- detonation recoil: anticipation → kick → overshoot-settle -------------
+  // A restrained three-act recoil on the blast (distance multiplier on top of the
+  // zoom story). It rides BOTH:
+  //   • morph  — the scroll-space approach to the breakout (the "charge up"), and
+  //   • nova   — the TIME envelope of the blast itself (so a fast scroller still
+  //              feels the kick fire and ring out after the wheel has stopped).
+  //
+  //   1. ANTICIPATION: as morph climbs toward the breakout (0.5), pull the camera
+  //      slightly IN — the world holds its breath, drawing inward before the blast.
+  //   2. KICK: when nova fires, a modest outward shove (the shockwave nudges the
+  //      camera back). nova rises fast then decays, so this is the gentle punch.
+  //   3. SETTLE: the kick decays with nova's tail; a damped sinusoid on the tail
+  //      gives one small outward overshoot that rings back to rest, so it doesn't
+  //      just deflate — it recoils and settles like a soft impact.
+  // Kept subtle: a hint of pull-in, a modest outward shove, a barely-there ring —
+  // enough to feel the world recoil from the blast without a big lurch.
+  const charge = smoothstep01((morph - 0.34) / 0.16) * (1 - smoothstep01((morph - 0.5) / 0.06));
+  const anticipation = -0.025 * charge; // pull IN up to 2.5% just before breakout
+  // nova² front-loads the punch into the rise/peak; the damped ring lives on the tail.
+  const kickPunch = 0.12 * nova * nova;
+  const ring = 0.018 * nova * Math.sin(nova * 22.0) * (1 - nova); // one faint bounce on the decay
+  const novaKick = reduced ? 1 : 1 + anticipation + kickPunch + ring;
+
+  // camera-shake "trauma" envelope. CRUCIAL TIMING: the whiteout pass is opaque
+  // while nova is near its peak (rise+hold+early decay), so a rattle that peaked
+  // WITH nova would happen entirely behind the white and be invisible. Instead we
+  // shape it as a hump that is ZERO at nova=1 (hidden) and PEAKS as the whiteout
+  // CLEARS — nova falling through ≈0.5 — so the camera is visibly rattling exactly
+  // when the remnant is first revealed, then rings out as nova → 0. 4·n·(1−n)
+  // peaks at n=0.5 (=1.0) and is 0 at both ends. 0 under reduced motion.
+  const shakeAmp = reduced ? 0 : 4 * nova * (1 - nova);
+  // a gentle FOV breath on the detonation — the lens widens a touch then settles,
+  // a faint blast-wave cue. Rides the same reveal-timed hump as the shake (peaks
+  // as the whiteout clears, not behind it) so the breath is seen on the reveal.
+  const fovKick = reduced ? 0 : 3.0 * shakeAmp;
 
   // azimuth: a small extra sweep during the intro, then steady rotation.
   const introSweep = reduced ? 0 : (1 - intro) * 0.45; // eases out as we settle
@@ -589,6 +624,8 @@ export function lifecycle(input: LifecycleInput): StarState {
     distFactor,
     zoom,
     novaKick,
+    shakeAmp,
+    fovKick,
     introSweep,
     rotation,
   };
