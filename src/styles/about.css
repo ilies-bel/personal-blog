@@ -1,0 +1,166 @@
+/* About — an overlay panel floating in the hero's room. The dimmed signature
+   object (.bh-backdrop, hero.css) sits behind a single calm reading column:
+   lots of dark negative space, the panel held off-centre like a viewfinder
+   readout, persistent brand top-left, a bracket Close top-right. */
+
+.about-lead { font-size: 1.3rem; color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
+
+/* Close: a viewfinder-style bracketed label, fixed top-right, mirroring the
+   hero's corner chrome. Returns to the home scene. */
+.about-close {
+  position: fixed;
+  top: clamp(1rem, 3vw, 2rem);
+  right: clamp(1rem, 4vw, 3rem);
+  z-index: 21;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.2rem;
+  font-family: var(--font-mono);
+  font-size: clamp(0.78rem, 1.1vw, 0.92rem);
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  text-decoration: none;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
+  transition: color 0.18s ease;
+}
+/* The brackets: two short L-shaped corners that tighten inward on hover (a small
+   viewfinder "focus" gesture). */
+.about-close-bracket {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid var(--line);
+  border-right: none;
+  border-bottom: none;
+  transition: border-color 0.18s ease, transform 0.24s var(--ease-out-quint);
+}
+.about-close-bracket--end {
+  border: 1px solid var(--line);
+  border-left: none;
+  border-top: none;
+}
+.about-close:hover { color: var(--fg); }
+.about-close:hover .about-close-bracket {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}
+.about-close:hover .about-close-bracket--end {
+  border-color: var(--accent);
+  transform: translateX(-2px);
+}
+.about-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+/* The shell centres the panel and guarantees the dark negative space around it.
+   Above the fixed backdrop canvas (z-0), below the corner chrome. */
+.about-shell {
+  position: relative;
+  z-index: 10;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(5rem, 14vh, 9rem) var(--gutter) clamp(3rem, 8vh, 5rem);
+}
+
+/* The reading panel: a calm column held by faint bracket corners (pseudo-
+   elements), not a boxed card. */
+.about-panel {
+  position: relative;
+  max-width: 40rem;
+  width: 100%;
+  padding: clamp(1.75rem, 5vw, 3.25rem) clamp(1.5rem, 4vw, 2.75rem);
+}
+/* Top-left + bottom-right bracket corners: two pseudo-elements, each an L drawn
+   from two adjacent borders at low-alpha cobalt. */
+.about-panel::before,
+.about-panel::after {
+  content: '';
+  position: absolute;
+  width: clamp(1.4rem, 3vw, 2.2rem);
+  height: clamp(1.4rem, 3vw, 2.2rem);
+  border: 1px solid color-mix(in oklch, var(--accent) 34%, transparent);
+  pointer-events: none;
+}
+.about-panel::before {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+}
+.about-panel::after {
+  right: 0;
+  bottom: 0;
+  border-left: none;
+  border-top: none;
+}
+
+/* One quiet mono section marker at the head of the panel. */
+.about-kicker {
+  margin: 0 0 1.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+/* The lead sits larger and brighter; the body steps down to muted. */
+.about-panel .about-lead {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.about-body {
+  margin: 0 0 1.2rem;
+  font-size: 1.075rem;
+  line-height: 1.75;
+  color: var(--fg-dim);
+  text-wrap: pretty;
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+}
+.about-body:last-of-type { margin-bottom: 0; }
+
+/* Generous separation marks the gear-change from voice to action. */
+.about-contact {
+  margin-top: clamp(2.5rem, 7vh, 4rem);
+}
+.about-contact-title {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+.about-contact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.5rem;
+}
+.about-contact-list a {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  padding-bottom: 2px;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+.about-contact-list a:hover { color: var(--fg); border-bottom-color: var(--fg); }
+.about-contact-list a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}

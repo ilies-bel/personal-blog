@@ -1,0 +1,69 @@
+/* Reading-page chrome — the header pill + footer shown on non-bare pages
+   (BaseLayout's non-bare branch). The bare home/about use the overlay in
+   scene.css instead. */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0 2rem;
+  /* Rides the full-bleed shell: brand hard-left, nav pill hard-right. */
+  position: relative;
+  z-index: 2;
+}
+.site-header .brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+  text-decoration: none;
+}
+.site-header .brand .dot { color: var(--accent); }
+
+/* The nav pill — a rounded capsule of links with the current page highlighted. */
+.nav-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.nav-pill a {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--fg-dim);
+  text-decoration: none;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+.nav-pill a:hover { color: var(--fg); }
+/* Active segment: filled light capsule with dark ink. */
+.nav-pill a.is-active {
+  background: var(--fg);
+  color: var(--bg);
+}
+.nav-pill a.is-active:hover { color: var(--bg); }
+
+.site-footer {
+  margin-top: 5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: var(--fg-faint);
+}
+.site-footer a { color: var(--fg-dim); text-decoration: none; transition: color 0.16s ease; }
+.site-footer a:hover { color: var(--accent); }
+.site-footer .socials { display: flex; gap: 1.1rem; }

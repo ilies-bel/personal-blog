@@ -1,0 +1,431 @@
+/* Final exploration HUD — appears only after the last cinematic beat. The default
+   state is a glyph instrument rail; labels, destination and connector line exist
+   only on active hover/focus/selection so the animation stays the visual subject. */
+.hud-system {
+  --hud-line: color-mix(in oklch, var(--fg) 34%, transparent);
+  --hud-line-dim: color-mix(in oklch, var(--fg) 16%, transparent);
+  --hud-amber: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+  position: fixed;
+  left: clamp(1.25rem, 5vw, 5rem);
+  top: 50%;
+  z-index: 18;
+  display: grid;
+  gap: 0.28rem;
+  width: max-content;
+  opacity: 0;
+  transform: translate(-0.75rem, -50%);
+  pointer-events: none;
+  transition:
+    opacity 0.55s var(--ease-out-quint),
+    transform 0.55s var(--ease-out-quint);
+}
+.hud-system::before { display: none; }
+.hud-system > * {
+  position: relative;
+  z-index: 1;
+}
+.hud-system[data-visible='true'] {
+  opacity: 1;
+  transform: translate(0, -50%);
+  pointer-events: auto;
+}
+.hud-system[data-visible='true']::before { opacity: 0; }
+.hud-system-prompt { display: none; }
+.hud-system[data-visible='true'] .hud-system-prompt {
+  opacity: 0.86;
+  transform: none;
+}
+.hud-nav {
+  position: relative;
+  width: max-content;
+  opacity: 0;
+  transform: translateX(-0.35rem);
+  transition:
+    opacity 0.5s var(--ease-out-quint) 0.28s,
+    transform 0.5s var(--ease-out-quint) 0.28s;
+}
+.hud-system[data-visible='true'] .hud-nav {
+  opacity: 1;
+  transform: none;
+}
+.hud-nav::before {
+  content: '';
+  position: absolute;
+  top: -1.5rem;
+  bottom: -1.5rem;
+  left: 1.15rem;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--hud-line) 20%, var(--hud-line) 80%, transparent);
+  pointer-events: none;
+  /* Transparent gaps at each glyph center. The element runs from -1.5rem above
+     the nav top to +1.5rem below the nav bottom. Glyph centers from line top:
+     2.66rem, 5.36rem, 8.06rem, 10.76rem, 13.46rem. Gap half-width: 0.72rem. */
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(2.66rem - 0.72rem),
+    transparent calc(2.66rem - 0.72rem),
+    transparent calc(2.66rem + 0.72rem),
+    black calc(2.66rem + 0.72rem),
+    black calc(5.36rem - 0.72rem),
+    transparent calc(5.36rem - 0.72rem),
+    transparent calc(5.36rem + 0.72rem),
+    black calc(5.36rem + 0.72rem),
+    black calc(8.06rem - 0.72rem),
+    transparent calc(8.06rem - 0.72rem),
+    transparent calc(8.06rem + 0.72rem),
+    black calc(8.06rem + 0.72rem),
+    black calc(10.76rem - 0.72rem),
+    transparent calc(10.76rem - 0.72rem),
+    transparent calc(10.76rem + 0.72rem),
+    black calc(10.76rem + 0.72rem),
+    black calc(13.46rem - 0.72rem),
+    transparent calc(13.46rem - 0.72rem),
+    transparent calc(13.46rem + 0.72rem),
+    black calc(13.46rem + 0.72rem)
+  );
+}
+.hud-nav-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.38rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hud-nav-row {
+  margin: 0;
+  padding: 0;
+}
+.hud-nav-button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  align-items: center;
+  width: 2.45rem;
+  height: 2.32rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: visible;
+  transition:
+    width 0.34s var(--ease-out-quint),
+    color 0.2s ease;
+}
+.hud-nav-button::before {
+  content: '';
+  position: absolute;
+  left: 1.15rem;
+  top: 50%;
+  width: 0.5rem;
+  height: 1px;
+  background: var(--hud-line-dim);
+  transform: translate(-50%, -50%);
+  transition:
+    width 0.22s var(--ease-out-quint),
+    background-color 0.2s ease;
+}
+.hud-nav-button[data-active='true'],
+.hud-nav-button[data-selected='true'] {
+  width: 11.7rem;
+  color: var(--fg);
+}
+.hud-nav-button[data-active='true']::before,
+.hud-nav-button[data-selected='true']::before {
+  width: 1.1rem;
+  background: var(--hud-amber);
+}
+.hud-nav-button:focus-visible {
+  outline: 1px solid var(--hud-amber);
+  outline-offset: 0.25rem;
+}
+.hud-nav-glyph {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 2.3rem;
+  font-family: var(--font-mono);
+  font-size: 1.08rem;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-shadow:
+    0 0 16px rgba(0, 0, 0, 1),
+    0 0 10px color-mix(in oklch, var(--hud-amber) 26%, transparent);
+  transform-origin: 50% 50%;
+  padding: 0.1rem 0;
+}
+.hud-nav-copy {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-0.45rem);
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 0.34s var(--ease-out-quint),
+    opacity 0.2s ease,
+    transform 0.34s var(--ease-out-quint);
+}
+.hud-nav-button[data-active='true'] .hud-nav-copy,
+.hud-nav-button[data-selected='true'] .hud-nav-copy {
+  max-width: 8.6rem;
+  opacity: 1;
+  transform: none;
+}
+.hud-nav-title,
+.hud-nav-destination,
+.hud-nav-object,
+.hud-nav-panel {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+.hud-nav-title {
+  font-size: 0.72rem;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  color: var(--fg);
+  text-shadow:
+    0 0 18px rgba(0, 0, 0, 1),
+    0 0 4px rgba(0, 0, 0, 0.95);
+}
+.hud-nav-destination {
+  font-size: 0.66rem;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  color: color-mix(in oklch, var(--fg-dim) 88%, var(--fg));
+  text-shadow:
+    0 0 18px rgba(0, 0, 0, 1),
+    0 0 4px rgba(0, 0, 0, 0.95);
+}
+.hud-nav-connector {
+  display: none;
+}
+.hud-nav-connector::after {
+  content: '';
+  position: absolute;
+  right: -0.2rem;
+  top: 50%;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-top: 1px solid var(--hud-line);
+  border-right: 1px solid var(--hud-line);
+  transform: translateY(-50%) rotate(45deg);
+}
+.hud-nav-button[data-active='true'] .hud-nav-connector,
+.hud-nav-button[data-selected='true'] .hud-nav-connector {
+  opacity: 0.72;
+  transform: translateY(-50%) scaleX(1);
+}
+.hud-nav-object {
+  display: none;
+}
+.hud-nav-mobile-readout {
+  display: none;
+}
+.hud-nav-panel {
+  position: fixed;
+  right: clamp(1.25rem, 5vw, 5rem);
+  bottom: clamp(2rem, 8vh, 5rem);
+  z-index: 19;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  width: min(22rem, 36vw);
+  padding: 0.15rem 0 0.15rem 1rem;
+  border-left: 1px solid var(--hud-line);
+  background:
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.78),
+      rgba(0, 0, 0, 0.48) 68%,
+      transparent);
+  color: var(--fg-dim);
+  text-shadow:
+    0 0 18px rgba(0, 0, 0, 1),
+    0 0 5px rgba(0, 0, 0, 0.95);
+}
+.hud-nav-panel::before,
+.hud-nav-panel::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  width: 0.78rem;
+  height: 0.78rem;
+  border-left: 1px solid var(--hud-amber);
+  pointer-events: none;
+}
+.hud-nav-panel::before {
+  top: -0.35rem;
+  border-top: 1px solid var(--hud-amber);
+}
+.hud-nav-panel::after {
+  bottom: -0.35rem;
+  border-bottom: 1px solid var(--hud-amber);
+}
+.hud-nav-panel-index {
+  margin: 0.2rem 0 0;
+  color: var(--hud-amber);
+  font-size: 0.9rem;
+  line-height: 1;
+  letter-spacing: 0.16em;
+}
+.hud-nav-panel h2 {
+  margin: 0 0 0.28rem;
+  color: var(--fg);
+  font-size: clamp(0.86rem, 1.1vw, 1rem);
+  line-height: 1.15;
+  letter-spacing: 0.12em;
+}
+.hud-nav-panel p {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+}
+.hud-nav-panel .hud-nav-panel-object {
+  margin-bottom: 0.5rem;
+  color: var(--fg-faint);
+  font-size: 0.63rem;
+  letter-spacing: 0.14em;
+}
+.hud-nav-panel-link {
+  display: inline-flex;
+  margin-top: 0.75rem;
+  color: var(--fg);
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  border-bottom: 1px solid var(--hud-line);
+  padding-bottom: 0.18rem;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+.hud-nav-panel-link:hover {
+  color: var(--hud-amber);
+  border-color: var(--hud-amber);
+}
+.hud-nav-panel-link:focus-visible {
+  outline: 1px solid var(--hud-amber);
+  outline-offset: 0.25rem;
+}
+.hud-nav-inline-link {
+  margin: 0.15rem 0 0 2.35rem;
+  width: max-content;
+  opacity: 0.82;
+}
+
+@media (max-width: 46rem) {
+  .hud-system {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 3rem);
+    width: auto;
+    padding-inline: clamp(1rem, 4vw, 1.35rem);
+    transform: translateY(0.7rem);
+    justify-items: stretch;
+  }
+  .hud-system::before {
+    display: none;
+  }
+  .hud-system[data-visible='true'] {
+    transform: none;
+  }
+  .hud-system-prompt {
+    display: none;
+  }
+  .hud-nav {
+    width: 100%;
+  }
+  .hud-nav::before {
+    top: 50%;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--hud-line), transparent);
+  }
+  .hud-nav-list {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.2rem;
+  }
+  .hud-nav-button {
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+    width: 2.45rem;
+    height: 2.55rem;
+  }
+  .hud-nav-button[data-active='true'],
+  .hud-nav-button[data-selected='true'] {
+    width: clamp(8.2rem, 39vw, 10.8rem);
+  }
+  .hud-nav-button::before {
+    left: 1.15rem;
+  }
+  .hud-nav-glyph {
+    width: 2.35rem;
+  }
+  .hud-nav-copy {
+    gap: 0.18rem;
+  }
+  .hud-nav-title {
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+  }
+  .hud-nav-destination {
+    font-size: 0.6rem;
+  }
+  .hud-nav-connector {
+    display: none;
+  }
+  .hud-nav-mobile-readout {
+    display: none;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: -0.15rem 0 0;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+  }
+  .hud-nav-mobile-readout span:first-child {
+    color: var(--fg);
+  }
+  .hud-nav-panel {
+    left: clamp(1rem, 4vw, 1.35rem);
+    right: clamp(1rem, 4vw, 1.35rem);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8.9rem);
+    width: auto;
+    max-width: none;
+  }
+  .hud-nav-inline-link {
+    margin-left: 0;
+    justify-self: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-system,
+  .hud-system[data-visible='true'] {
+    transform: translate(0, -50%);
+  }
+  .hud-nav-glyph {
+    animation: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 46rem) {
+  .hud-system,
+  .hud-system[data-visible='true'] {
+    transform: none;
+  }
+}

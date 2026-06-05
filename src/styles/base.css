@@ -1,0 +1,52 @@
+/* Base — reset, document defaults, and the sitewide layout primitives. */
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 1.075rem;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: var(--link); text-underline-offset: 0.2em; }
+a:hover { color: var(--fg); }
+
+/* Display weight tops out at 700 — Space Grotesk's bold master — so heading bold
+   is real, never a synthesized faux-bold. */
+h1, h2, h3 { line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; }
+
+/* Full-bleed shell: the page spans edge-to-edge; only the side gutter holds
+   content off the very edge. Text-heavy blocks opt into .measure so a full-bleed
+   page never produces unreadable 100-character lines. */
+.wrap {
+  width: 100%;
+  margin: 0;
+  padding: 1.5rem var(--gutter) 6rem;
+  position: relative;
+  z-index: 1;                            /* above the fixed scene layer (z-0) */
+}
+
+/* The readable reading column. Drop it on any text-heavy section to cap its
+   line-length while the page around it stays full-bleed. */
+.measure {
+  max-width: var(--max);
+  margin-inline: auto;
+}
+
+/* Global reduced-motion: kill animation/transition and instant-scroll everywhere.
+   Concern-specific reduced-motion (hero, hud) lives with those stylesheets. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

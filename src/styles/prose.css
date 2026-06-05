@@ -1,0 +1,53 @@
+/* Article prose — posts and the about page keep a readable measure on the
+   full-bleed shell. Light text on a dark ground reads lighter, so prose runs a
+   touch more line-height. */
+.prose {
+  max-width: var(--max);
+  margin-inline: auto;
+  font-size: 1.12rem;
+  line-height: 1.78;
+}
+.article-header { margin-bottom: 2.5rem; }
+.article-header .date { font-family: var(--font-mono); font-size: 0.85rem; color: var(--fg-faint); }
+.article-header h1 { font-size: clamp(2rem, 5.5vw, 3rem); margin: 0.5rem 0 0; text-wrap: balance; }
+.prose p { margin: 1.3rem 0; }
+.prose h2 { font-size: 1.65rem; margin: 2.75rem 0 1rem; }
+.prose h3 { font-size: 1.3rem; margin: 2rem 0 0.75rem; }
+.prose a { font-weight: 600; }
+.prose ul, .prose ol { padding-left: 1.4rem; }
+.prose li { margin: 0.4rem 0; }
+/* A quiet full-border panel on the panel tint, set apart by background + a
+   hairline — no colored side stripe. The occasional quote runs in the serif
+   accent (Instrument Serif italic, an italic-only face → real italic, not slant). */
+.prose blockquote {
+  margin: 1.75rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--fg-dim);
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: 1.3rem;
+  line-height: 1.4;
+}
+.prose blockquote p:first-child { margin-top: 0; }
+.prose blockquote p:last-child { margin-bottom: 0; }
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+}
+.prose pre {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.prose pre code { background: none; border: none; padding: 0; }

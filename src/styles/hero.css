@@ -1,0 +1,231 @@
+/* The black-hole hero — the pinned, scroll-scrubbed stellar-lifecycle scene and
+   its manifesto chrome. The canvas (.bh-stage) is FIXED to the viewport and stays
+   centred while the page scrolls behind it (scene.css's .scene-track supplies the
+   height). See BlackHole.tsx for the three.js side. */
+
+.bh-root { position: relative; }
+.bh-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;                            /* behind the overlay + corner chrome, above body bg */
+  background: #000;
+  overflow: hidden;
+}
+.bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
+
+/* Backdrop mode (reading pages): the SAME pinned scene, pushed back so front copy
+   stays the focus. Dimmed + slightly desaturated, with a vignette wash that deepens
+   the room toward the edges so text never fights the canvas. */
+.bh-backdrop {
+  opacity: 0.42;
+  filter: saturate(0.82) brightness(0.9);
+}
+.bh-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Soft cobalt-room vignette: brightest off-centre where the object sits,
+     deepening to the room colour at the edges so text reads cleanly over it. */
+  background:
+    radial-gradient(120% 90% at 50% 42%,
+      transparent 0%,
+      color-mix(in oklch, var(--bg) 88%, transparent) 78%,
+      var(--bg) 100%);
+}
+
+/* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
+.bh-identity {
+  position: fixed;
+  top: clamp(1rem, 3vw, 2.1rem);
+  left: clamp(1.25rem, 5vw, 5rem);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-decoration: none;
+  color: inherit;
+}
+.bh-identity-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.05rem, 2.2vw, 1.6rem);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--fg);
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.85), 0 0 5px rgba(0, 0, 0, 0.7);
+}
+.bh-identity-role {
+  font-family: var(--font-mono);
+  font-size: clamp(0.66rem, 1vw, 0.8rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
+}
+.bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
+.bh-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+
+/* Cinematic chrome: the name (.bh-identity) and the top-right menu (.overlay-blog,
+   scene.css) belong to the opening frame only. Once scroll leaves the top the
+   island adds body.is-scrolled and both fade up-and-out so the scene plays without
+   chrome; they glide back at the top. pointer-events drop while hidden. */
+body.bare .bh-identity,
+body.bare .overlay-blog {
+  transition:
+    opacity 0.5s var(--ease-out-quint),
+    transform 0.5s var(--ease-out-quint),
+    visibility 0s linear 0s;
+}
+body.bare.is-scrolled .bh-identity,
+body.bare.is-scrolled .overlay-blog {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-0.6rem);
+  pointer-events: none;
+  transition:
+    opacity 0.5s var(--ease-out-quint),
+    transform 0.5s var(--ease-out-quint),
+    visibility 0s linear 0.5s;
+}
+
+/* --- Manifesto beats (pinned, cross-faded by scroll) ----------------------- */
+/* The island positions these absolutely over the canvas and drives their opacity
+   from scroll progress so each lifecycle state reveals a beat. Each beat carries
+   TWO big lines (down/up arc); the active one is chosen by scroll direction. */
+.bh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 0.5s var(--ease-out-quint);
+}
+.bh-root[data-exploring='true'] .bh-overlay,
+.bh-overlay[data-exploring='true'] {
+  opacity: 0.28;
+}
+.bh-beat {
+  position: absolute;
+  left: clamp(1.25rem, 5vw, 5rem);
+  right: clamp(1.25rem, 5vw, 5rem);
+  bottom: clamp(2rem, 8vh, 5rem);
+  max-width: min(40rem, 84vw);
+  transition: opacity 0.45s var(--ease-out-quint);
+  will-change: opacity;
+}
+
+/* Big line: both directions stacked in the same box, crossfaded by [data-active]. */
+.bh-beat-big {
+  position: relative;
+  margin: 0 0 1.1rem;
+  min-height: 1.08em;                    /* reserve the line box so the whisper doesn't jump on swap */
+}
+.bh-beat-line {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 4rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+  text-wrap: balance;
+  text-shadow: 0 0 26px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  transform: translateY(0.18em);
+  transition: opacity 0.4s var(--ease-out-quint), transform 0.4s var(--ease-out-quint);
+}
+.bh-beat-line--up { position: absolute; inset: 0; }
+.bh-beat-line[data-active='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Whisper: small, dim, elaborating the big line. Shared; never swaps. */
+.bh-beat-whisper {
+  margin: 0;
+  max-width: min(34rem, 80vw);
+  font-family: var(--font-mono);
+  font-size: clamp(0.8rem, 1.3vw, 0.98rem);
+  line-height: 1.55;
+  color: var(--fg-dim);
+  text-wrap: pretty;
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
+}
+.bh-beat-state {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--highlight);
+}
+
+@media (max-width: 34rem) {
+  .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
+  .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
+  .bh-identity-name { font-size: 1.05rem; }
+  .bh-root[data-exploring='true'] .bh-overlay,
+  .bh-overlay[data-exploring='true'] { opacity: 0 !important; }
+}
+
+/* A faint scroll hint, shown only at the very top, fades on first scroll. */
+.bh-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  pointer-events: none;
+  animation: bh-hint-pulse 2.4s ease-in-out infinite;
+}
+@keyframes bh-hint-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.85; }
+}
+
+/* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
+   stay reachable, so the island renders every beat fully and shows BOTH big lines
+   stacked (no crossfade); lay them out in normal flow instead of pinning them. */
+@media (prefers-reduced-motion: reduce) {
+  body.bare .bh-identity,
+  body.bare .overlay-blog {
+    transition: opacity 0.2s linear, visibility 0s linear 0s;
+    transform: none !important;
+  }
+  body.bare.is-scrolled .bh-identity,
+  body.bare.is-scrolled .overlay-blog {
+    transition: opacity 0.2s linear, visibility 0s linear 0.2s;
+  }
+
+  .bh-overlay {
+    position: static !important;
+    pointer-events: auto !important;
+  }
+  .bh-beat {
+    position: static !important;
+    inset: auto !important;
+    opacity: 1 !important;
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: clamp(2.5rem, 12vh, 6rem) var(--gutter);
+  }
+  .bh-beat-big { min-height: 0 !important; }
+  .bh-beat-line {
+    position: static !important;
+    opacity: 1 !important;
+    transform: none !important;
+    inset: auto !important;
+    margin-bottom: 0.4rem;
+  }
+  .bh-hint { display: none !important; }
+
+  .bh-root[data-exploring='true'] .bh-overlay,
+  .bh-overlay[data-exploring='true'] {
+    opacity: 1 !important;
+  }
+}

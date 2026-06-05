@@ -1,0 +1,118 @@
+/* Bare-page scene shell — the pinned three.js canvas pages (home + about).
+   This file owns the bare body, the scroll track that gives the pinned scene its
+   scrollable height, the fixed corner overlay (brand + micro-nav), and the no-JS
+   fallback copy. The canvas + manifesto beats themselves live in hero.css. */
+
+/* The bare body fills the viewport; the real scroll height comes from .scene-track. */
+body.bare {
+  margin: 0;
+  background: #000;                      /* the scene is pure black at the edges */
+  overflow-x: hidden;
+}
+.bare-main { display: block; }
+
+/* The scroll track: N stages that exist only to give the page scrollable height.
+   They render nothing — the pinned canvas reads scrollY. Each stage is taller than
+   one viewport, so the proportional scroll→stage map (scroll.ts) makes a lifecycle
+   step cost more pixels the taller the track: pacing lives here. */
+.scene-track { position: relative; z-index: 0; }
+.scene-stage { height: 160svh; }
+
+/* --- Fixed corner overlay (brand top-left, blog micro-nav top-right) --------- */
+.overlay-brand {
+  position: fixed;
+  top: clamp(1rem, 3vw, 2rem);
+  left: clamp(1rem, 4vw, 3rem);
+  z-index: 20;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.05rem, 1.4vw, 1.35rem);
+  letter-spacing: -0.03em;
+  color: var(--fg);
+  text-decoration: none;
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.8), 0 0 5px rgba(0, 0, 0, 0.7);
+}
+.overlay-brand .dot { color: var(--accent); }
+
+.overlay-blog {
+  position: fixed;
+  top: clamp(0.75rem, 2.5vw, 1.5rem);
+  right: clamp(1rem, 4vw, 3rem);
+  z-index: 21;                           /* above the manifesto overlay, stays clickable */
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.overlay-blog-mark {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.18s ease, transform 0.18s var(--ease-out-quint);
+}
+.overlay-blog-mark svg {
+  fill: var(--fg-dim);
+  stroke: var(--fg-dim);
+  stroke-width: 0.9;
+  transition: fill 0.18s ease, stroke 0.18s ease;
+}
+.overlay-blog-mark .overlay-blog-core { fill: var(--accent); stroke: var(--accent); }
+.overlay-blog-mark:hover { border-color: var(--accent); transform: rotate(-8deg); }
+.overlay-blog-mark:hover svg { fill: var(--fg); stroke: var(--fg); }
+.overlay-blog-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.overlay-blog-links {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+.overlay-blog-links a {
+  color: var(--fg-dim);
+  text-decoration: none;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
+  transition: color 0.16s ease;
+}
+.overlay-blog-links a:hover { color: var(--fg); }
+@media (max-width: 34rem) {
+  .overlay-blog-links { display: none; } /* mark only on the smallest screens */
+}
+
+/* Per-page overlay visibility. On the home the manifesto identity (.bh-identity,
+   hero.css) replaces the small wordmark, so the wordmark is hidden and the
+   micro-nav is shown. About runs the scene in backdrop mode (no .bh-identity), so
+   the wordmark owns the top-left and the micro-nav yields to the bracket Close. */
+body.bare .overlay-brand { display: none; }
+body.bare.about-page .overlay-brand { display: inline-flex; }
+body.bare.about-page .overlay-blog { display: none; }
+body.bare:not(.about-page) .overlay-blog { display: none; }
+
+/* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
+/* Shown only when the island can't mount; mirrors the manifesto copy so the page
+   stays meaningful and indexable. Inherits .measure from the markup. */
+.scene-fallback {
+  padding-block: clamp(2.5rem, 12vh, 6rem);
+  color: var(--fg);
+}
+.scene-fallback-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+  letter-spacing: 0.02em;
+  color: var(--fg);
+}
+.scene-fallback-role {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
