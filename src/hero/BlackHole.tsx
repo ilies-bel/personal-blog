@@ -2684,129 +2684,6 @@ interface SceneHooks {
   /** True while the final HUD is controlling previews. Suppresses cinematic-only
    *  effects such as the supernova whiteout so menu hover never becomes flashy. */
   isExplorationMode?: () => boolean;
-  /** Suppress the DEV disk-tuning panel. Backdrop mode (reading pages) sets this
-   *  so the slider panel never floats over page copy. */
-  noDebugPanel?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-//  DEV-ONLY tuning panel. Lets the two disk light-layers (primary bright
-//  crescent + secondary lower band) plus the photon ring + interior blackout
-//  sphere be tuned live: per-layer density, secondary scale/offset (seam),
-//  radial spread, thickness, ring size, blackout-sphere size. Live tuning only —
-//  read the values off the panel and bake the ones you like into CFG, then
-//  delete this builder + its call + the dbgCtl block + the writes that read it.
-// ---------------------------------------------------------------------------
-interface DiskTuneState {
-  densityPrimary: number;
-  densitySecondary: number;
-  sec: number;
-  secOffsetX: number;
-  secOffsetY: number;
-  distrib: number;
-  thick: number;
-  ringScale: number;
-  holeScale: number;
-}
-
-interface SliderSpec {
-  key: keyof DiskTuneState;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-}
-
-function buildDebugPanel(state: DiskTuneState): () => void {
-  const sliders: readonly SliderSpec[] = [
-    { key: 'densityPrimary', label: 'density · crescent', min: 0, max: 3, step: 0.01 },
-    { key: 'densitySecondary', label: 'density · lower band', min: 0, max: 3, step: 0.01 },
-    { key: 'sec', label: 'secondary scale', min: 0.3, max: 1.6, step: 0.005 },
-    { key: 'secOffsetX', label: 'secondary X', min: -0.6, max: 0.6, step: 0.002 },
-    { key: 'secOffsetY', label: 'secondary Y (seam)', min: -0.6, max: 0.6, step: 0.002 },
-    { key: 'distrib', label: 'radial spread', min: 0.3, max: 2.5, step: 0.01 },
-    { key: 'thick', label: 'thickness', min: 0, max: 0.8, step: 0.005 },
-    { key: 'ringScale', label: 'ring size', min: 0.3, max: 3, step: 0.01 },
-    { key: 'holeScale', label: 'blackout sphere size', min: 0.3, max: 3, step: 0.01 },
-  ];
-
-  const panel = document.createElement('div');
-  panel.style.cssText = [
-    'position:fixed',
-    'top:12px',
-    'right:12px',
-    'z-index:99999',
-    'width:240px',
-    'padding:12px 14px',
-    'background:rgba(8,10,8,0.82)',
-    'backdrop-filter:blur(6px)',
-    'border:1px solid rgba(255,255,255,0.12)',
-    'border-radius:10px',
-    'font:11px/1.5 var(--font-mono, ui-monospace,SFMono-Regular,Menlo,monospace)',
-    'color:#cfe0c0',
-    'user-select:none',
-  ].join(';');
-
-  const title = document.createElement('div');
-  title.textContent = 'disk layers · dev';
-  title.style.cssText = 'font-weight:600;letter-spacing:0.04em;margin-bottom:10px;opacity:0.7;text-transform:uppercase';
-  panel.appendChild(title);
-
-  for (const spec of sliders) {
-    const row = document.createElement('label');
-    row.style.cssText = 'display:block;margin:8px 0';
-
-    const head = document.createElement('div');
-    head.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:2px';
-    const name = document.createElement('span');
-    name.textContent = spec.label;
-    const val = document.createElement('span');
-    val.style.cssText = 'opacity:0.85;font-variant-numeric:tabular-nums';
-    val.textContent = state[spec.key].toFixed(3);
-    head.appendChild(name);
-    head.appendChild(val);
-
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.min = String(spec.min);
-    input.max = String(spec.max);
-    input.step = String(spec.step);
-    input.value = String(state[spec.key]);
-    input.style.cssText = 'width:100%;accent-color:#b9d089;cursor:ew-resize';
-    input.addEventListener('input', () => {
-      const v = parseFloat(input.value);
-      state[spec.key] = v;
-      val.textContent = v.toFixed(3);
-    });
-
-    row.appendChild(head);
-    row.appendChild(input);
-    panel.appendChild(row);
-  }
-
-  const dump = document.createElement('button');
-  dump.textContent = 'log values';
-  dump.style.cssText = [
-    'margin-top:10px',
-    'width:100%',
-    'padding:6px',
-    'background:rgba(185,208,137,0.16)',
-    'border:1px solid rgba(185,208,137,0.35)',
-    'border-radius:6px',
-    'color:#dcecca',
-    'font:inherit',
-    'cursor:pointer',
-  ].join(';');
-  dump.addEventListener('click', () => {
-    // eslint-disable-next-line no-console
-    console.log('[disk tune]', JSON.stringify(state, null, 2));
-  });
-  panel.appendChild(dump);
-
-  document.body.appendChild(panel);
-  return () => {
-    if (panel.parentNode) panel.parentNode.removeChild(panel);
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -3382,7 +3259,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // dev: holeScale resizes the interior blackout sphere (the dark shadow disc).
     // The disk carve, the star/warp inner cutoff and the ring radius all key off
     // uHole, so this scales the whole void consistently.
-    const holeR = ndcShadow * CFG.holeFactor * dbgCtl.holeScale;
+    const holeR = ndcShadow * CFG.holeFactor;
     const starThetaE = holeR * 1.55;
     const pr = renderer.getPixelRatio();
 
@@ -3449,23 +3326,6 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   const t0 = performance.now();
   let raf = 0;
   let stopped = false;
-
-  // --- DEV tuning panel state (delete the panel + this block when done) -------
-  // Live overrides. Density values MULTIPLY the per-layer base brightness (so the
-  // frame's auto-exposure logic is preserved); the rest are written to uniforms.
-  // holeScale resizes the interior blackout sphere; ringScale resizes the photon
-  // ring. Seeded from CFG so the panel opens on the current look.
-  const dbgCtl = {
-    densityPrimary: 1.0, // bright crescent (primary lensed image) brightness ×
-    densitySecondary: 1.0, // lower grainy band (secondary image) brightness ×
-    sec: CFG.secScale, // secondary image scale (uSec)
-    secOffsetX: 0.0, // secondary band L/R nudge (NDC-aspect)
-    secOffsetY: 0.0, // secondary band up/down nudge — closes the seam
-    distrib: CFG.diskDistrib, // radial spread (uDistrib): <1 outer, >1 inner
-    thick: CFG.diskThickness, // vertical thickness (uThick)
-    ringScale: 1.0, // photon-ring radius × (relative to the dark-core rim)
-    holeScale: 1.0, // interior blackout-sphere (shadow disc) radius ×
-  };
 
   // easeOut (cubic) + smoothstep01 are the single-source-of-truth easings, now
   // owned by lifecycle.ts (imported above). The stateful clock below still needs
@@ -3538,7 +3398,6 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatPrimary.uniforms.uMorph.value = morph;
     diskMatSecondary.uniforms.uMorph.value = morph;
     ringMat.uniforms.uMorph.value = morph;
-    ringMat.uniforms.uRingScale.value = dbgCtl.ringScale; // dev: live ring size
     // --- supernova flash: time-based envelope, fired on the breakout crossing ---
     // Detect a crossing of the breakout (morph through 0.5) in EITHER scroll
     // direction. Fire once, then latch: re-arm only after morph has clearly left
@@ -3801,17 +3660,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // Collapse cloud brightness (s.cloudBright): inside the collapse window it
     // brightens the converging infall (light pouring into the star) then fades the
     // cloud out as the mesh star forms — clean handoff. Exactly 1 outside the window.
-    diskMatPrimary.uniforms.uBright.value = s.baseBright * dbgCtl.densityPrimary * s.cloudBright * focusEmission;
-    diskMatSecondary.uniforms.uBright.value = s.baseBright * dbgCtl.densitySecondary * s.cloudBright * focusEmission;
-    // --- DEV: live layer geometry (delete with the panel) ---
-    diskMatPrimary.uniforms.uSec.value = dbgCtl.sec;
-    diskMatSecondary.uniforms.uSec.value = dbgCtl.sec;
-    diskMatSecondary.uniforms.uSecOffsetX.value = dbgCtl.secOffsetX;
-    diskMatSecondary.uniforms.uSecOffsetY.value = dbgCtl.secOffsetY;
-    diskMatPrimary.uniforms.uDistrib.value = dbgCtl.distrib;
-    diskMatSecondary.uniforms.uDistrib.value = dbgCtl.distrib;
-    diskMatPrimary.uniforms.uThick.value = dbgCtl.thick;
-    diskMatSecondary.uniforms.uThick.value = dbgCtl.thick;
+    diskMatPrimary.uniforms.uBright.value = s.baseBright * s.cloudBright * focusEmission;
+    diskMatSecondary.uniforms.uBright.value = s.baseBright * s.cloudBright * focusEmission;
     // Bloom + auto-exposure + grade + disk-saturation are all resolved by
     // lifecycle() (including the sun / red-giant / nebula branch overrides), so the
     // shell just assigns the finals. See lifecycle.ts for the per-beat reasoning
@@ -3959,15 +3809,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   onResize();
   frame();
 
-  // DEV tuning panel (delete this line + buildDebugPanel + dbgCtl when done).
-  // Backdrop mode suppresses it so the sliders never float over reading-page copy.
-  const disposeDebugPanel = hooks.noDebugPanel ? () => {} : buildDebugPanel(dbgCtl);
-
   // --- teardown ---
   return () => {
     stopped = true;
     cancelAnimationFrame(raf);
-    disposeDebugPanel();
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointerMove);
 
@@ -4100,7 +3945,6 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       };
       const dispose = createScene(host, isReduced, {
         getStage: pinnedStage,
-        noDebugPanel: true,
       });
       return () => dispose();
     }
@@ -4172,7 +4016,6 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       getStage,
       getFocusTarget: () => activeHudRef.current,
       isExplorationMode: () => explorationModeRef.current,
-      noDebugPanel: true,
     });
     return () => {
       clearExplorationTimer();
