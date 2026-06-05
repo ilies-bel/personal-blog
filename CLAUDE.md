@@ -33,24 +33,46 @@ Scroll progress (0..1) maps to a fractional `stage` (0..5):
 
 ## Architecture
 
-- **`src/hero/BlackHole.tsx`** — the entire scene (vanilla three.js inside a `client:only`
-  React island). A ~1.2M-point GPU accretion-disk cloud, lensed starfield, warp arcs, photon
-  ring, a post chain (UnrealBloom → grade shader), and the per-frame render loop. This is where
-  almost all hero work happens.
+The hero lives in `src/hero/`, split by concern so each piece is small and the three.js
+engine is framework-agnostic (React only mounts/unmounts it):
+
+- **`scene/`** — vanilla three.js, no React. `createScene.ts` builds the renderer/camera, wires
+  the rigs, and owns the per-frame render loop (`frame()`); the rig factories (`buildDisk`,
+  `buildStarfield`, `buildWarp`, `buildRing`, `buildSunRig`, `buildPostChain`) each own one piece
+  of geometry + materials + disposal. `types.ts` holds the shared `Uniforms`/`SceneHooks` types.
+  This is where almost all hero *engine* work happens — the ~1.2M-point GPU accretion-disk cloud,
+  lensed starfield, warp arcs, photon ring, and the UnrealBloom → grade post chain.
   - The morph is driven by scroll via uniforms: **`uMorph`** (transition 1, = `min(1, stage)`),
     **`uFlash`** (supernova burst envelope), **`uGiant`** (gather into the star),
     `uYellow`/`uNebula`/`uDot` (later states).
-  - The render loop `frame()` samples scroll, eases `stage`, and drives all uniforms + camera
-    zoom + bloom/exposure grade per frame.
+  - The render loop samples scroll, eases `stage`, and drives all uniforms + camera zoom +
+    bloom/exposure grade per frame.
   - **Scale story**: the camera pushes IN at the hero black hole and pulls WAY back at the tiny
     seed so the black hole reads as enormous vs the speck it collapses to.
+- **`shaders/`** — the GLSL sources as `*.glsl.ts` string modules (lens, disk, star, warp, ring,
+  sun, post), grouped by rig. The pure choreography (`lifecycle.ts`) and GPGPU collapse sim
+  (`gravitySim.ts`) sit alongside in `src/hero/`.
+- **`components/`** — the thin React layer. `HeroIsland.tsx` owns the canvas host element, the
+  scroll tracker, refs and the mount/unmount effect, and publishes a scroll-driven snapshot via
+  `SceneStateContext` (provider + `useSceneState`/`useSceneActions`). The presentational
+  consumers — `HeroIdentity`, `ManifestoOverlay`, `ScrollHint`, `ExplorationHud` — read from it.
+  `BlackHole.tsx` is a one-line re-export of `HeroIsland` (the import path the pages use).
+- **`lib/`** — `config.ts` (the `CFG` tuning table + device/reduced-motion helpers) and
+  `constants.ts` (magic strings + scroll/beat thresholds + the `__bh*` debug-hook keys).
 - **`src/hero/scroll.ts`** — `ScrollTracker`: maps `window.scrollY` to `progress` (0..1) and
   `stageF` (`progress * stageCount`).
 - **`src/pages/index.astro`** — mounts the hero, defines the 6-stage scroll track, and holds a
   `<noscript>` SSR fallback that **mirrors the manifesto copy** (keep both in sync if copy
   changes).
 - Manifesto beats (one per state, with scroll-direction-dependent big lines) live in the
-  `BEATS` array in `BlackHole.tsx`.
+  `BEATS` array in **`src/hero/beats.ts`** (shared with `index.astro`'s SSR fallback).
+
+### Styles
+
+`src/styles/global.css` is a thin aggregator that `@import`s per-concern partials in cascade
+order: `tokens.css` (the single source of CSS custom properties) → `base.css` → `chrome.css`
+→ `scene.css` → `hero.css` → `hud.css` → `prose.css` → `about.css`. Add new rules to the
+partial that owns the concern; only `tokens.css` defines `:root` variables.
 
 ## Debugging & verification
 
