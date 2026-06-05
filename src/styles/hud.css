@@ -139,6 +139,18 @@
   width: 1.1rem;
   background: var(--hud-amber);
 }
+/* Scroll-spy "you are here": the stage the scroll position maps to, when not
+   already lit by hover/focus or a committed selection. Quiet on purpose — it
+   does NOT expand the rail (no layout shift as you scroll); it just lifts the
+   glyph out of --fg-faint and gives the connector tick a dim amber so the eye
+   can find the current stage at a glance. */
+.hud-nav-button[data-current='true'] {
+  color: color-mix(in oklch, var(--fg-dim) 78%, var(--fg));
+}
+.hud-nav-button[data-current='true']::before {
+  width: 0.78rem;
+  background: color-mix(in oklch, var(--hud-amber) 46%, var(--hud-line-dim));
+}
 .hud-nav-button:focus-visible {
   outline: 1px solid var(--hud-amber);
   outline-offset: 0.25rem;

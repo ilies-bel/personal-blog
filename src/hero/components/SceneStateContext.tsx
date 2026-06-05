@@ -16,10 +16,16 @@ export interface SceneState {
   reduced: boolean;
   /** True once the final exploration HUD has taken over. */
   explorationMode: boolean;
-  /** HUD target currently previewed-or-selected (preview wins). */
+  /** HUD target under a deliberate hover/focus preview, or the committed
+   *  selection (preview wins). Drives the loud active treatment (rail expands,
+   *  label revealed). Scroll does NOT feed this — see scrollHudId. */
   activeHudId: HudTargetId | null;
-  /** HUD target the visitor has committed to. */
+  /** HUD target the visitor has committed to (click). Owns the inline route link. */
   selectedHudId: HudTargetId | null;
+  /** HUD target the current scroll position maps to — the last lifecycle stage
+   *  scrolled past. Drives the quiet "you are here" marker so the rail tracks
+   *  scroll even when nothing is hovered or selected, without expanding. */
+  scrollHudId: HudTargetId | null;
   /** import.meta.env.BASE_URL, resolved once. */
   base: string;
 }

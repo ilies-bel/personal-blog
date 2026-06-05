@@ -71,10 +71,37 @@ export const HUD_NAV_BY_ID = HUD_NAV_ITEMS.reduce<Record<HudTargetId, HudNavItem
   return acc;
 }, {} as Record<HudTargetId, HudNavItem>);
 
+// Items in ascending `stage` order — the source list happens to already be sorted,
+// but the scroll-spy mapping below depends on it, so make that contract explicit
+// rather than relying on authoring order.
+const HUD_NAV_BY_STAGE: readonly HudNavItem[] = [...HUD_NAV_ITEMS].sort((a, b) => a.stage - b.stage);
+
+/**
+ * Scroll-spy: map a lifecycle stage (0..5, the same transition-space `getStage`
+ * produces) to the HUD target the visitor is currently "on" — the last stage
+ * they have scrolled past. Returns the first item while still above it, so the
+ * top of the rail (BLACK HOLE / stage 0) lights up at the very top of the page.
+ */
+export function hudIdForStage(stage: number): HudTargetId {
+  let current = HUD_NAV_BY_STAGE[0];
+  for (const item of HUD_NAV_BY_STAGE) {
+    if (stage >= item.stage) current = item;
+    else break;
+  }
+  return current.id;
+}
+
 interface HudNavigationProps {
   visible: boolean;
+  /** The highlighted target: preview > committed selection > scroll position.
+   *  Resolved upstream so the readout + loud "active" treatment track it. */
   activeId: HudTargetId | null;
+  /** The committed (clicked) target — rendered louder than a scroll highlight. */
   selectedId: HudTargetId | null;
+  /** The target the current scroll position maps to (scroll-spy "you are here").
+   *  Drives a quiet ambient marker, distinct from the deliberate active/selected
+   *  treatments, so the rail reflects scroll even when idle. */
+  currentId: HudTargetId | null;
   base: string;
   onPreview: (id: HudTargetId) => void;
   onPreviewEnd: () => void;
@@ -90,6 +117,7 @@ export default function HudNavigation({
   visible,
   activeId,
   selectedId,
+  currentId,
   base,
   onPreview,
   onPreviewEnd,
@@ -98,6 +126,9 @@ export default function HudNavigation({
 }: HudNavigationProps) {
   const activeItem = activeId ? HUD_NAV_BY_ID[activeId] : null;
   const selectedItem = selectedId ? HUD_NAV_BY_ID[selectedId] : null;
+  // The mobile readout names the stage in focus: a deliberate preview/selection
+  // if there is one, otherwise the scroll-spy current stage so it tracks scroll.
+  const readoutItem = activeItem ?? (currentId ? HUD_NAV_BY_ID[currentId] : null);
 
   return (
     <div className="hud-system" data-visible={visible} onMouseLeave={onPreviewEnd}>
@@ -116,6 +147,13 @@ export default function HudNavigation({
           {HUD_NAV_ITEMS.map((item) => {
             const isActive = activeId === item.id;
             const isSelected = selectedId === item.id;
+            // Scroll-spy "you are here": where the scroll position sits in the
+            // lifecycle. This is the visitor's real location in the set, so it owns
+            // aria-current. The quiet visual marker is suppressed when the same row
+            // is already lit louder by a hover/focus preview or selection, so the
+            // two treatments never double up.
+            const isCurrent = currentId === item.id;
+            const showCurrentMarker = isCurrent && !isActive && !isSelected;
 
             return (
               <li className="hud-nav-row" key={item.id}>
@@ -123,10 +161,12 @@ export default function HudNavigation({
                   className="hud-nav-button"
                   data-active={isActive || isSelected}
                   data-selected={isSelected}
+                  data-current={showCurrentMarker}
                   data-motion={item.motion}
                   type="button"
                   aria-label={`${item.label}. ${item.destination}. ${item.object}.`}
                   tabIndex={visible ? 0 : -1}
+                  aria-current={isCurrent ? 'location' : undefined}
                   aria-expanded={isActive || isSelected}
                   aria-pressed={isSelected}
                   onFocus={() => onPreview(item.id)}
@@ -149,10 +189,10 @@ export default function HudNavigation({
         </ol>
       </nav>
 
-      {activeItem && (
+      {readoutItem && (
         <p className="hud-nav-mobile-readout" aria-hidden="true">
-          <span>{activeItem.label}</span>
-          <span>{activeItem.destination}</span>
+          <span>{readoutItem.label}</span>
+          <span>{readoutItem.destination}</span>
         </p>
       )}
 

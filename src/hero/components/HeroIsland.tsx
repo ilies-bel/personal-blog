@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker } from '../scroll';
 import { STAGE_COUNT, BUILT_STAGES } from '../beats';
-import { HUD_NAV_BY_ID, type HudTargetId } from '../HudNavigation';
+import { HUD_NAV_BY_ID, hudIdForStage, type HudTargetId } from '../HudNavigation';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -177,6 +177,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
   }, []);
 
   const base = import.meta.env.BASE_URL ?? '/';
+  // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
+  // same scroll-stage expression the scene's getStage() uses (progress * stages,
+  // clamped to what's built) so the rail's "you are here" marker and the morph
+  // stay in lock-step. Only meaningful once the HUD has revealed.
+  const scrollHudId = explorationMode ? hudIdForStage(Math.min(BUILT_STAGES, progress * STAGE_COUNT)) : null;
+  // The loud "active" treatment (rail expands, label revealed) is reserved for a
+  // deliberate hover/focus preview or a committed selection — NOT scroll. Scroll
+  // gets the quiet `scrollHudId` marker below, so the rail never expands/collapses
+  // just from scrolling past a stage.
   const activeHudId = explorationMode ? previewHudId ?? selectedHudId : null;
 
   const handleHudPreview = (id: HudTargetId): void => {
@@ -219,7 +228,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
 
   return (
     <SceneStateProvider
-      state={{ progress, direction, reduced, explorationMode, activeHudId, selectedHudId, base }}
+      state={{ progress, direction, reduced, explorationMode, activeHudId, selectedHudId, scrollHudId, base }}
       actions={{
         onHudPreview: handleHudPreview,
         onHudPreviewEnd: handleHudPreviewEnd,
