@@ -3,8 +3,8 @@
 // its manifesto copy.
 //
 // The home page plays the stellar lifecycle BACKWARDS as the visitor scrolls:
-// black hole (top) → reverse supernova → red giant → yellow star → nebula →
-// pale blue dot (bottom). Each lifecycle state is one beat of the manifesto.
+// black hole (top) → dying-star bridge → red giant → dying star → nebula →
+// beginning dot (bottom). Each lifecycle state is one beat of the manifesto.
 //
 // This module is imported by BOTH the client-only React island
 // (BlackHole.tsx, which renders the live cross-fading overlay) AND
@@ -35,10 +35,9 @@ export interface ManifestoBeat {
   whisper: string;
 }
 
-// Six states evenly spaced on the scroll timeline, black hole at the top
-// (progress 0), pale blue dot at the bottom (progress ~0.86). With STAGE_COUNT
-// = 6 the morph for state N settles around stage N (progress N/6), so each
-// beat's centre is placed on its state's settled frame.
+// Six states on the scroll timeline, black hole at the top and the beginning dot
+// near the bottom. The final two copy beats are intentionally delayed so the
+// nebula and the tiny beginning star get a silent observation window first.
 export const BEATS: ManifestoBeat[] = [
   {
     at: 0.02,
@@ -49,9 +48,9 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 1 / 6,
-    state: 'reverse supernova',
-    down: 'doomed to explode?',
-    up: 'and one day it blows up.',
+    state: 'dying star',
+    down: 'uncertain. still holding.',
+    up: 'and one day it gives way.',
     whisper: 'fast to build. faster to fall apart.',
   },
   {
@@ -63,21 +62,21 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 3 / 6,
-    state: 'yellow star',
-    down: 'or could it just burn steady?',
+    state: 'dying star',
+    down: 'small enough to doubt.',
     up: 'for a while, it just works.',
     whisper: "the part that's still up at 3am. that's engineering.",
   },
   {
-    at: 4 / 6,
+    at: 0.72,
     state: 'nebula',
     down: 'everything starts here.',
     up: "a few more, and it's a real thing.",
     whisper: 'stars are born from what the last one left behind.',
   },
   {
-    at: 5 / 6,
-    state: 'pale blue dot',
+    at: 0.89,
+    state: 'beginning',
     down: 'in the beginning.',
     up: 'it starts with one good decision.',
     whisper: "every line you'll ever ship fits on that dot. worth doing properly, then.",

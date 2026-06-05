@@ -22,6 +22,7 @@ import { ScrollTracker } from './scroll';
 import { BEATS, STAGE_COUNT, BUILT_STAGES } from './beats';
 import { lifecycle, easeOut, smoothstep01 } from './lifecycle';
 import { buildGravitySim, simDimensions, NEBULA_PLACE_FN, type GravitySim } from './gravitySim';
+import HudNavigation, { HUD_NAV_BY_ID, type HudTargetId } from './HudNavigation';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -71,13 +72,13 @@ interface Config {
 
 const CFG: Config = {
   // --- disk ---
-  rIn: 2.4,
+  rIn: 2.55,
   rOut: 18.0,
   diskThickness: 0.215,
   diskParticles: 1_200_000,
-  diskDistrib: 0.9,
-  coreSize: 1.86,
-  holeFactor: 0.85,
+  diskDistrib: 0.78,
+  coreSize: 2.06,
+  holeFactor: 0.88,
   ringBright: 0.62, // brighter rim (ref: 0.44)
 
   // --- physics ---
@@ -86,7 +87,7 @@ const CFG: Config = {
   betaScale: 0.53,
   beamExp: 2.7,
   doppler: 0.55,
-  lens: 1.5,
+  lens: 1.72,
   secScale: 0.85,
   vertAsym: 1.0,
   horizAsym: 0.56,
@@ -105,14 +106,14 @@ const CFG: Config = {
   warmth: 0.01,
   saturation: 0.38,
   olive: 1.6,
-  warp: 0.6,
+  warp: 0.76,
   starBright: 3.6, // ref: 3.0
-  starDensity: 7.6,
+  starDensity: 5.2,
 };
 
 // Fixed screen scale.
-const lookOffsetX = -0.55;
-const lookOffsetY = 0.1;
+const lookOffsetX = -0.82;
+const lookOffsetY = 0.16;
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
@@ -663,13 +664,13 @@ const diskVertexShader = /* glsl */ `
         vPlaceholder = 1.0;
         vSunRed = redGiant;
         vYrMix = uYrMix;   // 0 = smooth gold cloud sphere (post-swap) → 1 = red giant
-        // red giants are BIG and bloated; the yellow sun is a tighter orb.
-        float sunRadFac = (redGiant > 0.5) ? 1.45 : 0.92;
+        // red giants are BIG and bloated; the dying star is a tighter orb.
+        float sunRadFac = (redGiant > 0.5) ? 2.35 : 0.92;
         // yellow → red giant grow: at uYrGrow=0 the cloud is size-matched to the
-        // yellow mesh (×0.35 = SUN_RIG_RADIUS/RED_GIANT_RADIUS), inflating to the
+        // yellow mesh (×0.18 = SUN_RIG_RADIUS/RED_GIANT_RADIUS), inflating to the
         // full red-giant radius at uYrGrow=1. No-op (×1.0) everywhere else.
-        // KEEP 0.35 IN SYNC with SUN_RIG_RADIUS's factor so the swap stays seamless.
-        sunRadFac *= mix(0.35, 1.0, uYrGrow);
+        // KEEP 0.18 IN SYNC with SUN_RIG_RADIUS's factor so the swap stays seamless.
+        sunRadFac *= mix(0.18, 1.0, uYrGrow);
         float tt = uTime * 0.05;
 
         // === (A) photosphere field ==========================================
@@ -730,7 +731,7 @@ const diskVertexShader = /* glsl */ `
         // atmosphere anchored to the (collapsing) surface radius so loops/jets ride
         // the photosphere inward as it caves in rather than hanging in empty space.
         float sunR  = uGiantR * sunRadFac * collapseScale;  // actual (collapsed) radius
-        float atmoThresh = (redGiant > 0.5) ? 0.955 : 0.91;
+        float atmoThresh = (redGiant > 0.5) ? 0.94 : 0.91;
         // suppress loops/prominences while the cloud is the smooth gold swap-in
         // ball: push the pick threshold to ~never (≥1) at low uYrMix, easing the
         // (rare) red-giant flares back in only as it reddens. No-op at uYrMix=1.
@@ -817,7 +818,7 @@ const diskVertexShader = /* glsl */ `
         vec3 ELL = vec3(1.55, 0.78, 1.15);
         float NR = uGiantR * 1.30;                          // overall nebula extent (bigger → sprawls)
         // a slow wandering drift so the whole cloud rolls/breathes (not frozen).
-        vec3 nDrift = vec3(uTime*0.016, uTime*0.011, -uTime*0.013);
+        vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 
         // -- base + warped position: a FULLY-HASHED point in the volume shaped into
         // the irregular ellipsoid and domain-warped into organic cloud + voids. This
@@ -949,7 +950,7 @@ const diskVertexShader = /* glsl */ `
       }
       // -- pale blue dot: collapse to a small, soft, cool sphere ------------
       if(uDot > 0.5){
-        pos = sphere * (uGiantR * 0.18);
+        pos = sphere * (uGiantR * 0.018);
         heat = 0.5;
         vPlaceholder = 3.0;
       }
@@ -1330,6 +1331,9 @@ const diskVertexShader = /* glsl */ `
       if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize*3.0, 2.5, 9.0); // young-star knot (small bright point)
       if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
     }
+    if(vPlaceholder > 2.9){
+      gl_PointSize = (aSeed < 0.000018) ? clamp(baseSize * 0.10, 0.35, 0.75) : 0.0;
+    }
     if(drop) gl_PointSize = 0.0;
   }
 `;
@@ -1620,6 +1624,70 @@ const starFragmentShader = /* glsl */ `
     vec2 c = gl_PointCoord-0.5; if(length(c)>0.5) discard;
     float a = smoothstep(0.5,0.0,length(c));
     gl_FragColor = vec4(vec3(0.95,0.96,0.98)*vB*a*1.05, 1.0);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+//  A single distant star for the black-hole frame. It is intentionally tiny and
+//  quiet: a few sub-points travel as one source so lensing can stretch it near
+//  the rim, then it fades into the event horizon.
+// ---------------------------------------------------------------------------
+const distantStarVertexShader = /* glsl */ `
+  attribute float aShard;
+  attribute float aSeed;
+  uniform float uTime, uPixelRatio, uShadowR, uThetaE, uAspect, uHole, uPresence;
+  varying float vB;
+
+  ${LENS_GLSL}
+
+  void main(){
+    float cycle = fract((uTime + 8.0) / 24.0);
+    float drift = smoothstep(0.0, 0.68, cycle);
+    float fall = smoothstep(0.62, 0.94, cycle);
+    float p = drift * 0.22 + pow(fall, 2.7) * 0.78;
+
+    vec3 startP = vec3(-130.0, 20.0, -240.0);
+    vec3 midP = vec3(-42.0, 8.0, -110.0);
+    vec3 endP = vec3(-0.20, 0.07, -3.2);
+    vec3 pos = mix(startP, midP, smoothstep(0.0, 0.72, p));
+    pos = mix(pos, endP, pow(smoothstep(0.50, 1.0, p), 2.2));
+
+    vec3 travel = normalize(endP - startP);
+    vec3 side = normalize(cross(travel, vec3(0.0, 1.0, 0.0)));
+    vec3 up = normalize(cross(side, travel));
+    float stretch = smoothstep(0.56, 0.90, cycle);
+    pos += side * (aShard - 0.5) * (0.010 + 0.11 * stretch);
+    pos += up * (aSeed - 0.5) * 0.018 * stretch;
+
+    vec4 viewP = modelViewMatrix * vec4(pos, 1.0);
+    vec4 clipP = projectionMatrix * viewP;
+    vec4 clipBH = projectionMatrix * modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    float mag, screenR;
+    vec4 lClip = lensClip(clipP, clipBH, mag, screenR);
+
+    float fadeIn = smoothstep(0.04, 0.12, cycle);
+    float fadeOut = 1.0 - smoothstep(0.88, 0.97, cycle);
+    float horizonFade = 1.0 - smoothstep(uHole * 0.72, uHole * 1.04, screenR);
+    float visible = uPresence * fadeIn * fadeOut * horizonFade;
+
+    gl_Position = lClip;
+    float dist = max(-viewP.z, 1.0);
+    gl_PointSize = clamp(uPixelRatio * (0.85 + 1.6 * stretch) * (150.0 / dist), 0.55, 2.2);
+    vB = visible * (0.20 + 0.20 * aSeed) * (1.0 + 1.15 * stretch) * min(mag, 1.9);
+    if(clipP.w <= 0.0 || vB < 0.002) gl_PointSize = 0.0;
+  }
+`;
+
+const distantStarFragmentShader = /* glsl */ `
+  precision highp float;
+  varying float vB;
+  void main(){
+    vec2 c = gl_PointCoord - 0.5;
+    float d = length(c);
+    if(d > 0.5) discard;
+    float a = smoothstep(0.5, 0.0, d);
+    vec3 col = vec3(0.82, 0.90, 1.0);
+    gl_FragColor = vec4(col * vB * a, a);
   }
 `;
 
@@ -2610,6 +2678,12 @@ interface SceneHooks {
    *  0→1 = transition 1 (black hole → reverse supernova remnant),
    *  1→2 = transition 2 (remnant → red giant). Later stages extend the range. */
   getStage: () => number;
+  /** Active HUD target. The render loop uses this only for a quiet focus boost;
+   *  the stage preview itself still flows through getStage(). */
+  getFocusTarget?: () => HudTargetId | null;
+  /** True while the final HUD is controlling previews. Suppresses cinematic-only
+   *  effects such as the supernova whiteout so menu hover never becomes flashy. */
+  isExplorationMode?: () => boolean;
   /** Suppress the DEV disk-tuning panel. Backdrop mode (reading pages) sets this
    *  so the slider panel never floats over page copy. */
   noDebugPanel?: boolean;
@@ -2954,6 +3028,61 @@ function buildStarfield(scene: THREE.Scene, particleCount: number, pixelRatio: n
   return { pts, secPts, geo, mat, matSec, uniforms, dispose };
 }
 
+interface DistantStarRig {
+  pts: THREE.Points;
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  uniforms: Uniforms;
+  dispose: () => void;
+}
+
+function buildDistantStar(scene: THREE.Scene, pixelRatio: number): DistantStarRig {
+  const N = 9;
+  const pos = new Float32Array(N * 3);
+  const shard = new Float32Array(N);
+  const seed = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    shard[i] = i / (N - 1);
+    seed[i] = Math.random();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aShard', new THREE.BufferAttribute(shard, 1));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
+
+  const uniforms: Uniforms = {
+    uTime: { value: 0 },
+    uPixelRatio: { value: pixelRatio },
+    uShadowR: { value: 0.1 },
+    uThetaE: { value: 0.15 },
+    uAspect: { value: 1.0 },
+    uImageSign: { value: 1.0 },
+    uHole: { value: 0.12 },
+    uPresence: { value: 1.0 },
+  };
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: distantStarVertexShader,
+    fragmentShader: distantStarFragmentShader,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  scene.add(pts);
+
+  const dispose = (): void => {
+    scene.remove(pts);
+    geo.dispose();
+    mat.dispose();
+  };
+
+  return { pts, geo, mat, uniforms, dispose };
+}
+
 // The warp arcs: short line segments that trace each background star's lensed
 // arc, intensifying the "spacetime bent around the hole" read. Like the disk
 // and starfield they carry a PRIMARY (+1) and SECONDARY (-1) image off one geo.
@@ -3190,6 +3319,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   const starPts = starRig.pts;
   const starSecPts = starRig.secPts;
 
+  const distantStarRig = buildDistantStar(scene, pr0);
+  const distantStarUniforms = distantStarRig.uniforms;
+  const distantStarPts = distantStarRig.pts;
+
   const warpRig = buildWarp(scene, diskParticles);
   const warpUniforms = warpRig.uniforms; // updateLensUniforms() writes through this
   const warpMat = warpRig.mat;
@@ -3209,13 +3342,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor that GROWS into the red giant. The red
-  // giant is the point cloud at uGiantR (4.2) × its sunRadFac (1.45) = 6.09 world
-  // units, so the yellow star lands at 6.09 × 0.35 ≈ 2.13 — a small tight orb that
-  // inflates to the bloated giant. NOTE: the cloud's grow-start factor in the
-  // vertex shader (`mix(0.35, 1.0, uYrGrow)`) MUST equal this 0.35 so the gold
+  // giant is the point cloud at uGiantR (4.2) × its sunRadFac (2.35) = 9.87 world
+  // units, so the dying star lands at 9.87 × 0.18 ≈ 1.78 — a small isolated orb
+  // that inflates to the bloated giant. NOTE: the cloud's grow-start factor in the
+  // vertex shader (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold
   // particle sphere is size-matched to the mesh at the swap.
-  const RED_GIANT_RADIUS = 4.2 * 1.45; // point-cloud red giant world radius
-  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.35; // yellow star: small grow anchor
+  const RED_GIANT_RADIUS = 4.2 * 2.35; // point-cloud red giant world radius
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
@@ -3242,7 +3375,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   function updateLensUniforms(): void {
     const aspect = window.innerWidth / window.innerHeight;
     const fovY = THREE.MathUtils.degToRad(camera.fov);
-    const D = camera.position.distanceTo(lookTarget);
+    const D = camera.position.length();
     const shadowAng = CFG.coreSize / D;
     const ndcShadow = shadowAng / Math.tan(fovY / 2);
     const thetaE = ndcShadow * CFG.lens;
@@ -3271,6 +3404,11 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       u.uAspect.value = aspect;
       u.uPixelRatio.value = pr;
     }
+    distantStarUniforms.uShadowR.value = ndcShadow;
+    distantStarUniforms.uThetaE.value = starThetaE;
+    distantStarUniforms.uHole.value = holeR;
+    distantStarUniforms.uAspect.value = aspect;
+    distantStarUniforms.uPixelRatio.value = pr;
     for (const u of [warpUniforms, warpMatSec.uniforms]) {
       u.uShadowR.value = ndcShadow;
       u.uThetaE.value = starThetaE;
@@ -3298,7 +3436,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   // azimuth rotation forever. A gentle pointer parallax rides on top.
   const NEAR_FACTOR = 0.42; // how close the travelling begins (× resting distance)
   const INTRO_DUR = 6.0; // seconds for the dezoom
-  const ROTATE_SPEED = 0.045; // rad/s of resting drift
+  const ROTATE_SPEED = 0.018; // rad/s of resting drift
 
   let mouseX = 0;
   let mouseY = 0;
@@ -3337,6 +3475,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   // flick of the wheel glides through the transitions instead of snapping.
   // stage 0→1 = reverse supernova; 1→2 = red giant.
   let stage = 0;
+  let focusGlow = 0;
   // previous-frame stage for the gravity sim (more substeps on a fast scroll).
   let prevSimStage = 0;
 
@@ -3362,6 +3501,18 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
   const NOVA_DECAY = 1.2;    // s: cool-out, reveal the remnant
   const NOVA_DUR = NOVA_RISE + NOVA_HOLD + NOVA_DECAY; // 1.54 s total
   const NOVA_COOLDOWN = 900; // ms minimum between fires (anti-strobe backstop)
+  let nebulaFlashStart = -1;
+  let nebulaFlashArmed = true;
+  let prevNebulaStage = 0;
+  const NEBULA_FLASH_TRIGGER = 3.5;
+  const NEBULA_FLASH_ARM = 0.18;
+  const NEBULA_FLASH_RISE = 0.08;
+  const NEBULA_FLASH_HOLD = 0.18;
+  const NEBULA_FLASH_DECAY = 1.55;
+  const NEBULA_FLASH_DUR = NEBULA_FLASH_RISE + NEBULA_FLASH_HOLD + NEBULA_FLASH_DECAY;
+  const NEBULA_FLASH_COOLDOWN = 1200;
+  const frameLookTarget = new THREE.Vector3();
+  const flashOrigin = new THREE.Vector3();
 
   function frame(): void {
     if (stopped) return;
@@ -3370,6 +3521,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     const t = (now - t0) / 1000;
 
     // --- lifecycle position, smoothed toward the scroll target ---
+    const exploring = hooks.isExplorationMode?.() === true;
+    const focusTarget = exploring ? hooks.getFocusTarget?.() ?? null : null;
     const stageTarget = hooks.getStage();
     stage += (stageTarget - stage) * (reduced ? 1 : 0.12);
     // DEBUG: window.__bhMorph forces the stage to an exact value (no smoothing)
@@ -3393,7 +3546,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // with a hard cooldown as an anti-strobe backstop. Reduced-motion never fires.
     const crossed = (prevMorph < NOVA_TRIGGER) !== (morph < NOVA_TRIGGER);
     if (
-      crossed && novaArmed && !reduced &&
+      crossed && novaArmed && !reduced && !exploring &&
       (novaStart < 0 || now - novaStart > NOVA_COOLDOWN)
     ) {
       novaStart = now;
@@ -3424,11 +3577,39 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // expire during their settle wait). Pairs with __bhMorph (which pins stage).
     const dbgFlash = (window as unknown as { __bhFlash?: number }).__bhFlash;
     if (typeof dbgFlash === 'number') nova = Math.max(0, Math.min(1, dbgFlash));
-    novaPass.uniforms.uNova.value = nova;
+
+    const crossedNebula = (prevNebulaStage < NEBULA_FLASH_TRIGGER) !== (stage < NEBULA_FLASH_TRIGGER);
+    if (
+      crossedNebula && nebulaFlashArmed && !reduced && !exploring &&
+      (nebulaFlashStart < 0 || now - nebulaFlashStart > NEBULA_FLASH_COOLDOWN)
+    ) {
+      nebulaFlashStart = now;
+      nebulaFlashArmed = false;
+    }
+    if (!nebulaFlashArmed && Math.abs(stage - NEBULA_FLASH_TRIGGER) > NEBULA_FLASH_ARM) nebulaFlashArmed = true;
+    prevNebulaStage = stage;
+    let nebulaFlash = 0;
+    if (nebulaFlashStart >= 0) {
+      const te = (now - nebulaFlashStart) / 1000;
+      if (te >= NEBULA_FLASH_DUR) nebulaFlashStart = -1;
+      else if (te < NEBULA_FLASH_RISE) nebulaFlash = smoothstep01(te / NEBULA_FLASH_RISE);
+      else if (te < NEBULA_FLASH_RISE + NEBULA_FLASH_HOLD) nebulaFlash = 1.0;
+      else {
+        const p = (te - NEBULA_FLASH_RISE - NEBULA_FLASH_HOLD) / NEBULA_FLASH_DECAY;
+        nebulaFlash = 1.0 - p * p * (3.0 - 2.0 * p);
+      }
+    }
+    const dbgNebulaFlash = (window as unknown as { __bhNebulaFlash?: number }).__bhNebulaFlash;
+    if (typeof dbgNebulaFlash === 'number') nebulaFlash = Math.max(0, Math.min(1, dbgNebulaFlash));
+
+    const screenNova = Math.max(nova * 0.82, nebulaFlash);
+    const nebulaFlashOwnsScreen = nebulaFlash >= nova * 0.82;
+    novaPass.uniforms.uNova.value = screenNova;
+    novaPass.uniforms.uPeak.value = nebulaFlashOwnsScreen ? 0.985 : 0.88;
     // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
     // so a capture script can inspect either variant without scrolling to trigger it.
     const dbgFlashDir = (window as unknown as { __bhFlashDir?: number }).__bhFlashDir;
-    novaPass.uniforms.uNovaDir.value = typeof dbgFlashDir === 'number' ? dbgFlashDir : novaDir;
+    novaPass.uniforms.uNovaDir.value = nebulaFlashOwnsScreen ? 1 : typeof dbgFlashDir === 'number' ? dbgFlashDir : novaDir;
 
     // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
     // This is the second piece of the stateful clock (time-based intro ramp); like
@@ -3452,6 +3633,9 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
       nearFactor: NEAR_FACTOR,
       cfg: CFG,
     });
+    focusGlow += ((focusTarget ? 1 : 0) - focusGlow) * (reduced ? 1 : 0.08);
+    const focusEmission = 1 + focusGlow * 0.18;
+    const focusBloom = 1 + focusGlow * 0.12;
 
     // the particle-side shock-breakout glow follows the SAME time envelope, so
     // the additive blast core peaks together with the screen whiteout. The shader's
@@ -3555,8 +3739,9 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // suppressed entirely while growing, ramping in over the last 3% of growth so
     // the young forming star is a clean orb, not a flaring one. 1 outside the window.
     const flarePresence = s.starFormed > 0 ? smoothstep01((s.starFormed - 0.97) / 0.03) : 1;
-    sunRig.loopMat.uniforms.uFade.value = flarePresence;
-    sunRig.coronaMat.uniforms.uFade.value = flarePresence;
+    const dyingStarQuiet = s.meshSide && !growing ? 0.22 : 1;
+    sunRig.loopMat.uniforms.uFade.value = flarePresence * dyingStarQuiet;
+    sunRig.coronaMat.uniforms.uFade.value = flarePresence * dyingStarQuiet;
     // the glow shell cools blue→gold with the star as it grows.
     if (growing) {
       (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
@@ -3582,7 +3767,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     sunRig.starBack.visible = s.starBackVisible;
     // Compensate the dome's brightness for the red giant's dimmer post grade so the
     // shared star field reads the SAME behind both star states (see starBackBright).
-    sunRig.starMat.uniforms.uBright.value = STAR_BACK_BASE_BRIGHT * s.starBackBright;
+    sunRig.starMat.uniforms.uBright.value = STAR_BACK_BASE_BRIGHT * s.starBackBright * (1 + focusGlow * 0.08);
     // Outside the yellow⇄red slot the cloud renders the red giant, the nebula AND
     // the pale-blue-dot. Inside the slot, the cloud body only shows on the cloud
     // side (the opaque mesh owns the yellow side).
@@ -3598,6 +3783,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // forms we drop the gravitational-warp background entirely and restore the plain
     // starfield to full brightness (s.starBright) behind the star.
     starMat.uniforms.uStarBright.value = s.starBright;
+    distantStarPts.visible = !s.gravityGone && stage < 0.45;
+    distantStarUniforms.uPresence.value = distantStarPts.visible ? 1 - smoothstep01((stage - 0.08) / 0.34) : 0;
     // Completely remove ALL gravity once the star forms (s.gravityGone): the warp
     // arcs, the secondary (lensed) disk image, and the photon ring are switched off
     // — a star has no event horizon bending light around it. The plain (un-lensed)
@@ -3614,8 +3801,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // Collapse cloud brightness (s.cloudBright): inside the collapse window it
     // brightens the converging infall (light pouring into the star) then fades the
     // cloud out as the mesh star forms — clean handoff. Exactly 1 outside the window.
-    diskMatPrimary.uniforms.uBright.value = s.baseBright * dbgCtl.densityPrimary * s.cloudBright;
-    diskMatSecondary.uniforms.uBright.value = s.baseBright * dbgCtl.densitySecondary * s.cloudBright;
+    diskMatPrimary.uniforms.uBright.value = s.baseBright * dbgCtl.densityPrimary * s.cloudBright * focusEmission;
+    diskMatSecondary.uniforms.uBright.value = s.baseBright * dbgCtl.densitySecondary * s.cloudBright * focusEmission;
     // --- DEV: live layer geometry (delete with the panel) ---
     diskMatPrimary.uniforms.uSec.value = dbgCtl.sec;
     diskMatSecondary.uniforms.uSec.value = dbgCtl.sec;
@@ -3629,9 +3816,13 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // lifecycle() (including the sun / red-giant / nebula branch overrides), so the
     // shell just assigns the finals. See lifecycle.ts for the per-beat reasoning
     // (the nebula branch carries the SHO-palette grade tuning).
-    bloom.strength = s.bloomStrength;
+    const nebulaDark = exploring
+      ? 0
+      : smoothstep01((stage - 3.30) / 0.17) * (1 - smoothstep01((stage - 3.50) / 0.17));
+    const preFlashDarken = 1 - 0.88 * nebulaDark * (1 - nebulaFlash);
+    bloom.strength = s.bloomStrength * focusBloom * preFlashDarken + nebulaFlash * 0.18;
     bloom.radius = s.bloomRadius;
-    gradePass.uniforms.uExposure.value = s.exposure;
+    gradePass.uniforms.uExposure.value = s.exposure * preFlashDarken;
     gradePass.uniforms.uOlive.value = s.olive;
     gradePass.uniforms.uWarmth.value = s.warmth;
     gradePass.uniforms.uSat.value = s.gradeSat;
@@ -3659,19 +3850,34 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // plus the pointer parallax. Folded together as yWobble below.
     const idleBob = reduced
       ? 0
-      : Math.sin(t * 0.055) * 0.42 + Math.sin(t * 0.13 + 1.7) * 0.1 + Math.sin(t * 0.31 + 4.1) * 0.035;
+      : Math.sin(t * 0.055) * 0.16 + Math.sin(t * 0.13 + 1.7) * 0.035 + Math.sin(t * 0.31 + 4.1) * 0.014;
 
     // azimuth: a small extra sweep during the intro, then steady rotation (both
     // shaped in lifecycle()). A slow lateral handheld sway + the pointer parallax
     // ride on top here, in the impure shell, since they are DOM/time input rather
     // than lifecycle state.
     const baseAz = THREE.MathUtils.degToRad(CFG.rotation);
-    const idleSway = reduced ? 0 : Math.sin(t * 0.041 + 0.6) * 0.006; // sub-degree drift
-    const a = baseAz + s.introSweep + s.rotation + idleSway + mouseX * 0.1;
-    const yWobble = idleBob + -mouseY * 0.8;
+    const idleSway = reduced ? 0 : Math.sin(t * 0.041 + 0.6) * 0.0025; // sub-degree drift
+    const a = baseAz + s.introSweep + s.rotation + idleSway + mouseX * 0.04;
+    const yWobble = idleBob + -mouseY * 0.25;
 
     camera.position.set(Math.sin(a) * horiz, camY0 + yWobble, Math.cos(a) * horiz);
-    camera.lookAt(lookTarget);
+    const redFrame =
+      smoothstep01((stage - 1.58) / 0.42) *
+      (1 - smoothstep01((stage - 2.86) / 0.34));
+    const dyingFrame =
+      smoothstep01((stage - 2.72) / 0.20) *
+      (1 - smoothstep01((stage - 3.44) / 0.20));
+    frameLookTarget.copy(lookTarget);
+    frameLookTarget.x += redFrame * -2.25 + dyingFrame * 0.72;
+    frameLookTarget.y += redFrame * 0.42 + dyingFrame * -0.18;
+    camera.lookAt(frameLookTarget);
+
+    flashOrigin.set(0, 0, 0).project(camera);
+    novaPass.uniforms.uCenter.value.set(
+      Math.max(0, Math.min(1, flashOrigin.x * 0.5 + 0.5)),
+      Math.max(0, Math.min(1, flashOrigin.y * 0.5 + 0.5)),
+    );
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
     // lookAt rewrites the camera's orientation every frame, so the roll + local
@@ -3725,6 +3931,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     diskMatSecondary.uniforms.uTime.value = ut;
     starMat.uniforms.uTime.value = ut;
     starMatSec.uniforms.uTime.value = ut;
+    distantStarUniforms.uTime.value = ut;
     warpMat.uniforms.uTime.value = ut;
     warpMatSec.uniforms.uTime.value = ut;
     ringMat.uniforms.uTime.value = ut;
@@ -3770,6 +3977,7 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     postRig.dispose();
     diskRig.dispose();
     starRig.dispose();
+    distantStarRig.dispose();
     warpRig.dispose();
     ringRig.dispose();
     sunRig.dispose();
@@ -3797,6 +4005,8 @@ const DIR_DEADZONE = 0.0008;
 // fades out, so the lifecycle scene plays uninterrupted; it returns at the top.
 // Small enough that the very first nudge of the wheel begins the hide.
 const CHROME_HIDE_AT = 0.015;
+const EXPLORATION_TRIGGER_AT = 0.972;
+const EXPLORATION_REVEAL_DELAY = 1500;
 
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
@@ -3851,6 +4061,20 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<'down' | 'up'>('down');
   const [reduced, setReduced] = useState(false);
+  const [explorationMode, setExplorationMode] = useState(false);
+  const [previewHudId, setPreviewHudId] = useState<HudTargetId | null>(null);
+  const [selectedHudId, setSelectedHudId] = useState<HudTargetId | null>(() => {
+    try {
+      const stored = localStorage.getItem('hud-selected');
+      return stored && stored in HUD_NAV_BY_ID ? (stored as HudTargetId) : null;
+    } catch {
+      return null;
+    }
+  });
+  const explorationModeRef = useRef(false);
+  const explorationTimerRef = useRef<number | null>(null);
+  const selectedHudRef = useRef<HudTargetId | null>(selectedHudId);
+  const activeHudRef = useRef<HudTargetId | null>(selectedHudId);
   // Whether the opening chrome (name + menu) is currently shown. Tracked in a
   // ref so the scroll callback only touches the DOM on an actual transition.
   const chromeVisibleRef = useRef(true);
@@ -3881,6 +4105,16 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       return () => dispose();
     }
 
+    const clearExplorationTimer = (): void => {
+      if (explorationTimerRef.current == null) return;
+      window.clearTimeout(explorationTimerRef.current);
+      explorationTimerRef.current = null;
+    };
+    const openExploration = (): void => {
+      explorationModeRef.current = true;
+      setExplorationMode(true);
+    };
+
     const tracker = new ScrollTracker(STAGE_COUNT);
     const unsub = tracker.subscribe((s) => {
       progressRef.current = s.progress;
@@ -3889,6 +4123,12 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       const delta = s.progress - lastProgressRef.current;
       if (delta > DIR_DEADZONE) setDirection('down');
       else if (delta < -DIR_DEADZONE) setDirection('up');
+      if (explorationModeRef.current && selectedHudRef.current && Math.abs(delta) > DIR_DEADZONE) {
+        selectedHudRef.current = null;
+        activeHudRef.current = null;
+        setSelectedHudId(null);
+        try { localStorage.removeItem('hud-selected'); } catch { /* noop */ }
+      }
       lastProgressRef.current = s.progress;
       // Cinematic chrome: the name (.bh-identity) and the top-right menu
       // (.overlay-blog, owned by the layout) belong to the opening frame only.
@@ -3901,6 +4141,17 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
         chromeVisibleRef.current = top;
         document.body.classList.toggle('is-scrolled', !top);
       }
+
+      if (s.progress >= EXPLORATION_TRIGGER_AT) {
+        if (!explorationModeRef.current && explorationTimerRef.current == null) {
+          explorationTimerRef.current = window.setTimeout(() => {
+            explorationTimerRef.current = null;
+            openExploration();
+          }, isReduced ? 0 : EXPLORATION_REVEAL_DELAY);
+        }
+      } else if (!explorationModeRef.current) {
+        clearExplorationTimer();
+      }
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
@@ -3910,11 +4161,21 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
     // Lifecycle position over the scroll. Each stage is 1/STAGE_COUNT of the page;
     // the five transitions span stage 0→1, 1→2, ... 4→5. Clamp to the number of
     // transitions built so the bottom of the page holds the final state.
-    const getStage = (): number =>
-      Math.min(BUILT_STAGES, progressRef.current * STAGE_COUNT);
+    const getStage = (): number => {
+      const activeItem = explorationModeRef.current && !isReduced && activeHudRef.current
+        ? HUD_NAV_BY_ID[activeHudRef.current]
+        : null;
+      return activeItem?.stage ?? Math.min(BUILT_STAGES, progressRef.current * STAGE_COUNT);
+    };
 
-    const dispose = createScene(host, isReduced, { getStage });
+    const dispose = createScene(host, isReduced, {
+      getStage,
+      getFocusTarget: () => activeHudRef.current,
+      isExplorationMode: () => explorationModeRef.current,
+      noDebugPanel: true,
+    });
     return () => {
+      clearExplorationTimer();
       unsub();
       tracker.stop();
       dispose();
@@ -3924,7 +4185,35 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
   }, []);
 
   const base = import.meta.env.BASE_URL ?? '/';
-  const contactHref = `${base}/about#get-in-touch`.replace(/\/+/g, '/');
+  const activeHudId = explorationMode ? previewHudId ?? selectedHudId : null;
+
+  const handleHudPreview = (id: HudTargetId): void => {
+    if (!explorationModeRef.current) return;
+    activeHudRef.current = id;
+    setPreviewHudId(id);
+  };
+
+  const handleHudPreviewEnd = (): void => {
+    setPreviewHudId(null);
+    activeHudRef.current = selectedHudRef.current;
+  };
+
+  const handleHudActivate = (id: HudTargetId): void => {
+    if (!explorationModeRef.current) return;
+    selectedHudRef.current = id;
+    activeHudRef.current = id;
+    setPreviewHudId(null);
+    setSelectedHudId(id);
+    try { localStorage.setItem('hud-selected', id); } catch { /* noop */ }
+  };
+
+  const handleHudClearSelection = (): void => {
+    selectedHudRef.current = null;
+    activeHudRef.current = null;
+    setPreviewHudId(null);
+    setSelectedHudId(null);
+    try { localStorage.removeItem('hud-selected'); } catch { /* noop */ }
+  };
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own
   // chrome and copy, and dims this layer via CSS (.bh-backdrop).
@@ -3937,7 +4226,7 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
   }
 
   return (
-    <div className="bh-root">
+    <div className="bh-root" data-exploring={explorationMode}>
       <div className="bh-stage" ref={hostRef} aria-hidden="true" />
 
       {/* Persistent identity — fixed top-left across every beat. The sole
@@ -3947,7 +4236,11 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
         <span className="bh-identity-role">Software Engineer</span>
       </a>
 
-      <div className="bh-overlay">
+      <div
+        className="bh-overlay"
+        data-exploring={explorationMode}
+        style={{ opacity: explorationMode && !reduced ? 0 : undefined }}
+      >
         {BEATS.map((beat, i) => {
           // Under reduced motion every beat is shown (so all copy is reachable);
           // otherwise the trapezoid fade reveals one beat at a time. The first and
@@ -3985,25 +4278,21 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
                 <span className="bh-beat-state">{beat.state}</span>
                 {beat.whisper}
               </p>
-
-              {/* Beat 6 tail: the loop invitation and the contact bridge, each
-                  progressively more faded, stacked under the dot whisper. */}
-              {isLast && (
-                <div className="bh-tail">
-                  <p className="bh-tail-loop">time only goes one way. scroll up to see it.</p>
-                  <a
-                    className="bh-tail-contact"
-                    href={contactHref}
-                    style={{ pointerEvents: reduced || visible ? 'auto' : 'none' }}
-                  >
-                    Make it last, or don't make it. Sounds interesting? Let's connect..
-                  </a>
-                </div>
-              )}
             </div>
           );
         })}
       </div>
+
+      <HudNavigation
+        visible={explorationMode}
+        activeId={activeHudId}
+        selectedId={selectedHudId}
+        base={base}
+        onPreview={handleHudPreview}
+        onPreviewEnd={handleHudPreviewEnd}
+        onActivate={handleHudActivate}
+        onClearSelection={handleHudClearSelection}
+      />
 
       {!reduced && progress < 0.02 && <p className="bh-hint">scroll to rewind ↓</p>}
     </div>

@@ -443,26 +443,25 @@ export function lifecycle(input: LifecycleInput): StarState {
   // star's background. It stays HIDDEN for: the black hole (it keeps the warping
   // lensed starfield), the nebula and the dot (gas/speck alone on black), and the
   // gravitational-collapse window (the infalling gas sits alone on black).
-  const starBackVisible = (sunWindow || redGiantPhase) && !nebula && !dot && !collapsing;
+  const starBackVisible = redGiantPhase && !nebula && !dot && !collapsing;
   if (sunWindow) {
-    // The yellow star is the MESH sun rig (bright, opaque, real photosphere). Push
-    // exposure + bloom UP and keep the grade out of the way: no tone-map crush, no
-    // olive, no desaturation — let the bright gold body and white-hot limb survive.
-    bloomStrength = 0.7 + 0.12 * yrPunch; // bright limb/corona halo + subtle swap flash
-    bloomRadius = 0.5; // tighter so the solid sphere edge stays defined
-    exposure = 1.0 * (1 + 0.05 * yrPunch);
+    // The dying star is deliberately fragile: smaller, darker, and isolated on
+    // black. It should not compete with the red giant or the nebula release.
+    bloomStrength = 0.34 + 0.08 * yrPunch;
+    bloomRadius = 0.34;
+    exposure = 0.62 * (1 + 0.04 * yrPunch);
     olive = 0.0;
-    warmth = 0.0;
-    gradeSat = 1.0; // full saturation → vivid gold
+    warmth = -0.02;
+    gradeSat = 0.76;
   } else if (redGiantPhase) {
     // rg crossfades the grade from the bright gold swap-in (rg=0, still flashing)
     // to the settled dim matte red giant (rg=1). On the cloud side it follows
     // yrColor; below the slot it is pinned to 1.
     const rg = cloudSide ? yrColor : 1;
-    bloomStrength = (0.7 + 0.12 * yrPunch) * (1 - rg) + 0.22 * rg; // subtle flash → dim halo
-    bloomRadius = cfg.bloomRad;
-    const yellowExposure = 1.0 * (1 + 0.05 * yrPunch);
-    const redExposure = cfg.exposure * 0.7;
+    bloomStrength = (0.34 + 0.08 * yrPunch) * (1 - rg) + 0.32 * rg; // fragile star → broad dim halo
+    bloomRadius = cfg.bloomRad * (1 - rg) + 0.68 * rg;
+    const yellowExposure = 0.62 * (1 + 0.04 * yrPunch);
+    const redExposure = cfg.exposure * 0.78;
     exposure = yellowExposure * (1 - rg) + redExposure * rg;
     olive = 0.0; // no olive cast on the star
     warmth = 0.14 * rg; // warm the matte red
@@ -490,6 +489,16 @@ export function lifecycle(input: LifecycleInput): StarState {
     gradeSat = gradeSat * (1 - ne) + 1.55 * ne; // vivid SHO palette
     diskSat = diskSat * (1 - ne) + 1.4 * ne;
     grain = grain * (1 - ne); // fade film grain out → smooth immersed gas (no speckle)
+  } else if (dot) {
+    // beginning: a near-pixel star in a very large black field.
+    bloomStrength = 0.03;
+    bloomRadius = 0.10;
+    exposure = 0.28;
+    olive = 0.0;
+    warmth = -0.03;
+    gradeSat = 0.72;
+    diskSat = 0.7;
+    grain = 0.035;
   } else {
     bloomRadius = cfg.bloomRad;
   }
@@ -504,10 +513,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   // size ranking reads BH(close) > red giant > seed(far). Reduced motion = 1.
   let zoom = 1.0;
   if (!reduced) {
-    const ZOOM_HERO = 0.6; // close at the hero BH → dist≈12 (BH fills the frame)
+    const ZOOM_HERO = 0.56; // close at the hero BH → dist≈11 (BH fills the frame)
     const ZOOM_SEED = 2.6; // far at the seed     → dist≈52 (speck in a vast field)
     const ZOOM_BLAST = 2.0; // pulled back across the blast → dist≈40 (big remnant fits)
-    const ZOOM_OUT = 1.0; // resting at the red giant
+    const ZOOM_OUT = 0.72; // close on the red giant so it exceeds the viewport
     // hero push-in eases out as the implosion gets underway (stage 0 → 0.18)
     const heroT = smoothstep01(stage / 0.18);
     // seed pull-back, IN SYNC with the world-space seed collapse (0.18 → 0.46)
@@ -532,8 +541,8 @@ export function lifecycle(input: LifecycleInput): StarState {
     // reads as turbulent gas all around, not spokes.) Ease in as the nebula arrives
     // (3.1 → 3.7), hold immersed, then pull WAY back out toward the pale blue dot
     // (4.3 → 4.7) so the dot reads as a tiny speck.
-    const ZOOM_NEBULA = 0.65; // dist≈13 → camera sits inside the cloud, gas fills the frame
-    const ZOOM_DOT = 2.4; // pull back out so the pale blue dot is a far speck
+    const ZOOM_NEBULA = 0.72; // slower, calmer immersion; gas still fills the frame
+    const ZOOM_DOT = 4.6; // pull far out so the beginning is nearly a single pixel
     const nebIn = smoothstep01((stage - 3.1) / 0.6);
     const nebOut = smoothstep01((stage - 4.3) / 0.4);
     zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn; // ease into the cloud

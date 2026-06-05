@@ -82,7 +82,7 @@ export const NEBULA_PLACE_FN = /* glsl */ `
   vec3 nebulaPlace(float aSeed, float aU, float aPhase, float uTime, float uGiantR){
     vec3 ELL = vec3(1.55, 0.78, 1.15);
     float NR = uGiantR * 1.30;                          // overall nebula extent
-    vec3 nDrift = vec3(uTime*0.016, uTime*0.011, -uTime*0.013);
+    vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 
     vec3 hh = vec3(
       h31(vec3(aSeed*13.0, aU*17.0,  5.0)),
