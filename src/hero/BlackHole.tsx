@@ -23,113 +23,27 @@ import { BEATS, STAGE_COUNT, BUILT_STAGES } from './beats';
 import { lifecycle, easeOut, smoothstep01 } from './lifecycle';
 import { buildGravitySim, simDimensions, NEBULA_PLACE_FN, type GravitySim } from './gravitySim';
 import HudNavigation, { HUD_NAV_BY_ID, type HudTargetId } from './HudNavigation';
+import { CFG, lookOffsetX, lookOffsetY, prefersReducedMotion, tuneParticlesForDevice } from './lib/config';
+import {
+  SCROLLED_BODY_CLASS,
+  HUD_SELECTED_STORAGE_KEY,
+  SCROLL_DOWN,
+  SCROLL_UP,
+  type ScrollDirection,
+  type BeatEdge,
+  DIRECTION_DEADZONE,
+  CHROME_HIDE_AT,
+  EXPLORATION_TRIGGER_AT,
+  EXPLORATION_REVEAL_DELAY_MS,
+  BEAT_HOLD,
+  BEAT_FADE,
+  DEBUG_WINDOW_KEYS,
+  readDebugNumber,
+} from './lib/constants';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-
-// ---------------------------------------------------------------------------
-//  Config (rs = 1; the hole sits at the world origin). Physics adapted from
-//  github.com/vlwkaos/threejs-blackhole: Keplerian orbits, relativistic
-//  beaming ∝ δ³, gravitational redshift, T ∝ r^-3/4.
-//
-//  Brightness-related values are lifted above the moody reference still so the
-//  hero reads as clearly luminous (see uExposure / bloomStr / disk brightness).
-// ---------------------------------------------------------------------------
-interface Config {
-  rIn: number;
-  rOut: number;
-  diskThickness: number;
-  diskParticles: number;
-  diskDistrib: number;
-  coreSize: number;
-  holeFactor: number;
-  ringBright: number;
-  omega0: number;
-  spinDir: number;
-  betaScale: number;
-  beamExp: number;
-  doppler: number;
-  lens: number;
-  secScale: number;
-  vertAsym: number;
-  horizAsym: number;
-  inclDeg: number;
-  camDist: number;
-  fovDeg: number;
-  rotation: number;
-  exposure: number;
-  bloomStr: number;
-  bloomRad: number;
-  grain: number;
-  warmth: number;
-  saturation: number;
-  olive: number;
-  warp: number;
-  starBright: number;
-  starDensity: number;
-}
-
-const CFG: Config = {
-  // --- disk ---
-  rIn: 2.55,
-  rOut: 18.0,
-  diskThickness: 0.215,
-  diskParticles: 1_200_000,
-  diskDistrib: 0.78,
-  coreSize: 2.06,
-  holeFactor: 0.88,
-  ringBright: 0.62, // brighter rim (ref: 0.44)
-
-  // --- physics ---
-  omega0: 0.5,
-  spinDir: -1.0,
-  betaScale: 0.53,
-  beamExp: 2.7,
-  doppler: 0.55,
-  lens: 1.72,
-  secScale: 0.85,
-  vertAsym: 1.0,
-  horizAsym: 0.56,
-
-  // --- camera (resting pose; the intro travels in to this) ---
-  inclDeg: 5.0,
-  camDist: 20.0,
-  fovDeg: 30.0,
-  rotation: 35.0,
-
-  // --- render (brightened) ---
-  exposure: 0.85, // ref: 0.50 → noticeably brighter
-  bloomStr: 0.78, // ref: 0.56
-  bloomRad: 0.45,
-  grain: 0.16,
-  warmth: 0.01,
-  saturation: 0.38,
-  olive: 1.6,
-  warp: 0.76,
-  starBright: 3.6, // ref: 3.0
-  starDensity: 5.2,
-};
-
-// Fixed screen scale.
-const lookOffsetX = -0.82;
-const lookOffsetY = 0.16;
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-// Density adapted to the device.
-function tuneParticlesForDevice(): number {
-  if (typeof window === 'undefined') return CFG.diskParticles;
-  const w = window.innerWidth;
-  const mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || w < 760;
-  if (w < 480) return 95_000;
-  if (mobile) return 150_000;
-  if (w < 1280) return 240_000;
-  return CFG.diskParticles;
-}
 
 // ---------------------------------------------------------------------------
 //  Shared GLSL: gravitational lensing (point lens)
@@ -3387,8 +3301,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     stage += (stageTarget - stage) * (reduced ? 1 : 0.12);
     // DEBUG: window.__bhMorph forces the stage to an exact value (no smoothing)
     // so the explosion can be inspected frame-by-frame from a capture script.
-    const dbg = (window as unknown as { __bhMorph?: number }).__bhMorph;
-    if (typeof dbg === 'number') stage = dbg;
+    const morphOverride = readDebugNumber(DEBUG_WINDOW_KEYS.morph);
+    if (typeof morphOverride === 'number') stage = morphOverride;
     // `morph` (= min(1, stage)) is needed HERE for the stateful nova clock's
     // breakout-crossing detection below; lifecycle() recomputes it from the same
     // formula for the look scalars. (Kept local + cheap — it's the clock's input.)
@@ -3434,8 +3348,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // DEBUG: window.__bhFlash pins the envelope to a held value so capture scripts
     // can screenshot the rise/peak/decay (the time-based flash would otherwise
     // expire during their settle wait). Pairs with __bhMorph (which pins stage).
-    const dbgFlash = (window as unknown as { __bhFlash?: number }).__bhFlash;
-    if (typeof dbgFlash === 'number') nova = Math.max(0, Math.min(1, dbgFlash));
+    const flashOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flash);
+    if (typeof flashOverride === 'number') nova = Math.max(0, Math.min(1, flashOverride));
 
     const crossedNebula = (prevNebulaStage < NEBULA_FLASH_TRIGGER) !== (stage < NEBULA_FLASH_TRIGGER);
     if (
@@ -3458,8 +3372,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
         nebulaFlash = 1.0 - p * p * (3.0 - 2.0 * p);
       }
     }
-    const dbgNebulaFlash = (window as unknown as { __bhNebulaFlash?: number }).__bhNebulaFlash;
-    if (typeof dbgNebulaFlash === 'number') nebulaFlash = Math.max(0, Math.min(1, dbgNebulaFlash));
+    const nebulaFlashOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebulaFlash);
+    if (typeof nebulaFlashOverride === 'number') nebulaFlash = Math.max(0, Math.min(1, nebulaFlashOverride));
 
     const screenNova = Math.max(nova * 0.82, nebulaFlash);
     const nebulaFlashOwnsScreen = nebulaFlash >= nova * 0.82;
@@ -3467,8 +3381,8 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     novaPass.uniforms.uPeak.value = nebulaFlashOwnsScreen ? 0.985 : 0.88;
     // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
     // so a capture script can inspect either variant without scrolling to trigger it.
-    const dbgFlashDir = (window as unknown as { __bhFlashDir?: number }).__bhFlashDir;
-    novaPass.uniforms.uNovaDir.value = nebulaFlashOwnsScreen ? 1 : typeof dbgFlashDir === 'number' ? dbgFlashDir : novaDir;
+    const flashDirOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flashDir);
+    novaPass.uniforms.uNovaDir.value = nebulaFlashOwnsScreen ? 1 : typeof flashDirOverride === 'number' ? flashDirOverride : novaDir;
 
     // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
     // This is the second piece of the stateful clock (time-based intro ramp); like
@@ -3550,10 +3464,10 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
     // nebula light model strength (ambient+depth+self-occlusion). Always full; the
     // factor only touches nebula particles. DEBUG: window.__bhNebLight pins it (0 =
     // flat self-emission, 1 = full light model) so the look can be A/B'd live.
-    const nebLightDbg = (window as unknown as { __bhNebLight?: number }).__bhNebLight;
-    const nebLightVal = typeof nebLightDbg === 'number' ? nebLightDbg : 1;
-    diskMatPrimary.uniforms.uNebLight.value = nebLightVal;
-    diskMatSecondary.uniforms.uNebLight.value = nebLightVal;
+    const nebLightOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebLight);
+    const nebLightValue = typeof nebLightOverride === 'number' ? nebLightOverride : 1;
+    diskMatPrimary.uniforms.uNebLight.value = nebLightValue;
+    diskMatSecondary.uniforms.uNebLight.value = nebLightValue;
 
     // --- yellow star → red giant: FLASH-SWAP transition ----------------------
     // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
@@ -3842,39 +3756,23 @@ function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks
 //  fallback and scroll track in index.astro share one source of truth with this
 //  live overlay; see that module for the full narrative rationale.
 // ---------------------------------------------------------------------------
-// Direction deadzone: ignore scroll deltas smaller than this (in progress units)
-// so sub-pixel jitter never flips the big-line swap.
-const DIR_DEADZONE = 0.0008;
-
-// Once scroll progress passes this fraction the opening chrome (name + menu)
-// fades out, so the lifecycle scene plays uninterrupted; it returns at the top.
-// Small enough that the very first nudge of the wheel begins the hide.
-const CHROME_HIDE_AT = 0.015;
-const EXPLORATION_TRIGGER_AT = 0.972;
-const EXPLORATION_REVEAL_DELAY = 1500;
-
-function clamp01(x: number): number {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
 // Per-beat opacity: a trapezoid centred on `at` — ramp in, hold across a flat
-// top, ramp out — so neighbouring beats cross-dissolve. Half-width HOLD keeps
-// the line steady through the middle of its slot; FADE softens the edges.
-//
-// `edge` pins the open side so the first/last beats never leave a dead band at
-// the page extremes: 'leading' holds full opacity for everything BEFORE the
-// centre (the opening black-hole beat sits at the very top), 'trailing' holds
-// full opacity for everything AFTER the centre (so the closing pale-blue-dot
-// beat — and its contact bridge — stays reachable all the way to the bottom).
-const BEAT_HOLD = 0.055; // half-width of the fully-shown plateau
-const BEAT_FADE = 0.045; // ramp distance on each side
-function beatOpacity(progress: number, at: number, edge?: 'leading' | 'trailing'): number {
+// top, ramp out — so neighbouring beats cross-dissolve. `edge` pins the open side
+// so the first/last beats never leave a dead band at the page extremes: 'leading'
+// holds full opacity before the centre (the opening black-hole beat sits at the
+// very top), 'trailing' holds it after (so the closing pale-blue-dot beat stays
+// reachable all the way to the bottom).
+function beatOpacity(progress: number, at: number, edge?: BeatEdge): number {
   if (edge === 'leading' && progress <= at) return 1;
   if (edge === 'trailing' && progress >= at) return 1;
-  const d = Math.abs(progress - at);
-  if (d <= BEAT_HOLD) return 1;
-  if (d >= BEAT_HOLD + BEAT_FADE) return 0;
-  return clamp01((BEAT_HOLD + BEAT_FADE - d) / BEAT_FADE);
+  const distance = Math.abs(progress - at);
+  if (distance <= BEAT_HOLD) return 1;
+  if (distance >= BEAT_HOLD + BEAT_FADE) return 0;
+  return clamp01((BEAT_HOLD + BEAT_FADE - distance) / BEAT_FADE);
 }
 
 // ---------------------------------------------------------------------------
@@ -3904,13 +3802,13 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
   // hopeful arc); 'up' swaps in the forward / tragic line. A small deadzone keeps
   // sub-pixel jitter from flipping it.
   const lastProgressRef = useRef(0);
-  const [direction, setDirection] = useState<'down' | 'up'>('down');
+  const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
   const [reduced, setReduced] = useState(false);
   const [explorationMode, setExplorationMode] = useState(false);
   const [previewHudId, setPreviewHudId] = useState<HudTargetId | null>(null);
   const [selectedHudId, setSelectedHudId] = useState<HudTargetId | null>(() => {
     try {
-      const stored = localStorage.getItem('hud-selected');
+      const stored = localStorage.getItem(HUD_SELECTED_STORAGE_KEY);
       return stored && stored in HUD_NAV_BY_ID ? (stored as HudTargetId) : null;
     } catch {
       return null;
@@ -3939,9 +3837,9 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       // window.__bhBackdropStage lets a capture script A/B the pinned frame live
       // (mirrors the home's __bhMorph debug hook). Defaults to the prop.
       const pinnedStage = (): number => {
-        const o = (window as unknown as { __bhBackdropStage?: number }).__bhBackdropStage;
-        const v = typeof o === 'number' ? o : fallback;
-        return Math.min(BUILT_STAGES, Math.max(0, v));
+        const override = readDebugNumber(DEBUG_WINDOW_KEYS.backdropStage);
+        const value = typeof override === 'number' ? override : fallback;
+        return Math.min(BUILT_STAGES, Math.max(0, value));
       };
       const dispose = createScene(host, isReduced, {
         getStage: pinnedStage,
@@ -3965,13 +3863,13 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       setProgress(s.progress);
       // Direction from the delta, with a deadzone so tiny jitter doesn't flip it.
       const delta = s.progress - lastProgressRef.current;
-      if (delta > DIR_DEADZONE) setDirection('down');
-      else if (delta < -DIR_DEADZONE) setDirection('up');
-      if (explorationModeRef.current && selectedHudRef.current && Math.abs(delta) > DIR_DEADZONE) {
+      if (delta > DIRECTION_DEADZONE) setDirection(SCROLL_DOWN);
+      else if (delta < -DIRECTION_DEADZONE) setDirection(SCROLL_UP);
+      if (explorationModeRef.current && selectedHudRef.current && Math.abs(delta) > DIRECTION_DEADZONE) {
         selectedHudRef.current = null;
         activeHudRef.current = null;
         setSelectedHudId(null);
-        try { localStorage.removeItem('hud-selected'); } catch { /* noop */ }
+        try { localStorage.removeItem(HUD_SELECTED_STORAGE_KEY); } catch { /* noop */ }
       }
       lastProgressRef.current = s.progress;
       // Cinematic chrome: the name (.bh-identity) and the top-right menu
@@ -3983,7 +3881,7 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       const top = s.progress < CHROME_HIDE_AT;
       if (top !== chromeVisibleRef.current) {
         chromeVisibleRef.current = top;
-        document.body.classList.toggle('is-scrolled', !top);
+        document.body.classList.toggle(SCROLLED_BODY_CLASS, !top);
       }
 
       if (s.progress >= EXPLORATION_TRIGGER_AT) {
@@ -3991,7 +3889,7 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
           explorationTimerRef.current = window.setTimeout(() => {
             explorationTimerRef.current = null;
             openExploration();
-          }, isReduced ? 0 : EXPLORATION_REVEAL_DELAY);
+          }, isReduced ? 0 : EXPLORATION_REVEAL_DELAY_MS);
         }
       } else if (!explorationModeRef.current) {
         clearExplorationTimer();
@@ -4023,7 +3921,7 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
       tracker.stop();
       dispose();
       // Leave the body in a clean state if the island unmounts mid-scroll.
-      document.body.classList.remove('is-scrolled');
+      document.body.classList.remove(SCROLLED_BODY_CLASS);
     };
   }, []);
 
@@ -4047,7 +3945,7 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
     activeHudRef.current = id;
     setPreviewHudId(null);
     setSelectedHudId(id);
-    try { localStorage.setItem('hud-selected', id); } catch { /* noop */ }
+    try { localStorage.setItem(HUD_SELECTED_STORAGE_KEY, id); } catch { /* noop */ }
   };
 
   const handleHudClearSelection = (): void => {
@@ -4055,7 +3953,7 @@ export default function BlackHole({ backdrop = false, backdropStage = 5 }: Black
     activeHudRef.current = null;
     setPreviewHudId(null);
     setSelectedHudId(null);
-    try { localStorage.removeItem('hud-selected'); } catch { /* noop */ }
+    try { localStorage.removeItem(HUD_SELECTED_STORAGE_KEY); } catch { /* noop */ }
   };
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own
