@@ -57,11 +57,13 @@ export const CFG: Config = {
   spinDir: -1.0,
   betaScale: 0.53,
   beamExp: 2.7,
-  doppler: 0.46, // softer relativistic beam — slightly dimmer bright (left) lobe
+  doppler: 0.40, // softer relativistic beam — eased 0.46 → 0.40 so the bright (left)
+  //   lobe no longer overpowers the final black-hole composition (still beamed, just calmer)
   lens: 1.72,
   secScale: 0.85,
   vertAsym: 1.0,
-  horizAsym: 0.4, // gentler L/R imbalance → light spread more evenly around the disk
+  horizAsym: 0.34, // gentler L/R imbalance (0.40 → 0.34) → light spread more evenly, the left
+  //   beam reads as a hot lobe rather than a blown-out streak that pulls the eye off the hole
 
   // --- camera (resting pose; the intro travels in to this) ---
   inclDeg: 5.0,

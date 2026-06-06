@@ -130,8 +130,11 @@ export const NovaShader = {
         : smoothstep(uNova * 1.4, uNova * 1.4 - 0.45, d);
       // Keep the flash radial and cinematic: bright around the origin/front, with
       // the corners protected so the beat never reads as a flat loading whiteout.
-      float edgeGuard = smoothstep(1.12, 0.24, d);
-      float coreBloom = smoothstep(0.88, 1.0, uNova) * smoothstep(0.62, 0.0, d) * 0.18;
+      // Tighter edge guard (1.00→0.18) keeps the OUTER frame darker so the blast
+      // reads as a glowing ball, not an edge-to-edge wash. A small hot core bloom
+      // adds punch at the centre without flooding the screen.
+      float edgeGuard = smoothstep(1.00, 0.18, d);
+      float coreBloom = smoothstep(0.88, 1.0, uNova) * smoothstep(0.58, 0.0, d) * 0.20;
       float bleach = max(uNova * front * edgeGuard, coreBloom) * uPeak;
       // TEMPERATURE.
       //  explode: blue-white when hot (high uNova) → warm amber as it cools.
@@ -139,10 +142,14 @@ export const NovaShader = {
       //    (light arriving), the exact mirror of the explode cooldown. Achieved by
       //    reading the ramp on the rising envelope the same way; the perceptual
       //    reversal comes from the inward-collapsing front above carrying it.
-      vec3 cold = vec3(0.90, 0.95, 1.0);   // ~#E6F2FF blue-white shock front
-      vec3 warm = vec3(1.0, 0.90, 0.74);   // ~#FFE6BD cooling amber
-      vec3 tint = mix(warm, cold, smoothstep(0.35, 0.85, uNova));
-      vec3 white = mix(vec3(1.0), tint, 0.6); // mostly white, a slight temperature cast
+      // Warmer overall so the supernova reads as incandescent stellar matter, not
+      // a cold grey/white screen wipe. The peak is a warm white-gold; it never goes
+      // fully blue-white. The cast is stronger (0.42 white mix vs 0.6) so the warm
+      // temperature survives the bleach instead of washing to neutral grey.
+      vec3 cold = vec3(1.0, 0.97, 0.90);   // warm-white shock front (was blue-white)
+      vec3 warm = vec3(1.0, 0.82, 0.55);   // ~#FFD18C cooling amber-gold
+      vec3 tint = mix(warm, cold, smoothstep(0.35, 0.90, uNova));
+      vec3 white = mix(vec3(1.0), tint, 0.42); // warm-tinted, never neutral white
       col = mix(col, white, clamp(bleach, 0.0, 1.0));
       gl_FragColor = vec4(col, 1.0);
     }

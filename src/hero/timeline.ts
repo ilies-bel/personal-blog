@@ -1,5 +1,41 @@
 import { clamp01, segment } from './scroll';
 
+// ===========================================================================
+// LIFECYCLE DIRECTION — the single toggle that decides which way time runs.
+//
+// There are two distinct progress values, kept deliberately separate so the
+// story can be reversed later without touching the renderer or the shaders:
+//
+//   userScrollProgress — the raw scroll position (0 at top, 1 at bottom). This
+//     is what the visitor physically controls; it always increases as they
+//     scroll DOWN. It is NEVER read directly by scene visuals.
+//   lifecycleProgress  — the value the stellar-lifecycle renderer consumes. In
+//     "normal" mode it equals userScrollProgress; in "reverse" mode it is
+//     1 - userScrollProgress, so the SAME downward scroll walks the lifecycle
+//     the other way.
+//
+// TEMPORARY direction (this pass keeps the normal lifecycle):
+//     nebula -> yellow star -> red giant -> collapse/supernova -> black hole
+// The FINAL intended direction (a later pass, NOT performed here):
+//     black hole -> reverse supernova -> red giant -> yellow star -> nebula
+//
+// To perform the future inversion, flip LIFECYCLE_DIRECTION to "reverse". Every
+// downstream system (camera poses, the legacy "stage" mapping, beats, HUD) reads
+// lifecycleProgress through legacyStageForProgress / cameraPoseForProgress, so
+// the single flag below is the only edit the inversion requires here. The shader
+// "stage" coordinate stays untouched — lifecycle.ts remains a pure function of it.
+// ===========================================================================
+export type LifecycleDirection = 'normal' | 'reverse';
+export const LIFECYCLE_DIRECTION: LifecycleDirection = 'normal';
+
+/** Map the raw scroll value (0..1, increases scrolling down) to the value the
+ *  lifecycle renderer consumes. Normal = identity; reverse = mirror. This is the
+ *  ONLY place direction is applied — keep it the single seam. */
+export function lifecycleProgress(userScrollProgress: number): number {
+  const p = clamp01(userScrollProgress);
+  return LIFECYCLE_DIRECTION === 'reverse' ? 1 - p : p;
+}
+
 type Vec3Tuple = readonly [number, number, number];
 
 export interface CameraPose {
@@ -35,11 +71,18 @@ const easeOutExpo = (t: number): number => {
   return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
 };
 
-// Forward scroll progress is the public cinematic timeline. The existing shaders
-// still understand the older reverse "stage" coordinates, so this is the single
-// handoff from the new story into the proven morph machinery.
+// The public cinematic timeline. The existing shaders still understand the older
+// reverse "stage" coordinates, so this is the single handoff from the new story
+// into the proven morph machinery. `progress` is the RAW scroll value; we run it
+// through lifecycleProgress() so LIFECYCLE_DIRECTION owns which way time flows.
+//
+// Phase bands (in lifecycleProgress space) match the cinematic spec exactly:
+//   0.00-0.16 nebulaFormation | 0.16-0.30 yellowStarIgnition |
+//   0.30-0.46 redGiantGrowth  | 0.46-0.62 redGiantHold       |
+//   0.62-0.72 collapse        | 0.72-0.80 supernova          |
+//   0.80-0.94 blackHoleFormation | 0.94-1.00 blackHoleHold / portfolio lure.
 export function legacyStageForProgress(progress: number): number {
-  const p = clamp01(progress);
+  const p = lifecycleProgress(progress);
 
   if (p < 0.16) {
     return lerp(3.5, 3.32, smoothstep(segment(p, 0.0, 0.16)));
@@ -95,16 +138,32 @@ const RED_COMPOSITION = {
   position: [-6.8, -1.05, 31.2] as Vec3Tuple,
   target: [-9.2, -0.20, 0.0] as Vec3Tuple,
 };
+// COLLAPSE: the star is at world origin; the red hold framed it off-centre-RIGHT
+// (RED_COMPOSITION looks at negative-x, ~ -9.2). Instead of snapping the star to
+// dead-centre at the collapse (which made the supernova read as a new, unrelated
+// centred scene), we PULL BACK while EASING the off-centre framing inward — the
+// collapse point inherits the giant's screen position and only drifts toward
+// centre as the blast grows to fill the frame. Target keeps a residual negative-x
+// so the collapse core sits where the limb just was, not jump-cut to centre.
 const COLLAPSE_PULL = {
-  position: [-1.1, -0.35, 23.6] as Vec3Tuple,
-  target: [-0.22, -0.06, 0.0] as Vec3Tuple,
+  position: [-2.6, -0.5, 25.8] as Vec3Tuple,
+  target: [-2.4, -0.12, 0.0] as Vec3Tuple,
 };
+// SUPERNOVA: the blast erupts from that same off-centre point and expands. The
+// camera eases the core the rest of the way to centre AS the shell fills the
+// frame (so the recentre is motivated by the expanding blast, not a cut), with a
+// small continued pull-back — NO push-in spike (the old 27.8 in-out-in
+// rollercoaster is gone; z now moves monotonically outward through the blast).
 const SUPERNOVA_RECOIL = {
-  position: [0.45, -0.12, 27.8] as Vec3Tuple,
-  target: [0.02, 0.0, 0.0] as Vec3Tuple,
+  position: [-0.9, -0.2, 24.8] as Vec3Tuple,
+  target: [-0.7, -0.04, 0.0] as Vec3Tuple,
 };
+// BLACK HOLE forms from the settling debris: continue the same gentle inward
+// drift, now fully centred, as the remnant condenses. Monotonic z (24.8 -> 23.2
+// -> 21.8) so the whole collapse->blast->hole reads as one continuous physical
+// pull, never a teleport to a tiny dot.
 const BLACK_HOLE_SETL = {
-  position: [0.22, 0.14, 23.8] as Vec3Tuple,
+  position: [0.0, 0.05, 23.2] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 const EVENT_HORIZON = {
@@ -113,7 +172,9 @@ const EVENT_HORIZON = {
 };
 
 export function cameraPoseForProgress(progress: number, time: number, nova: number, reduced: boolean): CameraPose {
-  const p = clamp01(progress);
+  // `progress` is the RAW scroll value; route through lifecycleProgress so the
+  // camera arc inherits LIFECYCLE_DIRECTION along with everything else.
+  const p = lifecycleProgress(progress);
   let position = NEBULA_START.position;
   let target = NEBULA_START.target;
   let parallax = 0.08;
@@ -138,7 +199,12 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     target = RED_COMPOSITION.target;
     parallax = 0.015;
   } else if (p < 0.72) {
-    const t = easeInQuart(segment(p, 0.62, 0.72));
+    // COLLAPSE reveal: pull back and recompose PROMPTLY (easeOutCubic leads the
+    // move) so the camera reveals the collapsing core early and settles on it,
+    // rather than the old easeInQuart that held the off-centre limb then lurched
+    // at the last instant. The star slides from extreme-right-cropped toward the
+    // collapse framing as the surface caves in.
+    const t = easeOutCubic(segment(p, 0.62, 0.72));
     position = mixVec(RED_COMPOSITION.position, COLLAPSE_PULL.position, t);
     target = mixVec(RED_COMPOSITION.target, COLLAPSE_PULL.target, t);
     parallax = 0.0;

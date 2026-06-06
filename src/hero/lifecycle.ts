@@ -322,24 +322,26 @@ export function lifecycle(input: LifecycleInput): StarState {
   // the star reaches full size — the inflow visibly FEEDS the star rather than the
   // star appearing and the gas catching up.
   const collapse = Math.pow(prog, 0.7);
-  // star GROWTH is deliberately SLOW: prog^2.4 keeps the star tiny through the
-  // first ~two-thirds of the window and grows it mostly in the final stretch, so
-  // you watch a small seed being fed for a long time before it inflates. Visual
-  // size is `0.05 + 0.95*starFormed` in frame() (small → full).
-  const starFormed = Math.pow(prog, 2.4);
+  // star GROWTH (prog^1.8): the seed becomes faintly visible EARLIER and grows on
+  // a smoother, more continuous curve, so the yellow star reads as CONDENSING out
+  // of the infalling gas rather than popping into existence in the final stretch.
+  // It still lags the gas (which leads at prog^0.7), so the inflow visibly feeds a
+  // growing core. Visual size is `0.05 + 0.95*starFormed` in frame() (small→full).
+  const starFormed = Math.pow(prog, 1.8);
   // sim owns the disk just inside the window; fades as the mesh takes the core.
   const simBlend = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.1) * (1 - 0.85 * prog);
   // cloud DENSITY/brightness is the INVERSE of star size: as the star grows
   // (prog→1) the gas thins to almost nothing (mass moved INTO the star). The fade
   // is shaped (1-prog)^1.5 so the gas stays present through the first half (you see
-  // it fall) then clears decisively in the second half so the forming blue star
-  // reveals instead of being washed by additive gas in front. A small mid-window
-  // glow bump reads as light pouring in. 1 (no-op) outside the window.
-  const feedBump = 4 * prog * (1 - prog); // 0→1→0, peaks mid-window
+  // it fall) then clears decisively in the second half so the forming gold star
+  // reveals instead of being washed by additive gas in front. A STRONGER mid-window
+  // glow bump (5.2× vs 4×, +0.8 weight) makes the "light pouring into the core" read
+  // clearly as the gas agglomerates onto the star. 1 (no-op) outside the window.
+  const feedBump = 5.2 * prog * (1 - prog); // 0→1→0, peaks mid-window (brighter convergence)
   // gas stays visibly present LONGER (^1.6, not ^2.2) so you watch MORE particles
   // stream inward and feed the star before the cloud finally clears.
   const invDensity = Math.pow(1 - prog, 1.6); // 1 → 0
-  const cloudBright = 1 + inWindow * ((1 + 0.55 * feedBump) * invDensity - 1);
+  const cloudBright = 1 + inWindow * ((1 + 0.8 * feedBump) * invDensity - 1);
   // the shader runs its nebula geometry across the real nebula AND the collapse
   // window, so `pos` holds the analytic nebula placement (the sim's seed/home)
   // whenever the sim blend is active.
@@ -498,9 +500,14 @@ export function lifecycle(input: LifecycleInput): StarState {
     // band (2.88→3.0) and ramps to 0 as the collapse takes over, handing the
     // brightness story to the collapse/nebula logic below.
     const settled = collapsing ? 1 - smoothstep01((stage - 3.0) / 0.15) : 1;
-    bloomStrength = (0.72 + 0.1 * yrPunch) * settled + 0.34 * (1 - settled);
-    bloomRadius = 0.62;
-    exposure = (0.96 * settled + 0.6 * (1 - settled)) * (1 + 0.04 * yrPunch);
+    // Bloom pulled DOWN ~28% (0.72 → 0.52) and the halo radius tightened (0.62 →
+    // 0.50) so the yellow star keeps a readable SPHERE/RIM instead of blooming into
+    // a featureless white blob. It still reads as a bright, radiant main-sequence
+    // sun, but the silhouette survives — the halo no longer eats the disc. Exposure
+    // eased 0.96 → 0.88 in the same spirit (bright, not blown out).
+    bloomStrength = (0.52 + 0.08 * yrPunch) * settled + 0.32 * (1 - settled);
+    bloomRadius = 0.50;
+    exposure = (0.88 * settled + 0.58 * (1 - settled)) * (1 + 0.04 * yrPunch);
     olive = 0.0;
     warmth = 0.02; // barely-warm gold cast — keeps the halo pale-gold, not orange
     gradeSat = 1.0;
@@ -512,14 +519,14 @@ export function lifecycle(input: LifecycleInput): StarState {
     // The red giant must be clearly VISIBLE (it used to be too dim to read), but the
     // ~1M additively-blended points blow out to white if pushed hard, so the lift is
     // spread conservatively across bloom + exposure + the per-grain shader recipe.
-    bloomStrength = (0.72 + 0.03 * yrPunch) * (1 - rg) + 0.46 * rg; // rg=0 end matches the bright
-    //   yellow sunWindow bloom (0.72) for a soft mesh↔cloud cross-dissolve; the settled red giant
-    //   end (0.46) stays dialled DOWN so the orange wash doesn't pull the eye off the headline. The
-    //   flash bump (yrPunch) is a whisper (0.03) so the size-matched mesh handoff is a soft pop-free
-    //   cross-dissolve.
-    bloomRadius = 0.62 * (1 - rg) + 0.54 * rg; // rg=0 end matches the yellow halo radius (0.62);
-    //   the red giant end (0.54) keeps a TIGHTER halo so its glow falls off faster.
-    const yellowExposure = 0.96 * (1 + 0.04 * yrPunch); // must match the bright sunWindow exposure
+    bloomStrength = (0.52 + 0.03 * yrPunch) * (1 - rg) + 0.42 * rg; // rg=0 end matches the new
+    //   (reduced) yellow sunWindow bloom (0.52) for a soft mesh↔cloud cross-dissolve; the settled
+    //   red giant end eased 0.46 → 0.42 so the orange halo competes a touch less with the headline
+    //   during the readable hold. The flash bump (yrPunch) is a whisper (0.03) so the size-matched
+    //   mesh handoff is a soft pop-free cross-dissolve.
+    bloomRadius = 0.50 * (1 - rg) + 0.54 * rg; // rg=0 end matches the new yellow halo radius (0.50);
+    //   the red giant end (0.54) keeps a slightly wider matte falloff.
+    const yellowExposure = 0.88 * (1 + 0.04 * yrPunch); // must match the bright sunWindow exposure (0.88)
     const redExposure = cfg.exposure * 0.92; // pulled down ~8% with the bloom so the whole red
     //   giant reads a touch dimmer; brightness still comes mainly from the lowered toneComp below.
     exposure = yellowExposure * (1 - rg) + redExposure * rg;
@@ -596,6 +603,14 @@ export function lifecycle(input: LifecycleInput): StarState {
   const giantScale = GIANT_FULL;
 
   // --- lifecycle zoom choreography (the scale story) ---
+  // DEPRECATED / DEAD CAMERA SCALARS: the values computed from here down that feed
+  // the camera (zoom, orbitSweep, novaKick, shakeAmp, fovKick, introSweep, rotation,
+  // redYellowAz, redYellowElev) are NO LONGER CONSUMED by the render loop. The active
+  // camera is the progress-based keyframe rig in timeline.ts (cameraPoseForProgress),
+  // which createScene writes directly to camera.position/lookAt. These remain only so
+  // StarState's shape is unchanged; they are safe to delete in a dedicated cleanup
+  // pass (out of scope for this cinematic-polish change). Do NOT wire them back into
+  // the camera — timeline.ts owns the camera grammar.
   // The camera story (scrolling DOWN, stage rising):
   //   1. HERO → SEED (0 → 0.46): the black hole SHRINKS geometrically (blackHoleScale),
   //      so the camera holds a steady frame (the shrink + orbit carry the "gets small").

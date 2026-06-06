@@ -55,7 +55,10 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 0.965,
-    text: { inStart: 0.940, inEnd: 0.955, outStart: 0.990, outEnd: 1.000 },
+    // Enters at 0.950 (was 0.940) so the headline appears AFTER the easeOutExpo
+    // settle onto the black hole has visually completed (0.80–0.94), not during its
+    // decelerating tail — the frame is locked and magnetic before the copy reads.
+    text: { inStart: 0.950, inEnd: 0.962, outStart: 0.992, outEnd: 1.000 },
     state: 'black hole',
     down: 'what survives has gravity.',
     up: 'what survives has gravity.',

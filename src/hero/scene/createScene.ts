@@ -214,6 +214,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let stage = hooks.getStage();
   let progress = hooks.getProgress?.() ?? progressForLegacyStage(stage);
   let focusGlow = 0;
+  // latch so the settled yellow-star glow colour (constant gold) is written once,
+  // not re-set every frame while the star holds.
+  let glowSettled = false;
   // previous-frame stage for the gravity sim (more substeps on a fast scroll).
   let prevSimStage = stage;
   // previous-frame stage for the hyperspace-streak flow direction (latched on a
@@ -238,21 +241,22 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let novaDir = 1;
   const NOVA_TRIGGER = 0.5;  // breakout (where the legacy flash fired)
   const NOVA_ARM = 0.12;     // must move |morph-0.5| beyond this to re-arm
+  // PUNCHY, not a wash: rise fast, hold a beat, decay quickly so the screen flash
+  // is felt as an impact and the remnant is revealed almost immediately. The old
+  // 0.68s decay let the bleach dwell ~0.84s and read as a grey loading screen;
+  // total dwell is now ~0.48s. The particle shock-breakout (disk uFlash) keeps
+  // going on its own morph schedule, so the BLAST is still substantial — only the
+  // screen-white envelope is tightened.
   const NOVA_RISE = 0.08;    // s: dark → peak accent
-  const NOVA_HOLD = 0.08;    // s: brief peak, not a white loading screen
-  const NOVA_DECAY = 0.68;   // s: cool-out, reveal the remnant
+  const NOVA_HOLD = 0.05;    // s: brief peak, not a white loading screen
+  const NOVA_DECAY = 0.35;   // s: quick cool-out, reveal the remnant fast
   const NOVA_DUR = NOVA_RISE + NOVA_HOLD + NOVA_DECAY;
   const NOVA_COOLDOWN = 1200; // ms minimum between fires (anti-strobe backstop)
-  let nebulaFlashStart = -1;
-  let nebulaFlashArmed = true;
+  // Nebula-intro flash — REMOVED (it read as a cheap grey exposure glitch as the
+  // nebula appeared). Only the previous-stage tracker survives so the crossing is
+  // still computed for clarity; the whiteout never fires. See the block in frame().
   let prevNebulaStage = stage;
   const NEBULA_FLASH_TRIGGER = 3.5;
-  const NEBULA_FLASH_ARM = 0.18;
-  const NEBULA_FLASH_RISE = 0.06;
-  const NEBULA_FLASH_HOLD = 0.05;
-  const NEBULA_FLASH_DECAY = 0.62;
-  const NEBULA_FLASH_DUR = NEBULA_FLASH_RISE + NEBULA_FLASH_HOLD + NEBULA_FLASH_DECAY;
-  const NEBULA_FLASH_COOLDOWN = 1600;
   const frameLookTarget = new THREE.Vector3();
   const flashOrigin = new THREE.Vector3();
   const onVisibilityChange = (): void => {
@@ -333,36 +337,31 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const flashOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flash);
     if (typeof flashOverride === 'number') nova = Math.max(0, Math.min(1, flashOverride));
 
+    // NEBULA INTRO FLASH — REMOVED. The full-screen whiteout that used to fire on
+    // the stage-3.5 crossing read as a cheap grey exposure glitch right as the
+    // nebula appears (and the pre-flash darken below greyed the frame BEFORE it).
+    // The nebula now arrives clean: no screen flash, only the gas itself. The
+    // envelope state machinery is kept dormant (advanced but never composited) so
+    // the __bhNebulaFlash capture hook and a future re-enable stay one-line trivial.
     const crossedNebula = (prevNebulaStage < NEBULA_FLASH_TRIGGER) !== (stage < NEBULA_FLASH_TRIGGER);
-    if (
-      crossedNebula && nebulaFlashArmed && !reduced && !exploring &&
-      (nebulaFlashStart < 0 || now - nebulaFlashStart > NEBULA_FLASH_COOLDOWN)
-    ) {
-      nebulaFlashStart = now;
-      nebulaFlashArmed = false;
-    }
-    if (!nebulaFlashArmed && Math.abs(stage - NEBULA_FLASH_TRIGGER) > NEBULA_FLASH_ARM) nebulaFlashArmed = true;
+    void crossedNebula; // intentionally not firing the nebula whiteout
     prevNebulaStage = stage;
-    let nebulaFlash = 0;
-    if (nebulaFlashStart >= 0) {
-      const te = (now - nebulaFlashStart) / 1000;
-      if (te >= NEBULA_FLASH_DUR) nebulaFlashStart = -1;
-      else if (te < NEBULA_FLASH_RISE) nebulaFlash = smoothstep01(te / NEBULA_FLASH_RISE);
-      else if (te < NEBULA_FLASH_RISE + NEBULA_FLASH_HOLD) nebulaFlash = 1.0;
-      else {
-        const p = (te - NEBULA_FLASH_RISE - NEBULA_FLASH_HOLD) / NEBULA_FLASH_DECAY;
-        nebulaFlash = 1.0 - p * p * (3.0 - 2.0 * p);
-      }
-    }
+    // Debug hook can still pin a nebula-flash value for capture A/B, but it no
+    // longer fires from scroll.
     const nebulaFlashOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebulaFlash);
-    if (typeof nebulaFlashOverride === 'number') nebulaFlash = Math.max(0, Math.min(1, nebulaFlashOverride));
+    const nebulaFlash = typeof nebulaFlashOverride === 'number' ? Math.max(0, Math.min(1, nebulaFlashOverride)) : 0;
 
-    const novaScreen = nova * 0.72;
-    const nebulaScreen = nebulaFlash * 0.62;
+    // SUPERNOVA SCREEN FLASH — short, warm, corner-protected. Dialed down from the
+    // old grey full-screen wash (0.72 @ peak 0.82) so the blast reads as a bright
+    // bloom that keeps the dark corners, never an edge-to-edge loading whiteout.
+    // The physical radial particle shock-breakout (disk uFlash) does the heavy
+    // lifting; this pass is just the warm bloom punch over it. See NovaShader.
+    const novaScreen = nova * 0.5;
+    const nebulaScreen = nebulaFlash * 0.5; // debug-only path; 0 in normal play
     const screenNova = Math.max(novaScreen, nebulaScreen);
-    const nebulaFlashOwnsScreen = nebulaScreen >= novaScreen;
+    const nebulaFlashOwnsScreen = nebulaScreen > novaScreen;
     novaPass.uniforms.uNova.value = screenNova;
-    novaPass.uniforms.uPeak.value = nebulaFlashOwnsScreen ? 0.76 : 0.82;
+    novaPass.uniforms.uPeak.value = 0.78; // filmic cap — peak stays under pure white
     // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
     // so a capture script can inspect either variant without scrolling to trigger it.
     const flashDirOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flashDir);
@@ -460,9 +459,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // home-spring would idle. uSimBlend morphs the disk from analytic → sim positions.
     let simBlend = 0;
     if (gravitySim.available && (look.simBlend > 0.001 || look.collapse > 0.001)) {
-      // more substeps on a fast scroll so a flick still visibly collapses.
+      // more substeps on a fast scroll so a flick still visibly collapses, but
+      // capped at 3 total (was 4) to bound the per-frame GPU sim cost on a hard
+      // wheel-flick through the formation window — trades a hair of collapse
+      // smoothness for steadier frame time.
       const dStage = Math.abs(stage - prevSimStage);
-      const substeps = 1 + Math.min(3, Math.floor(dStage / 0.05));
+      const substeps = 1 + Math.min(2, Math.floor(dStage / 0.05));
       gravitySim.step(look.collapse, t, substeps);
       const tex = gravitySim.getPosTexture();
       diskMatPrimary.uniforms.uSimPos.value = tex;
@@ -529,17 +531,22 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // them while the young star is forming so it reveals as a clean orb first.
     sunRig.loopMat.uniforms.uFade.value = flarePresence;
     sunRig.coronaMat.uniforms.uFade.value = flarePresence;
-    // the glow shell cools blue→gold with the star as it grows.
+    // the glow shell cools blue→gold with the star as it grows. setRGB mutates the
+    // existing THREE.Color in place (no allocation); the settled branch only writes
+    // when it actually changes (`glowSettled` latch) so the constant gold isn't
+    // re-set every frame while the star holds.
     if (growing) {
       (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
         0.35 + 0.65 * look.starFormed,
         0.55 * look.starFormed + 0.55 * (1 - look.starFormed),
         0.16 + 0.74 * (1 - look.starFormed),
       );
-    } else {
+      glowSettled = false;
+    } else if (!glowSettled) {
       // settled yellow star: a bright PALE-GOLD halo (lifted off the old orange so
       // the luminous rim/halo reads yellow-white like the reference, not amber).
       (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.78, 0.34);
+      glowSettled = true;
     }
     sunRig.starMat.uniforms.uOpacity.value = 1;
 
@@ -620,13 +627,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // lifecycle() (including the sun / red-giant / nebula branch overrides), so the
     // shell just assigns the finals. See lifecycle.ts for the per-beat reasoning
     // (the nebula branch carries the SHO-palette grade tuning).
-    const nebulaDark = exploring
-      ? 0
-      : smoothstep01((stage - 3.30) / 0.17) * (1 - smoothstep01((stage - 3.50) / 0.17));
-    const preFlashDarken = 1 - 0.88 * nebulaDark * (1 - nebulaFlash);
-    bloom.strength = look.bloomStrength * focusBloom * preFlashDarken + nebulaFlash * 0.18;
+    //
+    // The old `preFlashDarken`/`nebulaDark` block that greyed bloom + exposure
+    // across stage ~3.13–3.47 has been REMOVED: it existed only to set up the
+    // nebula whiteout, and with that flash gone it just dimmed the frame to grey
+    // exactly as the nebula appeared. The nebula now reads at its own graded
+    // brightness with no pre-darken dip. `nebulaFlash` is the debug-only hook.
+    bloom.strength = look.bloomStrength * focusBloom + nebulaFlash * 0.18;
     bloom.radius = look.bloomRadius;
-    gradePass.uniforms.uExposure.value = look.exposure * preFlashDarken;
+    gradePass.uniforms.uExposure.value = look.exposure;
     gradePass.uniforms.uOlive.value = look.olive;
     gradePass.uniforms.uWarmth.value = look.warmth;
     gradePass.uniforms.uSat.value = look.gradeSat;
@@ -654,6 +663,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     }
     camera.lookAt(frameLookTarget);
 
+    // The supernova flash originates from the STAR, not the screen centre. The
+    // star sits at world origin the whole time; projecting it through the current
+    // (off-centre, collapse-framed) camera gives the on-screen point where the
+    // collapsing core is — so the radial whiteout erupts from where the red giant
+    // just was, not from a disconnected dead-centre. Runs AFTER lookAt so it uses
+    // the final camera orientation.
     flashOrigin.set(0, 0, 0).project(camera);
     novaPass.uniforms.uCenter.value.set(
       Math.max(0, Math.min(1, flashOrigin.x * 0.5 + 0.5)),

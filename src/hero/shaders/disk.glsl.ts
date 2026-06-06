@@ -290,7 +290,12 @@ export const diskVertexShader = /* glsl */ `
     reach *= 1.0 + breathe * flare;                           // grow/shrink over time
     float ejectaR = coreR + speed * reach;
 
-    r = mix(rImplode, ejectaR, step(0.46, uMorph));
+    // Hand the imploding radius off to the ejecta radius over a SHORT smooth band
+    // around the breakout (0.44–0.50) instead of a hard step at 0.46, so the debris
+    // doesn't snap from "collapsed seed" to "radial blast" in a single frame — it
+    // transitions continuously, reading as one physical event (matter compresses,
+    // detonates, then the remnant settles) rather than a scene cut.
+    r = mix(rImplode, ejectaR, smoothstep(0.44, 0.50, uMorph));
     r = max(r, uRin*0.03);                          // off the singularity (true speck ok)
 
     // orbits spin up HARD as they fall in (angular-momentum feel, accelerating
