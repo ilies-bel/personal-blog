@@ -74,12 +74,30 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uVertAsym: { value: CFG.vertAsym },
     uHorizAsym: { value: CFG.horizAsym },
     uDistrib: { value: CFG.diskDistrib },
+    // Black-hole-only geometric shrink: 1 = full accretion disk, →small as the hole
+    // implodes toward the seed (driven per-frame from lifecycle.blackHoleScale). The
+    // shader gates it to uGiant==0, so the red giant / nebula / dot / sim seed are all
+    // untouched. It makes the HOLE read as visibly smaller (not just farther away).
+    uBlackHoleScale: { value: 1 },
     uBright: { value: 1.25 }, // disk brightness multiplier (brightened)
     uMorph: { value: 0 }, // transition 1: reverse supernova (scroll-driven)
     uFlash: { value: 0 }, // central burst envelope (peaks mid-morph)
     uCollapse: { value: 0 }, // red-giant surface collapse (0 sphere → 1 point)
     uGiant: { value: 0 }, // transition 2: remnant cloud → sun
-    uGiantR: { value: 4.2 }, // sun radius (world units) — a contained orb
+    uGiantR: { value: 4.2 }, // base scale (world units). SHARED by red giant, yellow
+    //   star, nebula extent AND the gravity-sim seed — do NOT repurpose it for the
+    //   red-giant size alone (that's uGiantScale below). Keep at 4.2.
+    // Red giant ONLY: it grows BIG and bloated but stays CENTRED at the world origin
+    // (the supernova collapses centred, the star grows centred). The big off-centre
+    // "vast limb" framing is a CAMERA move (see createScene's red-giant park), NOT a
+    // geometry offset — so uGiantCenter defaults to origin. The dev panel can still
+    // nudge the orb in world space via __bhGiantCenter for inspection.
+    uGiantScale: { value: 9.0 / 4.2 }, // red-giant-only radius ×base. MEDIUM (~9, dense) not
+    //   the old bloated ~17.6 — the fixed grain count goes sparse on a huge sphere. The
+    //   lifecycle ramps this during the reveal (small newborn → this held size); kept in
+    //   sync with lifecycle's GIANT_FULL so the held giant doesn't pop.
+    uGiantCenter: { value: new THREE.Vector3(0, 0, 0) }, // centred; framing is a camera move
+    uGiantSpin: { value: 0 }, // axial spin angle (radians); driven per-frame from uTime
     uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
     // --- Later lifecycle transitions (scroll-driven 0..1 each). The scroll
     //     timeline drives these per frame; the shader body consumes them to morph

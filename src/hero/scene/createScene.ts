@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, lookOffsetX, lookOffsetY, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, readDebugNumber } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugVec3 } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
@@ -82,14 +82,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const novaPass = postRig.novaPass;
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
-  // The yellow star is a small anchor that GROWS into the red giant. The red
-  // giant is the point cloud at uGiantR (4.2) × its sunRadFac (2.35) = 9.87 world
-  // units, so the dying star lands at 9.87 × 0.18 ≈ 1.78 — a small isolated orb
-  // that inflates to the bloated giant. NOTE: the cloud's grow-start factor in the
-  // vertex shader (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold
-  // particle sphere is size-matched to the mesh at the swap.
-  const RED_GIANT_RADIUS = 4.2 * 2.35; // point-cloud red giant world radius
-  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor
+  // The yellow star is a small anchor the red giant CONTRACTS into. The red giant's
+  // TRUE world radius is uGiantR (4.2) × uGiantScale (9.0/4.2) = 9.0 units (the held
+  // medium-dense giant — the old 2.35 factor was stale and made the cloud side ~21, a
+  // hidden 9→21 pop now fixed in the shader). So the dying star lands at 9.0 × 0.18 ≈
+  // 1.62 — the exact size the cloud shrinks to. NOTE: the cloud's grow factor in the
+  // vertex shader (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold particle
+  // sphere is size-matched to the mesh at the swap (no pop).
+  const RED_GIANT_RADIUS = 4.2 * (9.0 / 4.2); // = 9.0; uGiantR × uGiantScale (held giant)
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.62
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
@@ -181,6 +182,24 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const NEAR_FACTOR = 0.42; // how close the travelling begins (× resting distance)
   const INTRO_DUR = 6.0; // seconds for the dezoom
   const ROTATE_SPEED = 0.018; // rad/s of resting drift
+  // Red-giant axial spin: ~one rotation per 60 s on its tilted pole (2π/60). Slow
+  // and cinematic — the surface rolls, the camera no longer orbits it (see the
+  // red-giant orbit freeze below). The base radius the size slider divides by so
+  // __bhGiantR keeps its world-units feel against the red-giant-only uGiantScale.
+  const RED_GIANT_SPIN_RATE = (Math.PI * 2) / 60; // rad/s
+  const RED_GIANT_BASE_R = 4.2; // = buildDisk's base uGiantR (the scale's denominator)
+  // The parked vantage for the grown red giant. The orb stays at the world origin;
+  // sliding the camera + its look target by this shared vector reproduces the chosen
+  // off-centre comp framing (the vast curved limb filling the lower-left). By the
+  // rigid-slide identity it is the NEGATION of the orb-offset the framing was dialled
+  // in at ([-18,12,-26]) → moving the camera/target by −offset shows the centred orb
+  // exactly where offsetting the orb by +offset (fixed camera) would have.
+  // Halved from the old (18,-12,26): the red giant is now revealed at a CLOSER camera
+  // distance (ZOOM_RED_HOLD pulled in to ~2.35), where the full off-centre vast-limb comp
+  // would shove the brighter star half out of frame and re-introduce a size mismatch. A
+  // gentler off-centre weight keeps the whole star framed. The rigid position+target slide
+  // identity is preserved (orb stays centred at origin).
+  const RED_GIANT_PARK = new THREE.Vector3(5, -3, 7);
 
   let mouseX = 0;
   let mouseY = 0;
@@ -386,6 +405,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // surface-collapse progress (0 full red-giant sphere → 1 collapsed to the point)
     diskMatPrimary.uniforms.uCollapse.value = look.kCollapse;
     diskMatSecondary.uniforms.uCollapse.value = look.kCollapse;
+    // black-hole geometric shrink: the disk physically CONTRACTS toward the origin as
+    // the hole implodes, so it reads as visibly smaller (not just farther). 1 at the
+    // hero / past the breakout; the shader gates it to the black-hole state.
+    diskMatPrimary.uniforms.uBlackHoleScale.value = look.blackHoleScale;
+    diskMatSecondary.uniforms.uBlackHoleScale.value = look.blackHoleScale;
 
     // --- transitions 3-5: yellow star → nebula → pale blue dot ---
     // REVIEW MODE (placeholders, no real morph): the new states HARD-SWAP — each
@@ -397,6 +421,28 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // --- transition 2: red giant (held at 1 once a later placeholder takes over) ---
     diskMatPrimary.uniforms.uGiant.value = look.giantHeld;
     diskMatSecondary.uniforms.uGiant.value = look.giantHeld;
+    // Red-giant SIZE is a RED-GIANT-ONLY scale (uGiantScale) so resizing the orb never
+    // balloons the nebula/dot/sun states or the gravity-sim seed (all share the base
+    // uGiantR). lifecycle.giantScale ramps it from a SMALL newborn star (tiny vs the black
+    // hole) up to the full bloated size as the camera comes in (the scale-contrast reveal).
+    // DEBUG: window.__bhGiantR overrides it live; unset → the lifecycle-driven value.
+    const giantScaleOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantRadius);
+    const giantScaleValue =
+      typeof giantScaleOverride === 'number' ? giantScaleOverride / RED_GIANT_BASE_R : look.giantScale;
+    diskMatPrimary.uniforms.uGiantScale.value = giantScaleValue;
+    diskMatSecondary.uniforms.uGiantScale.value = giantScaleValue;
+    // The orb stays centred (uGiantCenter = origin); its off-centre FRAMING is the
+    // camera park below. DEBUG: window.__bhGiantCenter = [x, y, z] retargets the PARK
+    // VANTAGE live so the framing can be re-dialled with the slider panel; unset → the
+    // baked RED_GIANT_PARK. (It no longer moves the geometry — the star is at origin.)
+    const giantCenterOverride = readDebugVec3(DEBUG_WINDOW_KEYS.giantCenter);
+    if (giantCenterOverride) RED_GIANT_PARK.set(giantCenterOverride[0], giantCenterOverride[1], giantCenterOverride[2]);
+    // Axial spin: roll the red-giant photosphere on its own tilted pole (≈23°) at a
+    // slow, cinematic rate (~60 s / rotation). t accumulates seconds, so the angle
+    // grows monotonically; the shader gates it to the displayed red giant only.
+    const giantSpin = reduced ? 0 : t * RED_GIANT_SPIN_RATE;
+    diskMatPrimary.uniforms.uGiantSpin.value = giantSpin;
+    diskMatSecondary.uniforms.uGiantSpin.value = giantSpin;
     // The POINT CLOUD is always the RED GIANT (its grainy body), never the yellow
     // star — the yellow star is the mesh sun rig. So the cloud's uYellow stays 0;
     // the look.yellow flag still gates the timeline (laterActive / grade) inside lifecycle.
@@ -581,6 +627,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     gradePass.uniforms.uOlive.value = look.olive;
     gradePass.uniforms.uWarmth.value = look.warmth;
     gradePass.uniforms.uSat.value = look.gradeSat;
+    gradePass.uniforms.uToneComp.value = look.toneComp; // tone-map compression (low for red giant)
     gradePass.uniforms.uGrain.value = look.grain; // per-state film grain (0 in the nebula)
     diskMatPrimary.uniforms.uSat.value = look.diskSat;
     diskMatSecondary.uniforms.uSat.value = look.diskSat;
@@ -595,7 +642,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // still feels the world recoil from the detonation).
     const distance = CFG.camDist * look.distFactor * look.zoom * look.novaKick;
 
-    const inclination = THREE.MathUtils.degToRad(CFG.inclDeg);
+    // Inclination: the fixed resting pitch, plus the red→yellow recompose ELEVATION
+    // (lifts the eye above the equator across stage 2.1→2.5 so the parked off-centre
+    // limb rolls into a centred whole ball before it shrinks into the yellow star).
+    const inclination = THREE.MathUtils.degToRad(CFG.inclDeg) + look.redYellowElev;
     const horiz = distance * Math.cos(inclination);
     const camY0 = distance * Math.sin(inclination);
 
@@ -607,28 +657,65 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       ? 0
       : Math.sin(t * 0.055) * 0.16 + Math.sin(t * 0.13 + 1.7) * 0.035 + Math.sin(t * 0.31 + 4.1) * 0.014;
 
+    // RED-GIANT CAMERA PARK: the orb itself stays CENTRED at the world origin the
+    // whole time (the supernova collapses centred, the star grows centred). Once the
+    // giant is GROWN we DRIVE THE CAMERA to a chosen off-centre vantage so the sheer
+    // SCALE reads — the giant fills the frame as a vast curved limb — then RECENTRE
+    // for the yellow-star transformation. Because the orb is at origin, translating
+    // the camera position AND its look target by the SAME world vector slides the
+    // whole view rigidly: the centred orb projects exactly where the off-centre comp
+    // put it, pixel-for-pixel, but the star never actually leaves the origin.
+    //
+    // parkWeight ramps 0→1 IN LOCKSTEP WITH THE ZOOM-IN (lifecycle's far→comp reveal runs
+    // stage 1.3→1.75): the off-centre limb framing slides into place AS the camera comes
+    // in, so the star is seen far+CENTRED first, then we zoom in to the off-centre limb
+    // comp together. HOLDS fully across the red-giant beat, then ramps 1→0 (stage ~2.1→2.5)
+    // to recentre for the yellow swap. While parked we FREEZE the orbital drift so the
+    // giant sits still and just spins on its axis (uGiantSpin).
+    const parkIn = smoothstep01((stage - 1.35) / 0.35);
+    const parkOut = smoothstep01((stage - 2.1) / 0.4);
+    const parkWeight = parkIn * (1 - parkOut);
+    const driftDamp = 1 - parkWeight; // 1 normally → 0 while parked
+
     // azimuth: a small extra sweep during the intro, then steady rotation (both
     // shaped in lifecycle()). A slow lateral handheld sway + the pointer parallax
     // ride on top here, in the impure shell, since they are DOM/time input rather
-    // than lifecycle state.
+    // than lifecycle state. The drifting terms are damped to 0 while parked.
     const baseAz = THREE.MathUtils.degToRad(CFG.rotation);
     const idleSway = reduced ? 0 : Math.sin(t * 0.041 + 0.6) * 0.0025; // sub-degree drift
-    const azimuth = baseAz + look.introSweep + look.rotation + idleSway + (reduced ? 0 : mouseX * 0.04);
-    const yWobble = idleBob + (reduced ? 0 : -mouseY * 0.25);
+    const azimuth =
+      baseAz +
+      look.introSweep +
+      look.orbitSweep + // quarter-circle orbit around the shrinking hole (UNDAMPED: it's
+      //   a fixed +π/2 baseline by stage 0.46, long before the park, so damping it would
+      //   be pointless and the park slide is positional, not azimuthal — no conflict).
+      look.redYellowAz + // red→yellow recompose: azimuth half of the two-axis orbit that
+      //   swings the off-centre limb to a centred whole-ball view (stage 2.1→2.5).
+      look.rotation * driftDamp +
+      idleSway * driftDamp +
+      (reduced ? 0 : mouseX * 0.04 * driftDamp);
+    // keep ~30% of the vertical breath while parked (subtle, not locked-off).
+    const yBreathDamp = 1 - 0.7 * parkWeight;
+    const yWobble = idleBob * yBreathDamp + (reduced ? 0 : -mouseY * 0.25 * driftDamp);
 
     camera.position.set(Math.sin(azimuth) * horiz, camY0 + yWobble, Math.cos(azimuth) * horiz);
-    const redFrame =
-      smoothstep01((stage - 1.44) / 0.22) *
-      (1 - smoothstep01((stage - 2.22) / 0.18));
-    const redWipeFrame =
-      smoothstep01((stage - 2.22) / 0.18) *
-      (1 - smoothstep01((stage - 2.72) / 0.14));
+    // Slide the camera (position + look target together) to the parked vantage. The
+    // shared translation keeps the centred orb framed exactly like the chosen comp.
+    camera.position.addScaledVector(RED_GIANT_PARK, parkWeight);
+
+    // The red→yellow transition now ends CENTRED (the recompose orbit + park-out resolve
+    // the star to frame centre by stage 2.5), and the shrink (2.5→2.85) must read on a
+    // dead-centre star — so the old `redWipeFrame` lateral lookTarget slide (which shoved
+    // the star off-centre across 2.22→2.72) is REMOVED. `dyingFrame` (the downstream
+    // dying-star / nebula-approach reframe) now starts at the new swap (2.88), after the
+    // centred shrink is complete, so it never offsets the still-contracting star.
     const dyingFrame =
-      smoothstep01((stage - 2.72) / 0.20) *
+      smoothstep01((stage - 2.88) / 0.20) *
       (1 - smoothstep01((stage - 3.44) / 0.20));
     frameLookTarget.copy(lookTarget);
-    frameLookTarget.x += redFrame * -2.70 + redWipeFrame * -0.45 + dyingFrame * 0.72;
-    frameLookTarget.y += redFrame * -0.80 + redWipeFrame * 0.08 + dyingFrame * -0.18;
+    frameLookTarget.addScaledVector(RED_GIANT_PARK, parkWeight); // keep the orb framed while parked
+    frameLookTarget.x += dyingFrame * 0.72;
+    frameLookTarget.y += dyingFrame * -0.18;
     camera.lookAt(frameLookTarget);
 
     flashOrigin.set(0, 0, 0).project(camera);

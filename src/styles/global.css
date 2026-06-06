@@ -17,3 +17,4 @@
 @import './hud.css';      /* the final exploration HUD */
 @import './prose.css';    /* article prose + article header */
 @import './about.css';    /* the about overlay panel */
+@import './debug.css';    /* dev-only debug overlays (red-giant tuning sliders) */

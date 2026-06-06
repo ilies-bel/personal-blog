@@ -100,6 +100,12 @@ export interface StarState {
   giant: number;
   /** giant held at 1 once a later placeholder state takes over. uGiant. */
   giantHeld: number;
+  /** red-giant size multiplier (× uGiantR) driving uGiantScale. Ramps from SMALL at the
+   *  post-supernova reveal (the star looks tiny next to the huge black hole we just saw)
+   *  up to the full bloated size as the camera comes in (the reveal that it's actually a
+   *  massive star). Pinned to full outside the reveal window so the held giant / later
+   *  states are unchanged. */
+  giantScale: number;
 
   // --- later-state activation flags (review-mode hard swaps) ---
   /** yellow-star slot active (stage ≥ 2.5). */
@@ -197,6 +203,10 @@ export interface StarState {
   warmth: number;
   /** final grade saturation. uSat (grade). */
   gradeSat: number;
+  /** Reinhard tone-map compression denominator (uToneComp). Lower = brighter (less
+   *  highlight crush). 0.78 default; the red giant lowers it so its deep-red surface
+   *  isn't compressed toward black. */
+  toneComp: number;
   /** final film-grain amount; per-state seam (e.g. 0 in the nebula). uGrain. */
   grain: number;
   /** final disk in-shader saturation (after sun/nebula overrides). uSat (disk). */
@@ -223,6 +233,23 @@ export interface StarState {
   introSweep: number;
   /** resting azimuth rotation (t * rotateSpeed). */
   rotation: number;
+  /** scroll-driven quarter-circle (90°) orbit of the CAMERA around the black hole as
+   *  it shrinks (stage 0 → ~0.46), eased to rest before the breakout so the camera is
+   *  still when the nova fires. Pure in stage → scrolling back up unwinds it exactly. */
+  orbitSweep: number;
+  /** red giant → yellow star recompose: a two-axis camera orbit (azimuth) that, with the
+   *  park-out and the elevation term below, swings the off-centre limb comp round to a
+   *  CENTRED, whole-ball view across stage 2.1→2.5. Added to the azimuth sum. */
+  redYellowAz: number;
+  /** the elevation/pitch half of that recompose orbit (radians, added to the camera
+   *  inclination) — lifts the eye above the equator so the star reads as a whole ball,
+   *  not an edge-on disc, by stage 2.5. */
+  redYellowElev: number;
+  /** black-hole-only geometry shrink: 1 at the hero → small fraction as the disk
+   *  implodes toward the seed, reinforcing the collapse so the hole reads as visibly
+   *  SMALLER (not just farther). Drives uBlackHoleScale; the shader gates it to the
+   *  black-hole state so the red giant / nebula / dot / sim seed are untouched. */
+  blackHoleScale: number;
 }
 
 /**
@@ -326,24 +353,28 @@ export function lifecycle(input: LifecycleInput): StarState {
   // different textures, so they DON'T crossfade co-located. Instead a subtle
   // light flash fires at SWAP_STAGE and the mesh hands off to a gold particle
   // sphere that grows + cools to the red giant.
-  const SWAP_STAGE = 2.74; // flash peak / mesh↔cloud crossover
+  const SWAP_STAGE = 2.88; // mesh↔cloud crossover — AFTER the cloud has fully shrunk (≤2.85)
   const inYRWindow = stage > 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot
-  const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.74 .. 3.5 → yellow mesh
-  const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.74 → particle body
+  const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.88 .. 3.5 → yellow mesh
+  const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.88 → particle body (owns the shrink)
 
   // subtle flash envelope (its own stage-space gaussian, separate from the
   // supernova flash which lives in morph space and is tied to stage 0→1).
-  const YR_FLASH_SIGMA = 0.05;
+  const YR_FLASH_SIGMA = 0.04; // tighter than before — a brief, faint cross-dissolve cue only
   const yrFlash = inYRWindow ? Math.exp(-Math.pow((stage - SWAP_STAGE) / YR_FLASH_SIGMA, 2.0)) : 0;
 
-  // grow + colour curves. On scroll-down the red giant must HOLD as a composed
-  // sphere while its copy is readable, then shrink/cool into the yellow handoff
-  // only after the red text has left. The close-up transition can therefore use a
-  // full red sphere as the wipe instead of racing the copy.
-  const RED_EXIT_START = 2.56;
-  const RED_COLOR_EXIT_START = 2.60;
-  const yrGrow = 1 - smoothstep01((stage - RED_EXIT_START) / (SWAP_STAGE - RED_EXIT_START));
-  const yrColor = 1 - smoothstep01((stage - RED_COLOR_EXIT_START) / (SWAP_STAGE - RED_COLOR_EXIT_START));
+  // grow + colour curves. The red giant holds full size while parked, then — once the
+  // recompose orbit + unzoom have centred it (stage ~2.5) — SMOOTHLY CONTRACTS from full
+  // (~9 units) down to the yellow size (~1.6, = full × 0.18 in the shader) across a
+  // GENEROUS window so it's a continuous shrink, not the old 0.18-stage snap. The colour
+  // reddens→gold across the same window so it cools to a smooth gold ball exactly as it
+  // reaches the small size — primed for a seamless mesh handoff. Decoupled from SWAP_STAGE
+  // (explicit RED_SHRINK_END) so the cloud finishes shrinking BEFORE the mesh swaps in.
+  const RED_EXIT_START = 2.5; // shrink begins right after the recompose lands
+  const RED_COLOR_EXIT_START = 2.52; // colour cools just behind the size
+  const RED_SHRINK_END = 2.85; // fully shrunk to yellow size before the 2.88 swap
+  const yrGrow = 1 - smoothstep01((stage - RED_EXIT_START) / (RED_SHRINK_END - RED_EXIT_START));
+  const yrColor = 1 - smoothstep01((stage - RED_COLOR_EXIT_START) / (RED_SHRINK_END - RED_COLOR_EXIT_START));
 
   // During the gravitational collapse (stage 3.05..3.5) the CLOUD shows the
   // nebula particles falling inward, and the mesh star fades IN via starFormed as
@@ -430,6 +461,9 @@ export function lifecycle(input: LifecycleInput): StarState {
   // film grain: per-state seam. Defaults to the configured amount; a state branch
   // below can dial it (the nebula zeroes it so the immersed gas reads smooth).
   let grain = cfg.grain;
+  // tone-map compression: 0.78 (filmic default, protects the nova white core). The
+  // red-giant branch lowers it so the deep-red photosphere isn't crushed to black.
+  let toneComp = 0.78;
 
   // bloom radius defaults to the resting value; the branches below override it.
   let bloomRadius = cfg.bloomRad;
@@ -468,20 +502,31 @@ export function lifecycle(input: LifecycleInput): StarState {
     // to the settled dim matte red giant (rg=1). On the cloud side it follows
     // yrColor; below the slot it is pinned to 1.
     const rg = cloudSide ? yrColor : 1;
-    bloomStrength = (0.34 + 0.08 * yrPunch) * (1 - rg) + 0.32 * rg; // fragile star → broad dim halo
-    bloomRadius = cfg.bloomRad * (1 - rg) + 0.68 * rg;
+    // The red giant must be clearly VISIBLE (it used to be too dim to read), but the
+    // ~1M additively-blended points blow out to white if pushed hard, so the lift is
+    // spread conservatively across bloom + exposure + the per-grain shader recipe.
+    bloomStrength = (0.34 + 0.03 * yrPunch) * (1 - rg) + 0.52 * rg; // brighter broad halo; the swap
+    //   flash bump (yrPunch) is dialled to a whisper (0.03, was 0.08) so the now-size-matched,
+    //   same-colour mesh handoff is a soft cross-dissolve, not a pop.
+    bloomRadius = cfg.bloomRad * (1 - rg) + 0.68 * rg; // keep wide+soft so it's a halo, not a hot core
     const yellowExposure = 0.62 * (1 + 0.04 * yrPunch);
-    const redExposure = cfg.exposure * 0.78;
+    const redExposure = cfg.exposure * 1.0; // base exposure; the brightness now comes mainly
+    //   from the lowered tone-map compression (toneComp) below, not a huge exposure push.
     exposure = yellowExposure * (1 - rg) + redExposure * rg;
     olive = 0.0; // no olive cast on the star
     warmth = 0.14 * rg; // warm the matte red
     gradeSat = 1.0; // full saturation throughout
     diskSat = 1.0;
-    // The dome was tuned to read at the bright yellow grade; the red giant grades
-    // DARKER (redExposure < yellowExposure), which would crush the dim backdrop
-    // stars to black. Brighten the dome by the inverse exposure ratio so the SAME
-    // star field survives behind the red giant exactly as it does behind the yellow
-    // star. Ramps with rg (the swap-in is still bright → no boost needed there).
+    // The REAL fix for the dim red giant: the shared grade tone-map (col/(col+0.78))
+    // compresses highlights hard, and the deep-red palette's tiny green/blue channels
+    // get crushed toward black — no amount of disk brightness survives it. Drop the
+    // compression denominator for the red giant so its surface reads as a solid glowing
+    // wall. Ramps with rg so the bright gold swap-in keeps the filmic 0.78.
+    toneComp = 0.78 * (1 - rg) + 0.34 * rg;
+    // The dome was tuned to read at the yellow grade; the red giant now grades at a
+    // DIFFERENT exposure, which would shift the dim backdrop stars. Compensate by the
+    // inverse exposure ratio so the SAME star field reads behind both states. Ramps with
+    // rg (the swap-in is still the yellow grade → no boost needed there).
     starBackBright = 1 + ((yellowExposure / redExposure) - 1) * rg;
   } else if (nebula && !dot) {
     // nebula grade: a soft, luminous gas cloud. Eased in as the state arrives
@@ -515,35 +560,84 @@ export function lifecycle(input: LifecycleInput): StarState {
   // dezoom distance factor (0 close → 1 rest). Reduced motion lands at the rest frame.
   const distFactor = nearFactor + (1 - nearFactor) * intro;
 
+  // --- black-hole geometric shrink (drives uBlackHoleScale on the disk) -------
+  // The HOLE physically CONTRACTS as it implodes (stage ~0.10 → 0.46): full disk down
+  // to a small fraction, reinforcing the seed collapse so the hole reads as visibly
+  // SMALLER rather than merely farther. It holds at the floor through the brief flash;
+  // past the breakout the blast ejecta (computed from coreR, already a speck) owns the
+  // geometry and the shader gates the scale off above uGiant>0 — so a held floor is a
+  // no-op there. Pure in stage → scrolling up un-shrinks it. Reduced motion = 1 (no
+  // shrink, the static settled frame). Window matches the lensing/shadow fade so the
+  // fixed screen-space shadow radii never fight the shrinking disk (see the shader).
+  const SHRINK_START = 0.1;
+  const SHRINK_END = 0.46;
+  const SHRINK_MIN = 0.18; // disk contracts to ~18% of full size at the seed
+  const shrinkK = smoothstep01((stage - SHRINK_START) / (SHRINK_END - SHRINK_START));
+  const blackHoleScale = reduced ? 1 : 1 - (1 - SHRINK_MIN) * shrinkK;
+
+  // --- red-giant SIZE reveal (drives uGiantScale) — the SCALE-CONTRAST story --------
+  // The narrative: the black hole was HUGE (it filled the hero frame); after the
+  // supernova the red star first appears TINY — a small dense disc lost in a vast black
+  // field — so the eye reads "that little thing came from that enormous black hole".
+  // THEN, as the camera comes in, the star GROWS to its true bloated size — the reveal
+  // that it is itself a massive star. We grow the geometry (not just dolly) because the
+  // orb is intrinsically ~17.6 units: at any distance that frames it whole it fills the
+  // screen, so a small distinct star can only be a SMALL star. Keeping it small also
+  // keeps its ~1M grains overlapped → it reads as a solid little disc, not sparse dust.
+  // NOTE: the red giant is kept MEDIUM (radius ~9), NOT the old bloated ~17.6, because
+  // the fixed ~1M grains spread too thin on a huge sphere and the surface goes sparse/
+  // dusty; at ~9 it stays a solid, dense, glowing photosphere (like the gorgeous small
+  // newborn frame, just bigger). GIANT_FULL MUST match buildDisk's baked uGiantScale so
+  // the held giant doesn't pop when the reveal window ends.
+  const GIANT_FULL = 9.0 / 4.2; // medium, dense held size (matches buildDisk uGiantScale)
+  const GIANT_SMALL = 4.5 / 4.2; // the tiny just-born star (radius ~4.5 → small disc + margin)
+  // small until ~1.2 (the scale-contrast beat), then grow to full by ~1.7 as we come in.
+  const sizeT = easeOut(smoothstep01((stage - 1.2) / 0.5));
+  // below the reveal window pin to full so the gather/seed and held giant are unchanged;
+  // the reveal only modulates size across 1.0 → 1.7. Outside [1.0, ∞) it's full.
+  const inReveal = stage > 1.0 && stage < 1.7 ? 1 : 0;
+  const giantScale = reduced
+    ? GIANT_FULL
+    : GIANT_SMALL + (GIANT_FULL - GIANT_SMALL) * (inReveal ? sizeT : stage <= 1.0 ? 0 : 1);
+
   // --- lifecycle zoom choreography (the scale story) ---
-  // A black hole is tiny-but-massive; a star is huge-but-diffuse. The scale story
-  // is told by the CAMERA: sit CLOSE on the hero black hole, rocket WAY BACK as the
-  // matter collapses to its speck, then ease back to resting for the red giant. The
-  // size ranking reads BH(close) > red giant > seed(far). Reduced motion = 1.
+  // The camera story (scrolling DOWN, stage rising):
+  //   1. HERO → SEED (0 → 0.46): the black hole SHRINKS geometrically (blackHoleScale),
+  //      so the camera holds a steady frame (the shrink + orbit carry the "gets small").
+  //   2. BLAST (0.46 → ~0.95): SAME ZOOM. The supernova fires on a locked frame (the
+  //      subtle shake/novaKick still ride on top — see shakeAmp/novaKick), no zoom move.
+  //   3. RED REVEAL (1.0 → 1.7): the star is born SMALL (giantScale above) in a wide
+  //      frame → tiny vs the black hole; the camera then comes IN modestly while the star
+  //      GROWS to full, landing on the off-centre limb comp (RED_GIANT_PARK). The SIZE
+  //      ramp does the scale reveal; the camera move is a gentle accompanying push-in.
+  // Reduced motion = 1.
   let zoom = 1.0;
   if (!reduced) {
     const ZOOM_HERO = 0.56; // close at the hero BH → dist≈11 (BH fills the frame)
-    const ZOOM_SEED = 2.6; // far at the seed     → dist≈52 (speck in a vast field)
-    const ZOOM_BLAST = 2.0; // pulled back across the blast → dist≈40 (big remnant fits)
-    const ZOOM_RED_HOLD = 4.20; // composed red giant hold with room for lower-left copy
-    const ZOOM_RED_WIPE = 1.15; // close transition after red copy has faded
-    // hero push-in eases out as the implosion gets underway (stage 0 → 0.18)
+    const ZOOM_HOLD = 1.0; // steady frame from the implosion through the blast
+    const ZOOM_RED_WIDE = 2.7; // the small newborn star (radius ~4.5) sits in a WIDE frame
+    //   (dist≈54) → small disc with lots of black margin (tiny vs the huge black hole).
+    const ZOOM_RED_HOLD = 1.65; // come IN to the medium star (dist≈33) as it grows to ~9 — it
+    //   fills more of the frame as a solid, dense red star; the GROWTH does the scale reveal.
+    const ZOOM_RED_UNZOOM = 2.4; // red→yellow: pull BACK (dist≈48) so the whole red giant
+    //   recedes and sits small-and-whole, ready to CONTRACT into the yellow star. (Replaces
+    //   the old zoom-IN wipe — the transition is now unzoom-then-shrink, not a close push-in.)
+    // hero push-in eases out as the implosion gets underway (stage 0 → 0.18), settling to
+    // the steady ZOOM_HOLD — no big seed pull-back (the geometric shrink carries the scale).
     const heroT = smoothstep01(stage / 0.18);
-    // seed pull-back, IN SYNC with the world-space seed collapse (0.18 → 0.46)
-    const shrinkT = smoothstep01((stage - 0.18) / (0.46 - 0.18));
-    // hold WAY back across the blast so the now-much-bigger ejecta stays framed —
-    // ease from the seed distance to the blast hold as the shell breaks out
-    // (0.46 → 0.62), then keep it wide through the blast.
-    const blastT = smoothstep01((stage - 0.46) / (0.62 - 0.46));
-    // Above the collapse window, pull farther back into a stable, composed red-giant
-    // hold. Only after the red copy fades do we push in for a short texture wipe.
-    const growT = easeOut(Math.min(Math.max((stage - 1.05) / 0.50, 0), 1));
-    const redWipeT = smoothstep01((stage - 2.30) / (2.56 - 2.30));
-    const heroZoom = ZOOM_HERO + (1.0 - ZOOM_HERO) * heroT; // 0.6 → 1.0
-    const seedZoom = heroZoom + (ZOOM_SEED - heroZoom) * shrinkT; // → 2.6
-    const blastZoom = seedZoom + (ZOOM_BLAST - seedZoom) * blastT; // 2.6 → 2.0
-    const redHoldZoom = blastZoom + (ZOOM_RED_HOLD - blastZoom) * growT;
-    zoom = redHoldZoom + (ZOOM_RED_WIPE - redHoldZoom) * redWipeT;
+    const heroZoom = ZOOM_HERO + (ZOOM_HOLD - ZOOM_HERO) * heroT; // 0.56 → 1.0, then HOLD
+    // RED REVEAL: pull to the WIDE newborn frame as the giant forms (0.95 → 1.15), HOLD
+    // wide through the scale-contrast beat, then come IN to the limb comp (1.25 → 1.7) as
+    // the star grows — a gentle push-in accompanying the growth, not a big dolly.
+    const wideT = smoothstep01((stage - 0.95) / 0.2); // ease out to the wide newborn frame
+    const inT = easeOut(smoothstep01((stage - 1.25) / 0.45)); // gentle come-in as it grows
+    const revealZoom = ZOOM_HOLD + (ZOOM_RED_WIDE - ZOOM_HOLD) * wideT; // HOLD → WIDE
+    const redHoldZoom = revealZoom + (ZOOM_RED_HOLD - revealZoom) * inT; // WIDE → IN (comp)
+    // RED → YELLOW unzoom: pull back from the held comp (1.65) to ZOOM_RED_UNZOOM (2.4)
+    // across 2.0→2.5, in lockstep with the recompose orbit, then HOLD steady through the
+    // shrink (2.5→2.9) so the contraction reads as the STAR shrinking, not the camera.
+    const unzoomT = smoothstep01((stage - 2.0) / (2.5 - 2.0));
+    zoom = redHoldZoom + (ZOOM_RED_UNZOOM - redHoldZoom) * unzoomT;
     // nebula: fly the camera DEEP INSIDE the cloud so the gas fills the whole frame
     // and wraps past every edge — immersed, like flying through it. (The old radial-
     // spoke problem that once forced us back outside is gone: the geometry is now a
@@ -618,12 +712,38 @@ export function lifecycle(input: LifecycleInput): StarState {
   // azimuth: a small extra sweep during the intro, then steady rotation.
   const introSweep = reduced ? 0 : (1 - intro) * 0.45; // eases out as we settle
   const rotation = reduced ? 0 : t * rotateSpeed;
+  // quarter-circle (90°) CAMERA orbit around the shrinking black hole across stage
+  // 0 → ~0.46, eased to rest so the camera is STILL when the nova fires at the
+  // breakout. It saturates to a constant +π/2 well before the red-giant park begins
+  // (stage 1.35), so across the park it is just a fixed azimuth baseline and never
+  // fights the RED_GIANT_PARK positional slide. Pure in stage → scrolling up reverses
+  // the orbit exactly (no latch, no history). Reduced motion never orbits.
+  const ORBIT_END = 0.46;
+  const ORBIT_MAG = Math.PI / 2;
+  const orbitSweep = reduced ? 0 : ORBIT_MAG * smoothstep01(stage / ORBIT_END);
+
+  // --- red giant → yellow star: recompose orbit (two-axis) ------------------
+  // From the held off-centre limb comp, swing the camera AROUND the star on two axes
+  // (azimuth + elevation) so it ends CENTRED and whole, in lockstep with the park-out
+  // (createScene's parkOut runs 2.1→2.5) and the unzoom below — one combined "pull back
+  // and roll to centre" gesture. The park-out removes the lateral OFFSET (translation);
+  // this orbit changes the VIEWING ANGLE (which side of the sphere we see) — different
+  // DOF, sharing the same 2.1→2.5 window, so they resolve to centred-and-whole exactly
+  // once (no double-recentre / overshoot). Pure in stage → scrolls both ways.
+  const RY_ORBIT_LO = 2.1;
+  const RY_ORBIT_HI = 2.5;
+  const RY_AZ_MAG = (22 * Math.PI) / 180; // ~22° azimuth swing
+  const RY_ELEV_MAG = (14 * Math.PI) / 180; // ~14° pitch up (above the fixed 5° incl)
+  const ryOrbitT = reduced ? 0 : smoothstep01((stage - RY_ORBIT_LO) / (RY_ORBIT_HI - RY_ORBIT_LO));
+  const redYellowAz = ryOrbitT * RY_AZ_MAG;
+  const redYellowElev = ryOrbitT * RY_ELEV_MAG;
 
   return {
     morph,
     kCollapse,
     giant,
     giantHeld,
+    giantScale,
     yellow,
     nebula,
     nebulaShader,
@@ -659,6 +779,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     olive,
     warmth,
     gradeSat,
+    toneComp,
     grain,
     diskSat,
     streak,
@@ -669,5 +790,9 @@ export function lifecycle(input: LifecycleInput): StarState {
     fovKick,
     introSweep,
     rotation,
+    orbitSweep,
+    redYellowAz,
+    redYellowElev,
+    blackHoleScale,
   };
 }

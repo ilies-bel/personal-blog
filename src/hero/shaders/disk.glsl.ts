@@ -15,6 +15,9 @@ export const diskVertexShader = /* glsl */ `
   uniform float uTime, uOmega0, uSpinDir, uBetaScale, uBeamExp, uDoppler;
   uniform float uRin, uRout, uThick, uPixelRatio, uSec, uHole, uVertAsym, uHorizAsym, uDistrib;
   uniform float uBright;
+  // Black-hole-only geometric shrink (1 = full disk, →small as the hole implodes).
+  // Gated to uGiant==0 in the body so the red giant and later states are untouched.
+  uniform float uBlackHoleScale;
   // secondary-image (lower band) screen-space nudge — used to close the seam
   uniform float uSecOffsetX, uSecOffsetY;
   // --- Transition 1: reverse supernova (driven by scroll). 0 = black hole.
@@ -136,7 +139,17 @@ export const diskVertexShader = /* glsl */ `
 
   uniform float uGiant;     // 0 = remnant, 1 = sun (transition 2)
   uniform float uGiantR;    // sun radius in world units
+  uniform vec3  uGiantCenter; // dev: world-space offset of the red-giant orb (debug slider)
+  uniform float uGiantSpin;   // red-giant axial spin angle (radians; t * rate, tilted-axis)
+  uniform float uGiantScale;  // red-giant-ONLY radius multiplier (nebula/dot/sun unaffected)
   uniform float uGranScale;     // granulation cell frequency across the surface
+
+  // Rodrigues axis-angle rotation: spin a vector v about a (unit) axis by 'ang'.
+  // Used to roll the whole red-giant photosphere around its own tilted pole.
+  vec3 rotateAxis(vec3 v, vec3 axis, float ang){
+    float c = cos(ang), s = sin(ang);
+    return v*c + cross(axis, v)*s + axis*dot(axis, v)*(1.0 - c);
+  }
   // --- Later lifecycle transitions, each scroll-driven 0..1 (declared so the
   //     timeline can drive them; the shader body morphs the star onward).
   //       uYellow: red giant  -> yellow (sun-like) star
@@ -341,6 +354,14 @@ export const diskVertexShader = /* glsl */ `
     swirl -= blastDir * dot(swirl, blastDir);
     pos += swirl * (r * 0.45 + uRin * 0.5) * flare;
 
+    // Black-hole geometric shrink: contract the whole accretion-disk/seed/blast body
+    // toward the origin so the HOLE reads as visibly SMALLER (not merely farther). The
+    // shrink ramps in over the same window the gravitational lensing + shadow carve fade
+    // out (uMorph ~0.1→0.5 below), so the FIXED screen-space shadow radii (uShadowR,
+    // uHole) never fight the shrinking disk. It's a no-op past the implosion (the driver
+    // returns ~1) and is irrelevant once uGiant>0 (the red-giant branch rebuilds pos).
+    pos *= uBlackHoleScale;
+
     // === Transition 2: remnant cloud → a detailed Sun =======================
     // As uGiant goes 0→1 the scattered remnant GATHERS into a textured star.
     // The particles form the granular PHOTOSPHERE on the sphere surface.
@@ -351,6 +372,25 @@ export const diskVertexShader = /* glsl */ `
       float th = aPhase + aU*6.2831;             // azimuth
       float sp = sqrt(max(0.0, 1.0 - u*u));
       vec3 sphere = vec3(sp*cos(th), u, sp*sin(th));
+
+      // Is the DISPLAYED state the red giant? (Not yellow / nebula / dot — those keep
+      // uGiant=1 but must NOT take the red-giant spin or size.) Computed here so the
+      // spin + the red-giant-local radius scale share one gate.
+      float rgActive = (uYellow < 0.5 && uNebula < 0.5 && uDot < 0.5) ? 1.0 : 0.0;
+      // red-giant-ONLY radius multiplier (1.0 everywhere else → nebula/dot/sun keep
+      // their uGiantR scale and the gravity-sim seed is untouched).
+      float rgScale = mix(1.0, uGiantScale, rgActive);
+
+      // AXIAL SPIN: roll the whole textured photosphere about its own TILTED pole
+      // (≈23° from vertical, Earth-like) so the granulation rotates as one rigid
+      // body — the star turns on its axis instead of the camera orbiting it. Because
+      // "sphere" seeds the granulation lookup, "dir", the radius and the sun branch
+      // alike, rotating it here spins the entire surface coherently. uGiantSpin is 0
+      // at rest → no-op; gated to the red giant so held later states never rotate.
+      if(rgActive > 0.5){
+        vec3 spinAxis = normalize(vec3(0.39, 0.92, 0.0)); // ~23° tilt off vertical
+        sphere = rotateAxis(sphere, spinAxis, uGiantSpin);
+      }
 
       // -- multi-scale granulation (Voronoi cells + warped fbm + supergranules) --
       vec3 churn = vec3(0.0, uTime*0.025, 0.0);
@@ -371,7 +411,7 @@ export const diskVertexShader = /* glsl */ `
       // giant radius with a little granular relief so the limb isn't a perfect
       // circle (bumpy photosphere)
       float relief = 1.0 + 0.025*(gran - 0.6);
-      float giantR = uGiantR * relief;
+      float giantR = uGiantR * relief * rgScale;  // rgScale = red-giant-only inflate
       vec3 giantPos = sphere * giantR;
 
       // ================= UNIFIED NON-HOMOGENEOUS SURFACE COLLAPSE ============
@@ -499,8 +539,13 @@ export const diskVertexShader = /* glsl */ `
         vPlaceholder = 1.0;
         vSunRed = redGiant;
         vYrMix = uYrMix;   // 0 = smooth gold cloud sphere (post-swap) → 1 = red giant
-        // red giants are BIG and bloated; the dying star is a tighter orb.
-        float sunRadFac = (redGiant > 0.5) ? 2.35 : 0.92;
+        // The cloud-side red-giant base radius MUST match the held sphere-identity
+        // radius (line ~414: uGiantR * rgScale ≈ 9) — the old 2.35× made the cloud side
+        // ~21 units, so the held sphere POPPED to >2× size the instant the YR slot took
+        // over at stage 2.05. Use rgScale alone so both paths render the SAME ~9-unit
+        // giant; the ×0.18 grow below then shrinks it to the true yellow size. The yellow
+        // sun keeps its 0.92 (that branch is only hit when uYellow>0.5, inert here).
+        float sunRadFac = (redGiant > 0.5) ? rgScale : 0.92;
         // yellow → red giant grow: at uYrGrow=0 the cloud is size-matched to the
         // yellow mesh (×0.18 = SUN_RIG_RADIUS/RED_GIANT_RADIUS), inflating to the
         // full red-giant radius at uYrGrow=1. No-op (×1.0) everywhere else.
@@ -629,6 +674,11 @@ export const diskVertexShader = /* glsl */ `
             vSunHot   = clamp(0.5 - 0.3*s, 0.0, 1.0);   // hot root → cooler tip
           }
         }
+        // dev: rigidly translate the whole red-giant orb (body + atmosphere) by a
+        // world-space offset so a debug slider can reposition the star. Gated on
+        // redGiant so the held nebula/dot states (which also keep uGiant=1) and the
+        // yellow placeholder are untouched; defaults to (0,0,0) → no-op in prod.
+        pos += uGiantCenter * redGiant;
       }
       // -- nebula: a sprawling emission cloud (Hubble/SHO look) — see block below.
       if(uNebula > 0.5){
@@ -1043,8 +1093,11 @@ export const diskVertexShader = /* glsl */ `
 
       float photo = (surf * limbDark + rimGlow);
 
-      // overall scale — warm and richly lit but not a blinding white disc
-      float giantBright = photo * 0.7;
+      // overall scale — warm and richly lit. The real brightness fix is the lowered
+      // grade tone-map compression (uToneComp) for the red giant; this scale just needs
+      // to give the tone-map something to work with, so 1.1 is plenty (1.3 risked a wash
+      // once the compression was relaxed). The deep-red ramp keeps it red, not white.
+      float giantBright = photo * 1.1;
 
       // Hold the photosphere lighting on through the COLLAPSE so the shrinking,
       // spiking surface stays a lit (red→warm) surface rather than greying into the
@@ -1080,14 +1133,21 @@ export const diskVertexShader = /* glsl */ `
           // the colour ramp carries the hue, brightness only modulates it. A
           // gentle limb-darkening keeps the disc edge from glaring.
           float m = vSunM;
-          // red giant: lower overall luminance + a bit more limb darkening (a
-          // big diffuse cool star, dimmer toward the rim).
-          float baseLo = mix(0.30, 0.22, vSunRed);
-          float baseHi = mix(0.62, 0.50, vSunRed);
-          float limbMu = mix(0.18, 0.30, vSunRed);
+          // red giant: a big diffuse cool star. The parked comp frames the curved LIMB,
+          // so the old heavy limb-darkening (limbMu 0.30) + deep-red palette + low
+          // exposure crushed the surface to near-black. Lift the per-grain luminance
+          // substantially (floor 0.30→0.46, ceiling 0.60→0.82) AND cut the red limb
+          // darkening (limbMu 0.30→0.14) so the limb we're actually looking at reads as a
+          // lit, glowing edge rather than a black silhouette. Still below the yellow
+          // star's stack — the colour ramp stays deep red, so it brightens to a vivid red
+          // photosphere, not a white blowout.
+          float baseLo = mix(0.30, 0.80, vSunRed);
+          float baseHi = mix(0.62, 1.05, vSunRed);
+          float limbMu = mix(0.18, 0.12, vSunRed);
           float lum = (baseLo + baseHi*m) * (1.0 - vSunDark*0.85) * ((1.0-limbMu) + limbMu*mu);
-          float arBright = smoothstep(0.86, 0.995, m) * mix(0.45, 0.25, vSunRed);
-          bright = (lum + arBright + limb*mix(0.30, 0.22, vSunRed));
+          float arBright = smoothstep(0.86, 0.995, m) * mix(0.45, 0.40, vSunRed);
+          // light the fresnel limb warmly (was 0.22 for red) so the curved edge glows.
+          bright = (lum + arBright + limb*mix(0.30, 0.50, vSunRed));
           vHeat = m;
         }
       }
@@ -1129,11 +1189,20 @@ export const diskVertexShader = /* glsl */ `
     float dist = -viewP.z;
     // photosphere grains sit larger so the surface reads as solid.
     float baseSize = uPixelRatio * (1.0 + 0.6*sqrt(min(bright,6.0))) * (16.0/dist);
+    // Black-hole shrink moves grains CLOSER to the origin (smaller dist), which would
+    // balloon them via the 16/dist term and mush the disk. Scale the grain size with the
+    // shrink so the contracting disk stays crisp and grainy. Gated to uGiant==0 (step is
+    // 1 only when uGiant==0); the red giant / later states keep their own sizing.
+    baseSize *= mix(1.0, uBlackHoleScale, step(uGiant, 0.0));
     float surfSize = baseSize * 1.7;
     // yellow photosphere: enlarge the grains so ~1M points OVERLAP into a solid
     // surface (kills the sandy per-point speckle, leaving the big swirly cells).
     float yellowSurf = (vPlaceholder > 0.5 && vPlaceholder < 1.5 && vSunFlare < 0.5) ? 1.0 : 0.0;
-    surfSize = mix(surfSize, baseSize * 3.0, yellowSurf);
+    // red giant gets slightly FATTER grains (3.6 vs the yellow 3.0) so the photosphere
+    // reads denser at the parked limb — closing the worst black gaps — while keeping
+    // visible granulation (not a flat solid wall). vSunRed is 1 only for the red giant.
+    float surfGrain = mix(3.0, 3.6, vSunRed);
+    surfSize = mix(surfSize, baseSize * surfGrain, yellowSurf);
     // ejecta grains swell modestly during the blast so the debris reads as
     // glowing embers/streamers, but not so much that they overlap into a wash.
     float blastSize = baseSize * 1.5;
@@ -1297,16 +1366,20 @@ export const diskFragmentShader = /* glsl */ `
           sc += vSunLimb * vec3(0.6, 0.32, 0.08);
           sc *= 1.15;
           // red giant — deep, saturated red photosphere (built from mEff; dark
-          // veins/limb scaled by vYrMix so the gold ball has no lanes).
-          vec3 rc = vec3(0.14, 0.012, 0.004);                   // near-black umbra
-          rc = mix(rc, vec3(0.46, 0.05, 0.012), smoothstep(0.08, 0.34, mEff)); // dark blood red
-          rc = mix(rc, vec3(0.78, 0.13, 0.02),  smoothstep(0.30, 0.58, mEff)); // red
-          rc = mix(rc, vec3(0.95, 0.26, 0.04),  smoothstep(0.56, 0.80, mEff)); // red-orange
-          rc = mix(rc, vec3(1.00, 0.40, 0.10),  smoothstep(0.84, 1.0, mEff));  // hot orange (rare)
-          rc = mix(rc, vec3(0.12, 0.010, 0.0), vSunDark*vYrMix); // deep dark spots/veins
-          // cool, dusky red limb (forward-scattered, not bright gold)
-          rc = mix(rc, vec3(0.85, 0.20, 0.05), vSunLimb*0.55*vYrMix);
-          rc += vSunLimb * vec3(0.30, 0.05, 0.01) * vYrMix;
+          // veins/limb scaled by vYrMix so the gold ball has no lanes). The whole ramp
+          // is lifted warmer/brighter: the old blood-red mid-tones sank to near-black at
+          // this exposure. The umbra is no longer near-black, the body reaches a vivid
+          // red-orange across most of mEff, and the limb glows so the parked curved edge
+          // reads as molten, not a silhouette.
+          vec3 rc = vec3(0.62, 0.12, 0.03);                     // warmer glowing ember floor
+          rc = mix(rc, vec3(0.90, 0.18, 0.03),  smoothstep(0.08, 0.34, mEff)); // deep red
+          rc = mix(rc, vec3(1.00, 0.26, 0.05),  smoothstep(0.30, 0.58, mEff)); // red
+          rc = mix(rc, vec3(1.00, 0.40, 0.09),  smoothstep(0.56, 0.80, mEff)); // red-orange
+          rc = mix(rc, vec3(1.00, 0.54, 0.18),  smoothstep(0.84, 1.0, mEff));  // hot orange
+          rc = mix(rc, vec3(0.22, 0.020, 0.0), vSunDark*vYrMix); // dark spots/veins (lifted off black)
+          // warm, glowing red limb (forward-scattered) — the curved edge fills the comp.
+          rc = mix(rc, vec3(1.00, 0.32, 0.08), vSunLimb*0.65*vYrMix);
+          rc += vSunLimb * vec3(0.55, 0.12, 0.02) * vYrMix;
 
           // gold swap-in target: a clean warm gold that matches the yellow mesh,
           // so the flash-masked mesh→cloud handoff is seamless. Lerp gold → red
@@ -1320,7 +1393,7 @@ export const diskFragmentShader = /* glsl */ `
           // whiten under the swap flash so the incoming gold cloud frames bloom to
           // match the mesh handoff (subtle — a warm brightening, not a white-out).
           // No-op when uYrFlash=0.
-          pcol = mix(pcol, vec3(1.0, 0.92, 0.78), clamp(uYrFlash, 0.0, 1.0) * 0.15);
+          pcol = mix(pcol, vec3(1.0, 0.92, 0.78), clamp(uYrFlash, 0.0, 1.0) * 0.08);
         }
       } else if(vPlaceholder < 2.9){
         // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from

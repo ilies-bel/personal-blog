@@ -45,6 +45,21 @@ engine is framework-agnostic (React only mounts/unmounts it):
   - The morph is driven by scroll via uniforms: **`uMorph`** (transition 1, = `min(1, stage)`),
     **`uFlash`** (supernova burst envelope), **`uGiant`** (gather into the star),
     `uYellow`/`uNebula`/`uDot` (later states).
+  - **Red-giant size/pose.** The orb **grows and stays CENTRED at the world origin** the
+    whole time (the supernova collapses centred, the star grows centred). Its size is a
+    red-giant-ONLY scale: `uGiantR` (4.2) is the base radius SHARED by the red giant, the
+    yellow star, the nebula extent AND the gravity-sim seed — do **not** repurpose it to
+    resize the red giant alone; **`uGiantScale`** is the red-giant-only multiplier (1.0
+    everywhere else, so the nebula/dot/sun never balloon). **`uGiantSpin`** (radians,
+    `t * 2π/60`) rolls the photosphere on a fixed ~23°-tilted pole so the star turns on
+    its own axis. The big off-centre "vast limb" framing is **NOT** a geometry offset — it
+    is a **camera move** (`RED_GIANT_PARK` in createScene): once the giant is grown the
+    render loop slides the camera position + its look target by the same world vector
+    (`parkWeight` ramps in ~stage 1.35→1.55, HOLDS across the red-giant beat, ramps out
+    ~2.1→2.5 to **recentre for the yellow swap**), which reproduces the chosen comp
+    framing while the star never leaves the origin. While parked, the orbital drift is
+    frozen so the giant just sits and spins on its axis. (`uGiantCenter` exists but
+    defaults to origin — it can nudge the geometry in world space for dev inspection.)
   - The render loop samples scroll, eases `stage`, and drives all uniforms + camera zoom +
     bloom/exposure grade per frame.
   - **Scale story**: the camera pushes IN at the hero black hole and pulls WAY back at the tiny
@@ -71,8 +86,9 @@ engine is framework-agnostic (React only mounts/unmounts it):
 
 `src/styles/global.css` is a thin aggregator that `@import`s per-concern partials in cascade
 order: `tokens.css` (the single source of CSS custom properties) → `base.css` → `chrome.css`
-→ `scene.css` → `hero.css` → `hud.css` → `prose.css` → `about.css`. Add new rules to the
-partial that owns the concern; only `tokens.css` defines `:root` variables.
+→ `scene.css` → `hero.css` → `hud.css` → `prose.css` → `about.css` → `debug.css` (dev-only
+overlays). Add new rules to the partial that owns the concern; only `tokens.css` defines
+`:root` variables.
 
 ## Debugging & verification
 
@@ -90,6 +106,15 @@ partial that owns the concern; only `tokens.css` defines `:root` variables.
   (front gas brighter, far/buried gas dimmer & bluer → 3D volume). There is no star inside the
   cloud, so the "light" is the gas occluding itself toward the camera plus a depth fade, not a
   point source. Set `__bhMorph≈4.0` (full nebula) AND `__bhNebLight` to A/B the look.
+- **`window.__bhGiantR`** (a number) and **`window.__bhGiantCenter`** (`[x, y, z]`) live-tune the
+  **red giant** only: `__bhGiantR` reads in effective-`uGiantR` world units and drives the
+  red-giant-only `uGiantScale` (= value / 4.2), so resizing the orb never touches the nebula/dot/
+  sun/sim; `__bhGiantCenter` retargets the **camera park vantage** `RED_GIANT_PARK` (the orb stays
+  centred at origin — these move the CAMERA to frame the grown giant off-centre). Both default to
+  the shipped look (`uGiantScale` 17.6/4.2, park `[18, -12, 26]`). Set `__bhMorph≈1.9` to frame the
+  parked orb while tuning. A **dev-only slider panel** (`src/hero/components/RedGiantDebugPanel.tsx`,
+  mounted from `index.astro` behind `import.meta.env.DEV`) writes these hooks via UI; nothing ships
+  in prod.
 - **`scratchpad/*.mjs`** — Playwright capture scripts that spin up the dev server, scroll or
   force `__bhMorph`/`__bhFlash`, and save screenshots (`scratchpad/state-N-*.png`, `nova-*.png`,
   `live-*.png`, etc.) for reviewing each state. `scratchpad/` is a workspace for probes/

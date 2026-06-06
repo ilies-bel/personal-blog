@@ -12,6 +12,11 @@ export const GradeShader = {
     uWarmth: { value: 0.05 },
     uSat: { value: 0.1 },
     uOlive: { value: 0.6 },
+    // Reinhard tone-map denominator. LOWER = less highlight compression = brighter.
+    // 0.78 is the filmic default for the black hole (protects the white nova core);
+    // the red giant lowers it so its deep-red photosphere reads as a solid glowing
+    // surface instead of being crushed toward black by the compression.
+    uToneComp: { value: 0.78 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -20,14 +25,15 @@ export const GradeShader = {
   fragmentShader: /* glsl */ `
     precision highp float;
     uniform sampler2D tDiffuse;
-    uniform float uTime, uExposure, uGrain, uWarmth, uSat, uOlive;
+    uniform float uTime, uExposure, uGrain, uWarmth, uSat, uOlive, uToneComp;
     uniform vec2 uResolution;
     varying vec2 vUv;
     float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
     void main(){
       vec3 col = texture2D(tDiffuse, vUv).rgb * uExposure;
-      // soft tone map (preserves the white core)
-      col = col / (col + vec3(0.78));
+      // soft tone map (preserves the white core). uToneComp is the compression
+      // denominator — lower for the red giant so its deep red isn't crushed to black.
+      col = col / (col + vec3(uToneComp));
       col = pow(col, vec3(0.92));
       // desaturate -> grey
       float luma = dot(col, vec3(0.299,0.587,0.114));
