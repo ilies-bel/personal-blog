@@ -73,7 +73,7 @@ export const CFG: Config = {
   exposure: 0.85, // ref: 0.50 → noticeably brighter
   bloomStr: 0.78, // ref: 0.56
   bloomRad: 0.45,
-  grain: 0.16,
+  grain: 0, // film grain removed from all states
   warmth: 0.01,
   saturation: 0.38,
   olive: 1.3, // warm-graphite grade strength at the black hole (was olive-green 1.6)

@@ -508,7 +508,6 @@ export function lifecycle(input: LifecycleInput): StarState {
     warmth = -0.03;
     gradeSat = 0.72;
     diskSat = 0.7;
-    grain = 0.035;
   } else {
     bloomRadius = cfg.bloomRad;
   }
