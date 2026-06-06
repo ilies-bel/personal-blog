@@ -186,6 +186,7 @@ export const diskVertexShader = /* glsl */ `
   varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
   varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
   varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
+  varying float vEaten;   // core-swallow progress (0 = on surface, 1 = fallen to the core)
 
   void main(){
     vPlaceholder = 0.0; // REVIEW placeholder tag (set in the giant/placeholder block)
@@ -197,6 +198,7 @@ export const diskVertexShader = /* glsl */ `
     vNeb = 0.0;                                 // nebula emission/colour field
     vNebLane = 0.0;                             // nebula lane (0 diffuse, 1 filament)
     vNebLight = 1.0;                            // nebula light factor (1 = full bright; no-op off-nebula)
+    vEaten = 0.0;                               // core-swallow progress (set in the collapse block)
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
     float r = r0;
@@ -433,121 +435,67 @@ export const diskVertexShader = /* glsl */ `
       // timers → the fingers move as COHERENT groups, not per-grain shimmer.
       vec3 dir = sphere;
 
-      // per-region remap of the global collapse progress -----------------------
-      float bias = fbm(dir*1.6 + 23.0)*2.0 - 1.0;     // broad lobes: lead / lag
-      float lump = fbm(dir*4.0 +  9.0);               // patch-scale lumpiness
-      float fil  = fbm(dir*7.5 +  4.0);               // fine sub-filament detail
-      float regOffset = bias*0.30;                    // some regions start earlier/later
-      float regSlope  = 1.0 + bias*0.55 + (lump-0.5)*0.4;  // …and collapse faster/slower
-      // sparse LAGGARD field: the high tail of a sharpened lobe → a minority of
-      // regions that resist the collapse the longest. These become the fingers.
-      float lagField = pow(smoothstep(0.45, 0.92, fbm(dir*2.2 + 11.0)), 2.2);
-      lagField = clamp(lagField + 0.25*fil*lagField, 0.0, 1.5);  // split into threads
+      // fields the ragged swallow front uses: a fine fbm octave for the fringe, and a
+      // tiny per-particle jitter (aThickN + aSeed hash, 0-centred, static at uTime=0) so
+      // the eating edge grains don't form a clean line.
+      float fil      = fbm(dir*7.5 + 4.0);
+      float grainJit = 0.5*aThickN + 0.5*(h31(vec3(aSeed*31.7, 3.1, aSeed*7.9)) - 0.5);
 
-      // sparse COLLAPSE-HOLE field: a SEPARATE, DECORRELATED set of patches that get
-      // SUCKED IN harder than the surrounding bulk during the implosion, tearing dark
-      // CAVITIES into the photosphere so the viewer literally SEES the star coming
-      // apart — matter falling inward, opening voids that reveal the dark collapsing
-      // interior. Sampled at a DIFFERENT noise offset than lagField (+19 vs +11) so
-      // holes are NOT where the finger-spikes are: the spikes stick OUT, the holes
-      // sink IN, and they never coincide. Only the high tail of the field becomes a
-      // hole (smoothstep 0.62→0.86), so just a HANDFUL of cavities open — dramatic
-      // tears, not swiss cheese.
-      float holeField = smoothstep(0.62, 0.86, fbm(dir*3.1 + 19.0));
-      // HOLE WINDOW: gate the cavities to the MIDDLE of the collapse. It is 0 at BOTH
-      // ends (a rising flank that opens once the collapse is underway × a falling flank
-      // that has fully closed before the point), so the FULL SPHERE (uCollapse=0) and
-      // the FINAL POINT (uCollapse=1) are UNTOUCHED — the holes OPEN as the implosion
-      // begins and CLOSE again as everything converges on the seed for the flash. This
-      // preserves the endpoint pinning invariant exactly.
-      float holeWindow = smoothstep(0.12, 0.5, uCollapse) * (1.0 - smoothstep(0.7, 1.0, uCollapse));
+      // === CORE SWALLOW (hollowed outside-in) =============================
+      // The star is devoured into its own CORE (the centre). The outer photosphere is
+      // consumed first and the eating works progressively inward, hollowing the shell
+      // from the OUTSIDE toward the core, until the whole star has poured into the centre.
+      // Each particle falls radially from its surface point toward the origin as the
+      // ragged eating front passes over it — patches go at STAGGERED, irregular times so
+      // the shell tears in organically rather than deflating uniformly. The sink is the
+      // ORIGIN, so collapseScale (radius) → 0 and the consumers just scale dir by it.
+      //
+      // per-particle eating threshold: a ragged fbm field over the surface (0..1) decides
+      // WHEN each patch is taken. Coarse lobes + a fine octave + a tiny per-grain jitter
+      // → an organic, irregular front (no clean shell, no per-grain shimmer). No
+      // directional bias — patches all over the surface are eaten as the front sweeps.
+      float ragged = fbm(dir*2.3 + 11.0)                       // coarse ragged lobes
+                   + (fil - 0.5)*0.30                          // fine fringe detail
+                   + grainJit*0.10;                            // per-grain fray
+      float thresh = clamp(ragged, 0.0, 1.0);                  // when this patch is eaten
 
-      // per-region collapse 0→1. The per-region offset/slope/hold are all gated by
-      // a window that is 0 at BOTH ends (uCollapse·(1-uCollapse)), so the endpoints
-      // pin EXACTLY: uCollapse=0 → kReg=0 (full sphere, every region) and
-      // uCollapse=1 → kReg=1 (the point, every region). Only the MIDDLE desyncs →
-      // the non-homogeneous caving-in, with laggards trailing the bulk into fingers.
-      float desync = uCollapse*(1.0 - uCollapse)*4.0;  // 0 at ends, 1 at mid
-      float kReg = uCollapse + (regOffset + uCollapse*(regSlope - 1.0))*desync*0.5;
-      kReg = kReg - lagField*desync*0.9;               // laggards trail the bulk
-      kReg = clamp(kReg, 0.0, 1.0);
+      // SWEEP the eating front inward with uCollapse. A patch is consumed once the front
+      // passes its threshold. smoothstep WIDTH (0.30) is the soft eating edge. Endpoints:
+      //   uCollapse=0 → front=1.25, top=1.55; thresh≤1 < 1.25 → eaten=0 EVERYWHERE → full
+      //                 sphere (pinned).
+      //   uCollapse=1 → front=-0.35, top=-0.05; thresh≥0 > -0.05 → eaten=1 EVERYWHERE →
+      //                 every particle at the core (the point, pinned).
+      // Both extremes sit strictly outside the [0,1] thresh range → pins are EXACT.
+      float front = mix(1.25, -0.35, uCollapse);              // sweeps as uCollapse 0→1
+      float swallow = smoothstep(front, front + 0.30, thresh); // 0 not-yet .. 1 eaten
+      // ACCELERATE the infall once a patch is taken (gravity into the core): ease-in so it
+      // starts drifting then plunges toward the centre.
+      float eaten = pow(swallow, 1.6);
+      vEaten = eaten;   // → fragment: heat the colour red→white and dim as it falls in
 
-      // independent per-region LIFE timer: even at a held scroll position the
-      // fingers extend / retract on their own clocks → a living, churning core.
-      // Phase from dir (spatial) so whole lobes pulse together; uTime=0 under
-      // reduced motion → perfectly static.
-      float fphase = fbm(dir*1.7 + 5.0)*6.2831;
-      float fingerLife = 0.18*sin(uTime*0.5 + fphase) + 0.08*sin(uTime*1.2 + fphase*2.3);
+      // radial fall to the CORE: collapseScale is the particle's radius fraction. eaten=0
+      // → 1.0 (on the surface); eaten=1 → collapseLo (≈the core point). The consumers
+      // multiply dir (or the textured surface point) by this, so the gas falls straight
+      // in toward the centre. Staggered eaten → the shell hollows outside-in, raggedly.
+      float collapseLo = 0.04;
+      float collapseScale = mix(1.0, collapseLo, eaten);
 
-      // collapseScale: per-region radial scale, NORMALISED so 1.0 = the full giant
-      // surface radius. The bulk shrinks toward ~0 (collapseLo) while LAGGARD regions
-      // stay near 1 and EXTEND past it (>1) → the finger-spikes. This factor is
-      // applied to whatever radius the surface renderer uses (the sun/red-giant
-      // branch below), so the actual photosphere caves in and spikes — there is no
-      // separate blast and never a two-scale frame.
-      float collapseLo = 0.04;                                  // bulk near-point
-      float baseScale  = mix(1.0, collapseLo, kReg);            // the COLLAPSING bulk
-      // HOLE bulk: in a hole region (holeField·holeWindow→1) pull the bulk radius
-      // DEEPER than the surrounding shell (toward 0.18× the regular collapsing bulk),
-      // so those particles sink well BELOW the photosphere — a pit/cavity that opens
-      // a dark gap on the surface shell (the disk renders additively, so fewer grains
-      // on the shell there reads as a DARK void revealing the collapsing interior; no
-      // fragment change needed). NON-hole bulk is unchanged (holeField·holeWindow=0 →
-      // holeFac=1). At uCollapse 0 and 1 holeWindow=0 → holeFac=1 → holeBase==baseScale,
-      // so the endpoints (full sphere / point) pin EXACTLY as before. The FINGER scale
-      // below is deliberately built from the UN-holed baseScale, so the spikes are
-      // never sucked into a pit — fingers and holes stay fully independent.
-      float holeFac  = mix(1.0, 0.18, holeField * holeWindow);
-      float holeBase = baseScale * holeFac;                     // the cavitied bulk
-      // FINGER scale: the laggard regions HOLD near the full giant radius while the
-      // bulk caves in — that radial CONTRAST is what makes the long streaming spikes
-      // (ref Image-3). The fingers are CAPPED at the original sphere surface (scale
-      // 1.0) and never punch past it (user constraint). They reach UP toward the
-      // surface as the collapse deepens, then taper back toward the bulk near the
-      // point so everything reaches the seed for the flash. fingerLife only modulates
-      // how far UP toward 1.0 a finger reaches (always ≤ 1.0), never beyond.
-      float extendWin = smoothstep(0.0, 0.30, uCollapse) * (1.0 - smoothstep(0.80, 1.0, uCollapse));
-      // how close to the full surface this finger reaches (0..1), per region + life.
-      float fingerReach = clamp(extendWin * (0.7 + 0.5*lagField) * (0.85 + 0.15*fingerLife), 0.0, 1.0);
-      // finger tip scale: between the collapsing bulk and the original surface (1.0),
-      // never above it. max() so a finger can only stick OUT relative to the bulk.
-      float fingerScale = max(baseScale, mix(baseScale, 1.0, fingerReach));
-      // only the sparse laggard regions become fingers; everything else is the bulk.
-      float fingerMask = smoothstep(0.10, 0.5, lagField);
-      // bulk uses the CAVITIED radius (holeBase) so the dark voids open; fingers use
-      // fingerScale (from the un-holed baseScale) so the spikes are never sucked in.
-      float collapseScale = mix(holeBase, fingerScale, fingerMask);
-
-      // STREAK the fingers: a finger isn't a displaced shell — it's a long trail of
-      // matter from the core out to the tip. Spread each finger particle's radius
-      // across [bulk core .. finger tip] using a stable per-particle parameter
-      // (aThickN, ~[-1,1] → 0..1), so the laggard regions read as long radial streaks
-      // populated along their whole length, not stubs. Non-finger (bulk) particles
-      // are unaffected (fingerMask≈0 → streakScale==collapseScale==baseScale).
-      float along = 0.5 + 0.5*aThickN;                 // 0..1 stable per particle
-      along = pow(along, 0.7);                          // bias toward the tip a little
-      // streak radius runs from the bulk surface up to this finger's full reach.
-      float streakScale = mix(baseScale, collapseScale, mix(1.0, along, fingerMask));
-
-      // tangential curl so the fingers STREAM rather than sit glassy-radial: a
-      // curl-like vector (3 decorrelated fbm channels) projected onto the plane
-      // perpendicular to dir, drifting slowly with uTime. In UNIT-radius space
-      // (multiplied by the surface radius where it's applied). Only on the spikes
-      // (scaled by lagField) and only once the collapse is underway.
+      // tangential swirl as the gas streams into the core — a curl-like vector projected
+      // perpendicular to the radial fall (⊥ dir), drifting slowly with uTime so the
+      // infalling sheet folds and shears on its way in rather than sliding glassy-straight.
+      // UNIT-sphere space (consumers scale by radius). Faded by eaten*(1-eaten) so it is 0
+      // at the surface AND 0 once at the core (the point pins exactly).
       vec3 dr = vec3(
         fbm(dir*3.4 +  7.0 + vec3(0.0, uTime*0.05, 0.0)),
         fbm(dir*3.4 + 19.0 + vec3(0.0, uTime*0.05, 0.0)),
         fbm(dir*3.4 + 41.0 + vec3(0.0, uTime*0.05, 0.0))
       ) - 0.5;
-      dr -= dir*dot(dr, dir);
-      // small TANGENTIAL sway (perpendicular to dir → barely affects radius, so the
-      // surface cap holds) just to keep the fingers from being glassy-straight.
-      vec3 curlOff = dr*(collapseScale*0.22)*lagField*smoothstep(0.05, 0.5, uCollapse);
+      dr -= dir*dot(dr, dir);                                  // ⊥ to the radial fall
+      vec3 curlOff = dr * 0.18 * (eaten*(1.0 - eaten));        // unit-space swirl
 
-      // default position for the (rare) case the surface renderer below is inactive:
-      // the unit sphere scaled by the (streaked) collapse. The sun/red-giant branch
-      // re-applies streakScale + curlOff to its own textured surface radius.
-      pos = dir*(giantR*streakScale) + curlOff*giantR;
+      // default position (surface-renderer-inactive fallback): the radius pulled to the
+      // core by collapseScale, plus the streaming swirl, scaled to the giant radius.
+      pos = (dir*collapseScale + curlOff) * giantR;
 
       // === REVIEW PLACEHOLDERS (no real morph) ===========================
       // Minimal stand-ins for the three new states so their slot + look can be
@@ -629,14 +577,15 @@ export const diskVertexShader = /* glsl */ `
         // relief flattens to a perfectly round ball at the gold start (uYrMix→0),
         // returning to the bumpy red-giant photosphere as it reddens (uYrMix→1).
         float sunRelief = 1.0 + 0.05*(m - 0.55) * uYrMix;
-        // collapseScale / curlOff (from the unified surface-collapse block) make the
-        // red-giant photosphere cave in non-homogeneously: the bulk shrinks toward the
-        // point while laggard regions extend into the finger-spikes. At the full red
-        // giant (uCollapse=0) collapseScale=1 and curlOff=0 → the sphere is unchanged.
+        // CORE SWALLOW (from the block above): collapseScale pulls each particle's
+        // photosphere radius inward toward the core as the ragged eating front sweeps
+        // over its patch; curlOff is the streaming swirl on the way in. At the full red
+        // giant (uCollapse=0) eaten=0 → collapseScale=1, curlOff=0 → the sphere is
+        // unchanged. At uCollapse=1 every patch has fallen to the core → the point.
         float sunR0 = uGiantR * sunRadFac;
-        // streakScale spreads finger particles along [core..surface] so the spikes
-        // are long populated trails; capped at the surface so they never exceed it.
-        vec3 surf = sphere * (sunR0 * sunRelief * streakScale) + curlOff*sunR0;
+        // apply the radial fall + swirl in unit space, then scale by the textured surface
+        // radius (sunRelief mottle rides the surface part; it vanishes as gas reaches core).
+        vec3 surf = (sphere * collapseScale * sunRelief + curlOff) * sunR0;
         pos  = surf;
         heat = m;
 
@@ -653,6 +602,12 @@ export const diskVertexShader = /* glsl */ `
         // ball: push the pick threshold to ~never (≥1) at low uYrMix, easing the
         // (rare) red-giant flares back in only as it reddens. No-op at uYrMix=1.
         atmoThresh = mix(1.01, atmoThresh, smoothstep(0.6, 1.0, uYrMix));
+        // collapse gate: as the surface caves in, fade the off-surface atmosphere out
+        // so a collapsing red giant has NO loops/prominences/spicules sticking past the
+        // shrinking limb. uCollapse=0 (stable red giant) → no-op (mix→atmoThresh); by
+        // uCollapse≈0.45 the threshold is ≥1.01 → pick can never exceed it → every
+        // atmosphere particle falls through to the collapsing photosphere 'surf'.
+        atmoThresh = mix(atmoThresh, 1.01, smoothstep(0.05, 0.45, uCollapse));
         float pick = h31(vec3(aSeed*53.1, aPhase*11.7, aU*7.3));
         if(pick > atmoThresh){
           // which active region this particle belongs to (a few clustered sites)
@@ -1332,6 +1287,7 @@ export const diskFragmentShader = /* glsl */ `
   varying float vSunRed;  // 0 = gold (yellow sun) palette, 1 = red-giant palette
   varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
   varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
+  varying float vEaten;   // core-swallow progress (0 = on surface, 1 = fallen to the core)
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
@@ -1465,6 +1421,16 @@ export const diskFragmentShader = /* glsl */ `
           // match the mesh handoff (subtle — a warm brightening, not a white-out).
           // No-op when uYrFlash=0.
           pcol = mix(pcol, vec3(1.0, 0.92, 0.78), clamp(uYrFlash, 0.0, 1.0) * 0.08);
+
+          // CORE-SWALLOW HEATING: as each patch of gas falls into the core (vEaten 0→1)
+          // it compresses and HEATS — the colour ramps red → orange → white-hot. Two
+          // stops so it lingers red for most of the fall then whitens near the core.
+          // Gated by vSunRed so only the red giant heats (the gold sun path is untouched).
+          float heatK = pow(clamp(vEaten, 0.0, 1.0), 1.5) * vSunRed;
+          vec3 hotMid = vec3(1.0, 0.55, 0.15);                 // red → hot orange
+          vec3 hotWhite = vec3(1.0, 0.95, 0.88);               // → near-white core
+          pcol = mix(pcol, hotMid,   smoothstep(0.0, 0.6, heatK));
+          pcol = mix(pcol, hotWhite, smoothstep(0.55, 1.0, heatK));
         }
       } else if(vPlaceholder < 2.9){
         // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from
@@ -1525,6 +1491,12 @@ export const diskFragmentShader = /* glsl */ `
         // (vYrMix=1, the settled red giant + every other stage, is the 1.0 no-op end.)
         inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3)) * mix(0.80, 1.0, vYrMix);
       }
+      // CORE-SWALLOW DIM: as the gas falls into the core (vEaten→1) the photosphere
+      // collapses to a dense speck and DIMS — hold full brightness through most of the
+      // fall, then fade in the last third so the collapsed core reads dark, not a bright
+      // dot. Ramps only in the back half of the swallow so the bright body holds first.
+      float eatenDim = smoothstep(0.45, 1.0, vEaten);
+      inten *= 1.0 - 0.82*eatenDim;
     }
     // nebula: per-grain intensity stays MODERATE so the overlapping soft grains
     // accumulate additively into luminous gas WITHOUT clipping to white — the SHO
