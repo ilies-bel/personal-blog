@@ -1,7 +1,6 @@
-// The manifesto overlay: one beat per lifecycle state, pinned over the canvas and
-// cross-faded by scroll. Each beat carries two big lines (down = rewind/hopeful,
-// up = forward/tragic); the active one is chosen by scroll direction. Copy + the
-// timeline live in ../beats (shared with index.astro's SSR fallback).
+// The manifesto overlay: sparse text beats pinned over the canvas and cross-faded
+// by normalized scroll progress. Copy + timing live in ../beats (shared with
+// index.astro's SSR fallback).
 import { BEATS } from '../beats';
 import { SCROLL_DOWN, SCROLL_UP } from '../lib/constants';
 import { fadeInOut, segment } from '../scroll';
@@ -33,8 +32,8 @@ export default function ManifestoOverlay() {
             style={reduced ? { opacity } : { opacity, transform: `translate3d(0, ${y}px, 0)` }}
             aria-hidden={!reduced && !visible}
           >
-            {/* Big line: both directions rendered, crossfaded by `direction`.
-                Under reduced motion both are shown stacked (no crossfade). */}
+            {/* Big line: the component still supports direction-specific lines,
+                but the forward lifecycle currently uses the same line both ways. */}
             <h2 className="bh-beat-big">
               <span
                 className="bh-beat-line bh-beat-line--down"

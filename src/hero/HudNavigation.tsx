@@ -8,6 +8,7 @@ export interface HudNavItem {
   destination: string;
   object: string;
   stage: number;
+  progress: number;
   body: string;
   href?: string;
 }
@@ -21,16 +22,18 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
     destination: 'Inspirations',
     object: 'black hole',
     stage: 0,
+    progress: 0.97,
     body: 'References, atmospheres, and systems that survive the collapse.',
   },
   {
     id: 'collapse',
     glyph: '◌',
     motion: 'breathe',
-    label: 'DYING STAR',
+    label: 'COLLAPSE',
     destination: 'Projects',
-    object: 'dying star',
-    stage: 1.35,
+    object: 'stellar collapse',
+    stage: 0.82,
+    progress: 0.66,
     body: 'Selected builds under pressure: constraints, tradeoffs, and what held.',
   },
   {
@@ -40,7 +43,8 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
     label: 'RED GIANT',
     destination: 'Writing',
     object: 'red giant',
-    stage: 2.2,
+    stage: 2.05,
+    progress: 0.54,
     body: 'Notes on code, interfaces, tooling, and the systems around them.',
     href: 'writing',
   },
@@ -48,20 +52,22 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
     id: 'rebirth',
     glyph: '✦',
     motion: 'flicker',
-    label: 'NEBULA',
+    label: 'YELLOW STAR',
     destination: 'Experiments',
-    object: 'nebula',
-    stage: 4,
+    object: 'yellow star',
+    stage: 2.9,
+    progress: 0.26,
     body: 'Small prototypes and simulations where the next thing starts forming.',
   },
   {
     id: 'beginning',
     glyph: '•',
     motion: 'still',
-    label: 'BEGINNING',
+    label: 'NEBULA',
     destination: 'About me',
-    object: 'origin point',
-    stage: 5,
+    object: 'nebula',
+    stage: 3.5,
+    progress: 0.06,
     body: 'The quiet frame behind the work: engineer, writer, builder on the web.',
     href: 'about',
   },

@@ -12,7 +12,8 @@
 // index.astro's SSR fallback).
 import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker } from '../scroll';
-import { STAGE_COUNT, BUILT_STAGES } from '../beats';
+import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
+import { legacyStageForProgress, progressForLegacyStage } from '../timeline';
 import { HUD_NAV_BY_ID, hudIdForStage, type HudTargetId } from '../HudNavigation';
 import { prefersReducedMotion } from '../lib/config';
 import {
@@ -42,20 +43,20 @@ interface HeroIslandProps {
    *  behind their copy — the same room as the hero, pushed back. */
   backdrop?: boolean;
   /** The lifecycle frame to pin in backdrop mode, in getStage transition-space
-   *  (0 = black hole … 5 = the smoky-blue nebula at the end of the rewind). The
-   *  nebula is the calmest, coolest, most on-palette still, so reading copy sits
-   *  over atmosphere, not a hot disk. */
+   *  (0 = black hole, 3.5 = the smoky-blue nebula). The nebula is the calmest,
+   *  coolest, most on-palette still, so reading copy sits over atmosphere, not a
+   *  hot disk. */
   backdropStage?: number;
 }
 
-export default function HeroIsland({ backdrop = false, backdropStage = 5 }: HeroIslandProps = {}) {
+export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Live scroll progress (0..1) drives both the morph (via a ref the render loop
   // reads) and the manifesto opacities (via React state, updated on scroll).
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0);
-  // Scroll direction drives the big-line swap; a small deadzone keeps sub-pixel
-  // jitter from flipping it.
+  // Scroll direction is still published for components that support direction-
+  // specific copy; the current forward lifecycle uses matching lines both ways.
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
   const [reduced, setReduced] = useState(false);
@@ -117,7 +118,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
       setExplorationMode(true);
     };
 
-    const tracker = new ScrollTracker(STAGE_COUNT);
+    const tracker = new ScrollTracker(SCROLL_SECTION_COUNT);
     const unsub = tracker.subscribe((scrollState) => {
       progressRef.current = scrollState.progress;
       setProgress(scrollState.progress);
@@ -160,18 +161,24 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
     lastProgressRef.current = initial.progress;
     setProgress(initial.progress);
 
-    // Lifecycle position over the scroll. Each stage is 1/STAGE_COUNT of the page;
-    // the five transitions span stage 0→1 … 4→5. Clamp to the number of transitions
-    // built so the bottom of the page holds the final state.
+    // One normalized forward progress value owns the public choreography. The
+    // shader stage is a legacy implementation coordinate derived from it.
     const getStage = (): number => {
       const activeItem = explorationModeRef.current && !isReduced && activeHudRef.current
         ? HUD_NAV_BY_ID[activeHudRef.current]
         : null;
-      return activeItem?.stage ?? Math.min(BUILT_STAGES, progressRef.current * STAGE_COUNT);
+      return activeItem?.stage ?? legacyStageForProgress(progressRef.current);
+    };
+    const getProgress = (): number => {
+      const activeItem = explorationModeRef.current && !isReduced && activeHudRef.current
+        ? HUD_NAV_BY_ID[activeHudRef.current]
+        : null;
+      return activeItem ? activeItem.progress ?? progressForLegacyStage(activeItem.stage) : progressRef.current;
     };
 
     const dispose = createScene(host, isReduced, {
       getStage,
+      getProgress,
       getFocusTarget: () => activeHudRef.current,
       isExplorationMode: () => explorationModeRef.current,
     });
@@ -187,10 +194,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = 5 }: Hero
 
   const base = import.meta.env.BASE_URL ?? '/';
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
-  // same scroll-stage expression the scene's getStage() uses (progress * stages,
-  // clamped to what's built) so the rail's "you are here" marker and the morph
-  // stay in lock-step. Only meaningful once the HUD has revealed.
-  const scrollHudId = explorationMode ? hudIdForStage(Math.min(BUILT_STAGES, progress * STAGE_COUNT)) : null;
+  // same forward-progress → shader-stage expression the scene uses.
+  const scrollHudId = explorationMode ? hudIdForStage(legacyStageForProgress(progress)) : null;
   // The loud "active" treatment (rail expands, label revealed) is reserved for a
   // deliberate hover/focus preview or a committed selection — NOT scroll. Scroll
   // gets the quiet `scrollHudId` marker below, so the rail never expands/collapses

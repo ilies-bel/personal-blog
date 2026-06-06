@@ -1,8 +1,9 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { CFG, lookOffsetX, lookOffsetY, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
+import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugVec3 } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
+import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
@@ -29,8 +30,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(CFG.fovDeg, window.innerWidth / window.innerHeight, 0.1, 4000);
-  const lookTarget = new THREE.Vector3(lookOffsetX, lookOffsetY, 0);
-
   // ---- renderers ----
   // Each piece (disk / starfield / warp arcs / photon ring / post chain) is now
   // built by its own build*() factory above (mirroring buildSunRig). The rigs own
@@ -188,22 +187,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // __bhGiantR keeps its world-units feel against the red-giant-only uGiantScale.
   const RED_GIANT_SPIN_RATE = (Math.PI * 2) / 60; // rad/s
   const RED_GIANT_BASE_R = 4.2; // = buildDisk's base uGiantR (the scale's denominator)
-  // The parked vantage for the grown red giant. The orb stays at the world origin;
-  // sliding the camera + its look target by this shared vector reproduces the chosen
-  // off-centre comp framing (the vast curved limb filling the lower-left). By the
-  // rigid-slide identity it is the NEGATION of the orb-offset the framing was dialled
-  // in at ([-18,12,-26]) → moving the camera/target by −offset shows the centred orb
-  // exactly where offsetting the orb by +offset (fixed camera) would have.
-  // Halved from the old (18,-12,26): the red giant is now revealed at a CLOSER camera
-  // distance (ZOOM_RED_HOLD pulled in to ~2.35), where the full off-centre vast-limb comp
-  // would shove the brighter star half out of frame and re-introduce a size mismatch. A
-  // gentler off-centre weight keeps the whole star framed. The rigid position+target slide
-  // identity is preserved (orb stays centred at origin).
-  //
-  // Micro-reframe (rigid slide → orb moves OPPOSITE the camera on screen):
-  //   X 5 → 4.6   : camera shifts left, so the orb slides ~right (3–5%).
-  //   Y -3 → -3.15: camera drops a touch lower, so the orb lifts ~1–2% up.
-  const RED_GIANT_PARK = new THREE.Vector3(4.6, -3.15, 7);
+  // Debug retarget for the red-giant camera composition. The forward camera rig
+  // owns the real pose; this offset is only a development shim for the old tuning
+  // panel so it can still nudge the red hold without moving the star geometry.
+  const RED_GIANT_PARK = new THREE.Vector3(0, 0, 0);
 
   let mouseX = 0;
   let mouseY = 0;
@@ -224,13 +211,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // The lifecycle position is eased toward its scroll target each frame so a
   // flick of the wheel glides through the transitions instead of snapping.
   // stage 0→1 = reverse supernova; 1→2 = red giant.
-  let stage = 0;
+  let stage = hooks.getStage();
+  let progress = hooks.getProgress?.() ?? progressForLegacyStage(stage);
   let focusGlow = 0;
   // previous-frame stage for the gravity sim (more substeps on a fast scroll).
-  let prevSimStage = 0;
+  let prevSimStage = stage;
   // previous-frame stage for the hyperspace-streak flow direction (latched on a
   // deadzone so sub-pixel jitter at rest never flips the lightspeed streak flow).
-  let prevStreakStage = 0;
+  let prevStreakStage = stage;
   let streakDir = 1;
 
   // --- supernova whiteout: a TIME-based flash envelope, decoupled from scroll ---
@@ -241,7 +229,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // drives the whiteout pass + the particle/bloom/exposure beats.
   let novaStart = -1;     // performance.now() ms at fire; -1 = idle
   let novaArmed = true;   // hysteresis latch: re-arm only after leaving the band
-  let prevMorph = 0;      // previous-frame morph, for crossing detection
+  let prevMorph = Math.min(1, stage);      // previous-frame morph, for crossing detection
   // direction the blast plays, latched at fire and held for the whole envelope:
   //   +1 EXPLODE  — scroll UP, red giant → black hole (morph FALLING through 0.5),
   //                 time forward: a star collapses, detonates, blasts outward.
@@ -257,7 +245,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const NOVA_COOLDOWN = 1200; // ms minimum between fires (anti-strobe backstop)
   let nebulaFlashStart = -1;
   let nebulaFlashArmed = true;
-  let prevNebulaStage = 0;
+  let prevNebulaStage = stage;
   const NEBULA_FLASH_TRIGGER = 3.5;
   const NEBULA_FLASH_ARM = 0.18;
   const NEBULA_FLASH_RISE = 0.06;
@@ -285,12 +273,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // --- lifecycle position, smoothed toward the scroll target ---
     const exploring = hooks.isExplorationMode?.() === true;
     const focusTarget = exploring ? hooks.getFocusTarget?.() ?? null : null;
+    const follow = reduced ? 1 : 0.28;
+    const progressTarget = Math.max(0, Math.min(1, hooks.getProgress?.() ?? progress));
+    progress += (progressTarget - progress) * follow;
     const stageTarget = hooks.getStage();
-    stage += (stageTarget - stage) * (reduced ? 1 : 0.12);
+    stage += (stageTarget - stage) * follow;
     // DEBUG: window.__bhMorph forces the stage to an exact value (no smoothing)
     // so the explosion can be inspected frame-by-frame from a capture script.
     const morphOverride = readDebugNumber(DEBUG_WINDOW_KEYS.morph);
-    if (typeof morphOverride === 'number') stage = morphOverride;
+    if (typeof morphOverride === 'number') {
+      stage = morphOverride;
+      progress = progressForLegacyStage(morphOverride);
+    }
     // `morph` (= min(1, stage)) is needed HERE for the stateful nova clock's
     // breakout-crossing detection below; lifecycle() recomputes it from the same
     // formula for the look scalars. (Kept local + cheap — it's the clock's input.)
@@ -641,90 +635,23 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskMatPrimary.uniforms.uSat.value = look.diskSat;
     diskMatSecondary.uniforms.uSat.value = look.diskSat;
 
-    // --- lifecycle zoom choreography (the scale story) ---
-    // A black hole is tiny-but-massive; a star is huge-but-diffuse. The scale
-    // story is told by the CAMERA (computed in lifecycle()): sit CLOSE on the hero
-    // black hole so it fills the frame, rocket WAY BACK as the matter collapses to
-    // its speck, then ease back to resting for the red giant. distFactor folds in
-    // the intro dezoom; zoom is the lifecycle scale story; the novaKick is a subtle
-    // outward shove timed to the blast (rides the TIME envelope, so a fast scroller
-    // still feels the world recoil from the detonation).
-    const distance = CFG.camDist * look.distFactor * look.zoom * look.novaKick;
-
-    // Inclination: the fixed resting pitch, plus the red→yellow recompose ELEVATION
-    // (lifts the eye above the equator across stage 2.1→2.5 so the parked off-centre
-    // limb rolls into a centred whole ball before it shrinks into the yellow star).
-    const inclination = THREE.MathUtils.degToRad(CFG.inclDeg) + look.redYellowElev;
-    const horiz = distance * Math.cos(inclination);
-    const camY0 = distance * Math.sin(inclination);
-
-    // --- idle liveliness: layered "breathing" so the resting camera never reads
-    // as locked-off. Three incommensurate octaves on the vertical bob (their
-    // periods don't share a common multiple, so the motion never visibly loops),
-    // plus the pointer parallax. Folded together as yWobble below.
-    const idleBob = reduced
-      ? 0
-      : Math.sin(t * 0.055) * 0.16 + Math.sin(t * 0.13 + 1.7) * 0.035 + Math.sin(t * 0.31 + 4.1) * 0.014;
-
-    // RED-GIANT CAMERA PARK: the orb itself stays CENTRED at the world origin the
-    // whole time (the supernova collapses centred, the star grows centred). Once the
-    // giant is GROWN we DRIVE THE CAMERA to a chosen off-centre vantage so the sheer
-    // SCALE reads — the giant fills the frame as a vast curved limb — then RECENTRE
-    // for the yellow-star transformation. Because the orb is at origin, translating
-    // the camera position AND its look target by the SAME world vector slides the
-    // whole view rigidly: the centred orb projects exactly where the off-centre comp
-    // put it, pixel-for-pixel, but the star never actually leaves the origin.
-    //
-    // parkWeight ramps 0→1 IN LOCKSTEP WITH THE ZOOM-IN (lifecycle's far→comp reveal runs
-    // stage 1.3→1.75): the off-centre limb framing slides into place AS the camera comes
-    // in, so the star is seen far+CENTRED first, then we zoom in to the off-centre limb
-    // comp together. HOLDS fully across the red-giant beat, then ramps 1→0 (stage ~2.1→2.5)
-    // to recentre for the yellow swap. While parked we FREEZE the orbital drift so the
-    // giant sits still and just spins on its axis (uGiantSpin).
-    const parkIn = smoothstep01((stage - 1.35) / 0.35);
-    const parkOut = smoothstep01((stage - 2.1) / 0.4);
-    const parkWeight = parkIn * (1 - parkOut);
-    const driftDamp = 1 - parkWeight; // 1 normally → 0 while parked
-
-    // azimuth: a small extra sweep during the intro, then steady rotation (both
-    // shaped in lifecycle()). A slow lateral handheld sway + the pointer parallax
-    // ride on top here, in the impure shell, since they are DOM/time input rather
-    // than lifecycle state. The drifting terms are damped to 0 while parked.
-    const baseAz = THREE.MathUtils.degToRad(CFG.rotation);
-    const idleSway = reduced ? 0 : Math.sin(t * 0.041 + 0.6) * 0.0025; // sub-degree drift
-    const azimuth =
-      baseAz +
-      look.introSweep +
-      look.orbitSweep + // quarter-circle orbit around the shrinking hole (UNDAMPED: it's
-      //   a fixed +π/2 baseline by stage 0.46, long before the park, so damping it would
-      //   be pointless and the park slide is positional, not azimuthal — no conflict).
-      look.redYellowAz + // red→yellow recompose: azimuth half of the two-axis orbit that
-      //   swings the off-centre limb to a centred whole-ball view (stage 2.1→2.5).
-      look.rotation * driftDamp +
-      idleSway * driftDamp +
-      (reduced ? 0 : mouseX * 0.04 * driftDamp);
-    // keep ~30% of the vertical breath while parked (subtle, not locked-off).
-    const yBreathDamp = 1 - 0.7 * parkWeight;
-    const yWobble = idleBob * yBreathDamp + (reduced ? 0 : -mouseY * 0.25 * driftDamp);
-
-    camera.position.set(Math.sin(azimuth) * horiz, camY0 + yWobble, Math.cos(azimuth) * horiz);
-    // Slide the camera (position + look target together) to the parked vantage. The
-    // shared translation keeps the centred orb framed exactly like the chosen comp.
-    camera.position.addScaledVector(RED_GIANT_PARK, parkWeight);
-
-    // The red→yellow transition now ends CENTRED (the recompose orbit + park-out resolve
-    // the star to frame centre by stage 2.5), and the shrink (2.5→2.85) must read on a
-    // dead-centre star — so the old `redWipeFrame` lateral lookTarget slide (which shoved
-    // the star off-centre across 2.22→2.72) is REMOVED. `dyingFrame` (the downstream
-    // dying-star / nebula-approach reframe) now starts at the new swap (2.88), after the
-    // centred shrink is complete, so it never offsets the still-contracting star.
-    const dyingFrame =
-      smoothstep01((stage - 2.88) / 0.20) *
-      (1 - smoothstep01((stage - 3.44) / 0.20));
-    frameLookTarget.copy(lookTarget);
-    frameLookTarget.addScaledVector(RED_GIANT_PARK, parkWeight); // keep the orb framed while parked
-    frameLookTarget.x += dyingFrame * 0.72;
-    frameLookTarget.y += dyingFrame * -0.18;
+    // --- master forward camera rig ------------------------------------------
+    // Progress, not object identity, owns the camera: calm drift while the nebula
+    // gathers, stable holds while text is readable, one accelerating collapse pull,
+    // one supernova recoil, then a magnetic settle on the black hole.
+    const cameraPose = cameraPoseForProgress(progress, t, nova, reduced);
+    camera.position.set(cameraPose.position[0], cameraPose.position[1], cameraPose.position[2]);
+    frameLookTarget.set(cameraPose.target[0], cameraPose.target[1], cameraPose.target[2]);
+    if (!reduced && cameraPose.parallax > 0) {
+      camera.position.x += mouseX * cameraPose.parallax;
+      camera.position.y += -mouseY * cameraPose.parallax * 0.45;
+      frameLookTarget.x += mouseX * cameraPose.parallax * 0.35;
+      frameLookTarget.y += -mouseY * cameraPose.parallax * 0.18;
+    }
+    if (RED_GIANT_PARK.lengthSq() > 0 && progress >= 0.46 && progress <= 0.62) {
+      camera.position.add(RED_GIANT_PARK);
+      frameLookTarget.add(RED_GIANT_PARK);
+    }
     camera.lookAt(frameLookTarget);
 
     flashOrigin.set(0, 0, 0).project(camera);
@@ -734,27 +661,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     );
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
-    // lookAt rewrites the camera's orientation every frame, so the roll + local
-    // translations below are self-clearing — they never accumulate. Two layers:
-    //
-    //   • idle roll: a barely-there, slow view-axis tilt so the horizon breathes
-    //     even at rest (handheld feel). Sub-0.1°.
-    //   • blast shake: when look.shakeAmp is hot, a SUBTLE rumble — multi-axis local-
-    //     space jitter (screen-relative shudder) + a small view-axis roll. Driven
-    //     by layered high-frequency sines at incommensurate rates so it reads as
-    //     organic rumble, not a clean wobble. Amplitude is shakeAmp, a hump that
-    //     peaks as the whiteout CLEARS (see lifecycle.ts), so the rattle lands on
-    //     the reveal, not behind the white.
-    //
-    // The positional shudder is scaled by `distance` so it's a constant ANGULAR shake
-    // (same on-screen amplitude whether we're close on the BH or way back at the
-    // remnant — a fixed world offset would vanish at the far blast distance).
+    // Tiny and time-based: it sells one shock event without turning the scroll into
+    // a game-camera wobble.
     if (!reduced) {
       const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016; // rad, ~0.09°
-      const sh = look.shakeAmp;
+      const sh = cameraPose.shake;
       if (sh > 0.0001) {
         const f = t * 47.0; // fast carrier for the rumble
-        const amp = distance * 0.009 * sh; // angular shudder scale (≈0.9% of frame at peak)
+        const amp = camera.position.length() * 0.0045 * sh;
         // local-space positional shudder (X = screen horizontal, Y = vertical)
         const jitterX = (Math.sin(f * 1.00) + Math.sin(f * 2.30 + 1.3)) * 0.5 * amp;
         const jitterY = (Math.sin(f * 1.37 + 0.7) + Math.sin(f * 2.90 + 3.1)) * 0.5 * amp;
@@ -771,12 +685,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       }
     }
 
-    // --- FOV breath on the detonation -----------------------------------------
-    // The lens widens a touch on the blast then settles. fovKick is 0 at rest,
-    // so the projection matrix is only rebuilt while the kick is live.
-    const fov = CFG.fovDeg + look.fovKick;
-    if (camera.fov !== fov) {
-      camera.fov = fov;
+    if (camera.fov !== CFG.fovDeg) {
+      camera.fov = CFG.fovDeg;
       camera.updateProjectionMatrix();
     }
 

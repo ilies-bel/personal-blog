@@ -24,7 +24,7 @@ export const DIRECTION_DEADZONE = 0.0008;
  *  enough that the very first wheel nudge begins the hide. */
 export const CHROME_HIDE_AT = 0.015;
 /** Scroll fraction at which the final selected-work HUD arms. */
-export const EXPLORATION_TRIGGER_AT = 0.895;
+export const EXPLORATION_TRIGGER_AT = 0.992;
 /** Delay before the HUD reveals after the trigger; kept scroll-immediate. */
 export const EXPLORATION_REVEAL_DELAY_MS = 0;
 

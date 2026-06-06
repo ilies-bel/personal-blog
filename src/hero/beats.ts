@@ -1,26 +1,13 @@
 // ===========================================================================
-// beats.ts — the single source of truth for the reverse-lifecycle timeline and
-// its manifesto copy.
+// beats.ts — copy timing for the forward stellar-lifecycle hero.
 //
-// The home page plays the stellar lifecycle BACKWARDS as the visitor scrolls:
-// black hole (top) → dying-star bridge → red giant → dying star → nebula →
-// beginning dot (bottom). Each lifecycle state is one beat of the manifesto.
+// The scroll is one continuous normalized cinematic: nebula gathers → yellow
+// star → red giant → collapse → supernova → black hole → portfolio lure.
+// Text is deliberately sparse and appears only during stable states; the camera
+// is free to move during collapse/release without asking the visitor to read.
 //
-// This module is imported by BOTH the client-only React island
-// (BlackHole.tsx, which renders the live cross-fading overlay) AND
-// index.astro at build time (which renders the .scene-stage scroll track and
-// the <noscript> SSR fallback). Keeping the timeline + copy here means the
-// stage count, the number of scroll stages, and the no-JS fallback copy can
-// never drift apart — they all derive from this one array.
-//
-//  Core mechanic: each beat has TWO big lines and the big line SWAPS on scroll
-//  DIRECTION. Scrolling DOWN rewinds time (the hopeful arc: from the black hole
-//  at the end, back to the pale blue dot at the beginning); scrolling UP runs
-//  time forward (the tragic arc: from one good decision out to the inevitable
-//  collapse). The whisper is shared and does NOT swap.
-//
-//  All copy is real, selectable DOM text (never baked into the canvas) so it
-//  stays indexable. Straight quotes only; no em/en dashes, no curly quotes.
+// All copy is real, selectable DOM text (never baked into the canvas) so it
+// stays indexable. Straight quotes only; no em/en dashes, no curly quotes.
 // ---------------------------------------------------------------------------
 export interface ManifestoBeat {
   /** Scroll-progress centre of the beat (it owns a ~1/6 slot around this). */
@@ -34,73 +21,50 @@ export interface ManifestoBeat {
   };
   /** The lifecycle state this beat narrates (for the label / a11y). */
   state: string;
-  /** Big line shown while scrolling DOWN (rewind / hopeful arc). */
+  /** Primary line. `up` is kept for the existing crossfade component API. */
   down: string;
-  /** Big line shown while scrolling UP (forward / tragic arc). */
   up: string;
   /** Small dim elaboration. Shared across both directions; never swaps. */
   whisper: string;
 }
 
-// Six states on the scroll timeline, black hole at the top and the beginning dot
-// near the bottom. The final two copy beats are intentionally delayed so the
-// nebula and the tiny beginning star get a silent observation window first.
 export const BEATS: ManifestoBeat[] = [
   {
-    at: 0.02,
-    text: { inStart: 0.0, inEnd: 0.0, outStart: 0.045, outEnd: 0.075 },
-    state: 'black hole',
-    down: 'every project ends. eventually.',
-    up: 'every project ends. eventually.',
-    whisper: 'the part nobody sees is what holds it together.',
+    at: 0.09,
+    text: { inStart: 0.035, inEnd: 0.055, outStart: 0.125, outEnd: 0.155 },
+    state: 'nebula',
+    down: 'everything starts here.',
+    up: 'everything starts here.',
+    whisper: 'dust, pressure, and the patience to let shape appear.',
   },
   {
-    at: 1 / 6,
-    text: { inStart: 0.120, inEnd: 0.135, outStart: 0.195, outEnd: 0.220 },
-    state: 'dying star',
-    down: 'uncertain. still holding.',
-    up: 'and one day it gives way.',
-    whisper: 'fast to build. faster to fall apart.',
-  },
-  {
-    at: 2 / 6,
-    text: { inStart: 0.260, inEnd: 0.280, outStart: 0.345, outEnd: 0.370 },
-    state: 'red giant',
-    down: "bigger isn't the same as lasting.",
-    up: 'then it grows faster than anyone can hold.',
-    whisper: "the ai keeps adding. nobody's left who understands it.",
-  },
-  {
-    at: 3 / 6,
-    text: { inStart: 0.485, inEnd: 0.500, outStart: 0.555, outEnd: 0.580 },
-    state: 'dying star',
+    at: 0.255,
+    text: { inStart: 0.210, inEnd: 0.235, outStart: 0.275, outEnd: 0.300 },
+    state: 'yellow star',
     down: 'small enough to doubt.',
-    up: 'for a while, it just works.',
+    up: 'small enough to doubt.',
     whisper: "the part that's still up at 3am. that's engineering.",
   },
   {
-    at: 0.72,
-    text: { inStart: 0.625, inEnd: 0.650, outStart: 0.745, outEnd: 0.785 },
-    state: 'nebula',
-    down: 'everything starts here.',
-    up: "a few more, and it's a real thing.",
-    whisper: 'stars are born from what the last one left behind.',
+    at: 0.54,
+    text: { inStart: 0.460, inEnd: 0.500, outStart: 0.580, outEnd: 0.620 },
+    state: 'red giant',
+    down: "bigger isn't the same as lasting.",
+    up: "bigger isn't the same as lasting.",
+    whisper: "the ai keeps adding. nobody's left who understands it.",
   },
   {
-    at: 0.89,
-    text: { inStart: 0.810, inEnd: 0.835, outStart: 0.900, outEnd: 0.930 },
-    state: 'beginning',
-    down: 'in the beginning.',
-    up: 'it starts with one good decision.',
-    whisper: "every line you'll ever ship fits on that dot. worth doing properly, then.",
+    at: 0.965,
+    text: { inStart: 0.940, inEnd: 0.955, outStart: 0.990, outEnd: 1.000 },
+    state: 'black hole',
+    down: 'what survives has gravity.',
+    up: 'what survives has gravity.',
+    whisper: 'selected work begins at the edge of the collapse.',
   },
 ];
 
-// Six lifecycle states divide the scroll track into six full-viewport stages;
-// the five morphs run across stage boundaries 0→1 … 4→5. BUILT_STAGES caps the
-// lifecycle position so the bottom of the page rests on the final state instead
-// of running off the end. Both derive from BEATS so the timeline can never
-// disagree with the copy: STAGE_COUNT === the number of beats, and there is one
-// fewer morph than there are states.
-export const STAGE_COUNT = BEATS.length;
-export const BUILT_STAGES = BEATS.length - 1;
+// The copy and the scroll distance are separate on purpose: the lifecycle needs a
+// long physical runway, while headlines should be sparse.
+export const SCROLL_SECTION_COUNT = 6;
+export const STAGE_COUNT = SCROLL_SECTION_COUNT;
+export const BUILT_STAGES = 3.5;

@@ -1,11 +1,10 @@
 // ===========================================================================
-// lifecycle.ts — the reverse stellar-lifecycle choreography, as a PURE function.
+// lifecycle.ts — legacy shader-state choreography, as a PURE function.
 //
-// The hero plays the stellar lifecycle BACKWARDS as the visitor scrolls:
-//
-//     black hole → supernova bridge → red giant → yellow star → nebula → dot
-//
-// (see CLAUDE.md for the full stage→state map). The BlackHole scene's per-frame
+// The public scroll story now runs forward from nebula to black hole. This module
+// still speaks the older shader "stage" coordinate system because the GPU morphs
+// were built around it; timeline.ts owns the forward progress → legacy stage
+// mapping. The BlackHole scene's per-frame
 // loop used to compute ~48 named scalars from `stage`/`t` inline and immediately
 // pour them into three.js uniforms, bloom, exposure, grade and camera. That made
 // the actual SUBJECT MATTER — "how does the scroll position become the star's
@@ -271,11 +270,11 @@ export function lifecycle(input: LifecycleInput): StarState {
   const COLLAPSE_HI = 1.05; // stage where the surface is still the full sphere
   const COLLAPSE_LO = 0.5; // stage where the surface has shrunk to the point
   const kCollapse = Math.min(1, Math.max(0, (COLLAPSE_HI - stage) / (COLLAPSE_HI - COLLAPSE_LO)));
-  // `giant` now means "the sphere-identity model is active" — it must be 1 across
-  // the ENTIRE collapse window so the unified surface block owns the geometry (no
-  // co-existing radial blast → no two-scale artifact). It rises as we leave the
-  // black-hole side (stage 0.5 → 1.05) and stays 1 for the red giant and above.
-  const giant = Math.min(1, Math.max(0, (stage - COLLAPSE_LO) / (COLLAPSE_HI - COLLAPSE_LO)));
+  // `giant` means the sphere-identity model is active. In the forward story it
+  // must stay fully active through the whole red-giant collapse so uCollapse can
+  // physically crush the surface; only after the breakout crossing do we hand off
+  // to the black-hole machinery.
+  const giant = smoothstep01((stage - 0.46) / 0.04);
 
   // --- supernova flash: time-based envelope, fired on the breakout crossing ---
   // the particle-side shock-breakout glow follows the SAME time envelope as the
@@ -587,31 +586,14 @@ export function lifecycle(input: LifecycleInput): StarState {
   const shrinkK = smoothstep01((stage - SHRINK_START) / (SHRINK_END - SHRINK_START));
   const blackHoleScale = reduced ? 1 : 1 - (1 - SHRINK_MIN) * shrinkK;
 
-  // --- red-giant SIZE reveal (drives uGiantScale) — the SCALE-CONTRAST story --------
-  // The narrative: the black hole was HUGE (it filled the hero frame); after the
-  // supernova the red star first appears TINY — a small dense disc lost in a vast black
-  // field — so the eye reads "that little thing came from that enormous black hole".
-  // THEN, as the camera comes in, the star GROWS to its true bloated size — the reveal
-  // that it is itself a massive star. We grow the geometry (not just dolly) because the
-  // orb is intrinsically ~17.6 units: at any distance that frames it whole it fills the
-  // screen, so a small distinct star can only be a SMALL star. Keeping it small also
-  // keeps its ~1M grains overlapped → it reads as a solid little disc, not sparse dust.
-  // NOTE: the red giant is kept MEDIUM (radius ~9), NOT the old bloated ~17.6, because
-  // the fixed ~1M grains spread too thin on a huge sphere and the surface goes sparse/
-  // dusty; at ~9 it stays a solid, dense, glowing photosphere (like the gorgeous small
-  // newborn frame, just bigger). GIANT_FULL MUST match buildDisk's baked uGiantScale so
-  // the held giant doesn't pop when the reveal window ends.
+  // --- red-giant size (drives uGiantScale) ----------------------------------
+  // Forward scroll tells the growth through the yellow→red shader handoff
+  // (uYrGrow/uYrMix), then holds the red giant at a stable radius. Do not reuse
+  // the old reverse "tiny newborn red star" reveal here; that made the held giant
+  // shrink while its headline was readable and broke the physical lifecycle.
   const GIANT_FULL = 8.5 / 4.2; // medium, dense held size, trimmed ~6% (9.0 → 8.5) — matches
   //   buildDisk uGiantScale AND createScene's RED_GIANT_RADIUS; keep all three in sync.
-  const GIANT_SMALL = 4.5 / 4.2; // the tiny just-born star (radius ~4.5 → small disc + margin)
-  // small until ~1.2 (the scale-contrast beat), then grow to full by ~1.7 as we come in.
-  const sizeT = easeOut(smoothstep01((stage - 1.2) / 0.5));
-  // below the reveal window pin to full so the gather/seed and held giant are unchanged;
-  // the reveal only modulates size across 1.0 → 1.7. Outside [1.0, ∞) it's full.
-  const inReveal = stage > 1.0 && stage < 1.7 ? 1 : 0;
-  const giantScale = reduced
-    ? GIANT_FULL
-    : GIANT_SMALL + (GIANT_FULL - GIANT_SMALL) * (inReveal ? sizeT : stage <= 1.0 ? 0 : 1);
+  const giantScale = GIANT_FULL;
 
   // --- lifecycle zoom choreography (the scale story) ---
   // The camera story (scrolling DOWN, stage rising):
@@ -644,7 +626,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     // the star grows — a gentle push-in accompanying the growth, not a big dolly.
     const wideT = smoothstep01((stage - 0.95) / 0.2); // ease out to the wide newborn frame
     const inT = easeOut(smoothstep01((stage - 1.25) / 0.45)); // gentle come-in as it grows
-    const revealZoom = ZOOM_HOLD + (ZOOM_RED_WIDE - ZOOM_HOLD) * wideT; // HOLD → WIDE
+    const revealZoom = heroZoom + (ZOOM_RED_WIDE - heroZoom) * wideT; // HOLD → WIDE
     const redHoldZoom = revealZoom + (ZOOM_RED_HOLD - revealZoom) * inT; // WIDE → IN (comp)
     // RED → YELLOW unzoom: pull back from the held comp (1.65) to ZOOM_RED_UNZOOM (2.4)
     // across 2.0→2.5, in lockstep with the recompose orbit, then HOLD steady through the
