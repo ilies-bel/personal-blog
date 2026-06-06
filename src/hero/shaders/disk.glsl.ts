@@ -883,49 +883,18 @@ export const diskVertexShader = /* glsl */ `
       }
     }
 
-    // === Deterministic swirl-collapse (nebula -> yellow star) =================
-    // The nebula gas funnels into the forming star as a PURE FUNCTION of scroll
-    // (uNebCollapse, 0 at the resting nebula -> 1 at the formed star). This replaced
-    // the old stateful GPGPU sim, which integrated forward every frame and PARKED
-    // particles permanently on the core — so scrolling back up could not un-collapse
-    // them (the "moves only one way" bug). Being a deterministic lerp of the FROZEN
-    // nebula home (pos), it scrubs exactly both directions: scroll down converges,
-    // scroll up reverses, holding still = a frozen frame.
-    if(uNebCollapse > 0.0001){
-      vec3 home = pos;                              // frozen analytic nebula position
-      float homeR = length(home) + 1e-4;
-      vec3 dir = home / homeR;                      // radial direction from the core
-      float coreR = uGiantR * 0.36;                 // ~ the forming-star photosphere radius
-
-      // per-particle eased progress: outer gas leads slightly so the cloud collapses
-      // from the rim inward (a gentle stagger, not every grain moving in lockstep).
-      float lead = 0.82 + 0.36 * fract(aSeed * 7.31);
-      float c = clamp(uNebCollapse * lead, 0.0, 1.0);
-
-      // GRAVITY FEEL: the infall ACCELERATES. A weightless linear/smoothstep lerp read
-      // as "no gravity felt". Instead the radius barely changes at first then PLUNGES
-      // toward the core (pow ease-in ≈ accelerating freefall), so the gas hangs, then
-      // rushes in and slams onto the star. Pure function of c → exact on scroll reverse.
-      float fall = c * c * c;                        // accelerating infall (slow→fast)
-      float r = mix(homeR, coreR, fall);
-
-      // OMNIDIRECTIONAL SWIRL: curve the path along each particle's OWN tangent, not a
-      // global y-axis spin. (A y-axis rotation leaves pole particles un-rotated, so the
-      // cloud collapsed into two vertical columns top/bottom — the bug in the capture.)
-      // Build a stable tangent perpendicular to dir; every particle spirals in the same
-      // amount regardless of where it sits, so the gas funnels in from ALL directions.
-      vec3 ref = abs(dir.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-      vec3 tang = normalize(cross(dir, ref));
-      float swirl = (1.6 + 1.4 * fract(aSeed * 3.17)) * fall;   // radians of spin-in
-      vec3 curveDir = normalize(dir * cos(swirl) + tang * sin(swirl));
-
-      // final position: the swirled radial direction at the accelerating radius. At
-      // fall=0 this is exactly home (r=homeR, curveDir=dir); at fall=1 it is on the
-      // core shell — one continuous, exactly-reversible path, no double easing.
-      pos = curveDir * r;
-      // gas FADES only LATE (once it has visibly rushed in and piled onto the core), so
-      // you SEE the infall instead of it dissolving in place. Reverses on scroll-up.
-      vSimLife = 1.0 - smoothstep(0.55, 1.0, c);
+    // === Real gravity sim collapse (nebula -> yellow star) ====================
+    // The collapse is a STATEFUL N-body-style sim (see gravitySim.ts): particles
+    // accelerate under a softened central well + strong curl turbulence, swirl in
+    // chaotically from all directions, and accrete onto the core. "Scroll = time":
+    // the sim is advanced/replayed to match scroll position, so it tracks the
+    // scrollbar both ways while staying genuinely chaotic/organic (not a symmetric
+    // formula). pos holds the analytic nebula placement; the sim is SEEDED from the
+    // same placement, so at uSimBlend~0 simP.xyz~pos -> no pop.
+    if(uSimBlend > 0.0){
+      vec4 simP = texture2D(uSimPos, aSimUV);   // xyz = world pos, w = life
+      pos = mix(pos, simP.xyz, uSimBlend);
+      vSimLife = simP.w;                          // → frag brightens/dims accreting matter
     }
 
     vec4 viewP  = modelViewMatrix * vec4(pos, 1.0);

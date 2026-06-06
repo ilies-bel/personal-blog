@@ -273,11 +273,18 @@ const seedVelocityShader = /* glsl */ `
     // a SMALL tangential swirl about the y axis so the infall forms streamers,
     // plus a gentle inward bias so the gas leans toward the star from the start
     // (more particles actually reach + feed the core rather than orbiting forever).
-    vec3 up = vec3(0.0, 1.0, 0.0);
-    vec3 tang = normalize(cross(up, wp) + 1e-4);
+    // RANDOM per-particle swirl axis (NOT a global y axis) so the infall does not form
+    // a clean equatorial disk + polar columns (the cross-seam artifact). Each particle
+    // orbits about its own jittered axis, so the collapse is chaotic from all sides.
+    vec3 rnd = normalize(vec3(
+      h31(vec3(sd.x*91.0, sd.y*13.0, 7.0)) - 0.5,
+      h31(vec3(sd.y*51.0, sd.z*29.0, 3.0)) - 0.5,
+      h31(vec3(sd.z*17.0, sd.x*37.0, 5.0)) - 0.5
+    ) + 1e-4);
+    vec3 tang = normalize(cross(rnd, wp) + 1e-4);
     vec3 inward = -normalize(wp + 1e-4);
-    float swirl = 0.14 * (0.5 + 0.5*sd.x);
-    gl_FragColor = vec4(tang * swirl + inward * 0.35, sd.x); // w = per-particle seed
+    float swirl = 0.10 + 0.22*h31(vec3(sd.x*5.0, sd.y*7.0, 11.0));
+    gl_FragColor = vec4(tang * swirl + inward * (0.20 + 0.25*sd.y), sd.x); // w = seed
   }
 `;
 
@@ -286,8 +293,15 @@ const seedVelocityShader = /* glsl */ `
 export interface GravitySim {
   /** true when float targets are supported and the sim is live. */
   available: boolean;
-  /** advance the sim by `substeps` fixed-dt steps at the given collapse drive. */
-  step: (collapse: number, time: number, substeps: number) => void;
+  /** legacy no-op (the render path drives the sim via simulateTo). */
+  step: () => void;
+  /**
+   * Advance/rewind the stateful collapse so it matches scroll `progress` (0 = dispersed
+   * nebula, 1 = fully collapsed). Forward = incremental integration; backward = reseed
+   * + replay to the smaller target (so the real sim still tracks the scrollbar both
+   * ways). `budget` caps steps integrated this frame so a hard jump can't stall it.
+   */
+  simulateTo: (progress: number, budget?: number) => void;
   /** current position texture (xyz = world pos, w = life) for the render shader. */
   getPosTexture: () => THREE.Texture | null;
   dispose: () => void;
@@ -319,6 +333,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   const noop: GravitySim = {
     available: false,
     step: () => {},
+    simulateTo: () => {},
     getPosTexture: () => null,
     dispose: () => {},
   };
@@ -358,13 +373,14 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   velVar.material.uniforms.uM0 = { value: 1.0 };
   velVar.material.uniforms.uEps = { value: giantR * 0.15 };
   velVar.material.uniforms.uMaxSpeed = { value: giantR * 4.5 };
-  // higher damping bleeds orbital energy so swirling gas spirals IN and accretes
-  // instead of hanging in a diffuse halo (more particles actually feed the star).
-  velVar.material.uniforms.uDamp = { value: 1.9 };
+  // moderate damping bleeds orbital energy so swirling gas spirals IN and accretes
+  // over the collapse, but not so hard that it plummets straight (we want chaos).
+  velVar.material.uniforms.uDamp = { value: 1.2 };
   velVar.material.uniforms.uHomeDamp = { value: 8.0 };
   velVar.material.uniforms.uHomeK = { value: 30.0 };
-  // less curl so the inflow is more RADIAL (gas falls into the core, doesn't orbit).
-  velVar.material.uniforms.uCurlAmp = { value: 1.1 };
+  // STRONG curl turbulence so the infall churns — chaotic streamers/filaments feeding
+  // the star, organic and asymmetric (the whole point of using the real sim).
+  velVar.material.uniforms.uCurlAmp = { value: 3.2 };
   velVar.material.uniforms.uCollapseDrive = { value: 0 };
   velVar.material.uniforms.uAccretedFrac = { value: 0 };
   // a wider capture radius so MORE of the infalling gas parks onto the star.
@@ -395,29 +411,62 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
     uFrozenTime: { value: 0 },
     uGiantR: { value: giantR },
   });
-  // posVar/velVar each hold two RTs (ping-pong); seed BOTH so the first compute
-  // reads a valid previous state regardless of currentTextureIndex.
-  for (const rt of posVar.renderTargets) gpu.doRenderTarget(seedPosMat, rt);
-  for (const rt of velVar.renderTargets) gpu.doRenderTarget(seedVelMat, rt);
-  seedPosMat.dispose();
-  seedVelMat.dispose();
-
-  const step = (collapse: number, time: number, substeps: number): void => {
-    velVar.material.uniforms.uCollapseDrive.value = collapse;
-    velVar.material.uniforms.uTime.value = time;
-    // accreted fraction tracks the collapse drive (cheap proxy, no GPU readback):
-    // mass only really grows once particles are well into the infall.
-    velVar.material.uniforms.uAccretedFrac.value = Math.max(0, collapse - 0.4) / 0.6;
-    const k = Math.max(1, Math.min(4, Math.floor(substeps)));
-    for (let i = 0; i < k; i++) gpu.compute();
+  // Reset both ping-pong RTs (pos + vel) to the analytic nebula placement → the sim
+  // returns to the dispersed cloud. Used at init AND to REWIND: "scroll = time" means
+  // scrolling UP replays the deterministic sim from this seed forward to the (smaller)
+  // target step, so the collapse always tracks the scrollbar both directions.
+  const reseed = (): void => {
+    for (const rt of posVar.renderTargets) gpu.doRenderTarget(seedPosMat, rt);
+    for (const rt of velVar.renderTargets) gpu.doRenderTarget(seedVelMat, rt);
   };
+  reseed();
+
+  // --- scroll-as-time stepping with replay-rewind ---------------------------
+  // The collapse is a real stateful N-body-style sim, but we make it a function of
+  // SCROLL: targetStep = round(progress * MAX_STEPS). Forward scroll advances the
+  // integrator incrementally; backward scroll reseeds and replays to the (smaller)
+  // target. uTime is frozen (the chaos is the spatial curl field + velocity
+  // divergence, not wall-clock) so the replay is deterministic → same scroll = same
+  // frame. Gravity is always ON while stepping (uCollapseDrive = 1).
+  const MAX_STEPS = 110; // full-collapse integration length (tuned for the scroll span)
+  let curStep = 0;
+  velVar.material.uniforms.uCollapseDrive.value = 1;
+
+  const integrate = (n: number): void => {
+    for (let i = 0; i < n; i++) {
+      // accreted mass grows with how far the collapse has progressed (cheap proxy).
+      velVar.material.uniforms.uAccretedFrac.value = Math.min(1, curStep / MAX_STEPS);
+      gpu.compute();
+      curStep++;
+    }
+  };
+
+  // Advance/rewind the sim so it matches `progress` (0 = dispersed nebula, 1 = fully
+  // collapsed). `budget` caps integration steps THIS frame so a hard scroll-jump can't
+  // stall the frame; the next frames catch up. Returns nothing — read getPosTexture().
+  const simulateTo = (progress: number, budget = 6): void => {
+    const target = Math.round(Math.min(1, Math.max(0, progress)) * MAX_STEPS);
+    if (target === curStep) return;
+    if (target < curStep) {
+      // REWIND: reseed to the nebula and replay forward to the target.
+      reseed();
+      curStep = 0;
+    }
+    const todo = Math.min(target - curStep, budget * 4); // replay can afford more per frame
+    integrate(Math.max(0, todo));
+  };
+
+  // legacy no-op kept so any stale callers don't break (render path uses simulateTo).
+  const step = (): void => {};
 
   const getPosTexture = (): THREE.Texture => gpu.getCurrentRenderTarget(posVar).texture;
 
   const dispose = (): void => {
     seedTex.dispose();
+    seedPosMat.dispose();
+    seedVelMat.dispose();
     gpu.dispose();
   };
 
-  return { available: true, step, getPosTexture, dispose };
+  return { available: true, step, simulateTo, getPosTexture, dispose };
 }
