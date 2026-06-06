@@ -267,7 +267,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   // runs across stage 1.05 (full red giant) → 0.5 (the surface reaches the point,
   // where the legacy supernova FLASH fires and the seed/black-hole machinery
   // below takes over). kCollapse drives the shader's per-region shrink.
-  const COLLAPSE_HI = 1.05; // stage where the surface is still the full sphere
+  const COLLAPSE_HI = 1.6; // stage where the surface is still the full sphere (raised
+                           // from 1.05 → the core-swallow takes ~2× the scroll distance,
+                           // a slower, more deliberate collapse; still clear of the
+                           // parked red-giant beat above)
   const COLLAPSE_LO = 0.5; // stage where the surface has shrunk to the point
   const kCollapse = Math.min(1, Math.max(0, (COLLAPSE_HI - stage) / (COLLAPSE_HI - COLLAPSE_LO)));
   // `giant` means the sphere-identity model is active. In the forward story it
