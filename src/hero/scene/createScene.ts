@@ -83,14 +83,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor the red giant CONTRACTS into. The red giant's
-  // TRUE world radius is uGiantR (4.2) × uGiantScale (9.0/4.2) = 9.0 units (the held
-  // medium-dense giant — the old 2.35 factor was stale and made the cloud side ~21, a
-  // hidden 9→21 pop now fixed in the shader). So the dying star lands at 9.0 × 0.18 ≈
-  // 1.62 — the exact size the cloud shrinks to. NOTE: the cloud's grow factor in the
+  // TRUE world radius is uGiantR (4.2) × uGiantScale (8.5/4.2) = 8.5 units (the held
+  // medium-dense giant, trimmed ~6% from 9.0). So the dying star lands at 8.5 × 0.18 ≈
+  // 1.53 — the exact size the cloud shrinks to. NOTE: the cloud's grow factor in the
   // vertex shader (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold particle
-  // sphere is size-matched to the mesh at the swap (no pop).
-  const RED_GIANT_RADIUS = 4.2 * (9.0 / 4.2); // = 9.0; uGiantR × uGiantScale (held giant)
-  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.62
+  // sphere is size-matched to the mesh at the swap (no pop). Keep this uGiantScale in
+  // sync with buildDisk + lifecycle's GIANT_FULL.
+  const RED_GIANT_RADIUS = 4.2 * (8.5 / 4.2); // = 8.5; uGiantR × uGiantScale (held giant)
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.53
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
@@ -199,7 +199,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // would shove the brighter star half out of frame and re-introduce a size mismatch. A
   // gentler off-centre weight keeps the whole star framed. The rigid position+target slide
   // identity is preserved (orb stays centred at origin).
-  const RED_GIANT_PARK = new THREE.Vector3(5, -3, 7);
+  //
+  // Micro-reframe (rigid slide → orb moves OPPOSITE the camera on screen):
+  //   X 5 → 4.6   : camera shifts left, so the orb slides ~right (3–5%).
+  //   Y -3 → -3.15: camera drops a touch lower, so the orb lifts ~1–2% up.
+  const RED_GIANT_PARK = new THREE.Vector3(4.6, -3.15, 7);
 
   let mouseX = 0;
   let mouseY = 0;
