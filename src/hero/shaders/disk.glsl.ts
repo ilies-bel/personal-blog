@@ -163,13 +163,19 @@ export const diskVertexShader = /* glsl */ `
   //   uYrGrow: 0 = yellow radius (×0.35), 1 = red-giant radius (×1.0)
   uniform float uYrMix, uYrGrow;
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
-  //   uSimPos  : sim position texture (xyz = world pos, w = life). Sampled at aSimUV.
+  // The collapse is BAKED to a flipbook at load (see gravitySim.bake): the real
+  // sim runs once, snapshotting K frames into GPU textures. At scroll time we sample
+  // the TWO snapshots bracketing the scroll position and blend them — so the collapse
+  // is a PURE FUNCTION of scroll (perfectly scrubbable both ways, no per-frame physics,
+  // no reseed/replay snap-back).
+  //   uSimPos  : snapshot A (xyz = world pos, w = life). Sampled at aSimUV.
+  //   uSimPosB : snapshot B — the next baked frame after A.
+  //   uSimMix  : 0 → fully A, 1 → fully B (the inter-snapshot blend factor).
   //   uSimBlend: 0 = analytic placement, 1 = fully sim-driven. Ramps in over 3.5→3.4.
   uniform sampler2D uSimPos;
+  uniform sampler2D uSimPosB;
+  uniform float uSimMix;
   uniform float uSimBlend;
-  // Deterministic, scroll-driven nebula->star collapse (replaces the stateful sim's
-  // one-way behaviour). 0 = resting nebula, 1 = gas fully piled onto the forming star.
-  uniform float uNebCollapse;
 
   varying float vBright;
   varying float vSeed;
@@ -884,15 +890,18 @@ export const diskVertexShader = /* glsl */ `
     }
 
     // === Real gravity sim collapse (nebula -> yellow star) ====================
-    // The collapse is a STATEFUL N-body-style sim (see gravitySim.ts): particles
-    // accelerate under a softened central well + strong curl turbulence, swirl in
-    // chaotically from all directions, and accrete onto the core. "Scroll = time":
-    // the sim is advanced/replayed to match scroll position, so it tracks the
-    // scrollbar both ways while staying genuinely chaotic/organic (not a symmetric
-    // formula). pos holds the analytic nebula placement; the sim is SEEDED from the
-    // same placement, so at uSimBlend~0 simP.xyz~pos -> no pop.
+    // The collapse is a STATEFUL N-body-style sim (gravitySim.ts) BAKED to a flipbook
+    // at load: particles accelerate under a softened central well + strong curl
+    // turbulence, swirl in chaotically from all directions, and accrete onto the core.
+    // Here we read the two baked snapshots that bracket the scroll position and blend
+    // them (uSimMix), then blend THAT into the analytic placement (uSimBlend). Because
+    // the snapshots are fixed, the result is a pure function of scroll — scrubbing back
+    // and forth lands on the exact same frame every time (no snap-back). The sim is
+    // seeded from the same analytic placement, so at uSimBlend~0 simP~pos -> no pop.
     if(uSimBlend > 0.0){
-      vec4 simP = texture2D(uSimPos, aSimUV);   // xyz = world pos, w = life
+      vec4 simA = texture2D(uSimPos,  aSimUV);  // snapshot A (xyz = world pos, w = life)
+      vec4 simB = texture2D(uSimPosB, aSimUV);  // snapshot B (next baked frame)
+      vec4 simP = mix(simA, simB, uSimMix);     // interpolate between the two snapshots
       pos = mix(pos, simP.xyz, uSimBlend);
       vSimLife = simP.w;                          // → frag brightens/dims accreting matter
     }

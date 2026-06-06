@@ -189,12 +189,25 @@ const NEBULA_START = {
   position: [-0.78, 0.156, 17.16] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
+// GATHERED framing: a GENTLE push toward the core as the gas converges. Kept
+// near the resting nebula zoom (z 17.16 -> 14.6, only a slight ~15% push) rather
+// than the old hard dive to z11.2 — the star CONDENSES while the camera is still
+// at roughly the reference-screenshot zoom, so the freshly-formed yellow star
+// reads at the wide framing the user asked for instead of pressed-up-close. The
+// convergence still reads (small inward drift) without slamming into the core.
 const NEBULA_GATHERED = {
-  position: [0.18, 0.02, 11.2] as Vec3Tuple,
+  position: [0.3, 0.04, 14.6] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
+// YELLOW STAR birth/hold framing. The star must be CREATED at the wide, gas-
+// filling "resting nebula" zoom (≈ NEBULA_START's z17, the framing in the
+// reference screenshot) — NOT the tight gathered core (z≈11.2) nor the old far
+// z≈29.6 hold, both of which made the freshly-ignited star read as way too
+// zoomed-in. So the ignition camera move EASES BACK OUT from the gathered core
+// to this resting vantage as the star condenses, then holds here. A gentle
+// off-axis x/y + the parallax keep the "slight rotation" camera feel alive.
 const YELLOW_HOLD = {
-  position: [0.85, -0.14, 29.6] as Vec3Tuple,
+  position: [0.62, -0.08, 17.4] as Vec3Tuple,
   target: [0.0, -0.02, 0.0] as Vec3Tuple,
 };
 const RED_COMPOSITION = {

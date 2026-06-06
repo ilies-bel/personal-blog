@@ -95,13 +95,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
   // A stateful N-body-style gravity sim (see gravitySim.ts): particles accelerate under
   // a softened central well + curl turbulence and accrete onto the core — genuinely
-  // chaotic/organic, not a symmetric formula. It's driven as "scroll = time"
-  // (gravitySim.simulateTo): forward scroll integrates, backward scroll reseeds + replays
-  // to the target, so the real sim tracks the scrollbar both ways. Seeded from the SAME
+  // chaotic/organic, not a symmetric formula. The collapse is BAKED to a flipbook
+  // once at load (gravitySim.bake) and scrubbed by blending the two snapshots
+  // bracketing the scroll position (gravitySim.sampleAt) — a pure function of scroll,
+  // so it scrubs both directions with no state/replay/snap-back. Seeded from the SAME
   // analytic nebula placement the disk shader uses, so it starts pop-free. Skipped under
   // reduced motion; {available:false} (no-op) if float targets are unsupported.
   const gravitySim: GravitySim = reduced
-    ? { available: false, step: () => {}, simulateTo: () => {}, getPosTexture: () => null, dispose: () => {} }
+    ? { available: false, step: () => {}, bake: () => {}, isBaked: () => false, sampleAt: () => null, dispose: () => {} }
     : buildGravitySim({
         renderer,
         count: diskRig.count,
@@ -452,19 +453,31 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskMatPrimary.uniforms.uDot.value = look.dot ? 1 : 0;
     diskMatSecondary.uniforms.uDot.value = look.dot ? 1 : 0;
 
-    // --- nebula → star collapse: REAL gravity sim, "scroll = time" --------------
-    // Advance/replay the stateful sim to match scroll (look.collapse, 0 = dispersed
-    // nebula → 1 = fully collapsed). Forward scroll integrates incrementally; backward
-    // scroll reseeds + replays to the target, so the genuinely-chaotic sim tracks the
-    // scrollbar both ways and freezes when idle (no idle drift). uSimBlend morphs the
-    // disk from the analytic nebula placement to the sim positions across the window.
+    // --- nebula → star collapse: BAKED gravity-sim flipbook ---------------------
+    // The real chaotic collapse sim is run ONCE and snapshotted into a flipbook at
+    // load (gravitySim.bake), then scrubbed by blending the two snapshots bracketing
+    // the scroll position (look.collapse, 0 = dispersed nebula → 1 = fully collapsed).
+    // Because the snapshots are fixed, the collapse is a PURE FUNCTION of scroll — it
+    // scrubs identically both directions with no state, no replay, no snap-back (the
+    // earlier "scrolling back and forth bugs the animation" failure). uSimBlend morphs
+    // the disk from the analytic nebula placement onto the baked sim positions.
     let simBlend = 0;
+    // Pre-warm the baked flipbook as soon as the nebula is on screen (look.nebulaShader
+    // covers the nebula hold AND the collapse window) — the incremental bake then has the
+    // whole nebula beat to finish, so the snapshots are ready by the time the visitor
+    // actually scrolls into the collapse. bake() is resumable + self-completing.
+    if (gravitySim.available && look.nebulaShader && !gravitySim.isBaked()) gravitySim.bake();
     if (gravitySim.available && (look.simBlend > 0.001 || look.collapse > 0.001)) {
-      gravitySim.simulateTo(look.collapse);
-      const tex = gravitySim.getPosTexture();
-      diskMatPrimary.uniforms.uSimPos.value = tex;
-      diskMatSecondary.uniforms.uSimPos.value = tex;
-      simBlend = look.simBlend;
+      const sample = gravitySim.sampleAt(look.collapse);
+      if (sample) {
+        diskMatPrimary.uniforms.uSimPos.value = sample.texA;
+        diskMatSecondary.uniforms.uSimPos.value = sample.texA;
+        diskMatPrimary.uniforms.uSimPosB.value = sample.texB;
+        diskMatSecondary.uniforms.uSimPosB.value = sample.texB;
+        diskMatPrimary.uniforms.uSimMix.value = sample.mix;
+        diskMatSecondary.uniforms.uSimMix.value = sample.mix;
+        simBlend = look.simBlend;
+      }
     }
     diskMatPrimary.uniforms.uSimBlend.value = simBlend;
     diskMatSecondary.uniforms.uSimBlend.value = simBlend;

@@ -115,14 +115,15 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uYrFlash: { value: 0 }, // brief swap flash: whitens the freshly-spawned gold sphere
     uYrMix: { value: 1 }, // 0 = smooth gold sphere, 1 = granular red giant
     uYrGrow: { value: 1 }, // 0 = yellow radius (×0.35), 1 = red-giant radius
-    // --- deterministic scroll-driven collapse (nebula → yellow star) ---
-    // uNebCollapse: 0 = resting nebula, 1 = gas swirled onto the forming star. A pure
-    // function of scroll (look.collapse), so it scrubs exactly both directions — no
-    // stateful sim, no one-way drift. uSimPos/uSimBlend are retained (the sim still
-    // seeds the look) but no longer drive the render path.
-    uNebCollapse: { value: 0 },
-    uSimPos: { value: null }, // sim position texture (set per-frame from the sim)
-    uSimBlend: { value: 0 }, // legacy GPGPU blend — kept at 0 (collapse is shader-driven now)
+    // --- nebula → yellow star: gravitational collapse ---
+    // BAKED collapse flipbook (see gravitySim.bake): two snapshot textures bracketing
+    // the scroll position + the blend between them. The render loop sets these per
+    // frame from gravitySim.sampleAt(look.collapse); uSimBlend morphs the result into
+    // the analytic nebula placement across the collapse window.
+    uSimPos: { value: null }, // snapshot A (xyz = world pos, w = life)
+    uSimPosB: { value: null }, // snapshot B (next baked frame)
+    uSimMix: { value: 0 }, // 0 → A, 1 → B (inter-snapshot blend)
+    uSimBlend: { value: 0 }, // 0 = analytic placement, 1 = fully sim-driven
   };
 
   const primary = new THREE.ShaderMaterial({

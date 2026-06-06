@@ -290,20 +290,34 @@ const seedVelocityShader = /* glsl */ `
 
 // --- subsystem ------------------------------------------------------------
 
+/** The two baked snapshot textures bracketing a scroll position, plus the blend. */
+export interface SimSample {
+  texA: THREE.Texture;
+  texB: THREE.Texture;
+  /** 0 → fully texA, 1 → fully texB. */
+  mix: number;
+}
+
 export interface GravitySim {
   /** true when float targets are supported and the sim is live. */
   available: boolean;
-  /** legacy no-op (the render path drives the sim via simulateTo). */
+  /** legacy no-op (kept so any stale callers don't break). */
   step: () => void;
   /**
-   * Advance/rewind the stateful collapse so it matches scroll `progress` (0 = dispersed
-   * nebula, 1 = fully collapsed). Forward = incremental integration; backward = reseed
-   * + replay to the smaller target (so the real sim still tracks the scrollbar both
-   * ways). `budget` caps steps integrated this frame so a hard jump can't stall it.
+   * Run the real collapse ONCE and snapshot it into a flipbook of GPU textures.
+   * Idempotent — the first call bakes; later calls are no-ops. Cheap enough to call
+   * lazily on the first frame the collapse is needed (≈ one short burst of compute).
    */
-  simulateTo: (progress: number, budget?: number) => void;
-  /** current position texture (xyz = world pos, w = life) for the render shader. */
-  getPosTexture: () => THREE.Texture | null;
+  bake: () => void;
+  /** true once bake() has produced the snapshot flipbook. */
+  isBaked: () => boolean;
+  /**
+   * Return the two baked snapshots bracketing scroll `progress` (0 = dispersed nebula,
+   * 1 = fully collapsed) and the blend between them. A PURE FUNCTION of progress, so the
+   * collapse scrubs identically in both directions — no state, no replay, no snap-back.
+   * Returns null before bake() has run.
+   */
+  sampleAt: (progress: number) => SimSample | null;
   dispose: () => void;
 }
 
@@ -333,8 +347,9 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   const noop: GravitySim = {
     available: false,
     step: () => {},
-    simulateTo: () => {},
-    getPosTexture: () => null,
+    bake: () => {},
+    isBaked: () => false,
+    sampleAt: () => null,
     dispose: () => {},
   };
 
@@ -421,52 +436,105 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   };
   reseed();
 
-  // --- scroll-as-time stepping with replay-rewind ---------------------------
-  // The collapse is a real stateful N-body-style sim, but we make it a function of
-  // SCROLL: targetStep = round(progress * MAX_STEPS). Forward scroll advances the
-  // integrator incrementally; backward scroll reseeds and replays to the (smaller)
-  // target. uTime is frozen (the chaos is the spatial curl field + velocity
-  // divergence, not wall-clock) so the replay is deterministic → same scroll = same
-  // frame. Gravity is always ON while stepping (uCollapseDrive = 1).
+  // --- BAKED FLIPBOOK: run the real collapse ONCE, snapshot K frames ----------
+  // The collapse is a real stateful N-body-style sim, but a stateful integrator can't
+  // be scrubbed backward cheaply (rewinding meant reseed+replay-from-zero, which on
+  // back-and-forth scrolling made the cloud snap back to dispersed and re-collapse —
+  // the "whole animation bugs" report). So we run the sim ONCE at load, snapshotting
+  // SNAP_COUNT evenly-spaced frames of the collapse into persistent GPU textures, and
+  // at scroll time just blend the two snapshots bracketing the scroll position. The
+  // collapse is then a PURE FUNCTION of scroll: scrub-anywhere, both directions, no
+  // state, no per-frame physics. uTime is frozen, so the bake is deterministic.
   const MAX_STEPS = 110; // full-collapse integration length (tuned for the scroll span)
-  let curStep = 0;
+  const SNAP_COUNT = 17; // baked frames (snapshot 0 = dispersed, last = fully collapsed)
   velVar.material.uniforms.uCollapseDrive.value = 1;
 
-  const integrate = (n: number): void => {
-    for (let i = 0; i < n; i++) {
-      // accreted mass grows with how far the collapse has progressed (cheap proxy).
+  // persistent snapshot render targets — one per baked frame. Built via the GPGPU's
+  // own factory so they match its targets EXACTLY (RGBA, same float/half-float type,
+  // NearestFilter, ClampToEdge, no depth) — we sample them by exact texel UV.
+  const snaps: THREE.WebGLRenderTarget[] = [];
+
+  // a trivial blit material that copies the GPGPU position texture into a snapshot RT.
+  const copyMat = gpu.createShaderMaterial(
+    /* glsl */ `
+      uniform sampler2D uSrc;
+      void main(){ gl_FragColor = texture2D(uSrc, gl_FragCoord.xy / resolution.xy); }
+    `,
+    { uSrc: { value: null as THREE.Texture | null } },
+  );
+
+  // INCREMENTAL bake: ~110 compute passes over a 1.2M-texel sim crammed into one frame
+  // would be a visible hitch, so bake() is RESUMABLE — call it each frame and it advances
+  // a bounded number of steps, capturing any snapshots it crosses, until all SNAP_COUNT
+  // are done. The first frame seeds + captures snapshot 0, so sampleAt() has the dispersed
+  // nebula immediately; later snapshots fill in over the next few frames (the visitor is
+  // still easing into the collapse, so the deeper frames are ready before they're needed).
+  const STEPS_PER_BAKE_FRAME = 14; // compute passes per frame while baking (≈8 frames total)
+  let bakeStarted = false;
+  let bakeDone = false;
+  let curStep = 0;
+  let nextSnap = 0; // index of the next snapshot to capture
+
+  const stepTargetFor = (s: number): number => Math.round((s / (SNAP_COUNT - 1)) * MAX_STEPS);
+
+  const captureSnapshot = (): void => {
+    const rt = gpu.createRenderTarget(width, height);
+    copyMat.uniforms.uSrc.value = gpu.getCurrentRenderTarget(posVar).texture;
+    gpu.doRenderTarget(copyMat, rt);
+    snaps.push(rt);
+    nextSnap++;
+  };
+
+  const bake = (): void => {
+    if (bakeDone) return;
+    if (!bakeStarted) {
+      bakeStarted = true;
+      reseed(); // start from the dispersed nebula (both ping-pong RTs = analytic home)
+      captureSnapshot(); // snapshot 0 = dispersed cloud, available from frame one
+    }
+    // advance up to STEPS_PER_BAKE_FRAME compute passes, capturing snapshots crossed.
+    let budget = STEPS_PER_BAKE_FRAME;
+    while (nextSnap < SNAP_COUNT && budget > 0) {
+      const targetStep = stepTargetFor(nextSnap);
+      if (curStep >= targetStep) {
+        captureSnapshot();
+        continue;
+      }
       velVar.material.uniforms.uAccretedFrac.value = Math.min(1, curStep / MAX_STEPS);
       gpu.compute();
       curStep++;
+      budget--;
     }
+    if (nextSnap >= SNAP_COUNT) bakeDone = true;
   };
 
-  // Advance/rewind the sim so it matches `progress` (0 = dispersed nebula, 1 = fully
-  // collapsed). `budget` caps integration steps THIS frame so a hard scroll-jump can't
-  // stall the frame; the next frames catch up. Returns nothing — read getPosTexture().
-  const simulateTo = (progress: number, budget = 6): void => {
-    const target = Math.round(Math.min(1, Math.max(0, progress)) * MAX_STEPS);
-    if (target === curStep) return;
-    if (target < curStep) {
-      // REWIND: reseed to the nebula and replay forward to the target.
-      reseed();
-      curStep = 0;
-    }
-    const todo = Math.min(target - curStep, budget * 4); // replay can afford more per frame
-    integrate(Math.max(0, todo));
+  // Return the two baked snapshots bracketing `progress` and the blend between them.
+  // PURE: same progress → same pair + mix, so scrubbing is perfectly reversible. While
+  // the bake is still in flight, clamp to the deepest snapshot captured so far (the
+  // collapse just can't run ahead of the bake for a frame or two — never wrong, just
+  // briefly capped).
+  const sampleAt = (progress: number): SimSample | null => {
+    if (snaps.length === 0) return null;
+    const p = Math.min(1, Math.max(0, progress));
+    const f = p * (SNAP_COUNT - 1); // fractional snapshot index
+    const maxI = snaps.length - 1; // deepest captured snapshot
+    if (maxI === 0) return { texA: snaps[0].texture, texB: snaps[0].texture, mix: 0 };
+    const i = Math.min(maxI - 1, Math.floor(f));
+    return { texA: snaps[i].texture, texB: snaps[i + 1].texture, mix: Math.min(1, f - i) };
   };
 
-  // legacy no-op kept so any stale callers don't break (render path uses simulateTo).
+  // legacy no-op kept so any stale callers don't break.
   const step = (): void => {};
-
-  const getPosTexture = (): THREE.Texture => gpu.getCurrentRenderTarget(posVar).texture;
+  const isBaked = (): boolean => bakeDone;
 
   const dispose = (): void => {
     seedTex.dispose();
     seedPosMat.dispose();
     seedVelMat.dispose();
+    copyMat.dispose();
+    for (const rt of snaps) rt.dispose();
     gpu.dispose();
   };
 
-  return { available: true, step, simulateTo, getPosTexture, dispose };
+  return { available: true, step, bake, isBaked, sampleAt, dispose };
 }
