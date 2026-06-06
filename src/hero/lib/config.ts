@@ -57,11 +57,11 @@ export const CFG: Config = {
   spinDir: -1.0,
   betaScale: 0.53,
   beamExp: 2.7,
-  doppler: 0.55,
+  doppler: 0.46, // softer relativistic beam — slightly dimmer bright (left) lobe
   lens: 1.72,
   secScale: 0.85,
   vertAsym: 1.0,
-  horizAsym: 0.56,
+  horizAsym: 0.4, // gentler L/R imbalance → light spread more evenly around the disk
 
   // --- camera (resting pose; the intro travels in to this) ---
   inclDeg: 5.0,
