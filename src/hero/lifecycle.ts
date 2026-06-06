@@ -439,7 +439,14 @@ export function lifecycle(input: LifecycleInput): StarState {
   const hotZone = Math.exp(-Math.pow((morph - 0.5) / 0.15, 2.0));
   // The point-cloud red giant body renders at full base brightness; in the yellow→
   // red slot it simply appears under the swap flash (no ramp-in).
-  const baseBright = 1.25 * (1 - 0.92 * hotZone);
+  // SHRINK COMPENSATION: as the cloud contracts from the full red giant toward yellow
+  // size (yrGrow 1→0), the SAME ~1M additive points pack into a far smaller sphere, so
+  // per-pixel brightness balloons — the cloud blob was spiking ABOVE both the red giant
+  // and the yellow star (a "shiny" bump mid-transition). Cut base emission as it shrinks
+  // so the cloud's apparent brightness stays on the monotonic red→yellow line. Only on
+  // the cloud side (yrGrow is 1 everywhere else, so this is a no-op outside the slot).
+  const shrinkComp = cloudSide ? 0.30 + 0.70 * yrGrow : 1;
+  const baseBright = 1.25 * (1 - 0.92 * hotZone) * shrinkComp;
 
   // Auto-exposure: pull down across the flash, dip at the seed, settle lower for
   // the dim red giant. The over-exposure punch rides the TIME envelope (`nova`),
@@ -483,6 +490,20 @@ export function lifecycle(input: LifecycleInput): StarState {
   const redGiantPhase = redGiantActive; // (same predicate, defined above for the starfield gate)
   const yrPunch = yrFlash; // 0..1 subtle swap-flash envelope
 
+  // --- red→yellow brightness line (single source of truth) ------------------
+  // The brightness MUST rise monotonically from the dim red giant up to the bright
+  // yellow star — no mid-transition bump (the old cloud-shrink blob spiked above both
+  // ends and read as a "shiny" pop). These four constants are the two endpoints of
+  // that line; both the settled-yellow `sunWindow` branch AND the cloud-side ramp in
+  // `redGiantPhase` interpolate between them, so the whole transition is one straight
+  // line. RED_GIANT is the DIM end, YELLOW is the BRIGHT end.
+  const RED_GIANT_EXPOSURE = cfg.exposure * 0.86; // dim end of the ramp
+  const RED_GIANT_BLOOM = 0.40;
+  const YELLOW_EXPOSURE = 1.15; // BRIGHT end — the yellow star is the brightest star state (a blazing
+  //   gold sun like the reference, not a dusky ball). The surface keeps detail because the granulation
+  //   contrast + tight bloom land the brightness on the textured disc/rim, not a blown halo.
+  const YELLOW_BLOOM = 0.34; // tight: the extra brightness lands on the disc/rim, not a halo
+
   // --- shared star backdrop (yellow star + red giant) ----------------------
   // The twinkling far star dome (the sun rig's dome) is the BACKGROUND for the
   // two star states. The yellow star always showed it (it rides the mesh rig);
@@ -503,35 +524,48 @@ export function lifecycle(input: LifecycleInput): StarState {
     // band (2.88→3.0) and ramps to 0 as the collapse takes over, handing the
     // brightness story to the collapse/nebula logic below.
     const settled = collapsing ? 1 - smoothstep01((stage - 3.0) / 0.15) : 1;
-    // Bloom pulled DOWN ~28% (0.72 → 0.52) and the halo radius tightened (0.62 →
-    // 0.50) so the yellow star keeps a readable SPHERE/RIM instead of blooming into
-    // a featureless white blob. It still reads as a bright, radiant main-sequence
-    // sun, but the silhouette survives — the halo no longer eats the disc. Exposure
-    // eased 0.96 → 0.88 in the same spirit (bright, not blown out).
-    bloomStrength = (0.52 + 0.08 * yrPunch) * settled + 0.32 * (1 - settled);
-    bloomRadius = 0.50;
-    exposure = (0.88 * settled + 0.58 * (1 - settled)) * (1 + 0.04 * yrPunch);
+    // The yellow star is the BRIGHT END of the red→yellow ramp: brightness rises
+    // monotonically from the dim red giant up to here. Exposure lifted to YELLOW_EXPOSURE
+    // (the brightest star state) while bloom stays TIGHT (0.34) so the extra brightness
+    // lands on the detailed granulated disc + rim, not a broad halo — i.e. brighter, but
+    // still the solid textured sphere of the reference, not a blown-out white ball.
+    // (YELLOW_EXPOSURE / YELLOW_BLOOM are defined above the branch so the cloud-side ramp
+    //  in redGiantPhase can interpolate UP to exactly these values — keeping the whole
+    //  transition a single monotonic brightness line with no mid-transition bump.)
+    bloomStrength = (YELLOW_BLOOM + 0.05 * yrPunch) * settled + 0.32 * (1 - settled);
+    bloomRadius = 0.42; // tighter falloff → rim glow hugs the disc, no broad wash
+    exposure = (YELLOW_EXPOSURE * settled + 0.58 * (1 - settled)) * (1 + 0.03 * yrPunch);
     olive = 0.0;
-    warmth = 0.02; // barely-warm gold cast — keeps the halo pale-gold, not orange
+    warmth = 0.04; // a touch more gold so the surface reads amber, not pale-white
     gradeSat = 1.0;
+    // THE key brightness lever: the shared tone-map col/(col+uToneComp) compresses hard
+    // at the 0.78 default — that's what kept the disc dusky (median ~110/255) no matter how
+    // high exposure/luminance went. Drop it to 0.42 (like the red giant uses 0.34) so the
+    // bright gold photosphere reads as a LUMINOUS glowing surface like the reference, while
+    // the granulation contrast keeps the lava detail. `settled` keeps the collapse calm.
+    toneComp = 0.42 * settled + 0.78 * (1 - settled);
   } else if (redGiantPhase) {
     // rg crossfades the grade from the bright gold swap-in (rg=0, still flashing)
     // to the settled dim matte red giant (rg=1). On the cloud side it follows
     // yrColor; below the slot it is pinned to 1.
     const rg = cloudSide ? yrColor : 1;
-    // The red giant must be clearly VISIBLE (it used to be too dim to read), but the
-    // ~1M additively-blended points blow out to white if pushed hard, so the lift is
-    // spread conservatively across bloom + exposure + the per-grain shader recipe.
-    bloomStrength = (0.52 + 0.03 * yrPunch) * (1 - rg) + 0.42 * rg; // rg=0 end matches the new
-    //   (reduced) yellow sunWindow bloom (0.52) for a soft mesh↔cloud cross-dissolve; the settled
-    //   red giant end eased 0.46 → 0.42 so the orange halo competes a touch less with the headline
-    //   during the readable hold. The flash bump (yrPunch) is a whisper (0.03) so the size-matched
-    //   mesh handoff is a soft pop-free cross-dissolve.
-    bloomRadius = 0.50 * (1 - rg) + 0.54 * rg; // rg=0 end matches the new yellow halo radius (0.50);
-    //   the red giant end (0.54) keeps a slightly wider matte falloff.
-    const yellowExposure = 0.88 * (1 + 0.04 * yrPunch); // must match the bright sunWindow exposure (0.88)
-    const redExposure = cfg.exposure * 0.92; // pulled down ~8% with the bloom so the whole red
-    //   giant reads a touch dimmer; brightness still comes mainly from the lowered toneComp below.
+    // BRIGHTNESS RAMP: rg=1 is the full red giant (DIM end), rg=0 is the cloud shrunk to
+    // yellow size right before the swap. We interpolate LINEARLY between the endpoints so
+    // brightness climbs monotonically from red giant → swap with no mid-transition bump.
+    //
+    // CRUCIAL: the cloud is ~1M ADDITIVE points; when shrunk to a small sphere it blooms
+    // far hotter than the textured MESH for the SAME grade exposure (the dense additive
+    // core clips). So the cloud's bright end is NOT YELLOW_EXPOSURE — it's CLOUD_YELLOW
+    // (about half), tuned so the smooth pre-swap blob reads a touch DIMMER than the mesh
+    // yellow star that swaps in. The swap is then a small step UP into the bright,
+    // detailed sun — never the old bright-blob → dim-mesh DROP. Bloom is held tight too.
+    const CLOUD_YELLOW_EXPOSURE = 0.50; // additive cloud blooms hot → kept well below the mesh's 1.15
+    //   so the smooth pre-swap blob stays clearly DIMMER than the detailed yellow star it swaps into.
+    const CLOUD_YELLOW_BLOOM = 0.22; // tighter than the mesh so the blob doesn't grow a wide halo
+    const yellowExposure = CLOUD_YELLOW_EXPOSURE * (1 + 0.03 * yrPunch);
+    const redExposure = RED_GIANT_EXPOSURE; // dim end
+    bloomStrength = (CLOUD_YELLOW_BLOOM + 0.03 * yrPunch) * (1 - rg) + RED_GIANT_BLOOM * rg;
+    bloomRadius = 0.42 * (1 - rg) + 0.54 * rg; // yellow halo radius (0.42) → wider matte red (0.54)
     exposure = yellowExposure * (1 - rg) + redExposure * rg;
     olive = 0.0; // no olive cast on the star
     warmth = 0.10 * rg; // warm the matte red — eased back (0.14 → 0.10) so the gold highlights
@@ -543,7 +577,8 @@ export function lifecycle(input: LifecycleInput): StarState {
     // get crushed toward black — no amount of disk brightness survives it. Drop the
     // compression denominator for the red giant so its surface reads as a solid glowing
     // wall. Ramps with rg so the bright gold swap-in keeps the filmic 0.78.
-    toneComp = 0.78 * (1 - rg) + 0.34 * rg;
+    toneComp = 0.42 * (1 - rg) + 0.34 * rg; // rg=0 end (≈yellow 0.42) → red giant 0.34: low
+    //   compression both ends so the swap is seamless and both star bodies read as luminous walls.
     // The dome was tuned to read at the yellow grade; the red giant now grades at a
     // DIFFERENT exposure, which would shift the dim backdrop stars. Compensate by the
     // inverse exposure ratio so the SAME star field reads behind both states. Ramps with
