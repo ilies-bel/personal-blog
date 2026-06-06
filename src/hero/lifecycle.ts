@@ -317,19 +317,22 @@ export function lifecycle(input: LifecycleInput): StarState {
   // window (not a narrow sub-band) makes the transition fluid — the star grows
   // gradually and the gas thins gradually across the entire scroll, in lockstep.
   const prog = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
-  // `collapse` is the GPGPU drive. It LEADS the star growth (prog^0.7 ramps faster
-  // than prog) so the gas physically falls inward and piles onto the core BEFORE
-  // the star reaches full size — the inflow visibly FEEDS the star rather than the
-  // star appearing and the gas catching up.
-  const collapse = Math.pow(prog, 0.7);
+  // `collapse` is the GPGPU drive. It LEADS the star growth (prog^0.85 still ramps
+  // faster than the star's prog^1.8) so the gas falls inward and piles onto the core
+  // BEFORE the star reaches full size — the inflow visibly FEEDS the star. The 0.85
+  // (eased up from 0.7) is less front-loaded so the convergence RAMPS IN gently as
+  // you scroll into the window instead of the gas lurching inward at the first pixel.
+  const collapse = Math.pow(prog, 0.85);
   // star GROWTH (prog^1.8): the seed becomes faintly visible EARLIER and grows on
   // a smoother, more continuous curve, so the yellow star reads as CONDENSING out
   // of the infalling gas rather than popping into existence in the final stretch.
   // It still lags the gas (which leads at prog^0.7), so the inflow visibly feeds a
   // growing core. Visual size is `0.05 + 0.95*starFormed` in frame() (small→full).
   const starFormed = Math.pow(prog, 1.8);
-  // sim owns the disk just inside the window; fades as the mesh takes the core.
-  const simBlend = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.1) * (1 - 0.85 * prog);
+  // sim owns the disk just inside the window; fades as the mesh takes the core. The
+  // analytic→sim morph eases in over a slightly WIDER edge band (/0.16, up from /0.1)
+  // so the sim doesn't snap on in the first 0.1 stage units — softer collapse onset.
+  const simBlend = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.85 * prog);
   // cloud DENSITY/brightness is the INVERSE of star size: as the star grows
   // (prog→1) the gas thins to almost nothing (mass moved INTO the star). The fade
   // is shaped (1-prog)^1.5 so the gas stays present through the first half (you see

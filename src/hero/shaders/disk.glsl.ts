@@ -703,10 +703,12 @@ export const diskVertexShader = /* glsl */ `
         //   • an independent EMISSION field (vNeb: 0 teal → 1 rust) interleaves the
         //     palette through the whole volume instead of by radius.
         float laneH = h31(vec3(aSeed*53.7, aPhase*11.3, 3.0)); // 0..1 lane selector
-        // a BIG, slightly-flattened, IRREGULAR volume (not a tight ball). Stretched
-        // wider than tall (x>z>y) so it sprawls across the frame like Eagle/Carina.
-        vec3 ELL = vec3(1.55, 0.78, 1.15);
-        float NR = uGiantR * 1.30;                          // overall nebula extent (bigger → sprawls)
+        // a BIG, gently-ROUNDED, IRREGULAR volume (near-spherical, not a flat disc).
+        // The axes are evened-out so the cloud reads as a round ball, with a touch of
+        // irregularity kept so it still feels organic like Eagle/Carina, not CGI.
+        // MUST stay byte-identical to the ELL in gravitySim.ts (sim seed shares it).
+        vec3 ELL = vec3(1.12, 0.95, 1.06);
+        float NR = uGiantR * 1.30;                          // overall nebula extent (bigger → larger sphere)
         // a slow wandering drift so the whole cloud rolls/breathes (not frozen).
         vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 

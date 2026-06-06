@@ -80,7 +80,10 @@ export const NOISE_GLSL = /* glsl */ `
  */
 export const NEBULA_PLACE_FN = /* glsl */ `
   vec3 nebulaPlace(float aSeed, float aU, float aPhase, float uTime, float uGiantR){
-    vec3 ELL = vec3(1.55, 0.78, 1.15);
+    // a gently-rounded volume (near-spherical, kept slightly irregular so it still
+    // feels organic rather than a perfect CGI ball). MUST stay byte-identical to the
+    // ELL in disk.glsl.ts — the sim seed and analytic placement share it.
+    vec3 ELL = vec3(1.12, 0.95, 1.06);
     float NR = uGiantR * 1.30;                          // overall nebula extent
     vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 
