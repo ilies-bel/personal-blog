@@ -181,11 +181,12 @@ const DOT_VIEW = {
 // is the dispersed cloud framed wide-but-filling; NEBULA_GATHERED pushes IN toward
 // the core as the gas begins to converge toward the forming star.
 const NEBULA_START = {
-  // CLOSE enough that the round cloud (radius NR ≈ 7.2) OVERFILLS the frame on every
-  // side — at z≈13 the visible half-height (z·tan15° ≈ 3.5) is well inside the cloud,
-  // so the gas wraps past all four edges (immersed) instead of being cropped into a
-  // boxy patch with black margins (the old z≈19.5 left vertical crops + side gaps).
-  position: [-0.6, 0.12, 13.2] as Vec3Tuple,
+  // RESTING nebula framing, pulled back ~30% from the tight immersive vantage
+  // (z 13.2 -> 17.16, off-axis offsets scaled to match) so the round cloud sits a
+  // little more WHOLE in the frame — still filling it, but no longer pressed right up
+  // against the gas. The camera then pushes back in toward the core during the
+  // collapse (NEBULA_GATHERED).
+  position: [-0.78, 0.156, 17.16] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 const NEBULA_GATHERED = {
