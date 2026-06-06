@@ -529,9 +529,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // suppressed entirely while growing, ramping in over the last 3% of growth so
     // the young forming star is a clean orb, not a flaring one. 1 outside the window.
     const flarePresence = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.97) / 0.03) : 1;
-    const dyingStarQuiet = look.meshSide && !growing ? 0.22 : 1;
-    sunRig.loopMat.uniforms.uFade.value = flarePresence * dyingStarQuiet;
-    sunRig.coronaMat.uniforms.uFade.value = flarePresence * dyingStarQuiet;
+    // The yellow star is now an ENERGETIC main-sequence beat (cf. the reference's
+    // erupting prominences + coronal loops), so the settled star runs its flares at
+    // FULL strength — no more dying-star quieting. flarePresence still suppresses
+    // them while the young star is forming so it reveals as a clean orb first.
+    sunRig.loopMat.uniforms.uFade.value = flarePresence;
+    sunRig.coronaMat.uniforms.uFade.value = flarePresence;
     // the glow shell cools blue→gold with the star as it grows.
     if (growing) {
       (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
@@ -540,7 +543,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         0.16 + 0.74 * (1 - look.starFormed),
       );
     } else {
-      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.55, 0.16);
+      // settled yellow star: a bright PALE-GOLD halo (lifted off the old orange so
+      // the luminous rim/halo reads yellow-white like the reference, not amber).
+      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.78, 0.34);
     }
     sunRig.starMat.uniforms.uOpacity.value = 1;
 

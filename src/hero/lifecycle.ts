@@ -489,14 +489,22 @@ export function lifecycle(input: LifecycleInput): StarState {
   // gravitational-collapse window (the infalling gas sits alone on black).
   const starBackVisible = redGiantPhase && !nebula && !dot && !collapsing;
   if (sunWindow) {
-    // The dying star is deliberately fragile: smaller, darker, and isolated on
-    // black. It should not compete with the red giant or the nebula release.
-    bloomStrength = 0.34 + 0.08 * yrPunch;
-    bloomRadius = 0.34;
-    exposure = 0.62 * (1 + 0.04 * yrPunch);
+    // The yellow star is a PROPER, bright main-sequence beat (cf. the reference): a
+    // blazing gold-white sun in a wide luminous halo. Graded HOT — high exposure, a
+    // broad soft bloom for the halo, full warm saturation — so it reads as radiant,
+    // not the old fragile ember. It is now meant to be the brightest star state.
+    // BUT: the bright grade must back off once the gravitational-collapse gas engages
+    // (stage > 3.0, `collapsing`) — the close camera + infalling cloud + this hot
+    // grade would blow out to a white blob. `settled` is 1 across the gas-free yellow
+    // band (2.88→3.0) and ramps to 0 as the collapse takes over, handing the
+    // brightness story to the collapse/nebula logic below.
+    const settled = collapsing ? 1 - smoothstep01((stage - 3.0) / 0.15) : 1;
+    bloomStrength = (0.72 + 0.1 * yrPunch) * settled + 0.34 * (1 - settled);
+    bloomRadius = 0.62;
+    exposure = (0.96 * settled + 0.6 * (1 - settled)) * (1 + 0.04 * yrPunch);
     olive = 0.0;
-    warmth = -0.02;
-    gradeSat = 0.76;
+    warmth = 0.02; // barely-warm gold cast — keeps the halo pale-gold, not orange
+    gradeSat = 1.0;
   } else if (redGiantPhase) {
     // rg crossfades the grade from the bright gold swap-in (rg=0, still flashing)
     // to the settled dim matte red giant (rg=1). On the cloud side it follows
@@ -505,14 +513,14 @@ export function lifecycle(input: LifecycleInput): StarState {
     // The red giant must be clearly VISIBLE (it used to be too dim to read), but the
     // ~1M additively-blended points blow out to white if pushed hard, so the lift is
     // spread conservatively across bloom + exposure + the per-grain shader recipe.
-    bloomStrength = (0.34 + 0.03 * yrPunch) * (1 - rg) + 0.46 * rg; // broad halo, dialled DOWN
-    //   (0.52 → 0.46, ~−11%) so the orange bloom under the orb doesn't pull the eye off the
-    //   headline; the rim stays bright via the per-grain recipe — only the wash is quieter.
-    //   flash bump (yrPunch) is a whisper (0.03) so the size-matched mesh handoff is a soft
-    //   cross-dissolve, not a pop.
-    bloomRadius = cfg.bloomRad * (1 - rg) + 0.54 * rg; // TIGHTER halo (0.68 → 0.54): the glow
-    //   falls off faster so the surrounding (esp. lower-right) spread shrinks while the rim stays lit.
-    const yellowExposure = 0.62 * (1 + 0.04 * yrPunch);
+    bloomStrength = (0.72 + 0.03 * yrPunch) * (1 - rg) + 0.46 * rg; // rg=0 end matches the bright
+    //   yellow sunWindow bloom (0.72) for a soft mesh↔cloud cross-dissolve; the settled red giant
+    //   end (0.46) stays dialled DOWN so the orange wash doesn't pull the eye off the headline. The
+    //   flash bump (yrPunch) is a whisper (0.03) so the size-matched mesh handoff is a soft pop-free
+    //   cross-dissolve.
+    bloomRadius = 0.62 * (1 - rg) + 0.54 * rg; // rg=0 end matches the yellow halo radius (0.62);
+    //   the red giant end (0.54) keeps a TIGHTER halo so its glow falls off faster.
+    const yellowExposure = 0.96 * (1 + 0.04 * yrPunch); // must match the bright sunWindow exposure
     const redExposure = cfg.exposure * 0.92; // pulled down ~8% with the bloom so the whole red
     //   giant reads a touch dimmer; brightness still comes mainly from the lowered toneComp below.
     exposure = yellowExposure * (1 - rg) + redExposure * rg;
@@ -643,6 +651,20 @@ export function lifecycle(input: LifecycleInput): StarState {
     // shrink (2.5→2.9) so the contraction reads as the STAR shrinking, not the camera.
     const unzoomT = smoothstep01((stage - 2.0) / (2.5 - 2.0));
     zoom = redHoldZoom + (ZOOM_RED_UNZOOM - redHoldZoom) * unzoomT;
+    // YELLOW-STAR push-in: once the cloud has shrunk + handed off to the gold mesh
+    // (≈2.85) the star sits TINY at the unzoom distance (dist≈48). The yellow star is
+    // now its OWN proper beat — a blazing sun that should FILL the frame like the
+    // reference — so come IN to frame it close (ZOOM_YELLOW → dist≈11). It is a HUMP,
+    // not a hold: IN across 2.85→2.95, hold on the close blazing star through the
+    // gas-free settled band (2.95→3.0), then ease back OUT across 3.0→3.15 BEFORE the
+    // collapse gas (inWindow, from 3.0) brightens — so the close frame never coincides
+    // with the infalling cloud (which would over-bloom to a white blob). Above 3.15 the
+    // nebula immersion (nebIn) owns the camera.
+    const ZOOM_YELLOW = 0.55; // close on the full-size yellow star (dist≈11) → fills the frame
+    const yellowIn = smoothstep01((stage - 2.85) / 0.1); // come IN across 2.85→2.95
+    const yellowOut = smoothstep01((stage - 3.0) / 0.15); // ease back OUT across 3.0→3.15
+    const yellowInT = yellowIn * (1 - yellowOut); // hump: 0 → 1 (2.95–3.0) → 0
+    zoom = zoom + (ZOOM_YELLOW - zoom) * yellowInT;
     // nebula: fly the camera DEEP INSIDE the cloud so the gas fills the whole frame
     // and wraps past every edge — immersed, like flying through it. (The old radial-
     // spoke problem that once forced us back outside is gone: the geometry is now a

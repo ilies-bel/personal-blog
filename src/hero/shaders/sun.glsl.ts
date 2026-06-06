@@ -88,12 +88,16 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     float n = fbm(p + 3.2*q + t*0.5);
     float m = clamp(n*0.5+0.5, 0.0, 1.0);
 
-    // gold (yellow-star) photosphere ramp
-    vec3 g0 = vec3(0.24,0.035,0.0);
-    vec3 g1 = vec3(0.72,0.17,0.01);
-    vec3 g2 = vec3(1.00,0.44,0.06);
-    vec3 g3 = vec3(1.00,0.64,0.16);
-    vec3 g4 = vec3(1.00,0.84,0.40);
+    // gold (yellow-star) photosphere ramp — a blazing 5772K sun: hot amber troughs,
+    // bright YELLOW-WHITE crests (the reference reads gold-yellow, not orange). The
+    // green channel is lifted across the ramp to pull it off orange toward yellow, and
+    // the stops sit well above the old dim-gold values so the surface is luminous
+    // plasma, not a dusky ember.
+    vec3 g0 = vec3(0.58,0.22,0.02);
+    vec3 g1 = vec3(0.98,0.52,0.08);
+    vec3 g2 = vec3(1.14,0.82,0.22);
+    vec3 g3 = vec3(1.30,1.06,0.46);
+    vec3 g4 = vec3(1.45,1.30,0.82);
     // red-giant ramp: deep maroon → blood red → red-orange (never gold/white)
     vec3 r0 = vec3(0.10,0.008,0.003);
     vec3 r1 = vec3(0.42,0.04,0.01);
@@ -123,20 +127,26 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     float gran = fbm(p*7.0 + t*1.0);
     col *= 0.86 + 0.26*(gran*0.5+0.5);
 
-    // bright active-region speckle fades out toward the (quiet) red giant
-    float ar = smoothstep(0.88, 0.99, m) * (1.0 - 0.85*uRed);
-    col += ar * vec3(0.5,0.28,0.07);
+    // bright active-region speckle fades out toward the (quiet) red giant. On the
+    // yellow star these are the white-hot flare patches of the reference, so they
+    // run hot and bright; they cool to a dim glow as the surface reddens (uRed→1).
+    float ar = smoothstep(0.86, 0.99, m) * (1.0 - 0.85*uRed);
+    col += ar * mix(vec3(1.3,1.05,0.55), vec3(0.5,0.28,0.07), uRed);
 
     vec3 vd = normalize(-vViewPos);
     float fres = 1.0 - max(dot(vd, vViewN), 0.0);
     float limb = pow(fres, 2.0);
-    // gold limb → dusky red limb; weaken it for the red giant
-    vec3 limbCol = mix(vec3(1.0,0.74,0.30), vec3(0.78,0.18,0.04), uRed);
-    col = mix(col, limbCol, limb*mix(0.72, 0.5, uRed));
-    col += limb * mix(vec3(0.6,0.32,0.08), vec3(0.26,0.05,0.01), uRed);
+    // bright yellow-white limb → dusky red limb; weaken it for the red giant. The
+    // yellow star's limb glows hot (the luminous rim of the reference), so the gold
+    // limb colour is pushed past 1 and the additive rim lift is stronger.
+    vec3 limbCol = mix(vec3(1.45,1.18,0.62), vec3(0.78,0.18,0.04), uRed);
+    col = mix(col, limbCol, limb*mix(0.80, 0.5, uRed));
+    col += limb * mix(vec3(1.0,0.62,0.20), vec3(0.26,0.05,0.01), uRed);
 
-    // overall luminance: bright gold sun → dim matte red giant (light leads size)
-    col *= mix(1.15, 0.5, uRed);
+    // overall luminance: BLAZING gold-white sun → dim matte red giant (light leads
+    // size). The yellow-star multiplier is lifted hard so it reads as a proper,
+    // bright main-sequence star, not the old fragile ember.
+    col *= mix(1.95, 0.5, uRed);
 
     // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
     // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
@@ -169,8 +179,10 @@ export const sunGlowVert = /* glsl */ `
 export const sunGlowFrag = /* glsl */ `
   uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
   void main(){ vec3 vd=normalize(-vP);
-    float i=pow(1.0-max(dot(vd,vN),0.0), 2.2);
-    gl_FragColor=vec4(uColor*i*1.6, 1.0); }`;
+    // softer falloff (1.7, was 2.2) + a stronger lift so the chromosphere reads as
+    // the bright luminous yellow halo wrapping the photosphere in the reference.
+    float i=pow(1.0-max(dot(vd,vN),0.0), 1.7);
+    gl_FragColor=vec4(uColor*i*2.6, 1.0); }`;
 
 // --- soft corona haze (camera-facing additive billboard) ---
 
@@ -199,9 +211,11 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     float corona = halo*0.50 + streamer*0.22;
     corona *= smoothstep(df-0.02, df+0.04, r);
     corona *= smoothstep(1.0, df+0.05, r);
-    vec3 c = mix(vec3(1.0,0.56,0.16), vec3(1.0,0.78,0.38), st*0.7);
+    vec3 c = mix(vec3(1.20,0.78,0.30), vec3(1.30,1.02,0.52), st*0.7);
     c = mix(c, vec3(0.85,0.20,0.05), uRed);          // gold corona → dim red haze
-    gl_FragColor = vec4(c*corona*0.6*mix(1.0, 0.35, uRed)*uFade, 1.0);
+    // brighter base (1.05, was 0.6) so the yellow star sits in a wide luminous halo
+    // like the reference; the red giant still dims to a faint haze (×0.35).
+    gl_FragColor = vec4(c*corona*1.05*mix(1.0, 0.35, uRed)*uFade, 1.0);
   }`;
 
 // --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
