@@ -420,40 +420,40 @@ export const diskVertexShader = /* glsl */ `
       vec3 giantPos = sphere * giantR;
 
       // ================= UNIFIED NON-HOMOGENEOUS SURFACE COLLAPSE ============
-      // THE implosion. There is no separate radial blast and NO outward spikes — the
-      // red-giant photosphere CAVES IN on itself. Each patch of the sphere collapses
-      // INWARD at its OWN rate (the majority slowly, a minority at medium pace, none
-      // leading the front) and a sparse set of deep cavities buckle into the shell, so
-      // it reads as a crumpling surface eating itself — never extending past the
-      // original sphere. It is always ONE connected surface caving toward the seed.
+      // THE explosion. There is no separate radial blast — the spiky "explosion"
+      // IS this red-giant surface caving in unevenly. Each patch of the sphere
+      // collapses inward at its OWN rate; the laggard patches stay near full radius
+      // (and extend PAST it) while their neighbours shrink, so they read as long
+      // radial finger-spikes streaming off a churning core (ref Image-3). It is
+      // always ONE connected surface — never a big shell + a small core at once.
       //
       // Driven by uCollapse (0 = full red-giant sphere, 1 = collapsed to the point,
-      // where the legacy supernova flash fires). The region fields are fbm over the
-      // spatial dir, so neighbouring particles share their timers → the shell buckles
-      // as COHERENT lobes, not per-grain shimmer (a tiny per-grain jitter is added on
-      // top for life without breaking that coherence).
+      // where the legacy supernova flash fires). ALL the motion fields are fbm over
+      // the spatial dir (no aSeed term), so neighbouring particles share their
+      // timers → the fingers move as COHERENT groups, not per-grain shimmer.
       vec3 dir = sphere;
 
       // per-region remap of the global collapse progress -----------------------
-      float bias = fbm(dir*1.6 + 23.0)*2.0 - 1.0;     // broad lobes: faster / slower
+      float bias = fbm(dir*1.6 + 23.0)*2.0 - 1.0;     // broad lobes: lead / lag
       float lump = fbm(dir*4.0 +  9.0);               // patch-scale lumpiness
-      // per-region progress weight: a >1 exponent pushes the MAJORITY of regions to lag
-      // (collapse slowly); only a sparse MINORITY reach medium pace. No region leads.
-      float regW = clamp(0.5 + 0.5*bias + (lump-0.5)*0.35, 0.0, 1.0);
-      regW = pow(regW, 2.2);                       // skew toward slow
-      // small per-particle inward-speed jitter (reuses freed aThickN + aSeed hash),
-      // 0-centred & tiny so neighbours stay coherent (no shimmer); static at uTime=0.
-      float grainJit = 0.5*aThickN + 0.5*(h31(vec3(aSeed*31.7, 3.1, aSeed*7.9)) - 0.5);
-      regW = clamp(regW + grainJit*0.10, 0.0, 1.0);
-      float regLag = (1.0 - regW) * 0.55;          // 0 (medium) .. 0.55 (slowest)
+      float fil  = fbm(dir*7.5 +  4.0);               // fine sub-filament detail
+      float regOffset = bias*0.30;                    // some regions start earlier/later
+      float regSlope  = 1.0 + bias*0.55 + (lump-0.5)*0.4;  // …and collapse faster/slower
+      // sparse LAGGARD field: the high tail of a sharpened lobe → a minority of
+      // regions that resist the collapse the longest. These become the fingers.
+      float lagField = pow(smoothstep(0.45, 0.92, fbm(dir*2.2 + 11.0)), 2.2);
+      lagField = clamp(lagField + 0.25*fil*lagField, 0.0, 1.5);  // split into threads
 
-      // sparse COLLAPSE-HOLE field: a set of patches that cave IN harder than the
-      // surrounding shell during the implosion, buckling deep dark CAVITIES into the
-      // photosphere so the viewer literally SEES the star eating itself — matter
-      // falling inward, opening pits that reveal the dark collapsing interior. Only
-      // the high tail of the field becomes a hole (smoothstep 0.55→0.82), so just a
-      // HANDFUL of deep cavities open — dramatic tears, not swiss cheese.
-      float holeField = smoothstep(0.55, 0.82, fbm(dir*3.1 + 19.0));
+      // sparse COLLAPSE-HOLE field: a SEPARATE, DECORRELATED set of patches that get
+      // SUCKED IN harder than the surrounding bulk during the implosion, tearing dark
+      // CAVITIES into the photosphere so the viewer literally SEES the star coming
+      // apart — matter falling inward, opening voids that reveal the dark collapsing
+      // interior. Sampled at a DIFFERENT noise offset than lagField (+19 vs +11) so
+      // holes are NOT where the finger-spikes are: the spikes stick OUT, the holes
+      // sink IN, and they never coincide. Only the high tail of the field becomes a
+      // hole (smoothstep 0.62→0.86), so just a HANDFUL of cavities open — dramatic
+      // tears, not swiss cheese.
+      float holeField = smoothstep(0.62, 0.86, fbm(dir*3.1 + 19.0));
       // HOLE WINDOW: gate the cavities to the MIDDLE of the collapse. It is 0 at BOTH
       // ends (a rising flank that opens once the collapse is underway × a falling flank
       // that has fully closed before the point), so the FULL SPHERE (uCollapse=0) and
@@ -462,63 +462,92 @@ export const diskVertexShader = /* glsl */ `
       // preserves the endpoint pinning invariant exactly.
       float holeWindow = smoothstep(0.12, 0.5, uCollapse) * (1.0 - smoothstep(0.7, 1.0, uCollapse));
 
-      // per-region collapse 0→1. The per-region lag is gated by a window that is 0 at
-      // BOTH ends (uCollapse·(1-uCollapse)), so the endpoints pin EXACTLY: uCollapse=0
-      // → kReg=0 (full sphere, every region) and uCollapse=1 → kReg=1 (the point,
-      // every region). Only the MIDDLE desyncs → the non-homogeneous caving-in, with
-      // the majority of regions TRAILING the front (collapsing slowly) and never one
-      // leading it. The lag is also scaled by uCollapse so it folds away as the front
-      // approaches 1, keeping the convergence on the seed exact.
+      // per-region collapse 0→1. The per-region offset/slope/hold are all gated by
+      // a window that is 0 at BOTH ends (uCollapse·(1-uCollapse)), so the endpoints
+      // pin EXACTLY: uCollapse=0 → kReg=0 (full sphere, every region) and
+      // uCollapse=1 → kReg=1 (the point, every region). Only the MIDDLE desyncs →
+      // the non-homogeneous caving-in, with laggards trailing the bulk into fingers.
       float desync = uCollapse*(1.0 - uCollapse)*4.0;  // 0 at ends, 1 at mid
-      float kReg = uCollapse - regLag*desync*uCollapse;   // trail the front, never lead
+      float kReg = uCollapse + (regOffset + uCollapse*(regSlope - 1.0))*desync*0.5;
+      kReg = kReg - lagField*desync*0.9;               // laggards trail the bulk
       kReg = clamp(kReg, 0.0, 1.0);
 
+      // independent per-region LIFE timer: even at a held scroll position the
+      // fingers extend / retract on their own clocks → a living, churning core.
+      // Phase from dir (spatial) so whole lobes pulse together; uTime=0 under
+      // reduced motion → perfectly static.
+      float fphase = fbm(dir*1.7 + 5.0)*6.2831;
+      float fingerLife = 0.18*sin(uTime*0.5 + fphase) + 0.08*sin(uTime*1.2 + fphase*2.3);
+
       // collapseScale: per-region radial scale, NORMALISED so 1.0 = the full giant
-      // surface radius. Every region shrinks toward ~0 (collapseLo) as its kReg rises
-      // — slow regions stay nearer 1 for longer, fast regions dive in sooner, but ALL
-      // are caving INWARD (≤1, never past the surface). This factor is applied to
-      // whatever radius the surface renderer uses (the sun/red-giant branch below), so
-      // the actual photosphere caves in on itself — there is no separate blast.
+      // surface radius. The bulk shrinks toward ~0 (collapseLo) while LAGGARD regions
+      // stay near 1 and EXTEND past it (>1) → the finger-spikes. This factor is
+      // applied to whatever radius the surface renderer uses (the sun/red-giant
+      // branch below), so the actual photosphere caves in and spikes — there is no
+      // separate blast and never a two-scale frame.
       float collapseLo = 0.04;                                  // bulk near-point
       float baseScale  = mix(1.0, collapseLo, kReg);            // the COLLAPSING bulk
       // HOLE bulk: in a hole region (holeField·holeWindow→1) pull the bulk radius
-      // DEEPER than the surrounding shell (toward 0.08× the regular collapsing bulk),
-      // so those particles cave well BELOW the photosphere — a deep pit/cavity that
-      // tears a dark gap in the surface shell (the disk renders additively, so fewer
-      // grains on the shell there reads as a DARK void revealing the collapsing
-      // interior; no fragment change needed). NON-hole bulk is unchanged
-      // (holeField·holeWindow=0 → holeFac=1). At uCollapse 0 and 1 holeWindow=0 →
-      // holeFac=1 → holeBase==baseScale, so the endpoints (full sphere / point) pin
-      // EXACTLY as before. These deep buckles are what make the shell look like it is
-      // eating itself as it implodes.
-      float holeFac  = mix(1.0, 0.08, holeField * holeWindow);
+      // DEEPER than the surrounding shell (toward 0.18× the regular collapsing bulk),
+      // so those particles sink well BELOW the photosphere — a pit/cavity that opens
+      // a dark gap on the surface shell (the disk renders additively, so fewer grains
+      // on the shell there reads as a DARK void revealing the collapsing interior; no
+      // fragment change needed). NON-hole bulk is unchanged (holeField·holeWindow=0 →
+      // holeFac=1). At uCollapse 0 and 1 holeWindow=0 → holeFac=1 → holeBase==baseScale,
+      // so the endpoints (full sphere / point) pin EXACTLY as before. The FINGER scale
+      // below is deliberately built from the UN-holed baseScale, so the spikes are
+      // never sucked into a pit — fingers and holes stay fully independent.
+      float holeFac  = mix(1.0, 0.18, holeField * holeWindow);
       float holeBase = baseScale * holeFac;                     // the cavitied bulk
-      // collapseScale is just the cavitied inward bulk — every region pulls IN toward
-      // the seed (≤1, never past the surface), with hole regions sucked deeper to
-      // buckle the dark pits. No region holds out or extends past the original shell:
-      // the whole photosphere caves in on itself, crumpling as it goes.
-      float collapseScale = holeBase;
+      // FINGER scale: the laggard regions HOLD near the full giant radius while the
+      // bulk caves in — that radial CONTRAST is what makes the long streaming spikes
+      // (ref Image-3). The fingers are CAPPED at the original sphere surface (scale
+      // 1.0) and never punch past it (user constraint). They reach UP toward the
+      // surface as the collapse deepens, then taper back toward the bulk near the
+      // point so everything reaches the seed for the flash. fingerLife only modulates
+      // how far UP toward 1.0 a finger reaches (always ≤ 1.0), never beyond.
+      float extendWin = smoothstep(0.0, 0.30, uCollapse) * (1.0 - smoothstep(0.80, 1.0, uCollapse));
+      // how close to the full surface this finger reaches (0..1), per region + life.
+      float fingerReach = clamp(extendWin * (0.7 + 0.5*lagField) * (0.85 + 0.15*fingerLife), 0.0, 1.0);
+      // finger tip scale: between the collapsing bulk and the original surface (1.0),
+      // never above it. max() so a finger can only stick OUT relative to the bulk.
+      float fingerScale = max(baseScale, mix(baseScale, 1.0, fingerReach));
+      // only the sparse laggard regions become fingers; everything else is the bulk.
+      float fingerMask = smoothstep(0.10, 0.5, lagField);
+      // bulk uses the CAVITIED radius (holeBase) so the dark voids open; fingers use
+      // fingerScale (from the un-holed baseScale) so the spikes are never sucked in.
+      float collapseScale = mix(holeBase, fingerScale, fingerMask);
 
-      // tiny tangential sway so the caving shell isn't glassy-radial: a curl-like
-      // vector (3 decorrelated fbm channels) projected onto the plane perpendicular
-      // to dir, drifting slowly with uTime. In UNIT-radius space (multiplied by the
-      // surface radius where it's applied). Gated by desync (0 at both endpoints) and
-      // ramped in once the collapse is underway, so it never breaks endpoint pinning.
+      // STREAK the fingers: a finger isn't a displaced shell — it's a long trail of
+      // matter from the core out to the tip. Spread each finger particle's radius
+      // across [bulk core .. finger tip] using a stable per-particle parameter
+      // (aThickN, ~[-1,1] → 0..1), so the laggard regions read as long radial streaks
+      // populated along their whole length, not stubs. Non-finger (bulk) particles
+      // are unaffected (fingerMask≈0 → streakScale==collapseScale==baseScale).
+      float along = 0.5 + 0.5*aThickN;                 // 0..1 stable per particle
+      along = pow(along, 0.7);                          // bias toward the tip a little
+      // streak radius runs from the bulk surface up to this finger's full reach.
+      float streakScale = mix(baseScale, collapseScale, mix(1.0, along, fingerMask));
+
+      // tangential curl so the fingers STREAM rather than sit glassy-radial: a
+      // curl-like vector (3 decorrelated fbm channels) projected onto the plane
+      // perpendicular to dir, drifting slowly with uTime. In UNIT-radius space
+      // (multiplied by the surface radius where it's applied). Only on the spikes
+      // (scaled by lagField) and only once the collapse is underway.
       vec3 dr = vec3(
         fbm(dir*3.4 +  7.0 + vec3(0.0, uTime*0.05, 0.0)),
         fbm(dir*3.4 + 19.0 + vec3(0.0, uTime*0.05, 0.0)),
         fbm(dir*3.4 + 41.0 + vec3(0.0, uTime*0.05, 0.0))
       ) - 0.5;
       dr -= dir*dot(dr, dir);
-      // perpendicular to dir → barely touches the radius, so nothing extends past the
-      // surface; just enough lateral shuffle to keep the buckling shell from being
-      // glassy-smooth as it caves in.
-      vec3 curlOff = dr*(collapseScale*0.10)*desync*smoothstep(0.05, 0.5, uCollapse);
+      // small TANGENTIAL sway (perpendicular to dir → barely affects radius, so the
+      // surface cap holds) just to keep the fingers from being glassy-straight.
+      vec3 curlOff = dr*(collapseScale*0.22)*lagField*smoothstep(0.05, 0.5, uCollapse);
 
       // default position for the (rare) case the surface renderer below is inactive:
-      // the unit sphere pulled inward by the per-region collapseScale. The sun/red-
-      // giant branch re-applies collapseScale + curlOff to its own textured surface.
-      pos = dir*(giantR*collapseScale) + curlOff*giantR;
+      // the unit sphere scaled by the (streaked) collapse. The sun/red-giant branch
+      // re-applies streakScale + curlOff to its own textured surface radius.
+      pos = dir*(giantR*streakScale) + curlOff*giantR;
 
       // === REVIEW PLACEHOLDERS (no real morph) ===========================
       // Minimal stand-ins for the three new states so their slot + look can be
@@ -601,15 +630,13 @@ export const diskVertexShader = /* glsl */ `
         // returning to the bumpy red-giant photosphere as it reddens (uYrMix→1).
         float sunRelief = 1.0 + 0.05*(m - 0.55) * uYrMix;
         // collapseScale / curlOff (from the unified surface-collapse block) make the
-        // red-giant photosphere CAVE IN on itself: every region's radius is pulled
-        // inward (≤1, never past the surface), with sparse holeField patches sucked
-        // DEEPER to buckle dark cavities into the shell. At the full red giant
-        // (uCollapse=0) collapseScale=1 and curlOff=0 → the sphere is unchanged.
+        // red-giant photosphere cave in non-homogeneously: the bulk shrinks toward the
+        // point while laggard regions extend into the finger-spikes. At the full red
+        // giant (uCollapse=0) collapseScale=1 and curlOff=0 → the sphere is unchanged.
         float sunR0 = uGiantR * sunRadFac;
-        // collapseScale pulls each region's photosphere radius inward (≤1, never past
-        // the surface); curlOff is a tiny tangential sway so the caving shell isn't
-        // glassy. Holes (deepest regions) read as dark pits in the additive cloud.
-        vec3 surf = sphere * (sunR0 * sunRelief * collapseScale) + curlOff*sunR0;
+        // streakScale spreads finger particles along [core..surface] so the spikes
+        // are long populated trails; capped at the surface so they never exceed it.
+        vec3 surf = sphere * (sunR0 * sunRelief * streakScale) + curlOff*sunR0;
         pos  = surf;
         heat = m;
 
@@ -914,6 +941,22 @@ export const diskVertexShader = /* glsl */ `
     vec2 dFin = ndcFinal - bhN;
     float rFin = length(vec2(dFin.x*uAspect, dFin.y));
     if(carve && rFin < uHole*0.95 && behindAmt > 0.35) drop = true;
+    // RE-FORMATION shadow re-assert (scroll-UP only). The dissolve below was written
+    // for the SUPERNOVA (forward / scroll-DOWN): once morph passes ~0.5 the dying
+    // centre lets matter cross it. But while the hero is RE-FORMING (the feed beat,
+    // morph 0.30..0.46) the black hole is fully present and its shadow MUST stay a
+    // pure black void — the re-lit clumpy gas must not smear over the interior.
+    // reCarve must HOLD near 1 across the WHOLE beat and fall to 0 at BOTH ends —
+    // NOT track the feed's 0.46->0.30 ramp (that decays mid-beat, letting the front-
+    // face gas re-paint the centre by ~0.36). Low-end ramp (0.10->0.20) keeps morph->0
+    // exactly as-is (the existing carve already handles the resting hero); high-end
+    // ramp drops sharply 0.44->0.47 so it is 0 by the breakout -> the supernova that
+    // must fill the dying centre (morph>~0.47) is untouched.
+    float reCarve = smoothstep(0.10, 0.20, uMorph) * smoothstep(0.47, 0.44, uMorph);
+    // re-drop FAR-side particles inside the shadow for the WHOLE beat (the generic
+    // carve above already fades out as morph rises). Only behindAmt>0.35 (far side)
+    // is dropped, so the near face of the disk still shows IN FRONT of the hole.
+    if(rFin < uHole*0.98 && behindAmt > 0.35 && reCarve > 0.5) drop = true;
     float coreFade;
     if(behindAmt > 0.35){
       coreFade = smoothstep(uHole*0.95, uHole*1.20, rFin);              // back: carved, soft edge
@@ -922,6 +965,16 @@ export const diskVertexShader = /* glsl */ `
     }
     // dissolve the carve as the shadow dies, so the flare fills the centre
     coreFade = mix(coreFade, 1.0, smoothstep(0.15, 0.6, uMorph));
+    // reShadow: 1 INSIDE the shadow disc during the re-formation beat, 0 outside the
+    // rim (rFin >= uHole*1.15 -> photon ring survives) and 0 at the hero/supernova
+    // (reCarve guard). Reused below to gate the additive infall glow so NOTHING paints
+    // the interior during the beat.
+    float reShadow = reCarve * (1.0 - smoothstep(uHole*0.85, uHole*1.15, rFin));
+    // ...then RE-DARKEN the centre during the re-formation beat only: force coreFade->0
+    // (black) inside the shadow disc. bright multiplies coreFade (below), so zeroing it
+    // zeroes the organic-feed product too (feed * 0 = 0) — nothing multiplicative can
+    // re-light the interior.
+    coreFade = mix(coreFade, 0.0, reShadow);
 
     vec4 outClip = vec4(ndcFinal * clipP.w, clipP.z, clipP.w);
 
@@ -1013,7 +1066,11 @@ export const diskVertexShader = /* glsl */ `
     // the dark core (∝ inward strain), so you see glowing strands spiralling into
     // a black point — the "aspiration" read — instead of a glow blob. Never lights
     // the core itself ((1-coreDark)). infallGlow comes from the position block.
-    bright += infallGlow * (0.5 + 0.6*pv) * (1.0 - coreDark);
+    // Also gate by (1-reShadow): during the RE-FORMATION beat this additive seed
+    // glow must not paint the shadow interior either (coreFade only kills the
+    // multiplicative path). reShadow is 0 outside the beat, so the seed/supernova
+    // aspiration read past 0.44 is fully preserved.
+    bright += infallGlow * (0.5 + 0.6*pv) * (1.0 - coreDark) * (1.0 - reShadow);
 
     // -- expanding shock shell -----------------------------------------------
     // A thin bright spherical front sweeps outward AHEAD of the bulk debris
