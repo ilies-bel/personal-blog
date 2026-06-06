@@ -739,8 +739,8 @@ export const diskVertexShader = /* glsl */ `
         // The axes are evened-out so the cloud reads as a round ball, with a touch of
         // irregularity kept so it still feels organic like Eagle/Carina, not CGI.
         // MUST stay byte-identical to the ELL in gravitySim.ts (sim seed shares it).
-        vec3 ELL = vec3(1.12, 0.95, 1.06);
-        float NR = uGiantR * 1.30;                          // overall nebula extent (bigger → larger sphere)
+        vec3 ELL = vec3(1.04, 1.0, 1.02);
+        float NR = uGiantR * 1.72;                          // overall nebula extent (bigger → larger sphere, fills the frame)
         // a slow wandering drift so the whole cloud rolls/breathes (not frozen).
         vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 

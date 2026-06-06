@@ -85,20 +85,27 @@ const easeOutExpo = (t: number): number => {
 export function legacyStageForProgress(progress: number): number {
   const p = lifecycleProgress(progress);
 
-  if (p < 0.16) {
-    return lerp(3.5, 3.32, smoothstep(segment(p, 0.0, 0.16)));
+  if (p < 0.06) {
+    // DISPERSED NEBULA hold: settle on the big round cloud (stage 3.5 -> 3.42, still
+    // safely above the collapse window's 3.5 ceiling so no gas converges yet). The
+    // visitor reads the nebula beat before the gravitational collapse begins.
+    return lerp(3.5, 3.42, smoothstep(segment(p, 0.0, 0.06)));
   }
-  if (p < 0.22) {
-    // Ignite FAST: arrive at the settled gold (stage 2.96, comfortably inside the
-    // gas-free 2.88->3.0 yellow band) by ~progress 0.22 so the star is fully formed
-    // and blazing early, leaving room to dwell on it.
-    return lerp(3.32, 2.96, easeOutCubic(segment(p, 0.16, 0.22)));
+  if (p < 0.24) {
+    // THE COLLAPSE — the heart of the nebula -> star transition. Stage walks the
+    // WHOLE collapse window (3.42 -> 3.02, the lifecycle's [3.0, 3.5] band) across a
+    // GENEROUS scroll stretch (0.06 -> 0.24) so the gas visibly streams INWARD and
+    // FEEDS the forming star instead of the old 6%-of-scroll flick that skipped the
+    // window (which made the star pop "out of nowhere"). easeInOutCubic so the infall
+    // accelerates into the middle of the window and eases as the core fills.
+    return lerp(3.42, 3.02, easeInOutCubic(segment(p, 0.06, 0.24)));
   }
   if (p < 0.30) {
-    // CONTEMPLATION: a long, gentle, nearly-flat hold near the settled gold
-    // (2.96 -> 2.88) so the mesh sun rig barely moves across 0.22-0.30 and the
-    // visitor can read the headline before the red-giant growth resumes the descent.
-    return lerp(2.96, 2.88, easeInOutCubic(segment(p, 0.22, 0.30)));
+    // IGNITION + CONTEMPLATION: the star has condensed out of the gas; finish into
+    // the settled gold (3.02 -> 2.88, the gas-free 2.88->3.0 yellow band) and hold
+    // there so the visitor can read the headline on the blazing sun before the red-
+    // giant growth resumes the descent.
+    return lerp(3.02, 2.88, easeOutCubic(segment(p, 0.24, 0.30)));
   }
   if (p < 0.46) {
     return lerp(2.88, 2.05, easeInOutCubic(segment(p, 0.30, 0.46)));
@@ -122,8 +129,9 @@ export function legacyStageForProgress(progress: number): number {
 // object's camera family matters more than a mathematically exact eased inverse.
 export function progressForLegacyStage(stage: number): number {
   if (stage >= 3.5) return 0.02;
-  if (stage >= 3.32) return lerp(0.0, 0.16, (3.5 - stage) / (3.5 - 3.32));
-  if (stage >= 2.88) return lerp(0.16, 0.30, (3.32 - stage) / (3.32 - 2.88));
+  if (stage >= 3.42) return lerp(0.0, 0.06, (3.5 - stage) / (3.5 - 3.42));
+  if (stage >= 3.02) return lerp(0.06, 0.24, (3.42 - stage) / (3.42 - 3.02));
+  if (stage >= 2.88) return lerp(0.24, 0.30, (3.02 - stage) / (3.02 - 2.88));
   if (stage >= 2.05) return lerp(0.30, 0.46, (2.88 - stage) / (2.88 - 2.05));
   if (stage >= 1.05) return 0.54;
   if (stage >= 0.5) return lerp(0.62, 0.72, (1.05 - stage) / (1.05 - 0.5));
@@ -132,12 +140,18 @@ export function progressForLegacyStage(stage: number): number {
   return lerp(0.94, 1.0, (0.08 - Math.max(0, stage)) / 0.08);
 }
 
+// NEBULA framing: the cloud is a big ROUND volume centred at the origin (extent
+// NR = uGiantR*1.72 ≈ 7.2). The camera sits CLOSE enough that the gas fills the
+// frame and wraps past every edge (immersed), rather than the old far vantage
+// (z≈33) that left the cloud a small boxy patch with black margins. NEBULA_START
+// is the dispersed cloud framed wide-but-filling; NEBULA_GATHERED pushes IN toward
+// the core as the gas begins to converge toward the forming star.
 const NEBULA_START = {
-  position: [-1.4, 0.25, 34.0] as Vec3Tuple,
+  position: [-1.0, 0.18, 19.5] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 const NEBULA_GATHERED = {
-  position: [0.35, 0.02, 32.4] as Vec3Tuple,
+  position: [0.25, 0.02, 16.5] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 const YELLOW_HOLD = {
@@ -189,13 +203,21 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
   let target = NEBULA_START.target;
   let parallax = 0.08;
 
-  if (p < 0.16) {
-    const t = smoothstep(segment(p, 0.0, 0.16));
+  if (p < 0.24) {
+    // NEBULA hold + COLLAPSE: stay immersed and CLOSE while the gas streams inward.
+    // The camera makes only a gentle push toward the gathering core (NEBULA_START ->
+    // NEBULA_GATHERED) across the whole nebula+collapse band, so the cloud appears to
+    // CONVERGE on a fixed focal point (the forming star) rather than the camera flying
+    // out and making the gas look like it expands. The big inward move to the yellow
+    // framing waits for ignition (below).
+    const t = easeInOutCubic(segment(p, 0.0, 0.24));
     position = mixVec(NEBULA_START.position, NEBULA_GATHERED.position, t);
     target = mixVec(NEBULA_START.target, NEBULA_GATHERED.target, t);
     parallax = 0.05;
   } else if (p < 0.30) {
-    const t = easeOutCubic(segment(p, 0.16, 0.30));
+    // IGNITION: the gas has fed the star; ease out from the immersed core framing to
+    // the yellow-star hold as the sun settles into its blazing main-sequence beat.
+    const t = easeOutCubic(segment(p, 0.24, 0.30));
     position = mixVec(NEBULA_GATHERED.position, YELLOW_HOLD.position, t);
     target = mixVec(NEBULA_GATHERED.target, YELLOW_HOLD.target, t);
     parallax = 0.05;

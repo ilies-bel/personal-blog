@@ -80,11 +80,13 @@ export const NOISE_GLSL = /* glsl */ `
  */
 export const NEBULA_PLACE_FN = /* glsl */ `
   vec3 nebulaPlace(float aSeed, float aU, float aPhase, float uTime, float uGiantR){
-    // a gently-rounded volume (near-spherical, kept slightly irregular so it still
-    // feels organic rather than a perfect CGI ball). MUST stay byte-identical to the
+    // a ROUND volume (near-spherical, kept slightly irregular so it still feels
+    // organic rather than a perfect CGI ball). MUST stay byte-identical to the
     // ELL in disk.glsl.ts — the sim seed and analytic placement share it.
-    vec3 ELL = vec3(1.12, 0.95, 1.06);
-    float NR = uGiantR * 1.30;                          // overall nebula extent
+    // ELL is pulled close to a unit sphere (was 1.12/0.95/1.06) so the cloud reads
+    // as a CIRCLE, not a boxy ellipsoid.
+    vec3 ELL = vec3(1.04, 1.0, 1.02);
+    float NR = uGiantR * 1.72;                          // overall nebula extent (bigger → fills the frame)
     vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 
     vec3 hh = vec3(
@@ -92,9 +94,13 @@ export const NEBULA_PLACE_FN = /* glsl */ `
       h31(vec3(aSeed*7.0,  aPhase*9.0, 23.0)),
       h31(vec3(aU*29.0,    aPhase*3.0, 41.0))
     );
-    vec3 box = hh*2.0 - 1.0;
-    float bmag = pow(length(box), 0.85);
-    vec3 p0 = normalize(box + 1e-4) * bmag * NR;
+    // map the cube of hashes onto a SPHERE: directionalise (normalize) then pick a
+    // radius from a single uniform hash with a cube-root profile so the volume fills
+    // EVENLY out to NR. This kills the cube-corner bias (the old pow(length(box),0.85)
+    // kept ~1.7x more reach at the corners → a rounded box) so the cloud is a ball.
+    vec3 dir = normalize(hh*2.0 - 1.0 + 1e-4);
+    float rr = pow(h31(vec3(aSeed*31.0, aU*3.0, aPhase*19.0)), 0.3333);
+    vec3 p0 = dir * rr * NR;
     p0 *= ELL;
 
     vec3 warp = vec3(
