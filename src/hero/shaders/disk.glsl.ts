@@ -899,26 +899,33 @@ export const diskVertexShader = /* glsl */ `
 
       // per-particle eased progress: outer gas leads slightly so the cloud collapses
       // from the rim inward (a gentle stagger, not every grain moving in lockstep).
-      float lead = 0.85 + 0.30 * fract(aSeed * 7.31);
+      float lead = 0.82 + 0.36 * fract(aSeed * 7.31);
       float c = clamp(uNebCollapse * lead, 0.0, 1.0);
-      float ease = c * c * (3.0 - 2.0 * c);         // smoothstep
 
-      // radius eases from the nebula radius down to the core (gas piles onto the star)
-      float r = mix(homeR, coreR, ease);
+      // GRAVITY FEEL: the infall ACCELERATES. A weightless linear/smoothstep lerp read
+      // as "no gravity felt". Instead the radius barely changes at first then PLUNGES
+      // toward the core (pow ease-in ≈ accelerating freefall), so the gas hangs, then
+      // rushes in and slams onto the star. Pure function of c → exact on scroll reverse.
+      float fall = c * c * c;                        // accelerating infall (slow→fast)
+      float r = mix(homeR, coreR, fall);
 
-      // SWIRL: rotate the radial direction about the y axis by an angle that grows as
-      // the particle falls in, so it spirals/funnels rather than dropping straight —
-      // organic accretion without the unstable sim. Per-particle phase keeps streams
-      // distinct. The angle is a pure function of ease, so it rewinds on scroll-up.
-      float swirl = (2.4 + 2.0 * fract(aSeed * 3.17)) * ease;   // total radians of spin-in
-      float s = sin(swirl), cc = cos(swirl);
-      vec3 swirled = vec3(dir.x * cc - dir.z * s, dir.y, dir.x * s + dir.z * cc);
+      // OMNIDIRECTIONAL SWIRL: curve the path along each particle's OWN tangent, not a
+      // global y-axis spin. (A y-axis rotation leaves pole particles un-rotated, so the
+      // cloud collapsed into two vertical columns top/bottom — the bug in the capture.)
+      // Build a stable tangent perpendicular to dir; every particle spirals in the same
+      // amount regardless of where it sits, so the gas funnels in from ALL directions.
+      vec3 ref = abs(dir.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+      vec3 tang = normalize(cross(dir, ref));
+      float swirl = (1.6 + 1.4 * fract(aSeed * 3.17)) * fall;   // radians of spin-in
+      vec3 curveDir = normalize(dir * cos(swirl) + tang * sin(swirl));
 
-      vec3 collapsed = swirled * r;
-      pos = mix(home, collapsed, ease);
-      // gas FADES as it piles onto the core so the star reveals cleanly out of the
-      // dispersing cloud (and reverses: re-brightens as it flows back out on scroll-up).
-      vSimLife = 1.0 - ease;
+      // final position: the swirled radial direction at the accelerating radius. At
+      // fall=0 this is exactly home (r=homeR, curveDir=dir); at fall=1 it is on the
+      // core shell — one continuous, exactly-reversible path, no double easing.
+      pos = curveDir * r;
+      // gas FADES only LATE (once it has visibly rushed in and piled onto the core), so
+      // you SEE the infall instead of it dissolving in place. Reverses on scroll-up.
+      vSimLife = 1.0 - smoothstep(0.55, 1.0, c);
     }
 
     vec4 viewP  = modelViewMatrix * vec4(pos, 1.0);
