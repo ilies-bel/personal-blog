@@ -14,13 +14,13 @@
 import { useEffect, useState } from 'react';
 import { DEBUG_WINDOW_KEYS } from '../lib/constants';
 
-// Defaults mirror the SHIPPED red-giant look: size is uGiantScale 17.6/4.2 (the
-// slider reads in effective-uGiantR world units, so 17.6); the "pos" sliders now
+// Defaults mirror the SHIPPED red-giant look: size is uGiantScale 8.5/4.2 (the
+// slider reads in effective-uGiantR world units, so 8.5); the "pos" sliders now
 // drive the CAMERA PARK vantage (RED_GIANT_PARK in createScene), not the orb — the
 // star stays centred at origin and the camera moves to show its scale. Baked park
-// vantage is [18, -12, 26]. Keep in sync if those defaults change.
-const DEFAULT_RADIUS = 9.0;
-const DEFAULT_CENTER: [number, number, number] = [5, -3, 7];
+// vantage is [4.6, -3.15, 7]. Keep in sync if those defaults change.
+const DEFAULT_RADIUS = 8.5;
+const DEFAULT_CENTER: [number, number, number] = [4.6, -3.15, 7];
 // Stage that pins the grown, PARKED red giant (inside the camera-park hold ~1.9) so
 // the off-centre framing the sliders tune is the one on screen.
 const RED_GIANT_STAGE = 1.9;

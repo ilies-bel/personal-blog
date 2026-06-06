@@ -1371,11 +1371,13 @@ export const diskFragmentShader = /* glsl */ `
           // this exposure. The umbra is no longer near-black, the body reaches a vivid
           // red-orange across most of mEff, and the limb glows so the parked curved edge
           // reads as molten, not a silhouette.
-          vec3 rc = vec3(0.62, 0.12, 0.03);                     // warmer glowing ember floor
-          rc = mix(rc, vec3(0.90, 0.18, 0.03),  smoothstep(0.08, 0.34, mEff)); // deep red
+          vec3 rc = vec3(0.68, 0.15, 0.04);                     // ember floor, lifted (deeper
+          //   orange/red shadows brought UP a touch: 0.62,0.12,0.03 → 0.68,0.15,0.04).
+          rc = mix(rc, vec3(0.94, 0.20, 0.04),  smoothstep(0.08, 0.34, mEff)); // deep red, richer
           rc = mix(rc, vec3(1.00, 0.26, 0.05),  smoothstep(0.30, 0.58, mEff)); // red
           rc = mix(rc, vec3(1.00, 0.40, 0.09),  smoothstep(0.56, 0.80, mEff)); // red-orange
-          rc = mix(rc, vec3(1.00, 0.54, 0.18),  smoothstep(0.84, 1.0, mEff));  // hot orange
+          rc = mix(rc, vec3(0.96, 0.48, 0.14),  smoothstep(0.84, 1.0, mEff));  // hot orange, gold
+          //   highlight dialled DOWN slightly (1.00,0.54,0.18 → 0.96,0.48,0.14).
           rc = mix(rc, vec3(0.22, 0.020, 0.0), vSunDark*vYrMix); // dark spots/veins (lifted off black)
           // warm, glowing red limb (forward-scattered) — the curved edge fills the comp.
           rc = mix(rc, vec3(1.00, 0.32, 0.08), vSunLimb*0.65*vYrMix);

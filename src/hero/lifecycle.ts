@@ -505,16 +505,20 @@ export function lifecycle(input: LifecycleInput): StarState {
     // The red giant must be clearly VISIBLE (it used to be too dim to read), but the
     // ~1M additively-blended points blow out to white if pushed hard, so the lift is
     // spread conservatively across bloom + exposure + the per-grain shader recipe.
-    bloomStrength = (0.34 + 0.03 * yrPunch) * (1 - rg) + 0.52 * rg; // brighter broad halo; the swap
-    //   flash bump (yrPunch) is dialled to a whisper (0.03, was 0.08) so the now-size-matched,
-    //   same-colour mesh handoff is a soft cross-dissolve, not a pop.
-    bloomRadius = cfg.bloomRad * (1 - rg) + 0.68 * rg; // keep wide+soft so it's a halo, not a hot core
+    bloomStrength = (0.34 + 0.03 * yrPunch) * (1 - rg) + 0.46 * rg; // broad halo, dialled DOWN
+    //   (0.52 → 0.46, ~−11%) so the orange bloom under the orb doesn't pull the eye off the
+    //   headline; the rim stays bright via the per-grain recipe — only the wash is quieter.
+    //   flash bump (yrPunch) is a whisper (0.03) so the size-matched mesh handoff is a soft
+    //   cross-dissolve, not a pop.
+    bloomRadius = cfg.bloomRad * (1 - rg) + 0.54 * rg; // TIGHTER halo (0.68 → 0.54): the glow
+    //   falls off faster so the surrounding (esp. lower-right) spread shrinks while the rim stays lit.
     const yellowExposure = 0.62 * (1 + 0.04 * yrPunch);
-    const redExposure = cfg.exposure * 1.0; // base exposure; the brightness now comes mainly
-    //   from the lowered tone-map compression (toneComp) below, not a huge exposure push.
+    const redExposure = cfg.exposure * 0.92; // pulled down ~8% with the bloom so the whole red
+    //   giant reads a touch dimmer; brightness still comes mainly from the lowered toneComp below.
     exposure = yellowExposure * (1 - rg) + redExposure * rg;
     olive = 0.0; // no olive cast on the star
-    warmth = 0.14 * rg; // warm the matte red
+    warmth = 0.10 * rg; // warm the matte red — eased back (0.14 → 0.10) so the gold highlights
+    //   sit slightly cooler/quieter and don't compete with the headline.
     gradeSat = 1.0; // full saturation throughout
     diskSat = 1.0;
     // The REAL fix for the dim red giant: the shared grade tone-map (col/(col+0.78))
@@ -589,7 +593,8 @@ export function lifecycle(input: LifecycleInput): StarState {
   // dusty; at ~9 it stays a solid, dense, glowing photosphere (like the gorgeous small
   // newborn frame, just bigger). GIANT_FULL MUST match buildDisk's baked uGiantScale so
   // the held giant doesn't pop when the reveal window ends.
-  const GIANT_FULL = 9.0 / 4.2; // medium, dense held size (matches buildDisk uGiantScale)
+  const GIANT_FULL = 8.5 / 4.2; // medium, dense held size, trimmed ~6% (9.0 → 8.5) — matches
+  //   buildDisk uGiantScale AND createScene's RED_GIANT_RADIUS; keep all three in sync.
   const GIANT_SMALL = 4.5 / 4.2; // the tiny just-born star (radius ~4.5 → small disc + margin)
   // small until ~1.2 (the scale-contrast beat), then grow to full by ~1.7 as we come in.
   const sizeT = easeOut(smoothstep01((stage - 1.2) / 0.5));
