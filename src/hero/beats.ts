@@ -39,7 +39,11 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     at: 0.255,
-    text: { inStart: 0.210, inEnd: 0.235, outStart: 0.275, outEnd: 0.300 },
+    // The yellow star now ignites by ~0.22 and dwells in a nearly-flat
+    // contemplation hold through ~0.30 (see legacyStageForProgress), so the
+    // headline holds a touch longer (outStart 0.275 -> 0.285) to sit deeper in
+    // that stable window before easing out by 0.300 (red beat starts at 0.460).
+    text: { inStart: 0.210, inEnd: 0.235, outStart: 0.285, outEnd: 0.300 },
     state: 'yellow star',
     down: 'small enough to doubt.',
     up: 'small enough to doubt.',

@@ -77,7 +77,8 @@ const easeOutExpo = (t: number): number => {
 // through lifecycleProgress() so LIFECYCLE_DIRECTION owns which way time flows.
 //
 // Phase bands (in lifecycleProgress space) match the cinematic spec exactly:
-//   0.00-0.16 nebulaFormation | 0.16-0.30 yellowStarIgnition |
+//   0.00-0.16 nebulaFormation | 0.16-0.22 yellowStarIgnition |
+//   0.22-0.30 yellowStarContemplation (nearly-flat hold near the settled gold) |
 //   0.30-0.46 redGiantGrowth  | 0.46-0.62 redGiantHold       |
 //   0.62-0.72 collapse        | 0.72-0.80 supernova          |
 //   0.80-0.94 blackHoleFormation | 0.94-1.00 blackHoleHold / portfolio lure.
@@ -87,8 +88,17 @@ export function legacyStageForProgress(progress: number): number {
   if (p < 0.16) {
     return lerp(3.5, 3.32, smoothstep(segment(p, 0.0, 0.16)));
   }
+  if (p < 0.22) {
+    // Ignite FAST: arrive at the settled gold (stage 2.96, comfortably inside the
+    // gas-free 2.88->3.0 yellow band) by ~progress 0.22 so the star is fully formed
+    // and blazing early, leaving room to dwell on it.
+    return lerp(3.32, 2.96, easeOutCubic(segment(p, 0.16, 0.22)));
+  }
   if (p < 0.30) {
-    return lerp(3.32, 2.88, easeOutCubic(segment(p, 0.16, 0.30)));
+    // CONTEMPLATION: a long, gentle, nearly-flat hold near the settled gold
+    // (2.96 -> 2.88) so the mesh sun rig barely moves across 0.22-0.30 and the
+    // visitor can read the headline before the red-giant growth resumes the descent.
+    return lerp(2.96, 2.88, easeInOutCubic(segment(p, 0.22, 0.30)));
   }
   if (p < 0.46) {
     return lerp(2.88, 2.05, easeInOutCubic(segment(p, 0.30, 0.46)));
