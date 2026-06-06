@@ -1520,10 +1520,10 @@ export const diskFragmentShader = /* glsl */ `
         // The gold swap-in BALL (vYrMix→0) used to be LIFTED 1.4× — but that made the
         // particle cloud noticeably BRIGHTER than the dimmer mesh sun that swaps in,
         // so the swap read as a brightness DROP (bright white blob → dim gold sphere).
-        // Pull the cloud-ball factor DOWN to 0.80 so the smooth particle sphere lands
+        // Pull the cloud-ball factor DOWN to 0.50 so the smooth particle sphere lands
         // at/just-below the mesh brightness → the cloud→mesh handoff is continuous.
         // (vYrMix=1, the settled red giant + every other stage, is the 1.0 no-op end.)
-        inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3)) * mix(0.80, 1.0, vYrMix);
+        inten = a * (0.22 + 0.42*clamp(vBright, 0.0, 1.3)) * mix(0.50, 1.0, vYrMix);
       }
     }
     // nebula: per-grain intensity stays MODERATE so the overlapping soft grains
