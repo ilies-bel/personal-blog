@@ -444,6 +444,24 @@ export const diskVertexShader = /* glsl */ `
       float lagField = pow(smoothstep(0.45, 0.92, fbm(dir*2.2 + 11.0)), 2.2);
       lagField = clamp(lagField + 0.25*fil*lagField, 0.0, 1.5);  // split into threads
 
+      // sparse COLLAPSE-HOLE field: a SEPARATE, DECORRELATED set of patches that get
+      // SUCKED IN harder than the surrounding bulk during the implosion, tearing dark
+      // CAVITIES into the photosphere so the viewer literally SEES the star coming
+      // apart — matter falling inward, opening voids that reveal the dark collapsing
+      // interior. Sampled at a DIFFERENT noise offset than lagField (+19 vs +11) so
+      // holes are NOT where the finger-spikes are: the spikes stick OUT, the holes
+      // sink IN, and they never coincide. Only the high tail of the field becomes a
+      // hole (smoothstep 0.62→0.86), so just a HANDFUL of cavities open — dramatic
+      // tears, not swiss cheese.
+      float holeField = smoothstep(0.62, 0.86, fbm(dir*3.1 + 19.0));
+      // HOLE WINDOW: gate the cavities to the MIDDLE of the collapse. It is 0 at BOTH
+      // ends (a rising flank that opens once the collapse is underway × a falling flank
+      // that has fully closed before the point), so the FULL SPHERE (uCollapse=0) and
+      // the FINAL POINT (uCollapse=1) are UNTOUCHED — the holes OPEN as the implosion
+      // begins and CLOSE again as everything converges on the seed for the flash. This
+      // preserves the endpoint pinning invariant exactly.
+      float holeWindow = smoothstep(0.12, 0.5, uCollapse) * (1.0 - smoothstep(0.7, 1.0, uCollapse));
+
       // per-region collapse 0→1. The per-region offset/slope/hold are all gated by
       // a window that is 0 at BOTH ends (uCollapse·(1-uCollapse)), so the endpoints
       // pin EXACTLY: uCollapse=0 → kReg=0 (full sphere, every region) and
@@ -469,6 +487,18 @@ export const diskVertexShader = /* glsl */ `
       // separate blast and never a two-scale frame.
       float collapseLo = 0.04;                                  // bulk near-point
       float baseScale  = mix(1.0, collapseLo, kReg);            // the COLLAPSING bulk
+      // HOLE bulk: in a hole region (holeField·holeWindow→1) pull the bulk radius
+      // DEEPER than the surrounding shell (toward 0.18× the regular collapsing bulk),
+      // so those particles sink well BELOW the photosphere — a pit/cavity that opens
+      // a dark gap on the surface shell (the disk renders additively, so fewer grains
+      // on the shell there reads as a DARK void revealing the collapsing interior; no
+      // fragment change needed). NON-hole bulk is unchanged (holeField·holeWindow=0 →
+      // holeFac=1). At uCollapse 0 and 1 holeWindow=0 → holeFac=1 → holeBase==baseScale,
+      // so the endpoints (full sphere / point) pin EXACTLY as before. The FINGER scale
+      // below is deliberately built from the UN-holed baseScale, so the spikes are
+      // never sucked into a pit — fingers and holes stay fully independent.
+      float holeFac  = mix(1.0, 0.18, holeField * holeWindow);
+      float holeBase = baseScale * holeFac;                     // the cavitied bulk
       // FINGER scale: the laggard regions HOLD near the full giant radius while the
       // bulk caves in — that radial CONTRAST is what makes the long streaming spikes
       // (ref Image-3). The fingers are CAPPED at the original sphere surface (scale
@@ -484,7 +514,9 @@ export const diskVertexShader = /* glsl */ `
       float fingerScale = max(baseScale, mix(baseScale, 1.0, fingerReach));
       // only the sparse laggard regions become fingers; everything else is the bulk.
       float fingerMask = smoothstep(0.10, 0.5, lagField);
-      float collapseScale = mix(baseScale, fingerScale, fingerMask);
+      // bulk uses the CAVITIED radius (holeBase) so the dark voids open; fingers use
+      // fingerScale (from the un-holed baseScale) so the spikes are never sucked in.
+      float collapseScale = mix(holeBase, fingerScale, fingerMask);
 
       // STREAK the fingers: a finger isn't a displaced shell — it's a long trail of
       // matter from the core out to the tip. Spread each finger particle's radius
