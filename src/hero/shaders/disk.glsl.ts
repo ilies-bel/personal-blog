@@ -167,6 +167,9 @@ export const diskVertexShader = /* glsl */ `
   //   uSimBlend: 0 = analytic placement, 1 = fully sim-driven. Ramps in over 3.5→3.4.
   uniform sampler2D uSimPos;
   uniform float uSimBlend;
+  // Deterministic, scroll-driven nebula->star collapse (replaces the stateful sim's
+  // one-way behaviour). 0 = resting nebula, 1 = gas fully piled onto the forming star.
+  uniform float uNebCollapse;
 
   varying float vBright;
   varying float vSeed;
@@ -880,16 +883,42 @@ export const diskVertexShader = /* glsl */ `
       }
     }
 
-    // === GPGPU gravitational collapse override (nebula -> yellow star) ========
-    // During the nebula<->star window the particles are driven by the stateful
-    // gravity sim instead of the analytic placement. pos already holds the
-    // analytic nebula wp from the uNebula block above, and the sim is SEEDED
-    // from that same placement, so at uSimBlend~0 simP.xyz~pos -> no pop. As the
-    // collapse drive rises, uSimBlend->1 and the cloud falls inward toward the star.
-    if(uSimBlend > 0.0){
-      vec4 simP = texture2D(uSimPos, aSimUV);   // xyz = world pos, w = life
-      pos = mix(pos, simP.xyz, uSimBlend);
-      vSimLife = simP.w;                          // → frag brightens/dims accreting matter
+    // === Deterministic swirl-collapse (nebula -> yellow star) =================
+    // The nebula gas funnels into the forming star as a PURE FUNCTION of scroll
+    // (uNebCollapse, 0 at the resting nebula -> 1 at the formed star). This replaced
+    // the old stateful GPGPU sim, which integrated forward every frame and PARKED
+    // particles permanently on the core — so scrolling back up could not un-collapse
+    // them (the "moves only one way" bug). Being a deterministic lerp of the FROZEN
+    // nebula home (pos), it scrubs exactly both directions: scroll down converges,
+    // scroll up reverses, holding still = a frozen frame.
+    if(uNebCollapse > 0.0001){
+      vec3 home = pos;                              // frozen analytic nebula position
+      float homeR = length(home) + 1e-4;
+      vec3 dir = home / homeR;                      // radial direction from the core
+      float coreR = uGiantR * 0.36;                 // ~ the forming-star photosphere radius
+
+      // per-particle eased progress: outer gas leads slightly so the cloud collapses
+      // from the rim inward (a gentle stagger, not every grain moving in lockstep).
+      float lead = 0.85 + 0.30 * fract(aSeed * 7.31);
+      float c = clamp(uNebCollapse * lead, 0.0, 1.0);
+      float ease = c * c * (3.0 - 2.0 * c);         // smoothstep
+
+      // radius eases from the nebula radius down to the core (gas piles onto the star)
+      float r = mix(homeR, coreR, ease);
+
+      // SWIRL: rotate the radial direction about the y axis by an angle that grows as
+      // the particle falls in, so it spirals/funnels rather than dropping straight —
+      // organic accretion without the unstable sim. Per-particle phase keeps streams
+      // distinct. The angle is a pure function of ease, so it rewinds on scroll-up.
+      float swirl = (2.4 + 2.0 * fract(aSeed * 3.17)) * ease;   // total radians of spin-in
+      float s = sin(swirl), cc = cos(swirl);
+      vec3 swirled = vec3(dir.x * cc - dir.z * s, dir.y, dir.x * s + dir.z * cc);
+
+      vec3 collapsed = swirled * r;
+      pos = mix(home, collapsed, ease);
+      // gas FADES as it piles onto the core so the star reveals cleanly out of the
+      // dispersing cloud (and reverses: re-brightens as it flows back out on scroll-up).
+      vSimLife = 1.0 - ease;
     }
 
     vec4 viewP  = modelViewMatrix * vec4(pos, 1.0);

@@ -4,7 +4,6 @@ import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config
 import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugVec3 } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
-import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
 import { buildStarfield, buildDistantStar } from './buildStarfield';
@@ -92,25 +91,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.53
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
-  // --- GPGPU gravitational collapse (nebula → yellow star) ---
-  // A stateful gravity sim that collapses the nebula particles inward to feed the
-  // mesh star (see gravitySim.ts). Seeded from the SAME analytic nebula placement
-  // the disk shader uses, so it starts pop-free. Skipped under reduced motion;
-  // returns a no-op {available:false} if float targets are unsupported → the
-  // hero degrades to the analytic hard-swap. The accretion core matches the star
-  // photosphere (SUN_RIG_RADIUS); uGgiantR (4.2) is the nebula extent scale.
-  const gravitySim: GravitySim = reduced
-    ? { available: false, step: () => {}, getPosTexture: () => null, dispose: () => {} }
-    : buildGravitySim({
-        renderer,
-        count: diskRig.count,
-        aSeed: diskRig.aSeed,
-        aU: diskRig.aU,
-        aPhase: diskRig.aPhase,
-        giantR: diskMatPrimary.uniforms.uGiantR.value as number,
-        coreR: SUN_RIG_RADIUS,
-        halfFloat: diskParticles <= 240_000,
-      });
+  // --- nebula → yellow star collapse ---
+  // The collapse is now DETERMINISTIC and scroll-driven (computed in the disk shader
+  // via uNebCollapse — a swirl-infall lerp of the frozen nebula home → core). The old
+  // stateful GPGPU gravity sim is retired from the render path: it integrated forward
+  // every frame and parked particles permanently on the core, which made scrolling UP
+  // unable to un-collapse them (the "moves only one way" bug) and left idle frames
+  // drifting. We no longer build it, so there's no per-frame GPU sim cost or the
+  // ~1.2M-texel ping-pong allocation. (gravitySim.ts / buildGravitySim remain in the
+  // tree for reference but are unused.)
 
   // --- lens uniforms (recomputed each frame from camera geometry) ---
   function updateLensUniforms(): void {
@@ -217,8 +206,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // latch so the settled yellow-star glow colour (constant gold) is written once,
   // not re-set every frame while the star holds.
   let glowSettled = false;
-  // previous-frame stage for the gravity sim (more substeps on a fast scroll).
-  let prevSimStage = stage;
   // previous-frame stage for the hyperspace-streak flow direction (latched on a
   // deadzone so sub-pixel jitter at rest never flips the lightspeed streak flow).
   let prevStreakStage = stage;
@@ -453,35 +440,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskMatPrimary.uniforms.uDot.value = look.dot ? 1 : 0;
     diskMatSecondary.uniforms.uDot.value = look.dot ? 1 : 0;
 
-    // --- GPGPU gravitational collapse: step the sim + feed its texture to the cloud ---
-    // The sim collapses the nebula particles inward to form the yellow star. It's
-    // stepped only inside the window (look.collapse / look.simBlend > 0); otherwise the
-    // home-spring would idle. uSimBlend morphs the disk from analytic → sim positions.
-    let simBlend = 0;
-    if (gravitySim.available && (look.simBlend > 0.001 || look.collapse > 0.001)) {
-      // SCROLL-LOCK: only ADVANCE the integrator when the stage actually moved, so a
-      // truly idle frame holds the last sim texture (holding still = a frozen frame,
-      // not a cloud that keeps collapsing on a wall-clock timer). The texture + blend
-      // are (re)applied every in-window frame regardless, so stopping mid-collapse
-      // freezes the current cloud instead of snapping back to the analytic placement.
-      const dStage = Math.abs(stage - prevSimStage);
-      if (dStage > 1e-4) {
-        // more substeps on a fast scroll so a flick still visibly collapses, but
-        // capped at 3 total (was 4) to bound the per-frame GPU sim cost on a hard
-        // wheel-flick through the formation window — trades a hair of collapse
-        // smoothness for steadier frame time. uTime is FROZEN to 0 so the curl-noise
-        // swirl is deterministic per collapse-drive (scroll), not wall-clock-evolved.
-        const substeps = 1 + Math.min(2, Math.floor(dStage / 0.05));
-        gravitySim.step(look.collapse, 0, substeps);
-      }
-      const tex = gravitySim.getPosTexture();
-      diskMatPrimary.uniforms.uSimPos.value = tex;
-      diskMatSecondary.uniforms.uSimPos.value = tex;
-      simBlend = look.simBlend;
-    }
-    prevSimStage = stage;
-    diskMatPrimary.uniforms.uSimBlend.value = simBlend;
-    diskMatSecondary.uniforms.uSimBlend.value = simBlend;
+    // --- nebula → star collapse: DETERMINISTIC, scroll-driven (uNebCollapse) ---
+    // The collapse is now a pure function of scroll position computed in the disk
+    // shader (a swirl-infall lerp of the frozen nebula home → core). This replaced the
+    // stateful GPGPU sim, which integrated forward every frame and parked particles
+    // permanently on the core, so scrolling back UP could not un-collapse them (the
+    // "moves only one way" bug) and idle frames kept drifting. uNebCollapse scrubs
+    // exactly both directions and freezes when idle. uSimBlend stays 0 (the sim no
+    // longer drives the render path).
+    diskMatPrimary.uniforms.uNebCollapse.value = look.collapse;
+    diskMatSecondary.uniforms.uNebCollapse.value = look.collapse;
+    diskMatPrimary.uniforms.uSimBlend.value = 0;
+    diskMatSecondary.uniforms.uSimBlend.value = 0;
     // nebula light model strength (ambient+depth+self-occlusion). Always full; the
     // factor only touches nebula particles. DEBUG: window.__bhNebLight pins it (0 =
     // flat self-emission, 1 = full light model) so the look can be A/B'd live.
@@ -775,7 +745,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     streakRig.dispose();
     ringRig.dispose();
     sunRig.dispose();
-    gravitySim.dispose();
     renderer.dispose();
     if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
   };
