@@ -4,32 +4,39 @@ Personal blog built with **Astro** + **three.js**. The home page is dominated by
 signature hero: a GPU-particle object that runs the **stellar lifecycle in reverse** as the
 visitor scrolls.
 
-## The reverse-lifecycle hero
+## The lifecycle hero
 
 Forward stellar physics is:
 
 ```
-nebula → yellow star → red giant → supernova → black hole
+(pale blue dot) → nebula → yellow star → red giant → supernova → black hole
 ```
 
-The page plays this **backwards**. The top of the page (scroll = 0) is the **black hole**
-(end of life); scrolling **down** walks back through the lifecycle toward the **nebula**
-(birth). The intent is narrative — each state carries a line of the manifesto about building
-software that lasts.
+The page plays this **forward** (`LIFECYCLE_DIRECTION = 'normal'` in `timeline.ts`). The top
+of the page (scroll = 0) **opens on a lone pale blue dot** — a single quiet speck — which
+**blooms into the nebula** as you scroll down, then walks the full lifecycle to the **black
+hole** at the bottom (the big hero that pulls the portfolio in). The intent is narrative —
+each state carries a line of the manifesto about building software that lasts. (The
+direction is a single seam: flipping `LIFECYCLE_DIRECTION` to `'reverse'` mirrors the whole
+arc — `lifecycleProgress()` is the only place it's applied.)
 
-### Scroll stage → state map
+### Scroll progress → stage → state map
 
-The scroll height is 6 viewport-tall stages (`.scene-stage` in `src/pages/index.astro`).
-Scroll progress (0..1) maps to a fractional `stage` (0..5):
+The scroll track is 6 viewport-tall stages (`.scene-stage` in `src/pages/index.astro`). The
+shader "stage" coordinate runs **high→low** as you scroll **down** (`legacyStageForProgress`
+in `timeline.ts` maps progress 0..1 to a fractional `stage`). The pale-blue-dot opening
+(stage 4.7→3.5) lives in progress `0.00–0.10`; the proven nebula→black-hole arc is compressed
+into `0.10–1.00`.
 
-| stage | state            | notes |
-|-------|------------------|-------|
-| 0     | black hole       | top of page, the big hero |
-| 1     | supernova bridge | black-hole ↔ red-giant transition (loud blast → tiny seed) |
-| 2     | red giant        | |
-| 3     | yellow star      | rendered by a dedicated mesh "sun rig", not the cloud |
-| 4     | nebula           | |
-| 5     | pale blue dot    | bottom of page |
+| progress     | stage      | state            | notes |
+|--------------|------------|------------------|-------|
+| 0.00         | 4.7        | pale blue dot    | top of page — the opening speck |
+| 0.00 → 0.10  | 4.7 → 3.5  | dot → nebula     | the speck blooms into the cloud (camera flies in) |
+| 0.10 → ~0.32 | 3.5 → 3.0  | nebula → collapse| round fullscreen gas; GPGPU collapse feeds the star |
+| ~0.37        | ~2.9       | yellow star      | a dedicated mesh "sun rig", not the cloud |
+| ~0.51–0.66   | 2.05       | red giant        | |
+| ~0.66–0.82   | 1.05 → 0.32| collapse → supernova | loud blast |
+| 0.82 → 1.00  | 0.32 → 0.0 | black hole       | bottom of page, the big hero |
 
 ## Architecture
 

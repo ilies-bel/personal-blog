@@ -1,8 +1,9 @@
 // ===========================================================================
 // beats.ts — copy timing for the forward stellar-lifecycle hero.
 //
-// The scroll is one continuous normalized cinematic: nebula gathers → yellow
-// star → red giant → collapse → supernova → black hole → portfolio lure.
+// The scroll is one continuous normalized cinematic: a lone pale blue dot blooms
+// into a nebula → yellow star → red giant → collapse → supernova → black hole →
+// portfolio lure.
 // Text is deliberately sparse and appears only during stable states; the camera
 // is free to move during collapse/release without asking the visitor to read.
 //
@@ -30,39 +31,50 @@ export interface ManifestoBeat {
 
 export const BEATS: ManifestoBeat[] = [
   {
-    at: 0.09,
-    text: { inStart: 0.035, inEnd: 0.055, outStart: 0.125, outEnd: 0.155 },
-    state: 'nebula',
+    // PALE BLUE DOT — the opening speck (stage ~4.7 at the very top). Copy fades in
+    // immediately and out before the dot blooms into the nebula (~0.075). Sits inside
+    // the dot hold (progress 0.00 -> 0.04) so the line reads on the still point.
+    at: 0.02,
+    text: { inStart: 0.0, inEnd: 0.012, outStart: 0.05, outEnd: 0.075 },
+    state: 'pale blue dot',
     down: 'everything starts here.',
     up: 'everything starts here.',
+    whisper: 'one quiet point, before any of it.',
+  },
+  {
+    // NEBULA — the dispersed cloud hold (stage ~3.5 -> 3.42, progress ~0.10 -> 0.154).
+    at: 0.155,
+    text: { inStart: 0.115, inEnd: 0.135, outStart: 0.205, outEnd: 0.235 },
+    state: 'nebula',
+    down: 'shape, out of the dust.',
+    up: 'shape, out of the dust.',
     whisper: 'dust, pressure, and the patience to let shape appear.',
   },
   {
-    at: 0.255,
-    // The yellow star now ignites by ~0.22 and dwells in a nearly-flat
-    // contemplation hold through ~0.30 (see legacyStageForProgress), so the
-    // headline holds a touch longer (outStart 0.275 -> 0.285) to sit deeper in
-    // that stable window before easing out by 0.300 (red beat starts at 0.460).
-    text: { inStart: 0.210, inEnd: 0.235, outStart: 0.285, outEnd: 0.300 },
+    // YELLOW STAR — ignites by ~0.316 and dwells in the nearly-flat contemplation
+    // hold through ~0.37 (see legacyStageForProgress), so the headline sits in that
+    // stable window before easing out ahead of the red beat (starts at 0.514).
+    at: 0.33,
+    text: { inStart: 0.29, inEnd: 0.315, outStart: 0.355, outEnd: 0.375 },
     state: 'yellow star',
     down: 'small enough to doubt.',
     up: 'small enough to doubt.',
     whisper: "the part that's still up at 3am. that's engineering.",
   },
   {
-    at: 0.54,
-    text: { inStart: 0.460, inEnd: 0.500, outStart: 0.580, outEnd: 0.620 },
+    // RED GIANT — the hold band (stage 2.05, progress ~0.514 -> 0.658).
+    at: 0.586,
+    text: { inStart: 0.514, inEnd: 0.55, outStart: 0.62, outEnd: 0.66 },
     state: 'red giant',
     down: "bigger isn't the same as lasting.",
     up: "bigger isn't the same as lasting.",
     whisper: "the ai keeps adding. nobody's left who understands it.",
   },
   {
-    at: 0.965,
-    // Enters at 0.950 (was 0.940) so the headline appears AFTER the easeOutExpo
-    // settle onto the black hole has visually completed (0.80–0.94), not during its
-    // decelerating tail — the frame is locked and magnetic before the copy reads.
-    text: { inStart: 0.950, inEnd: 0.962, outStart: 0.992, outEnd: 1.000 },
+    // BLACK HOLE — enters after the easeOutExpo settle has visually completed
+    // (~0.82 -> 0.946), so the frame is locked and magnetic before the copy reads.
+    at: 0.968,
+    text: { inStart: 0.955, inEnd: 0.965, outStart: 0.992, outEnd: 1.0 },
     state: 'black hole',
     down: 'what survives has gravity.',
     up: 'what survives has gravity.',

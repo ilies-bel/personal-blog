@@ -85,61 +85,95 @@ const easeOutExpo = (t: number): number => {
 export function legacyStageForProgress(progress: number): number {
   const p = lifecycleProgress(progress);
 
-  if (p < 0.06) {
+  // --- THE PALE-BLUE-DOT OPENING (progress 0.00 -> 0.10) -------------------
+  // The page OPENS on a lone pale-blue speck (the cosmic "you are here"), which
+  // then blooms into the full nebula as you scroll down. The dot state needs
+  // stage >= 4.5 (see lifecycle.ts `dot`), so the top of the arc reaches up to
+  // DOT_STAGE 4.70 — ABOVE the 3.5 nebula ceiling the rest of the arc lives under.
+  // The proven nebula->black-hole arc below is unchanged in stage-space; it is just
+  // shifted into progress 0.10 -> 1.00 (each old breakpoint b -> 0.10 + 0.90*b) so
+  // its relative pacing is preserved exactly and only the opening is new.
+  if (p < 0.04) {
+    // DOT HOLD: a near-pixel speck in a vast black field. Barely moves (4.70 -> 4.50)
+    // so the opening frame rests as a single quiet point before anything happens.
+    return lerp(4.7, 4.5, smoothstep(segment(p, 0.0, 0.04)));
+  }
+  if (p < 0.1) {
+    // DOT -> NEBULA bloom: the speck blossoms into the dispersed cloud (4.50 -> 3.50),
+    // crossing the dot threshold (4.5) into the nebula threshold (3.5). The camera
+    // simultaneously flies in from the far dot vantage to the immersive nebula framing,
+    // so the cloud reads as the dot BLOOMING outward rather than a hard state swap.
+    return lerp(4.5, 3.5, easeInOutCubic(segment(p, 0.04, 0.1)));
+  }
+  if (p < 0.154) {
     // DISPERSED NEBULA hold: settle on the big round cloud (stage 3.5 -> 3.42, still
     // safely above the collapse window's 3.5 ceiling so no gas converges yet). The
     // visitor reads the nebula beat before the gravitational collapse begins.
-    return lerp(3.5, 3.42, smoothstep(segment(p, 0.0, 0.06)));
+    return lerp(3.5, 3.42, smoothstep(segment(p, 0.1, 0.154)));
   }
-  if (p < 0.24) {
+  if (p < 0.316) {
     // THE COLLAPSE — the heart of the nebula -> star transition. Stage walks the
     // WHOLE collapse window (3.42 -> 3.02, the lifecycle's [3.0, 3.5] band) across a
-    // GENEROUS scroll stretch (0.06 -> 0.24) so the gas visibly streams INWARD and
-    // FEEDS the forming star instead of the old 6%-of-scroll flick that skipped the
-    // window (which made the star pop "out of nowhere"). easeInOutCubic so the infall
-    // accelerates into the middle of the window and eases as the core fills.
-    return lerp(3.42, 3.02, easeInOutCubic(segment(p, 0.06, 0.24)));
+    // GENEROUS scroll stretch so the gas visibly streams INWARD and FEEDS the forming
+    // star instead of the old 6%-of-scroll flick that skipped the window (which made
+    // the star pop "out of nowhere"). easeInOutCubic so the infall accelerates into
+    // the middle of the window and eases as the core fills.
+    return lerp(3.42, 3.02, easeInOutCubic(segment(p, 0.154, 0.316)));
   }
-  if (p < 0.30) {
+  if (p < 0.37) {
     // IGNITION + CONTEMPLATION: the star has condensed out of the gas; finish into
     // the settled gold (3.02 -> 2.88, the gas-free 2.88->3.0 yellow band) and hold
     // there so the visitor can read the headline on the blazing sun before the red-
     // giant growth resumes the descent.
-    return lerp(3.02, 2.88, easeOutCubic(segment(p, 0.24, 0.30)));
+    return lerp(3.02, 2.88, easeOutCubic(segment(p, 0.316, 0.37)));
   }
-  if (p < 0.46) {
-    return lerp(2.88, 2.05, easeInOutCubic(segment(p, 0.30, 0.46)));
+  if (p < 0.514) {
+    return lerp(2.88, 2.05, easeInOutCubic(segment(p, 0.37, 0.514)));
   }
-  if (p < 0.62) {
+  if (p < 0.658) {
     return 2.05;
   }
-  if (p < 0.72) {
-    return lerp(1.05, 0.5, easeInQuart(segment(p, 0.62, 0.72)));
+  if (p < 0.748) {
+    return lerp(1.05, 0.5, easeInQuart(segment(p, 0.658, 0.748)));
   }
-  if (p < 0.80) {
-    return lerp(0.5, 0.32, easeOutCubic(segment(p, 0.72, 0.80)));
+  if (p < 0.82) {
+    return lerp(0.5, 0.32, easeOutCubic(segment(p, 0.748, 0.82)));
   }
-  if (p < 0.94) {
-    return lerp(0.32, 0.08, easeOutExpo(segment(p, 0.80, 0.94)));
+  if (p < 0.946) {
+    return lerp(0.32, 0.08, easeOutExpo(segment(p, 0.82, 0.946)));
   }
-  return lerp(0.08, 0.0, smoothstep(segment(p, 0.94, 1.0)));
+  return lerp(0.08, 0.0, smoothstep(segment(p, 0.946, 1.0)));
 }
 
 // Approximate inverse used only for HUD previews, where matching the selected
 // object's camera family matters more than a mathematically exact eased inverse.
 export function progressForLegacyStage(stage: number): number {
-  if (stage >= 3.5) return 0.02;
-  if (stage >= 3.42) return lerp(0.0, 0.06, (3.5 - stage) / (3.5 - 3.42));
-  if (stage >= 3.02) return lerp(0.06, 0.24, (3.42 - stage) / (3.42 - 3.02));
-  if (stage >= 2.88) return lerp(0.24, 0.30, (3.02 - stage) / (3.02 - 2.88));
-  if (stage >= 2.05) return lerp(0.30, 0.46, (2.88 - stage) / (2.88 - 2.05));
-  if (stage >= 1.05) return 0.54;
-  if (stage >= 0.5) return lerp(0.62, 0.72, (1.05 - stage) / (1.05 - 0.5));
-  if (stage >= 0.32) return lerp(0.72, 0.80, (0.5 - stage) / (0.5 - 0.32));
-  if (stage >= 0.08) return lerp(0.80, 0.94, (0.32 - stage) / (0.32 - 0.08));
-  return lerp(0.94, 1.0, (0.08 - Math.max(0, stage)) / 0.08);
+  // Inverse of legacyStageForProgress — keep the breakpoints in lockstep with it
+  // (both derive from the same progress->stage table). The leading dot bands map
+  // the pale-blue-dot opening (stage 4.70 -> 3.50) onto progress 0.00 -> 0.10.
+  if (stage >= 4.7) return 0.0;
+  if (stage >= 4.5) return lerp(0.0, 0.04, (4.7 - stage) / (4.7 - 4.5));
+  if (stage >= 3.5) return lerp(0.04, 0.1, (4.5 - stage) / (4.5 - 3.5));
+  if (stage >= 3.42) return lerp(0.1, 0.154, (3.5 - stage) / (3.5 - 3.42));
+  if (stage >= 3.02) return lerp(0.154, 0.316, (3.42 - stage) / (3.42 - 3.02));
+  if (stage >= 2.88) return lerp(0.316, 0.37, (3.02 - stage) / (3.02 - 2.88));
+  if (stage >= 2.05) return lerp(0.37, 0.514, (2.88 - stage) / (2.88 - 2.05));
+  if (stage >= 1.05) return 0.586;
+  if (stage >= 0.5) return lerp(0.658, 0.748, (1.05 - stage) / (1.05 - 0.5));
+  if (stage >= 0.32) return lerp(0.748, 0.82, (0.5 - stage) / (0.5 - 0.32));
+  if (stage >= 0.08) return lerp(0.82, 0.946, (0.32 - stage) / (0.32 - 0.08));
+  return lerp(0.946, 1.0, (0.08 - Math.max(0, stage)) / 0.08);
 }
 
+// DOT framing: the opening pale-blue speck. Far back and on-axis so the tiny dot
+// sphere (radius ≈ uGiantR*0.018 ≈ 0.076) reads as a near-pixel point in a vast
+// black field. The camera flies IN from here to the immersive nebula framing as the
+// dot blooms into the cloud (progress 0.00 -> 0.10), so the bloom reads as one
+// continuous "the point opens up", not a hard state swap.
+const DOT_VIEW = {
+  position: [0.0, 0.0, 78.0] as Vec3Tuple,
+  target: [0.0, 0.0, 0.0] as Vec3Tuple,
+};
 // NEBULA framing: the cloud is a big ROUND volume centred at the origin (extent
 // NR = uGiantR*1.72 ≈ 7.2). The camera sits CLOSE enough that the gas fills the
 // frame and wraps past every edge (immersed), rather than the old far vantage
@@ -147,11 +181,15 @@ export function progressForLegacyStage(stage: number): number {
 // is the dispersed cloud framed wide-but-filling; NEBULA_GATHERED pushes IN toward
 // the core as the gas begins to converge toward the forming star.
 const NEBULA_START = {
-  position: [-1.0, 0.18, 19.5] as Vec3Tuple,
+  // CLOSE enough that the round cloud (radius NR ≈ 7.2) OVERFILLS the frame on every
+  // side — at z≈13 the visible half-height (z·tan15° ≈ 3.5) is well inside the cloud,
+  // so the gas wraps past all four edges (immersed) instead of being cropped into a
+  // boxy patch with black margins (the old z≈19.5 left vertical crops + side gaps).
+  position: [-0.6, 0.12, 13.2] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 const NEBULA_GATHERED = {
-  position: [0.25, 0.02, 16.5] as Vec3Tuple,
+  position: [0.18, 0.02, 11.2] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 const YELLOW_HOLD = {
@@ -199,66 +237,75 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
   // `progress` is the RAW scroll value; route through lifecycleProgress so the
   // camera arc inherits LIFECYCLE_DIRECTION along with everything else.
   const p = lifecycleProgress(progress);
-  let position = NEBULA_START.position;
-  let target = NEBULA_START.target;
+  let position = DOT_VIEW.position;
+  let target = DOT_VIEW.target;
   let parallax = 0.08;
 
-  if (p < 0.24) {
+  if (p < 0.1) {
+    // DOT -> NEBULA: ease from the far speck framing into the immersive cloud. The
+    // camera flies in (z 78 -> 19.5) as the dot blooms into the nebula, so the cloud
+    // grows from a point rather than hard-swapping in. On-axis (x≈0) so the lone dot
+    // has no parallax drama before it opens up.
+    const t = easeInOutCubic(segment(p, 0.0, 0.1));
+    position = mixVec(DOT_VIEW.position, NEBULA_START.position, t);
+    target = mixVec(DOT_VIEW.target, NEBULA_START.target, t);
+    parallax = 0.04;
+  } else if (p < 0.316) {
     // NEBULA hold + COLLAPSE: stay immersed and CLOSE while the gas streams inward.
     // The camera makes only a gentle push toward the gathering core (NEBULA_START ->
     // NEBULA_GATHERED) across the whole nebula+collapse band, so the cloud appears to
     // CONVERGE on a fixed focal point (the forming star) rather than the camera flying
     // out and making the gas look like it expands. The big inward move to the yellow
     // framing waits for ignition (below).
-    const t = easeInOutCubic(segment(p, 0.0, 0.24));
+    const t = easeInOutCubic(segment(p, 0.1, 0.316));
     position = mixVec(NEBULA_START.position, NEBULA_GATHERED.position, t);
     target = mixVec(NEBULA_START.target, NEBULA_GATHERED.target, t);
     parallax = 0.05;
-  } else if (p < 0.30) {
+  } else if (p < 0.37) {
     // IGNITION: the gas has fed the star; ease out from the immersed core framing to
     // the yellow-star hold as the sun settles into its blazing main-sequence beat.
-    const t = easeOutCubic(segment(p, 0.24, 0.30));
+    const t = easeOutCubic(segment(p, 0.316, 0.37));
     position = mixVec(NEBULA_GATHERED.position, YELLOW_HOLD.position, t);
     target = mixVec(NEBULA_GATHERED.target, YELLOW_HOLD.target, t);
     parallax = 0.05;
-  } else if (p < 0.46) {
-    const t = easeInOutCubic(segment(p, 0.30, 0.46));
+  } else if (p < 0.514) {
+    const t = easeInOutCubic(segment(p, 0.37, 0.514));
     position = mixVec(YELLOW_HOLD.position, RED_COMPOSITION.position, t);
     target = mixVec(YELLOW_HOLD.target, RED_COMPOSITION.target, t);
     parallax = 0.04;
-  } else if (p < 0.62) {
+  } else if (p < 0.658) {
     position = RED_COMPOSITION.position;
     target = RED_COMPOSITION.target;
     parallax = 0.015;
-  } else if (p < 0.72) {
+  } else if (p < 0.748) {
     // COLLAPSE reveal: pull back and recompose PROMPTLY (easeOutCubic leads the
     // move) so the camera reveals the collapsing core early and settles on it,
     // rather than the old easeInQuart that held the off-centre limb then lurched
     // at the last instant. The star slides from extreme-right-cropped toward the
     // collapse framing as the surface caves in.
-    const t = easeOutCubic(segment(p, 0.62, 0.72));
+    const t = easeOutCubic(segment(p, 0.658, 0.748));
     position = mixVec(RED_COMPOSITION.position, COLLAPSE_PULL.position, t);
     target = mixVec(RED_COMPOSITION.target, COLLAPSE_PULL.target, t);
     parallax = 0.0;
-  } else if (p < 0.80) {
-    const t = easeOutCubic(segment(p, 0.72, 0.80));
+  } else if (p < 0.82) {
+    const t = easeOutCubic(segment(p, 0.748, 0.82));
     position = mixVec(COLLAPSE_PULL.position, SUPERNOVA_RECOIL.position, t);
     target = mixVec(COLLAPSE_PULL.target, SUPERNOVA_RECOIL.target, t);
     parallax = 0.0;
-  } else if (p < 0.94) {
-    const t = easeOutExpo(segment(p, 0.80, 0.94));
+  } else if (p < 0.946) {
+    const t = easeOutExpo(segment(p, 0.82, 0.946));
     position = mixVec(SUPERNOVA_RECOIL.position, BLACK_HOLE_SETL.position, t);
     target = mixVec(SUPERNOVA_RECOIL.target, BLACK_HOLE_SETL.target, t);
     parallax = 0.025;
   } else {
-    const t = smoothstep(segment(p, 0.94, 1.0));
+    const t = smoothstep(segment(p, 0.946, 1.0));
     position = mixVec(BLACK_HOLE_SETL.position, EVENT_HORIZON.position, t);
     target = mixVec(BLACK_HOLE_SETL.target, EVENT_HORIZON.target, t);
     parallax = 0.018;
   }
 
-  const redHold = segment(p, 0.46, 0.62);
-  const redHoldWindow = smoothstep(redHold) * (1 - smoothstep(segment(p, 0.58, 0.62)));
+  const redHold = segment(p, 0.514, 0.658);
+  const redHoldWindow = smoothstep(redHold) * (1 - smoothstep(segment(p, 0.622, 0.658)));
   const micro = reduced ? 0 : redHoldWindow * Math.sin(time * 0.09) * 0.16;
   if (micro !== 0) {
     position = [position[0] + micro, position[1] - micro * 0.18, position[2] + micro * 0.22];

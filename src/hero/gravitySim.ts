@@ -94,12 +94,16 @@ export const NEBULA_PLACE_FN = /* glsl */ `
       h31(vec3(aSeed*7.0,  aPhase*9.0, 23.0)),
       h31(vec3(aU*29.0,    aPhase*3.0, 41.0))
     );
-    // map the cube of hashes onto a SPHERE: directionalise (normalize) then pick a
-    // radius from a single uniform hash with a cube-root profile so the volume fills
-    // EVENLY out to NR. This kills the cube-corner bias (the old pow(length(box),0.85)
-    // kept ~1.7x more reach at the corners → a rounded box) so the cloud is a ball.
-    vec3 dir = normalize(hh*2.0 - 1.0 + 1e-4);
-    float rr = pow(h31(vec3(aSeed*31.0, aU*3.0, aPhase*19.0)), 0.3333);
+    // UNIFORM point in a BALL. The old normalize(cube) biased directions toward the 8
+    // cube corners → the cloud clumped along the diagonals and read as a rounded BOX.
+    // Instead pick a UNIFORM direction on the unit sphere (z = 1-2u, azimuth 2*pi*v)
+    // and a cube-root radius so density is even out to NR — a true round ball, no
+    // corner bias, no rectangular silhouette.
+    float uz = hh.x * 2.0 - 1.0;                        // cos(theta), uniform in [-1,1]
+    float az = hh.y * 6.2831853;                        // azimuth, uniform in [0,2pi)
+    float rad = sqrt(max(0.0, 1.0 - uz*uz));
+    vec3 dir = vec3(rad*cos(az), uz, rad*sin(az));
+    float rr = pow(hh.z, 0.3333);                        // even volumetric fill
     vec3 p0 = dir * rr * NR;
     p0 *= ELL;
 

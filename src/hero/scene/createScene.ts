@@ -459,13 +459,21 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // home-spring would idle. uSimBlend morphs the disk from analytic → sim positions.
     let simBlend = 0;
     if (gravitySim.available && (look.simBlend > 0.001 || look.collapse > 0.001)) {
-      // more substeps on a fast scroll so a flick still visibly collapses, but
-      // capped at 3 total (was 4) to bound the per-frame GPU sim cost on a hard
-      // wheel-flick through the formation window — trades a hair of collapse
-      // smoothness for steadier frame time.
+      // SCROLL-LOCK: only ADVANCE the integrator when the stage actually moved, so a
+      // truly idle frame holds the last sim texture (holding still = a frozen frame,
+      // not a cloud that keeps collapsing on a wall-clock timer). The texture + blend
+      // are (re)applied every in-window frame regardless, so stopping mid-collapse
+      // freezes the current cloud instead of snapping back to the analytic placement.
       const dStage = Math.abs(stage - prevSimStage);
-      const substeps = 1 + Math.min(2, Math.floor(dStage / 0.05));
-      gravitySim.step(look.collapse, t, substeps);
+      if (dStage > 1e-4) {
+        // more substeps on a fast scroll so a flick still visibly collapses, but
+        // capped at 3 total (was 4) to bound the per-frame GPU sim cost on a hard
+        // wheel-flick through the formation window — trades a hair of collapse
+        // smoothness for steadier frame time. uTime is FROZEN to 0 so the curl-noise
+        // swirl is deterministic per collapse-drive (scroll), not wall-clock-evolved.
+        const substeps = 1 + Math.min(2, Math.floor(dStage / 0.05));
+        gravitySim.step(look.collapse, 0, substeps);
+      }
       const tex = gravitySim.getPosTexture();
       diskMatPrimary.uniforms.uSimPos.value = tex;
       diskMatSecondary.uniforms.uSimPos.value = tex;
@@ -707,8 +715,16 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     }
 
     const ut = reduced ? 0 : t;
-    diskMatPrimary.uniforms.uTime.value = ut;
-    diskMatSecondary.uniforms.uTime.value = ut;
+    // SCROLL-LOCK THE NEBULA: across the nebula + gravitational-collapse window the
+    // disk clock is frozen to 0 so the cloud is purely a function of scroll position
+    // (holding still = a frozen frame; no wall-clock drift/shimmer). This freezes
+    // nDrift, the filament wobble AND the render-side nebulaPlace() warp at once, and
+    // (because the sim's home target uses uFrozenTime=0) realigns the analytic
+    // placement with the sim seed. Outside the window the disk runs on wall-clock ut
+    // (the explosion/red-giant turbulence terms, all gated to uGiant/uMorph, need it).
+    const diskTime = reduced ? 0 : look.nebulaShader ? 0 : t;
+    diskMatPrimary.uniforms.uTime.value = diskTime;
+    diskMatSecondary.uniforms.uTime.value = diskTime;
     starMat.uniforms.uTime.value = ut;
     starMatSec.uniforms.uTime.value = ut;
     distantStarUniforms.uTime.value = ut;

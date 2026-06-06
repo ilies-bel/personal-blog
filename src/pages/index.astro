@@ -14,10 +14,10 @@ const showDebug = import.meta.env.DEV;
 <BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} type="website" bare>
   {/* The signature object: a GPU-particle stellar lifecycle pinned to the center
       of the viewport. As the visitor scrolls, one normalized timeline runs
-      forward: nebula gathers, a yellow star forms, the star grows into a red
-      giant, collapses, detonates, and resolves into the black hole that pulls the
-      portfolio interface in. The scene is a client-only island; three.js never
-      blocks the page. */}
+      forward: a lone pale blue dot blooms into a nebula, a yellow star forms, the
+      star grows into a red giant, collapses, detonates, and resolves into the black
+      hole that pulls the portfolio interface in. The scene is a client-only island;
+      three.js never blocks the page. */}
   <BlackHole client:only="react" />
 
   {/* Dev-only: live sliders to tune the red giant's size + position. The panel
