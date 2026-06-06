@@ -245,6 +245,10 @@ body.bare.is-scrolled .overlay-blog {
     padding: clamp(2.5rem, 12vh, 6rem) var(--gutter);
   }
   .bh-beat-big { min-height: 0 !important; }
+  .bh-beat-big {
+    display: grid;
+    gap: 0.45rem;
+  }
   .bh-beat-line {
     position: static !important;
     opacity: 1 !important;
@@ -252,6 +256,7 @@ body.bare.is-scrolled .overlay-blog {
     inset: auto !important;
     margin-bottom: 0.4rem;
   }
+  .bh-beat-line--up { display: none !important; }
   .bh-hint { display: none !important; }
 
   .bh-root[data-exploring='true'] .bh-overlay,

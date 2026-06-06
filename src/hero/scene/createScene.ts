@@ -627,8 +627,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       smoothstep01((stage - 2.72) / 0.20) *
       (1 - smoothstep01((stage - 3.44) / 0.20));
     frameLookTarget.copy(lookTarget);
-    frameLookTarget.x += redFrame * -4.00 + redWipeFrame * -0.45 + dyingFrame * 0.72;
-    frameLookTarget.y += redFrame * -1.35 + redWipeFrame * 0.08 + dyingFrame * -0.18;
+    frameLookTarget.x += redFrame * -2.70 + redWipeFrame * -0.45 + dyingFrame * 0.72;
+    frameLookTarget.y += redFrame * -0.80 + redWipeFrame * 0.08 + dyingFrame * -0.18;
     camera.lookAt(frameLookTarget);
 
     flashOrigin.set(0, 0, 0).project(camera);

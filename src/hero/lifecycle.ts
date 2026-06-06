@@ -526,7 +526,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     const ZOOM_HERO = 0.56; // close at the hero BH → dist≈11 (BH fills the frame)
     const ZOOM_SEED = 2.6; // far at the seed     → dist≈52 (speck in a vast field)
     const ZOOM_BLAST = 2.0; // pulled back across the blast → dist≈40 (big remnant fits)
-    const ZOOM_RED_HOLD = 4.10; // composed red giant hold with room for lower-left copy
+    const ZOOM_RED_HOLD = 4.20; // composed red giant hold with room for lower-left copy
     const ZOOM_RED_WIPE = 1.15; // close transition after red copy has faded
     // hero push-in eases out as the implosion gets underway (stage 0 → 0.18)
     const heroT = smoothstep01(stage / 0.18);

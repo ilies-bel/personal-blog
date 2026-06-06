@@ -140,72 +140,80 @@ export default function HudNavigation({
   const readoutItem = activeItem ?? (currentId ? HUD_NAV_BY_ID[currentId] : null);
 
   return (
-    <div className="hud-system" data-visible={visible} onMouseLeave={onPreviewEnd}>
-      <nav
-        className="hud-nav"
-        aria-label="Explore portfolio stages"
-        aria-hidden={!visible}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            onPreviewEnd();
-            onClearSelection();
-          }
-        }}
-      >
-        <ol className="hud-nav-list">
-          {HUD_NAV_ITEMS.map((item) => {
-            const isActive = activeId === item.id;
-            const isSelected = selectedId === item.id;
-            // Scroll-spy "you are here": where the scroll position sits in the
-            // lifecycle. This is the visitor's real location in the set, so it owns
-            // aria-current. The quiet visual marker is suppressed when the same row
-            // is already lit louder by a hover/focus preview or selection, so the
-            // two treatments never double up.
-            const isCurrent = currentId === item.id;
-            const showCurrentMarker = isCurrent && !isActive && !isSelected;
+    <>
+      <div className="hud-system" data-visible={visible} onMouseLeave={onPreviewEnd}>
+        <nav
+          className="hud-nav"
+          aria-label="Explore portfolio stages"
+          aria-hidden={!visible}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              onPreviewEnd();
+              onClearSelection();
+            }
+          }}
+        >
+          <ol className="hud-nav-list">
+            {HUD_NAV_ITEMS.map((item) => {
+              const isActive = activeId === item.id;
+              const isSelected = selectedId === item.id;
+              // Scroll-spy "you are here": where the scroll position sits in the
+              // lifecycle. This is the visitor's real location in the set, so it owns
+              // aria-current. The quiet visual marker is suppressed when the same row
+              // is already lit louder by a hover/focus preview or selection, so the
+              // two treatments never double up.
+              const isCurrent = currentId === item.id;
+              const showCurrentMarker = isCurrent && !isActive && !isSelected;
 
-            return (
-              <li className="hud-nav-row" key={item.id}>
-                <button
-                  className="hud-nav-button"
-                  data-active={isActive || isSelected}
-                  data-selected={isSelected}
-                  data-current={showCurrentMarker}
-                  data-motion={item.motion}
-                  type="button"
-                  aria-label={`${item.label}. ${item.destination}. ${item.object}.`}
-                  tabIndex={visible ? 0 : -1}
-                  aria-current={isCurrent ? 'location' : undefined}
-                  aria-expanded={isActive || isSelected}
-                  aria-pressed={isSelected}
-                  onFocus={() => onPreview(item.id)}
-                  onBlur={onPreviewEnd}
-                  onMouseEnter={() => onPreview(item.id)}
-                  onClick={() => onActivate(item.id)}
-                >
-                  <span className="hud-nav-glyph" aria-hidden="true">{item.glyph}</span>
-                  <span className="hud-nav-copy">
-                    <span className="hud-nav-title">{item.label}</span>
-                    <span className="hud-nav-destination">{item.destination}</span>
-                  </span>
-                  <span className="hud-nav-connector" aria-hidden="true">
-                    <span className="hud-nav-object">{item.object}</span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+              return (
+                <li className="hud-nav-row" key={item.id}>
+                  <button
+                    className="hud-nav-button"
+                    data-active={isActive || isSelected}
+                    data-selected={isSelected}
+                    data-current={showCurrentMarker}
+                    data-motion={item.motion}
+                    type="button"
+                    aria-label={`${item.label}. ${item.destination}. ${item.object}.`}
+                    tabIndex={visible ? 0 : -1}
+                    aria-current={isCurrent ? 'location' : undefined}
+                    aria-expanded={isActive || isSelected}
+                    aria-pressed={isSelected}
+                    onFocus={() => onPreview(item.id)}
+                    onBlur={onPreviewEnd}
+                    onMouseEnter={() => onPreview(item.id)}
+                    onClick={() => onActivate(item.id)}
+                  >
+                    <span className="hud-nav-glyph" aria-hidden="true">{item.glyph}</span>
+                    <span className="hud-nav-copy">
+                      <span className="hud-nav-title">{item.label}</span>
+                      <span className="hud-nav-destination">{item.destination}</span>
+                    </span>
+                    <span className="hud-nav-connector" aria-hidden="true">
+                      <span className="hud-nav-object">{item.object}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
 
-      {readoutItem && (
-        <p className="hud-nav-mobile-readout" aria-hidden="true">
-          <span>{readoutItem.label}</span>
-          <span>{readoutItem.destination}</span>
-        </p>
-      )}
+        {readoutItem && (
+          <p className="hud-nav-mobile-readout" aria-hidden="true">
+            <span>{readoutItem.label}</span>
+            <span>{readoutItem.destination}</span>
+          </p>
+        )}
 
-      <aside className="hud-work-reveal" aria-hidden={!visible}>
+        {selectedItem?.href && (
+          <a className="hud-nav-panel-link hud-nav-inline-link" href={resolveHref(base, selectedItem.href)}>
+            {selectedItem.destination}
+          </a>
+        )}
+      </div>
+
+      <aside className="hud-work-reveal" data-visible={visible} aria-hidden={!visible}>
         <p className="hud-work-kicker">
           <span>{WORK_REVEAL.label}</span>
           <span>{WORK_REVEAL.index}</span>
@@ -219,12 +227,6 @@ export default function HudNavigation({
           <span />
         </div>
       </aside>
-
-      {selectedItem?.href && (
-        <a className="hud-nav-panel-link hud-nav-inline-link" href={resolveHref(base, selectedItem.href)}>
-          {selectedItem.destination}
-        </a>
-      )}
-    </div>
+    </>
   );
 }

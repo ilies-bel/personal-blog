@@ -261,7 +261,7 @@
     opacity 0.65s var(--ease-out-quint) 0.12s,
     transform 0.65s var(--ease-out-quint) 0.12s;
 }
-.hud-system[data-visible='true'] .hud-work-reveal {
+.hud-work-reveal[data-visible='true'] {
   opacity: 1;
   transform: none;
 }
