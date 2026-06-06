@@ -543,9 +543,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       );
       glowSettled = false;
     } else if (!glowSettled) {
-      // settled yellow star: a bright PALE-GOLD halo (lifted off the old orange so
-      // the luminous rim/halo reads yellow-white like the reference, not amber).
-      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(1.0, 0.78, 0.34);
+      // settled yellow star: a PALE-GOLD halo (still lifted off orange so the rim
+      // reads yellow-white, not amber), but dimmed ~28% from the old blinding value
+      // so the solid→particle handoff is a calm dissolve, not a glare bloom.
+      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(0.72, 0.56, 0.24);
       glowSettled = true;
     }
     sunRig.starMat.uniforms.uOpacity.value = 1;

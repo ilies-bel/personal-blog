@@ -143,10 +143,11 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     col = mix(col, limbCol, limb*mix(0.80, 0.5, uRed));
     col += limb * mix(vec3(1.0,0.62,0.20), vec3(0.26,0.05,0.01), uRed);
 
-    // overall luminance: BLAZING gold-white sun → dim matte red giant (light leads
-    // size). The yellow-star multiplier is lifted hard so it reads as a proper,
-    // bright main-sequence star, not the old fragile ember.
-    col *= mix(1.95, 0.5, uRed);
+    // overall luminance: bright gold sun → dim matte red giant (light leads size).
+    // The yellow-star multiplier is dialled back from the old blazing value so the
+    // photosphere mottling/granulation reads with detail instead of blowing out to
+    // glare under the swap bloom (still a proper main-sequence star, not an ember).
+    col *= mix(1.42, 0.5, uRed);
 
     // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
     // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
@@ -179,10 +180,11 @@ export const sunGlowVert = /* glsl */ `
 export const sunGlowFrag = /* glsl */ `
   uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
   void main(){ vec3 vd=normalize(-vP);
-    // softer falloff (1.7, was 2.2) + a stronger lift so the chromosphere reads as
-    // the bright luminous yellow halo wrapping the photosphere in the reference.
+    // softer falloff (1.7, was 2.2) so the chromosphere reads as a luminous yellow
+    // halo wrapping the photosphere; additive lift pulled back from 2.6 so the glow
+    // shell doesn't blow out into glare over the surface at the swap.
     float i=pow(1.0-max(dot(vd,vN),0.0), 1.7);
-    gl_FragColor=vec4(uColor*i*2.6, 1.0); }`;
+    gl_FragColor=vec4(uColor*i*1.85, 1.0); }`;
 
 // --- soft corona haze (camera-facing additive billboard) ---
 
