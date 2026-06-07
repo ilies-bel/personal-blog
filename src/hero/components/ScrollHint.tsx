@@ -1,20 +1,12 @@
-import { useEffect, useState } from 'react';
 import { SCROLL_HINT_DISMISS_AT } from '../lib/constants';
 import { useSceneState } from './SceneStateContext';
 
 export default function ScrollHint() {
   const { progress, reduced, base } = useSceneState();
-  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    if (dismissed || progress < SCROLL_HINT_DISMISS_AT) return;
-    setDismissed(true);
-  }, [dismissed, progress]);
-
-  if (reduced || dismissed || progress >= SCROLL_HINT_DISMISS_AT) return null;
+  if (reduced || progress >= SCROLL_HINT_DISMISS_AT) return null;
 
   const beginLifecycle = (): void => {
-    setDismissed(true);
     window.scrollTo({
       top: window.innerHeight * 0.86,
       behavior: reduced ? 'auto' : 'smooth',
@@ -29,7 +21,7 @@ export default function ScrollHint() {
         <span className="bh-hint-label">Begin lifecycle</span>
         <span className="bh-hint-line" aria-hidden="true"></span>
       </button>
-      <a className="bh-hint-skip" href={writingHref} onClick={() => setDismissed(true)}>
+      <a className="bh-hint-skip" href={writingHref}>
         Read writing
       </a>
     </div>
