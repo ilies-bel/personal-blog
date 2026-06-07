@@ -288,10 +288,19 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   };
 
   if (!reduced) {
-    renderer.domElement.addEventListener('pointerdown', onPointerDownSun);
-    renderer.domElement.addEventListener('pointerup', onPointerUpSun);
-    renderer.domElement.addEventListener('pointercancel', cancelHold);
-    renderer.domElement.addEventListener('pointerleave', cancelHold);
+    // Listen on `window`, NOT renderer.domElement — same as the parallax pointermove
+    // above. The canvas (.bh-stage) is position:fixed; z-index:0 and sits UNDER the
+    // scroll track: the page's .scene-track / .scene-stage divs (no pointer-events:none)
+    // stack on top of it, so they win hit-testing and swallow every canvas-targeted
+    // pointerdown/up before the canvas ever sees them. `window` receives the events
+    // regardless of which element is actually hit; onPointerDownSun then maps clientX/Y
+    // into canvas-relative NDC via getBoundingClientRect (so the raycast is correct even
+    // though the canvas wasn't the event target). A press that misses the sphere yields
+    // no `hit` and is ignored, leaving scrolling and other UI untouched.
+    window.addEventListener('pointerdown', onPointerDownSun);
+    window.addEventListener('pointerup', onPointerUpSun);
+    window.addEventListener('pointercancel', cancelHold);
+    window.addEventListener('pointerleave', cancelHold);
   }
 
   const t0 = performance.now();
@@ -847,11 +856,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('visibilitychange', onVisibilityChange);
-    // click-eruption listeners (only attached when motion is enabled)
-    renderer.domElement.removeEventListener('pointerdown', onPointerDownSun);
-    renderer.domElement.removeEventListener('pointerup', onPointerUpSun);
-    renderer.domElement.removeEventListener('pointercancel', cancelHold);
-    renderer.domElement.removeEventListener('pointerleave', cancelHold);
+    // click-eruption listeners (only attached when motion is enabled) — these live on
+    // `window`, not the canvas, because the scroll-track overlay swallows canvas-targeted
+    // pointer events; detach them from the same target we added them to.
+    window.removeEventListener('pointerdown', onPointerDownSun);
+    window.removeEventListener('pointerup', onPointerUpSun);
+    window.removeEventListener('pointercancel', cancelHold);
+    window.removeEventListener('pointerleave', cancelHold);
 
     // Each rig disposes its own geos + materials (and, for post, the composer +
     // bloom + grade material) — construction and teardown are now co-located in
