@@ -1,0 +1,344 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_TITLE } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+---
+
+<BaseLayout
+  title="Projects"
+  description={`Shipped tools and products by ${SITE_TITLE}. The work that held.`}
+  type="website"
+  bodyClass="projects-page"
+>
+  <section class="projects-hero" aria-labelledby="projects-title">
+    <p class="projects-kicker">Projects</p>
+    <h1 id="projects-title">The work that held.</h1>
+    <p>Tools I built, shipped, and still stand behind.</p>
+  </section>
+
+  <div class="projects-list" aria-label="Shipped projects">
+
+    <article class="projects-entry" id="fleet">
+      <header class="projects-entry-header">
+        <h2 class="projects-entry-name">Fleet</h2>
+        <div class="projects-entry-links">
+          <a href="https://github.com/ilies-bel/fleet" class="projects-link" target="_blank" rel="noopener noreferrer">github.com/ilies-bel/fleet</a>
+          <span class="projects-link-sep" aria-hidden="true">/</span>
+          <span class="projects-pkg"><span class="projects-pkg-label">npm</span> @ilies-bel/fleet</span>
+        </div>
+      </header>
+
+      <div class="projects-entry-body">
+        <figure class="projects-figure">
+          <img
+            src={img('projects/fleet.png')}
+            alt="Fleet dashboard showing multiple feature branches running in parallel containers"
+            class="projects-screenshot"
+            loading="lazy"
+          />
+          <figcaption>Fleet: parallel branch preview dashboard</figcaption>
+        </figure>
+
+        <div class="projects-copy">
+          <p>An open-source tool that runs every feature branch of your app at the same time on localhost, each in its own container behind a gateway. One dashboard to spin them up, tail logs, preview the running app, diff UI states, and leave QA notes per feature. It auto-detects the stack and manages multiple repos through git worktrees.</p>
+          <p>I built it because reviewing several branches at once meant constantly tearing down and rebuilding one local environment. Fleet just runs them all in parallel and lets you flip between them.</p>
+          <p class="projects-proud"><span class="projects-proud-label">What I am proud of:</span> it is a real tool, not a demo, and it found its people. It is niche by design, built for engineers doing parallel QA, and it has genuine adoption among them. The container orchestration, the gateway proxy, the stack auto-detection, and the diff view all had to work together, and they do.</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="projects-entry" id="mars">
+      <header class="projects-entry-header">
+        <h2 class="projects-entry-name">Mars <span class="projects-badge">private</span></h2>
+        <span class="projects-private-note">B2B product. No public link.</span>
+      </header>
+
+      <div class="projects-entry-body">
+        <!-- TODO: drop the real Mars topology screenshot at public/projects/mars.png and reference it here -->
+        <figure class="projects-figure projects-figure--placeholder">
+          <div class="projects-placeholder" role="img" aria-label="Mars topology screenshot pending">
+            <span class="projects-placeholder-icon" aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <rect x="6" y="14" width="10" height="7" rx="2" />
+                <rect x="19" y="6" width="10" height="7" rx="2" />
+                <rect x="32" y="14" width="10" height="7" rx="2" />
+                <rect x="13" y="28" width="10" height="7" rx="2" />
+                <rect x="26" y="28" width="10" height="7" rx="2" />
+                <line x1="11" y1="14" x2="20" y2="13" />
+                <line x1="29" y1="13" x2="37" y2="14" />
+                <line x1="16" y1="21" x2="18" y2="28" />
+                <line x1="32" y1="21" x2="30" y2="28" />
+              </svg>
+            </span>
+            <p class="projects-placeholder-label">Screenshot pending</p>
+          </div>
+          <figcaption>Mars: agent task topology view. Screenshot to follow.</figcaption>
+        </figure>
+
+        <div class="projects-copy">
+          <p>A local AFK agent swarm for software work. You give it a goal and it builds a web of tasks, figures out the order they have to run in, and executes the whole graph autonomously: writing code, recovering from failures, and chaining the follow-up work without a human in the loop. The topology view lets you watch the dependency web plan and run itself in real time.</p>
+          <p>It is the most ambitious thing I have built. Coordinating many agents so they do the right work in the right order, and recover when a step fails, is a genuinely hard orchestration problem, and Mars does it.</p>
+          <p class="projects-proud"><span class="projects-proud-label">Note:</span> it is a private product, so there is no public link. The screenshot is a real run: dozens of tasks, color coded by state, executing on their own.</p>
+        </div>
+      </div>
+    </article>
+
+  </div>
+</BaseLayout>
+
+<style>
+  .projects-page .wrap {
+    padding-bottom: 7rem;
+  }
+
+  .projects-hero,
+  .projects-list {
+    width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
+    margin-inline: auto;
+  }
+
+  .projects-hero {
+    display: grid;
+    gap: 1.1rem;
+    margin-top: clamp(4rem, 11vw, 7.5rem);
+    margin-bottom: clamp(2.5rem, 8vw, 5.5rem);
+  }
+
+  .projects-kicker {
+    margin: 0;
+    width: max-content;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--highlight);
+  }
+
+  .projects-hero h1 {
+    max-width: 16ch;
+    margin: 0;
+    font-size: clamp(2.65rem, 8.2vw, 5.8rem);
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+    text-wrap: balance;
+  }
+
+  .projects-hero p {
+    max-width: 42rem;
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+
+  .projects-list {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .projects-entry {
+    padding: clamp(2rem, 6vw, 3.5rem) 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .projects-entry-header {
+    margin-bottom: 1.75rem;
+  }
+
+  .projects-entry-name {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.65rem, 4vw, 2.6rem);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .projects-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    vertical-align: middle;
+  }
+
+  .projects-entry-links {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+  }
+
+  .projects-link {
+    color: var(--accent-strong);
+    text-decoration: none;
+    transition: color 0.16s ease;
+  }
+
+  .projects-link:hover {
+    color: var(--fg);
+    text-decoration: underline;
+  }
+
+  .projects-link-sep {
+    color: var(--fg-faint);
+  }
+
+  .projects-pkg {
+    color: var(--fg-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .projects-pkg-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+  }
+
+  .projects-private-note {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: var(--fg-faint);
+  }
+
+  .projects-entry-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: clamp(1.5rem, 5vw, 3rem);
+    align-items: start;
+  }
+
+  .projects-figure {
+    margin: 0;
+    position: sticky;
+    top: 5rem;
+  }
+
+  .projects-screenshot {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--bg-soft);
+  }
+
+  .projects-figure figcaption {
+    margin-top: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    color: var(--fg-faint);
+    line-height: 1.4;
+  }
+
+  .projects-figure--placeholder .projects-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-height: 12rem;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius-md);
+    background: color-mix(in oklch, var(--bg-soft) 60%, transparent);
+    color: var(--fg-faint);
+  }
+
+  .projects-placeholder-icon {
+    color: var(--fg-faint);
+    opacity: 0.6;
+  }
+
+  .projects-placeholder-label {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .projects-copy {
+    display: grid;
+    gap: 0;
+  }
+
+  .projects-copy p {
+    margin: 0 0 1.15rem;
+    color: var(--fg-dim);
+    font-size: 1.04rem;
+    line-height: 1.72;
+    text-wrap: pretty;
+  }
+
+  .projects-copy p:last-child {
+    margin-bottom: 0;
+  }
+
+  .projects-proud {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
+    font-size: 0.96rem !important;
+  }
+
+  .projects-proud-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--highlight);
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  @media (max-width: 58rem) {
+    .projects-entry-body {
+      grid-template-columns: 1fr;
+    }
+
+    .projects-figure {
+      position: static;
+      max-width: 36rem;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .projects-hero,
+    .projects-list {
+      width: min(100%, calc(100vw - 2rem));
+    }
+
+    .projects-hero {
+      margin-top: 2.75rem;
+    }
+
+    .projects-hero h1 {
+      font-size: clamp(2.45rem, 15vw, 3.7rem);
+    }
+  }
+</style>

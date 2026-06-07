@@ -1,0 +1,267 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_TITLE } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+---
+
+<BaseLayout
+  title="Graveyard"
+  description={`Projects that didn't survive, by ${SITE_TITLE}. Not everything I start makes it. Here's what didn't, and what it taught me.`}
+  type="website"
+  bodyClass="graveyard-page"
+>
+  <section class="graveyard-hero" aria-labelledby="graveyard-title">
+    <p class="graveyard-kicker">Graveyard</p>
+    <h1 id="graveyard-title">Not everything survives.</h1>
+    <p>Not everything I start makes it. Here is what didn't, and what it taught me.</p>
+  </section>
+
+  <div class="graveyard-list" aria-label="Failed and abandoned projects">
+
+    <article class="graveyard-entry" id="keywordlens">
+      <header class="graveyard-entry-header">
+        <h2 class="graveyard-entry-name">KeywordLens</h2>
+        <div class="graveyard-entry-links">
+          <a href="https://getkeywordlens.com/" class="graveyard-link" target="_blank" rel="noopener noreferrer">getkeywordlens.com</a>
+        </div>
+      </header>
+
+      <div class="graveyard-entry-body">
+        <figure class="graveyard-figure">
+          <img
+            src={img('graveyard/keywordlens.png')}
+            alt="KeywordLens interface showing keyword demand analysis for stock media platforms"
+            class="graveyard-screenshot"
+            loading="lazy"
+          />
+          <figcaption>KeywordLens: stock media keyword demand tool</figcaption>
+        </figure>
+
+        <div class="graveyard-copy">
+          <p>A SEMrush for stock media. It analyzed searches across the major stock platforms to surface high-demand, low-competition niches, so photographers could shoot what actually sells instead of guessing.</p>
+          <p>It died the month generative AI went mainstream. The whole premise was helping people find the right photo to shoot. When anyone could generate the exact image they needed on demand, the market I was optimizing for stopped existing. Not a pivot. The ground moved.</p>
+          <p class="graveyard-lesson"><span class="graveyard-lesson-label">What it taught me:</span> you can execute well and still be on the wrong side of a shift you didn't see coming. Timing isn't a detail. It's the whole bet.</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="graveyard-entry" id="heydaniel">
+      <header class="graveyard-entry-header">
+        <h2 class="graveyard-entry-name">HeyDaniel</h2>
+        <div class="graveyard-entry-links">
+          <a href="https://heydaniel.app/" class="graveyard-link" target="_blank" rel="noopener noreferrer">heydaniel.app</a>
+        </div>
+      </header>
+
+      <div class="graveyard-entry-body">
+        <figure class="graveyard-figure">
+          <img
+            src={img('graveyard/heydaniel.png')}
+            alt="HeyDaniel app interface showing context-aware reminders and task capture"
+            class="graveyard-screenshot"
+            loading="lazy"
+          />
+          <figcaption>HeyDaniel: context-aware reminder assistant</figcaption>
+        </figure>
+
+        <div class="graveyard-copy">
+          <p>A context-aware reminder assistant. You'd send it a task by Telegram, a screenshot, or a note, and it would surface the right one based on where you were and what your day looked like. Walk into a shop, your list appears. Capturing cost nothing, remembering cost nothing.</p>
+          <p>It worked. For me. Generalizing it for other people would have meant a lot more engineering, and I never got any market validation to justify the work. So I stopped building it as a product. I still use it every day.</p>
+          <p class="graveyard-lesson"><span class="graveyard-lesson-label">What it taught me:</span> I'll happily pour engineering into a problem before checking whether anyone else has it. Validation first, build second. (Also: a tool that only serves you isn't a failure. It just isn't a business.)</p>
+        </div>
+      </div>
+    </article>
+
+  </div>
+</BaseLayout>
+
+<style>
+  .graveyard-page .wrap {
+    padding-bottom: 7rem;
+  }
+
+  .graveyard-hero,
+  .graveyard-list {
+    width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
+    margin-inline: auto;
+  }
+
+  .graveyard-hero {
+    display: grid;
+    gap: 1.1rem;
+    margin-top: clamp(4rem, 11vw, 7.5rem);
+    margin-bottom: clamp(2.5rem, 8vw, 5.5rem);
+  }
+
+  .graveyard-kicker {
+    margin: 0;
+    width: max-content;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--highlight);
+  }
+
+  .graveyard-hero h1 {
+    max-width: 16ch;
+    margin: 0;
+    font-size: clamp(2.65rem, 8.2vw, 5.8rem);
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+    text-wrap: balance;
+  }
+
+  .graveyard-hero p {
+    max-width: 42rem;
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+
+  .graveyard-list {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .graveyard-entry {
+    padding: clamp(2rem, 6vw, 3.5rem) 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .graveyard-entry-header {
+    margin-bottom: 1.75rem;
+  }
+
+  .graveyard-entry-name {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.65rem, 4vw, 2.6rem);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+  }
+
+  .graveyard-entry-links {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+  }
+
+  .graveyard-link {
+    color: var(--fg-faint);
+    text-decoration: none;
+    transition: color 0.16s ease;
+  }
+
+  .graveyard-link:hover {
+    color: var(--fg-dim);
+    text-decoration: underline;
+  }
+
+  .graveyard-entry-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: clamp(1.5rem, 5vw, 3rem);
+    align-items: start;
+  }
+
+  .graveyard-figure {
+    margin: 0;
+    position: sticky;
+    top: 5rem;
+  }
+
+  .graveyard-screenshot {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--bg-soft);
+    /* Slightly desaturated to signal these are past projects */
+    filter: saturate(0.75);
+    transition: filter 0.22s ease;
+  }
+
+  .graveyard-screenshot:hover {
+    filter: saturate(1);
+  }
+
+  .graveyard-figure figcaption {
+    margin-top: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    color: var(--fg-faint);
+    line-height: 1.4;
+  }
+
+  .graveyard-copy {
+    display: grid;
+    gap: 0;
+  }
+
+  .graveyard-copy p {
+    margin: 0 0 1.15rem;
+    color: var(--fg-dim);
+    font-size: 1.04rem;
+    line-height: 1.72;
+    text-wrap: pretty;
+  }
+
+  .graveyard-copy p:last-child {
+    margin-bottom: 0;
+  }
+
+  .graveyard-lesson {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
+    font-size: 0.96rem !important;
+  }
+
+  .graveyard-lesson-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--highlight);
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  @media (max-width: 58rem) {
+    .graveyard-entry-body {
+      grid-template-columns: 1fr;
+    }
+
+    .graveyard-figure {
+      position: static;
+      max-width: 36rem;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .graveyard-hero,
+    .graveyard-list {
+      width: min(100%, calc(100vw - 2rem));
+    }
+
+    .graveyard-hero {
+      margin-top: 2.75rem;
+    }
+
+    .graveyard-hero h1 {
+      font-size: clamp(2.45rem, 15vw, 3.7rem);
+    }
+  }
+</style>
