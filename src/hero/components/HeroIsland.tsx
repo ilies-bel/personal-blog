@@ -124,9 +124,23 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       window.clearTimeout(explorationTimerRef.current);
       explorationTimerRef.current = null;
     };
+    // Drive the opening chrome (name + top-right menu) from a single source of
+    // truth: it is shown at the very top OR whenever the HUD is present. The HUD
+    // appears at the bottom and stays, so reusing its status keeps the name and
+    // menu pinned alongside it (no separate scroll threshold to drift). Tracked
+    // through chromeVisibleRef so the DOM is only touched on an actual transition.
+    const syncChrome = (): void => {
+      const visible = progressRef.current < CHROME_HIDE_AT || explorationModeRef.current;
+      if (visible === chromeVisibleRef.current) return;
+      chromeVisibleRef.current = visible;
+      document.body.classList.toggle(SCROLLED_BODY_CLASS, !visible);
+    };
     const openExploration = (): void => {
       explorationModeRef.current = true;
       setExplorationMode(true);
+      // The HUD just appeared — bring the name + menu back immediately rather
+      // than waiting for the next scroll event.
+      syncChrome();
     };
 
     const tracker = new ScrollTracker(SCROLL_SECTION_COUNT);
@@ -147,14 +161,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // Cinematic chrome: the name (.bh-identity) and the top-right menu
       // (.overlay-blog, owned by the layout) belong to the opening frame only. Once
       // scroll leaves the top they fade away so the lifecycle scene plays
-      // uninterrupted; they return at the top. A class on <body> drives both (the
-      // menu lives outside this island), with a threshold + hysteresis so a hair of
-      // jitter never flickers it.
-      const top = scrollState.progress < CHROME_HIDE_AT;
-      if (top !== chromeVisibleRef.current) {
-        chromeVisibleRef.current = top;
-        document.body.classList.toggle(SCROLLED_BODY_CLASS, !top);
-      }
+      // uninterrupted; they return at the top — and again once the HUD is present at
+      // the bottom (syncChrome reuses the exploration status). A class on <body>
+      // drives both (the menu lives outside this island).
+      syncChrome();
 
       if (scrollState.progress >= EXPLORATION_TRIGGER_AT) {
         if (!explorationModeRef.current && explorationTimerRef.current == null) {
