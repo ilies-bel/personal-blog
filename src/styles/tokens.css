@@ -21,6 +21,7 @@
   --accent: oklch(0.66 0.15 252);       /* cobalt — links, brand, emphasis (6.1:1) */
   --accent-strong: oklch(0.70 0.15 252);/* cobalt lifted for small interactive text (7.2:1) */
   --highlight: oklch(0.82 0.125 75);    /* amber — the lighthouse beam, rare (10.8:1) */
+  --signal-cyan: oklch(0.76 0.095 205); /* nebula/readout cyan — secondary signal (9.3:1) */
   --link: var(--accent);
 
   --max: 46rem;                          /* readable measure for prose / lists (.measure) */

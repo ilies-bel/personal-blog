@@ -133,20 +133,22 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-top: clamp(2rem, 6vh, 3.5rem);
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in oklch, var(--signal-cyan) 24%, var(--line));
   border-radius: var(--radius-md);
-  background: color-mix(in oklch, var(--bg-soft) 58%, transparent);
+  background:
+    linear-gradient(140deg, color-mix(in oklch, var(--signal-cyan) 7%, transparent), transparent 58%),
+    color-mix(in oklch, var(--bg-soft) 58%, transparent);
   overflow: hidden;
 }
 .about-principles div {
   padding: 1rem;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid color-mix(in oklch, var(--signal-cyan) 22%, var(--line));
 }
 .about-principles div:last-child { border-right: 0; }
 .about-principles span {
   display: block;
   margin-bottom: 0.55rem;
-  color: var(--fg);
+  color: color-mix(in oklch, var(--signal-cyan) 78%, var(--fg));
   font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.15;
@@ -202,7 +204,7 @@
 
   .about-principles div {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid color-mix(in oklch, var(--signal-cyan) 22%, var(--line));
   }
 
   .about-principles div:last-child {
