@@ -86,6 +86,10 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
             <div class="overlay-blog-links">
               <a href={href('about')}>About</a>
               <a href={href('writing')}>Writing</a>
+              <a href={href('projects')}>Projects</a>
+              <a href={href('graveyard')}>Graveyard</a>
+              {SOCIALS.github && <a href={SOCIALS.github} class="overlay-social">GitHub</a>}
+              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`} class="overlay-social">Email</a>}
             </div>
           </nav>
 
@@ -118,6 +122,20 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
                 aria-current={isWritingActive ? 'page' : undefined}
               >
                 Writing
+              </a>
+              <a
+                href={href('projects')}
+                class={isActive('projects') ? 'is-active' : undefined}
+                aria-current={isActive('projects') ? 'page' : undefined}
+              >
+                Projects
+              </a>
+              <a
+                href={href('graveyard')}
+                class={isActive('graveyard') ? 'is-active' : undefined}
+                aria-current={isActive('graveyard') ? 'page' : undefined}
+              >
+                Graveyard
               </a>
               <a
                 href={href('about')}
