@@ -56,8 +56,8 @@
    Scoped to body.article-page (the post layout). Tuned by eye against scroll
    positions where the fixed ring sits behind headings and body copy. */
 body.article-page .bh-backdrop {
-  opacity: 0.32;
-  filter: saturate(0.62) brightness(0.82) sepia(0.16) hue-rotate(186deg);
+  opacity: 0.4;
+  filter: saturate(0.66) brightness(0.86) sepia(0.16) hue-rotate(186deg);
 }
 body.article-page .bh-backdrop::after {
   /* Column-ellipse wash: a single elliptical pool of --bg centred on the
@@ -70,8 +70,8 @@ body.article-page .bh-backdrop::after {
   background:
     radial-gradient(46% 116% at 50% 46%,
       var(--bg) 0%,
-      color-mix(in oklch, var(--bg) 82%, transparent) 46%,
-      color-mix(in oklch, var(--bg) 30%, transparent) 78%,
+      color-mix(in oklch, var(--bg) 78%, transparent) 50%,
+      color-mix(in oklch, var(--bg) 26%, transparent) 80%,
       transparent 100%),
     linear-gradient(180deg,
       transparent 70%,
