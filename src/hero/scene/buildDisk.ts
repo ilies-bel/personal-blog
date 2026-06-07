@@ -90,8 +90,7 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     // Red giant ONLY: it grows BIG and bloated but stays CENTRED at the world origin
     // (the supernova collapses centred, the star grows centred). The big off-centre
     // "vast limb" framing is a CAMERA move (see createScene's red-giant park), NOT a
-    // geometry offset — so uGiantCenter defaults to origin. The dev panel can still
-    // nudge the orb in world space via __bhGiantCenter for inspection.
+    // geometry offset — so uGiantCenter defaults to origin.
     uGiantScale: { value: 8.5 / 4.2 }, // red-giant-only radius ×base. MEDIUM (~8.5, dense) not
     //   the old bloated ~17.6 — the fixed grain count goes sparse on a huge sphere. The
     //   lifecycle ramps this during the reveal (small newborn → this held size); kept in
