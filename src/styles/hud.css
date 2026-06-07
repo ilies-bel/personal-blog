@@ -235,12 +235,37 @@
 .hud-nav-mobile-readout {
   display: none;
 }
-/* The selected-target inline link. The old fixed bottom-right detail panel
-   (.hud-nav-panel + index/h2/p/object) was removed; only this link survives,
-   reused inline under the rail when a target with an href is committed. */
+.hud-nav-brief {
+  display: grid;
+  gap: 0.55rem;
+  max-width: 15.5rem;
+  margin: 0.65rem 0 0 2.35rem;
+}
+.hud-nav-brief p {
+  margin: 0;
+  color: color-mix(in oklch, var(--fg-dim) 86%, var(--fg));
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+  text-shadow:
+    0 0 18px rgba(0, 0, 0, 1),
+    0 0 4px rgba(0, 0, 0, 0.95);
+}
+.hud-nav-brief-meta {
+  width: max-content;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 18px rgba(0, 0, 0, 1),
+    0 0 4px rgba(0, 0, 0, 0.95);
+}
 .hud-nav-panel-link {
   display: inline-flex;
-  margin-top: 0.75rem;
+  width: max-content;
   color: var(--fg);
   font-size: 0.68rem;
   line-height: 1;
@@ -257,11 +282,6 @@
 .hud-nav-panel-link:focus-visible {
   outline: 1px solid var(--hud-amber);
   outline-offset: 0.25rem;
-}
-.hud-nav-inline-link {
-  margin: 0.15rem 0 0 2.35rem;
-  width: max-content;
-  opacity: 0.82;
 }
 
 @media (max-width: 46rem) {
@@ -342,8 +362,13 @@
   .hud-nav-mobile-readout span:first-child {
     color: var(--fg);
   }
-  .hud-nav-inline-link {
-    margin-left: 0;
+  .hud-nav-brief {
+    justify-items: center;
+    max-width: min(28rem, 100%);
+    margin: 0.45rem 0 0;
+    text-align: center;
+  }
+  .hud-nav-brief-meta {
     justify-self: center;
   }
 }

@@ -1,6 +1,7 @@
 // The manifesto overlay: sparse text beats pinned over the canvas and cross-faded
 // by normalized scroll progress. Copy + timing live in ../beats (shared with
 // index.astro's SSR fallback).
+import { useEffect, useState } from 'react';
 import { BEATS } from '../beats';
 import { SCROLL_DOWN, SCROLL_UP } from '../lib/constants';
 import { fadeInOut, segment } from '../scroll';
@@ -8,11 +9,33 @@ import { useSceneState } from './SceneStateContext';
 
 export default function ManifestoOverlay() {
   const { progress, direction, reduced, explorationMode } = useSceneState();
+  const [openingStarted, setOpeningStarted] = useState(false);
+
+  useEffect(() => {
+    if (reduced) {
+      setOpeningStarted(true);
+      return;
+    }
+
+    let secondFrame = 0;
+    let timer = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        timer = window.setTimeout(() => setOpeningStarted(true), 180);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      window.clearTimeout(timer);
+    };
+  }, [reduced]);
+
   return (
     <div
       className="bh-overlay"
       data-exploring={explorationMode}
-      style={{ opacity: explorationMode && !reduced ? 0 : undefined }}
     >
       {BEATS.map((beat, i) => {
         // Under reduced motion every beat is shown (so all copy is reachable).
@@ -29,11 +52,12 @@ export default function ManifestoOverlay() {
           <div
             className="bh-beat"
             key={i}
+            data-opening={i === 0 && !reduced ? (openingStarted ? 'run' : 'pending') : undefined}
             style={reduced ? { opacity } : { opacity, transform: `translate3d(0, ${y}px, 0)` }}
             aria-hidden={!reduced && !visible}
           >
-            {/* Big line: the component still supports direction-specific lines,
-                but the forward lifecycle currently uses the same line both ways. */}
+            {/* Big line: direction-specific copy lets the same visual state read as
+                a forward lifecycle on scroll down and a reverse arc on scroll up. */}
             <h2 className="bh-beat-big">
               <span
                 className="bh-beat-line bh-beat-line--down"

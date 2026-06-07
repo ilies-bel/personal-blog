@@ -1,9 +1,10 @@
 // ===========================================================================
-// beats.ts — copy timing for the forward stellar-lifecycle hero.
+// beats.ts — copy timing for the stellar-lifecycle hero.
 //
 // The scroll is one continuous normalized cinematic: a lone pale blue dot blooms
 // into a nebula → yellow star → red giant → collapse → supernova → black hole →
-// portfolio lure.
+// portfolio lure. The big lines are direction-aware: scroll down reads the
+// current forward lifecycle; scroll up carries the future reverse arc.
 // Text is deliberately sparse and appears only during stable states; the camera
 // is free to move during collapse/release without asking the visitor to read.
 //
@@ -31,24 +32,25 @@ export interface ManifestoBeat {
 
 export const BEATS: ManifestoBeat[] = [
   {
-    // PALE BLUE DOT — the opening speck (stage ~4.7 at the very top). Copy fades in
-    // immediately and out before the dot blooms into the nebula (~0.075). Sits inside
-    // the dot hold (progress 0.00 -> 0.04) so the line reads on the still point.
+    // PALE BLUE DOT — the opening speck (stage ~4.7 at the very top). Copy is
+    // fully visible immediately, then fades out before the dot blooms into the
+    // nebula (~0.075). Sits inside the dot hold (progress 0.00 -> 0.04) so the
+    // line reads on the still point.
     at: 0.02,
-    text: { inStart: 0.0, inEnd: 0.012, outStart: 0.05, outEnd: 0.075 },
+    text: { inStart: 0.0, inEnd: 0.0, outStart: 0.05, outEnd: 0.075 },
     state: 'pale blue dot',
-    down: 'everything starts here.',
-    up: 'everything starts here.',
-    whisper: 'one quiet point, before any of it.',
+    down: 'it starts with one decision worth keeping.',
+    up: 'start with one decision worth keeping.',
+    whisper: 'one good boundary can outlive a thousand generated lines.',
   },
   {
     // NEBULA — the dispersed cloud hold (stage ~3.5 -> 3.42, progress ~0.10 -> 0.154).
     at: 0.155,
     text: { inStart: 0.115, inEnd: 0.135, outStart: 0.205, outEnd: 0.235 },
     state: 'nebula',
-    down: 'shape, out of the dust.',
-    up: 'shape, out of the dust.',
-    whisper: 'dust, pressure, and the patience to let shape appear.',
+    down: 'then the dust becomes a system.',
+    up: 'shape the dust first.',
+    whisper: 'prompts, diffs, failing tests, half-ideas. raw material, not magic.',
   },
   {
     // YELLOW STAR — ignites by ~0.316 and dwells in the nearly-flat contemplation
@@ -57,28 +59,30 @@ export const BEATS: ManifestoBeat[] = [
     at: 0.33,
     text: { inStart: 0.29, inEnd: 0.315, outStart: 0.355, outEnd: 0.375 },
     state: 'yellow star',
-    down: 'small enough to doubt.',
-    up: 'small enough to doubt.',
-    whisper: "the part that's still up at 3am. that's engineering.",
+    down: 'for a while, it burns clean.',
+    up: 'make it boring enough to burn.',
+    whisper: "tests, review, small units, boring choices. that's the craft.",
   },
   {
     // RED GIANT — the hold band (stage 2.05, progress ~0.514 -> 0.658).
     at: 0.586,
     text: { inStart: 0.514, inEnd: 0.55, outStart: 0.62, outEnd: 0.66 },
     state: 'red giant',
-    down: "bigger isn't the same as lasting.",
+    down: 'then the codebase starts expanding.',
     up: "bigger isn't the same as lasting.",
     whisper: "the ai keeps adding. nobody's left who understands it.",
   },
   {
     // BLACK HOLE — enters after the easeOutExpo settle has visually completed
     // (~0.82 -> 0.946), so the frame is locked and magnetic before the copy reads.
+    // This is the terminal state, so the line holds through progress=1 instead
+    // of fading away at the absolute bottom.
     at: 0.968,
-    text: { inStart: 0.955, inEnd: 0.965, outStart: 0.992, outEnd: 1.0 },
+    text: { inStart: 0.955, inEnd: 0.965, outStart: 1.02, outEnd: 1.02 },
     state: 'black hole',
-    down: 'what survives has gravity.',
-    up: 'what survives has gravity.',
-    whisper: 'selected work begins at the edge of the collapse.',
+    down: 'every project ends. eventually.',
+    up: 'every project ends. eventually.',
+    whisper: 'even the repo you were proud of.',
   },
 ];
 

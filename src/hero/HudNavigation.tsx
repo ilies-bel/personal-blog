@@ -133,6 +133,7 @@ export default function HudNavigation({
 }: HudNavigationProps) {
   const activeItem = activeId ? HUD_NAV_BY_ID[activeId] : null;
   const selectedItem = selectedId ? HUD_NAV_BY_ID[selectedId] : null;
+  const panelItem = selectedItem ?? activeItem;
   // The mobile readout names the stage in focus: a deliberate preview/selection
   // if there is one, otherwise the scroll-spy current stage so it tracks scroll.
   const readoutItem = activeItem ?? (currentId ? HUD_NAV_BY_ID[currentId] : null);
@@ -203,10 +204,17 @@ export default function HudNavigation({
         </p>
       )}
 
-      {selectedItem?.href && (
-        <a className="hud-nav-panel-link hud-nav-inline-link" href={resolveHref(base, selectedItem.href)}>
-          {selectedItem.destination}
-        </a>
+      {panelItem && (
+        <div className="hud-nav-brief" aria-live="polite">
+          <p>{panelItem.body}</p>
+          {panelItem.href ? (
+            <a className="hud-nav-panel-link" href={resolveHref(base, panelItem.href)}>
+              Open {panelItem.destination}
+            </a>
+          ) : (
+            <span className="hud-nav-brief-meta">Stage pinned</span>
+          )}
+        </div>
       )}
     </div>
   );

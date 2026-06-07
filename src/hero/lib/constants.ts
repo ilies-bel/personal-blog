@@ -23,6 +23,8 @@ export const DIRECTION_DEADZONE = 0.0008;
 /** Past this scroll fraction the opening chrome (name + menu) fades out; small
  *  enough that the very first wheel nudge begins the hide. */
 export const CHROME_HIDE_AT = 0.015;
+/** Once the visitor has moved this far, the first-visit cue has done its job. */
+export const SCROLL_HINT_DISMISS_AT = 0.035;
 /** Scroll fraction at which the final selected-work HUD arms. */
 export const EXPLORATION_TRIGGER_AT = 0.992;
 /** Delay before the HUD reveals after the trigger; kept scroll-immediate. */

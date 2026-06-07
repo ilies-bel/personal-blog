@@ -117,7 +117,7 @@ body.bare.is-scrolled .overlay-blog {
 }
 .bh-root[data-exploring='true'] .bh-overlay,
 .bh-overlay[data-exploring='true'] {
-  opacity: 0.28;
+  opacity: 0.42;
 }
 .bh-beat {
   position: absolute;
@@ -155,6 +155,28 @@ body.bare.is-scrolled .overlay-blog {
   opacity: 1;
   transform: translateY(0);
 }
+.bh-beat[data-opening='pending'] .bh-beat-line[data-active='true'],
+.bh-beat[data-opening='pending'] .bh-beat-whisper {
+  opacity: 0;
+  transform: translateY(0.28rem);
+}
+.bh-beat[data-opening='run'] .bh-beat-line[data-active='true'],
+.bh-beat[data-opening='run'] .bh-beat-whisper {
+  animation: bh-opening-copy 1.1s var(--ease-out-quint) both;
+}
+.bh-beat[data-opening='run'] .bh-beat-whisper {
+  animation-delay: 0.08s;
+}
+@keyframes bh-opening-copy {
+  from {
+    opacity: 0;
+    transform: translateY(0.28rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* Whisper: small, dim, elaborating the big line. Shared; never swaps. */
 .bh-beat-whisper {
@@ -172,7 +194,7 @@ body.bare.is-scrolled .overlay-blog {
   .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
   .bh-identity-name { font-size: 1.05rem; }
   .bh-root[data-exploring='true'] .bh-overlay,
-  .bh-overlay[data-exploring='true'] { opacity: 0 !important; }
+  .bh-overlay[data-exploring='true'] { opacity: 0.28 !important; }
 }
 
 /* A faint affordance, shown only at the very top, fades on first scroll. It
@@ -181,25 +203,50 @@ body.bare.is-scrolled .overlay-blog {
 .bh-hint {
   position: fixed;
   left: 50%;
-  bottom: 1.5rem;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3vh, 1.5rem));
   transform: translateX(-50%);
   z-index: 10;
   display: grid;
   justify-items: center;
-  gap: 0.55rem;
+  gap: 0.42rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--fg-faint);
-  pointer-events: none;
-  opacity: 0.7;
+  pointer-events: auto;
+  opacity: 0.86;
   animation: bh-hint-in 0.9s var(--ease-out-quint) both;
+}
+.bh-hint-start {
+  appearance: none;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.25rem 0.4rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
 }
 .bh-hint-label {
   display: block;
   line-height: 1;
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+}
+.bh-hint-start:hover,
+.bh-hint-start:focus-visible {
+  color: var(--fg);
+}
+.bh-hint-start:focus-visible,
+.bh-hint-skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
 }
 .bh-hint-line {
   display: block;
@@ -209,9 +256,24 @@ body.bare.is-scrolled .overlay-blog {
   transform-origin: 50% 0;
   animation: bh-hint-line 2.2s ease-in-out infinite;
 }
+.bh-hint-skip {
+  color: var(--fg-dim);
+  font-size: 0.66rem;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--fg-dim) 42%, transparent);
+  padding-bottom: 0.18rem;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+.bh-hint-skip:hover {
+  color: var(--fg);
+  border-color: var(--fg);
+}
 @keyframes bh-hint-in {
   from { opacity: 0; transform: translate(-50%, 0.4rem); }
-  to { opacity: 0.7; transform: translate(-50%, 0); }
+  to { opacity: 0.86; transform: translate(-50%, 0); }
 }
 @keyframes bh-hint-line {
   0%, 100% { transform: scaleY(0.42); opacity: 0.45; }

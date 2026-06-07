@@ -38,3 +38,8 @@ pnpm-debug.log*
 
 # local scratch: throwaway probe scripts + capture artifacts (not versioned)
 /scratchpad/
+
+# local agent/project context notes
+/CLAUDE.md
+/DESIGN.md
+/PRODUCT.md

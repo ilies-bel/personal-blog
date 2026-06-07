@@ -5,7 +5,7 @@
 
 export const SITE_TITLE = 'Iliès';
 export const SITE_DESCRIPTION =
-  'Technical writing on web development, tooling, and software craft, by Iliès. Plus a hero that says hello back.';
+  'Technical writing on web development, tooling, and software craft, by Iliès. Plus a scroll-scrubbed black-hole hero.';
 export const SITE_LANG = 'en';
 
 // Social links (shown in footer / about). Leave blank to hide.
