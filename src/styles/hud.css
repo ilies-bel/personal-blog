@@ -150,21 +150,30 @@
   outline: 1px solid var(--hud-amber);
   outline-offset: 0.25rem;
 }
+/* The glyph is an SVG (in public/glyphs/) applied as a mask and painted with the
+   button's currentColor, so the rail's faint → amber → current color transitions
+   flow through the icon for free. --glyph-mask is set per-row inline in the JSX.
+   drop-shadow replaces the old text-shadow (it follows the masked alpha shape). */
 .hud-nav-glyph {
   position: relative;
   z-index: 1;
   display: block;
   width: 2.3rem;
-  font-family: var(--font-mono);
-  font-size: 1.08rem;
-  line-height: 1;
-  letter-spacing: 0.1em;
-  text-align: center;
-  text-shadow:
-    0 0 16px rgba(0, 0, 0, 1),
-    0 0 10px color-mix(in oklch, var(--hud-amber) 26%, transparent);
+  height: 1.25rem;
+  margin: 0 auto;
+  background-color: currentColor;
+  -webkit-mask-image: var(--glyph-mask);
+  mask-image: var(--glyph-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  filter:
+    drop-shadow(0 0 16px rgba(0, 0, 0, 1))
+    drop-shadow(0 0 10px color-mix(in oklch, var(--hud-amber) 26%, transparent));
   transform-origin: 50% 50%;
-  padding: 0.1rem 0;
 }
 .hud-nav-copy {
   display: grid;
