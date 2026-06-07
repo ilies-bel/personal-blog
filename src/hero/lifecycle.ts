@@ -365,7 +365,7 @@ export function lifecycle(input: LifecycleInput): StarState {
   // light flash fires at SWAP_STAGE and the mesh hands off to a gold particle
   // sphere that grows + cools to the red giant.
   const SWAP_STAGE = 2.88; // mesh↔cloud crossover — AFTER the cloud has fully shrunk (≤2.85)
-  const inYRWindow = stage > 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot
+  const inYRWindow = stage >= 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot (inclusive lower bound so the held red-giant beat at exactly stage 2.05 is interactive)
   const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.88 .. 3.5 → yellow mesh
   const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.88 → particle body (owns the shrink)
 
