@@ -40,6 +40,7 @@ pnpm-debug.log*
 /scratchpad/
 
 # local agent/project context notes
+/AGENTS.md
 /CLAUDE.md
 /DESIGN.md
 /PRODUCT.md
