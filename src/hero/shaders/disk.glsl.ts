@@ -21,6 +21,16 @@ export const diskVertexShader = /* glsl */ `
   // two bodies erupt with the same timing/feel.
   #define N_ERUPT 4
   #define ERUPT_LIFE 2.4
+  // GIANT_ERUPT_LIFE: the PARTICLE red giant's geyser runs on its OWN, much longer
+  // clock than the shared 2.4 (which still governs the yellow-star MESH). The user
+  // wants the giant plume to "feel the gravity" — a slow ballistic loft, a long hang
+  // near the apex, then an accelerating fall — so the whole event is stretched to
+  // ~2.3× the old life (5.5s vs 2.4s). MUST stay numerically identical to the JS
+  // GIANT_ERUPT_LIFE in createScene.ts: the render loop frees the giant slot (and
+  // wraps the debug clock) at this same age, so if the two drift the slot would die
+  // (intensity→0) BEFORE the shader finished animating and the plume would vanish
+  // mid-flight. The yellow-star MESH keeps ERUPT_LIFE=2.4 — untouched by this.
+  #define GIANT_ERUPT_LIFE 5.5
   attribute float aU;
   attribute float aPhase;
   attribute float aThickN;
@@ -172,7 +182,8 @@ export const diskVertexShader = /* glsl */ `
   //   uErupt[i].w   = intensity 0..1 (click-hold scaled: tap≈0.25 → ~1.5s hold = 1);
   //     w == 0 means the slot is idle and contributes nothing.
   //   uEruptAge[i]  = seconds since the eruption fired; the jet envelope + ripple
-  //     radius advance with it and the whole event ends by ERUPT_LIFE.
+  //     radius advance with it and the whole event ends by GIANT_ERUPT_LIFE (the giant's
+  //     own longer life — the mesh's ERUPT_LIFE=2.4 governs the yellow star only).
   uniform vec4 uErupt[N_ERUPT];
   uniform float uEruptAge[N_ERUPT];
 
@@ -695,7 +706,10 @@ export const diskVertexShader = /* glsl */ `
           vec3 spinAxis = normalize(vec3(0.39, 0.92, 0.0)); // ~23° tilt off vertical (matches surface)
           vec3 edNow    = rotateAxis(ed, spinAxis, uGiantSpin);
           float age = uEruptAge[i];
-          float life = clamp(age / ERUPT_LIFE, 0.0, 1.0);
+          // GIANT life — the geyser, the ballistic envelope AND the surface ripple all
+          // age on this ONE longer clock (GIANT_ERUPT_LIFE, not the shared 2.4) so the
+          // WHOLE event slows coherently: a sluggish loft, a long hang, a slow ring.
+          float life = clamp(age / GIANT_ERUPT_LIFE, 0.0, 1.0);
           // chord distance on the unit sphere from THIS particle (unspun) to the
           // eruption centre (unspun) — 0 at the centre, up to 2 at the antipode. The
           // ripple is a circle in this distance, so it expands as a true ring across
@@ -703,19 +717,41 @@ export const diskVertexShader = /* glsl */ `
           float cd = length(sphereUnspun - ed);
 
           // -- JET / GEYSER COLUMN: only a TIGHT cap of grains at the vent erupts.
-          // 'spread' is a SMALL angular footprint (≈0.07 at a tap, ≈0.16 at a full hold)
-          // so the base is a narrow vent — not a hemisphere. 'core' is the Gaussian gate
-          // that selects that cap; everything outside it stays put (the rest of the
-          // giant is untouched). rise = sin(life*PI) makes it erupt → peak → settle.
-          float spread = 0.07 + 0.09 * inten;              // TIGHT angular footprint of the vent
+          // 'spread' is a SMALL angular footprint so the base is a narrow vent — not a
+          // hemisphere. 'core' is the Gaussian gate that selects that cap; everything
+          // outside it stays put (the rest of the giant is untouched).
+          // RADIUS −20%: both spread terms are the old 0.07/0.09 × 0.8 (→0.056/0.072), so
+          // the vent footprint AND the Gaussian core shrink to 80% of their former width
+          // → a thinner, more collimated jet of the SAME throw height (COL_MAX unchanged).
+          float spread = 0.056 + 0.072 * inten;            // TIGHT vent footprint, 80% of the old width
           float core   = exp(-pow(cd / spread, 2.0));      // cap selector — narrow vent, not a dome
-          float rise   = sin(life * 3.14159265);           // 0→1→0: erupt, peak, settle
-          // Per-grain HEIGHT with a HEAVY TAIL: pow(rand, 3.5) keeps MOST grains low
-          // (the dense glowing base of the fountain) while a few fly far (the sparse
-          // arcing embers off the limb). aSeed/aU give each grain a stable, distinct
-          // throw so the plume reads as discrete spraying particles, not a solid spike.
+          // -- BALLISTIC HEIGHT ENVELOPE (gravity feel). Replaces the old symmetric
+          // sin(life*PI). 'rise' is the displacement-vs-time of a grain THROWN STRAIGHT
+          // UP under constant gravity: h(t) = 4·t·(1−t) is a parabola — 0 at launch,
+          // peak 1.0 at the apex (life=0.5), back to 0 at landing — whose VELOCITY
+          // (dh/dt = 4·(1−2t)) is LINEAR in time and exactly ZERO at the apex. That is
+          // the physically-correct projectile arc: it decelerates on the way up, hangs
+          // (near-zero speed) at the top, then symmetrically ACCELERATES back down — the
+          // "feel the gravity" cue the user asked for, and far more honest than a sine.
+          float ball  = 4.0 * life * (1.0 - life);          // ballistic parabola: 0→1@apex→0
+          // HANG bias: raising the parabola to a <1 power flattens its top (broadens the
+          // apex plateau) without moving launch/landing, so the plume lingers LONGER near
+          // the peak — extra hang time on top of the already-long GIANT_ERUPT_LIFE — while
+          // the steep launch/fall flanks stay (still ballistic, just a fatter apex).
+          // Per-grain HEAVY TAIL (declared before 'rise' so the apex-hang can use it):
+          // pow(rand, 3.5) keeps MOST grains low (the dense glowing base of the fountain)
+          // while a few fly far (the sparse arcing embers off the limb). aSeed/aU give
+          // each grain a stable, distinct throw so the plume reads as discrete spraying
+          // particles, not a solid spike.
           float grnd   = fract(aSeed*1.7 + aU*2.3);        // stable per-grain [0,1)
           float tail    = pow(grnd, 3.5);                  // heavy-tailed: most low, few high
+          // PER-GRAIN apex hang: the highest-flying grains (large 'tail') get a SMALLER
+          // exponent → a flatter, broader apex → they hang longest at the top, reinforcing
+          // the gravity arc (the far embers loiter near the peak while the base grains have
+          // already fallen). Base 0.7 (broad hang) eases to ~0.55 for the top grains; all
+          // values <1 so every grain stays ballistic (0→1@apex→0), only the hang width
+          // varies. ball is the projectile parabola from above.
+          float rise   = pow(ball, mix(0.7, 0.55, tail));   // ballistic loft, far grains hang longest
           float height  = COL_MAX * inten * core * rise * (0.18 + 0.82 * tail);
           // Launch the cap MOSTLY along the shared column axis edNow (the collimated
           // up-shot), with a SMALL fraction along each grain's own radius so the very
@@ -725,8 +761,11 @@ export const diskVertexShader = /* glsl */ `
           // Tiny lateral jitter near the top so high-flying grains scatter sideways into
           // a spray/arc instead of a clean spike. hash33 gives a stable per-grain offset;
           // scaled by tail so only the far grains drift (the base stays collimated).
+          // RADIUS −20%: top-spray amplitude is the old 0.18 × 0.8 (→0.144), shrinking the
+          // column's lateral spread in proportion to the −20% vent width so the WHOLE jet
+          // is uniformly narrower (same height — COL_MAX untouched).
           vec3 jit = (hash33(vec3(aSeed*31.0, aU*17.0, aPhase*7.0)) * 2.0 - 1.0);
-          eruptCol += jit * (height * tail * 0.18);
+          eruptCol += jit * (height * tail * 0.144);
 
           // -- RIPPLE: a LOCAL expanding ring wave in chord distance. It reads as a SHORT
           // disturbance rippling out a modest distance from the geyser BASE and dying —

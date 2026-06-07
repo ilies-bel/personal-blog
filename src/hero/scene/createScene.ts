@@ -207,7 +207,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // LONGER → bigger eruption (taller plume, wider/stronger ripple), capped at ~1.5s.
   // The whole interaction lives in the scene layer (like the pointermove parallax) —
   // no React. A small fixed pool lets rapid clicks stack instead of clobbering.
-  const ERUPT_LIFE = 2.4; // seconds; must match ERUPT_LIFE in sun.glsl.ts
+  const ERUPT_LIFE = 2.4; // seconds; must match ERUPT_LIFE in sun.glsl.ts — yellow-star MESH only
+  // The PARTICLE red giant erupts on its OWN, much longer clock so the geyser lofts,
+  // hangs at the apex, and falls back SLOWLY ("feel the gravity"). MUST stay numerically
+  // identical to GIANT_ERUPT_LIFE in disk.glsl.ts: the giant slot is freed (and the debug
+  // clock wrapped) at this exact age, matching the shader's `life = age / GIANT_ERUPT_LIFE`
+  // span — if the two drift the slot would free (intensity→0) before the shader finished
+  // the plume's flight and it would vanish mid-air. The mesh stays on ERUPT_LIFE=2.4.
+  const GIANT_ERUPT_LIFE = 5.5; // seconds; must match GIANT_ERUPT_LIFE in disk.glsl.ts
   const ERUPT_HOLD_MAX = 1.5; // seconds of hold that maps to a full-intensity blast
   interface Eruption {
     dir: THREE.Vector3; // object-space unit direction of the eruption centre
@@ -955,7 +962,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         const e = giantEruptPool[i];
         if (e.intensity > 0) {
           e.age += dtGiant;
-          if (e.age >= ERUPT_LIFE) e.intensity = 0; // spent → free the slot
+          // GIANT life: free the slot at GIANT_ERUPT_LIFE (NOT the shared 2.4) so the slot
+          // stays alive for the full, slower ballistic flight the shader animates over the
+          // same span — freeing at 2.4 would kill the plume mid-loft.
+          if (e.age >= GIANT_ERUPT_LIFE) e.intensity = 0; // spent → free the slot
         }
         let dx = e.dir.x;
         let dy = e.dir.y;
@@ -984,7 +994,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
           dy = eruptLocalDir.y;
           dz = eruptLocalDir.z;
           dw = Math.max(0, Math.min(1, giantEruptOverride));
-          dage = ut % ERUPT_LIFE;
+          // wrap the debug clock on the GIANT life so the replayed plume runs the full
+          // slow ballistic arc (loft → hang → fall) before looping, matching the shader.
+          dage = ut % GIANT_ERUPT_LIFE;
         }
         gErupt[i].set(dx, dy, dz, dw);
         gEruptAge[i] = dage;
