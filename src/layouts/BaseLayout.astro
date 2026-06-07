@@ -1,5 +1,9 @@
 ---
 import BaseHead from '../components/BaseHead.astro';
+// Sitewide custom cursor: a quiet off-white dot that becomes a hexagon outline
+// over interactive elements. Mounted once here so it covers every page (both the
+// `bare` home and the standard reading pages). Self-contained — see the file.
+import CustomCursor from '../components/CustomCursor.astro';
 import { SITE_TITLE, SITE_LANG, SOCIALS } from '../consts';
 // The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
 // (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
@@ -50,6 +54,8 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
     <BaseHead {...props} />
   </head>
   <body class={bodyClasses}>
+    {/* Sitewide custom cursor — covers both layout branches below. */}
+    <CustomCursor />
     {
       bare ? (
         <Fragment>

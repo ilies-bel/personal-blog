@@ -1,0 +1,509 @@
+---
+// Sitewide custom cursor — a single quiet off-white dot that becomes a thin
+// hexagon outline (dot still in its centre) over anything interactive.
+//
+// Design intent (this is a dark cobalt/indigo "blue-hour terminal" site): the
+// cursor must stay subtle. The DEFAULT is JUST a dot — NO ring, NO scanner
+// sweep, NO text/labels, ever, anywhere. Not on hover, not at the bottom of the
+// home page when the exploration HUD "activates" (`data-exploring="true"` on
+// .bh-root + body.is-scrolled). The only shape change the cursor ever makes is
+// dot → hexagon+dot over interactive elements.
+//
+// COMET TRAIL (the one motion the cursor has): the dot/ball IS the cursor — it
+// stays pinned exactly on the pointer so the cursor is precise and LEADS. Behind
+// it a soft luminous tail FOLLOWS THROUGH and CURVES along the path just travelled
+// (bright head on the ball → tapering, fading to nothing at the tail), then
+// catches up and vanishes the instant the cursor settles. At rest there is only
+// the clean ball.
+//
+// The tail is a canvas-2D *particle/point trail* (the standard cursor-trail
+// technique, e.g. nayutalienx/cursor-trail): a ring buffer of recent points, each
+// with a spawn time; on a fast move we INTERPOLATE extra points along the segment
+// (so the tail follows the curve instead of being a stiff straight bar), every
+// point fades by age, and the path is stroked as rounded, quadratic-smoothed
+// segments with a per-segment width + alpha taper and an additive glow. A single
+// straight rotated rectangle (the old approach) could not bend — this can.
+//
+// PERFORMANCE: the rAF loop IDLES when the cursor is still (mirrors the hero
+// scene's `raf = 0` sentinel + visibilitychange restart) — zero CPU at rest. No
+// per-frame style-property thrash, no CSS `filter: blur` on a moving element, and
+// the point buffer is preallocated (no per-frame allocations).
+//
+// This is a self-contained component: scoped <style> + a guarded inline <script>.
+// Keeping it cohesive in one file means it can be dropped into BaseLayout once
+// and work sitewide without touching the CSS cascade (tokens.css etc.). The
+// component renders nothing meaningful for SSR/no-JS — the markup is inert until
+// the script wires it up, and the native cursor is only hidden once we've
+// confirmed a fine pointer, so keyboard/touch users are never left cursorless.
+---
+
+{/* The comet-tail canvas — its OWN fixed full-viewport layer, BEHIND the ball
+    (one z-index step below), so its pixels are raw viewport coords fully
+    decoupled from the ball's transform. Inert + invisible until the script wires
+    it up and the first fine-pointer move reveals it. */}
+<canvas class="cursor-trail" data-cursor-trail aria-hidden="true"></canvas>
+
+{/*
+  The cursor root (the ball). position:fixed + pointer-events:none so it floats
+  above all content and can never eat a click. Hidden by default (opacity 0); the
+  script reveals it only on a fine pointer once the mouse has actually moved. The
+  dot and the hexagon both live inside, centred on the same point, so the swap
+  keeps the dot perfectly put.
+*/}
+<div class="cursor" data-custom-cursor aria-hidden="true">
+  {/* The hexagon outline — hidden until .cursor--interactive. Flat-top regular
+      hexagon (pointy sides), ~40px across, 1px-ish off-white stroke, no fill,
+      low opacity. Drawn as an inline SVG <polygon> so it scales crisply. */}
+  <svg class="cursor__hex" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+    <polygon
+      points="10,2.68 30,2.68 40,20 30,37.32 10,37.32 0,20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1"
+      vector-effect="non-scaling-stroke"
+    />
+  </svg>
+  {/* The constant centre dot — the whole default cursor. Stays put through the
+      hexagon swap. */}
+  <span class="cursor__dot" aria-hidden="true"></span>
+</div>
+
+<style>
+  /* off-white — matches the site's --fg token (oklch(0.95 0.006 252)). Hardcoded
+     here because this overlay lives outside the normal cascade (it's a
+     `cursor: none` replacement) and must render even before any token resolves. */
+  .cursor {
+    --cursor-fg: oklch(0.95 0.006 252);
+
+    position: fixed;
+    top: 0;
+    left: 0;
+    /* Centre the whole rig on (0,0); the script translates by the raw pointer
+       coords, and this -50%/-50% puts the dot/hex centre exactly on the tip. */
+    margin-left: -20px; /* half of the 40px hex box */
+    margin-top: -20px;
+    width: 40px;
+    height: 40px;
+
+    z-index: 2147483647;       /* above everything, including the HUD overlays */
+    pointer-events: none;      /* never intercept clicks / selection */
+    will-change: transform;    /* promote to its own layer for cheap rAF moves */
+
+    color: var(--cursor-fg);
+    opacity: 0;                /* revealed by the script on first fine-pointer move */
+  }
+
+  /* The comet-tail canvas: a full-viewport fixed layer, one z-index step BELOW
+     the ball so the tail paints behind it. pointer-events:none means the
+     full-bleed canvas never eats a click on the fixed overlays beneath it. The
+     CSS box is the viewport; the pixel buffer (width/height attrs) is owned by
+     the script and sized to viewport × capped DPR. */
+  .cursor-trail {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2147483646;       /* one below the ball → tail behind the dot */
+    pointer-events: none;
+    opacity: 0;                /* revealed with the ball on first move */
+  }
+
+  /* The default cursor: a single 5px filled dot at ~38% opacity. Centred in the
+     40px box. */
+  .cursor__dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--cursor-fg);
+    opacity: 0.38;
+  }
+
+  /* The hexagon outline: hidden + slightly shrunk by default, eased up to full
+     size + ~50% opacity over interactive elements. The dot is unaffected. */
+  .cursor__hex {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    color: var(--cursor-fg);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+    transform-origin: center;
+    /* Crafted-but-quiet swap with the site's confident ease-out curve. */
+    transition:
+      opacity 140ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .cursor.cursor--interactive .cursor__hex {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  /* Reduced motion: keep the cursor fully functional but skip the scale/opacity
+     animation — the hexagon snaps in/out instead of easing. The comet tail is
+     also suppressed (the script never starts the draw loop under reduced motion,
+     and this hides the canvas belt-and-braces). */
+  @media (prefers-reduced-motion: reduce) {
+    .cursor__hex {
+      transition: none;
+    }
+    .cursor-trail {
+      display: none;
+    }
+  }
+
+  /* Coarse / no-fine-pointer devices: never render the custom cursor at all.
+     The script is also gated on (pointer: fine), but this is a belt-and-braces
+     guard so the elements can never flash on a touch device before JS runs. */
+  @media not (pointer: fine) {
+    .cursor,
+    .cursor-trail {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  // Custom-cursor controller. Runs once per page load (plain MPA Astro — each
+  // navigation is a fresh document), guarded against double-init.
+  //
+  // Performance contract:
+  //  - The BALL is pinned to the raw pointer with ONE translate3d per frame.
+  //  - The TAIL is drawn on a canvas from a preallocated ring buffer of recent
+  //    points (no per-frame allocations, no style-property thrash, no CSS blur).
+  //  - The rAF loop IDLES when the cursor settles (raf = 0; no frame scheduled)
+  //    and restarts on the next move — zero CPU at rest. Mirrors the hero scene
+  //    loop in src/hero/scene/createScene.ts (raf=0 sentinel + visibilitychange).
+  (() => {
+    // Only enable for a genuine fine pointer (mouse / trackpad). On touch /
+    // coarse pointers we do nothing: no custom cursor AND we leave the native
+    // cursor alone so nothing is ever left cursorless.
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+
+    const cursor = document.querySelector<HTMLElement>('[data-custom-cursor]');
+    if (!cursor) return;
+
+    // Guard against double-init (e.g. if the component were ever rendered twice
+    // or the script re-evaluated). Mark the element once we've claimed it.
+    if (cursor.dataset.cursorInit === 'true') return;
+    cursor.dataset.cursorInit = 'true';
+
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-cursor-trail]');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+
+    // Hide the native cursor sitewide now that we know we'll draw our own. Done
+    // in JS (not CSS) so non-fine-pointer / no-JS visitors keep their real
+    // cursor. We set it on the root element so it cascades to everything.
+    const hideStyle = document.createElement('style');
+    hideStyle.textContent = `html, body, * { cursor: none !important; }`;
+    document.head.appendChild(hideStyle);
+
+    // Selector for things that should show the hexagon. `closest()` is used at
+    // hit-test time so a child of a link/button (an icon, a <span>) still counts.
+    const INTERACTIVE_SELECTOR = [
+      'a[href]',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      'label',
+      '[role="button"]',
+      '[data-cursor="interactive"]',
+    ].join(',');
+
+    // Honour reduced-motion: with it on, the ball still tracks the pointer exactly
+    // (written directly in onMove) but the comet tail / draw loop never runs.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // --- inlined house helpers (mirror src/hero, kept here so the IIFE stays
+    //     self-contained — see lifecycle.ts easeOut + config.ts tuneRenderPixelRatio) ---
+    // easeOutCubic: fast pull then soft settle — used to taper the tail head→tail.
+    const easeOut = (x: number): number => 1 - Math.pow(1 - x, 3);
+    // Cap the device pixel ratio so the offscreen buffer never gets huge on hiDPI.
+    const cappedDpr = (): number => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = window.innerWidth;
+      if (w < 1280) return Math.min(dpr, 1.6);
+      return Math.min(dpr, 1.85);
+    };
+
+    // ---- tuning (a visible luminous comet on a dark cobalt bg — bright head,
+    //      long soft fading tail, matching the reference image) ----
+    // The DOT is pinned to the exact pointer (zero lag — see loop). POINT_EASE is
+    // only the TAIL anchor's lag: higher = the tail keeps up closer to the head so
+    // it reads as one continuous comet rather than a detached lagging blob.
+    const POINT_EASE = 0.35;       // tail anchor follows the (exact) dot snappily
+    const SPAWN_STEP = 4;          // px between interpolated points on a fast move
+    const TRAIL_LIFE_MS = 420;     // tail length in TIME — long, soft fade
+    const TRAIL_WIDTH_MAX = 2.2;   // px — a THIN soft beam (matches the reference)
+    const TRAIL_ALPHA_MAX = 0.5;   // head of the beam; additive over the dark bg
+    const REST_EPS_SQ = 0.04;      // px²; eased anchor "caught the ball" threshold
+    const CAP = 160;               // ring capacity (long life × fast flicks needs more)
+    const TRAIL_RGB = '241, 242, 245'; // ≈ --fg oklch(0.95 0.006 252) in sRGB
+
+    // Raw pointer (the ball is pinned here). The tail anchor (easeX/Y) lags it.
+    let targetX = window.innerWidth / 2;
+    let targetY = window.innerHeight / 2;
+    let easeX = targetX;
+    let easeY = targetY;
+
+    // Ring buffer of recent points: parallel typed arrays → zero per-frame alloc.
+    const px = new Float32Array(CAP); // x in CSS px
+    const py = new Float32Array(CAP); // y in CSS px
+    const pt = new Float32Array(CAP); // spawn timestamp (ms)
+    let head = 0;   // index of the newest point
+    let count = 0;  // number of live points (0..CAP)
+    // Reuse buffers: live points unrolled head→tail each frame (no per-frame alloc).
+    const lpx = new Float32Array(CAP);
+    const lpy = new Float32Array(CAP);
+
+    let revealed = false; // becomes visible on the first real move
+    let raf = 0;          // rAF id; 0 = the loop is NOT running (idle)
+    let viewW = window.innerWidth;
+    let viewH = window.innerHeight;
+
+    // Push a point into the ring (overwriting the oldest once full).
+    const pushPoint = (x: number, y: number, now: number): void => {
+      head = (head + 1) % CAP;
+      px[head] = x;
+      py[head] = y;
+      pt[head] = now;
+      if (count < CAP) count++;
+    };
+
+    // Size the canvas backing store to viewport × capped DPR and set the
+    // transform so we can draw in CSS-px coordinates thereafter.
+    const resizeCanvas = (): void => {
+      if (!canvas || !ctx) return;
+      const dpr = cappedDpr();
+      viewW = window.innerWidth;
+      viewH = window.innerHeight;
+      canvas.width = Math.round(viewW * dpr);
+      canvas.height = Math.round(viewH * dpr);
+      canvas.style.width = viewW + 'px';
+      canvas.style.height = viewH + 'px';
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset before re-scaling (idempotent)
+      ctx.scale(dpr, dpr);
+    };
+
+    // Draw the comet from the ring buffer. Returns true if anything was drawn
+    // (i.e. the tail is still alive), false once it has fully decayed.
+    //
+    // SMOOTHNESS: the tail is ONE continuous path stroked ONCE. The old
+    // per-segment strokes (each with its own alpha, additively blended) overlapped
+    // unevenly on fast moves — bright where caps overlapped, dim where they barely
+    // met — which read as a DASHED line. A single stroke has no internal seams.
+    // The head→tail fade comes from a GRADIENT strokeStyle along the path, not
+    // per-segment alpha, so it's a clean continuous comet.
+    const drawTrail = (now: number): boolean => {
+      if (!ctx) return false;
+      ctx.clearRect(0, 0, viewW, viewH);
+      if (count < 2) return false;
+
+      // Collect the live points (head → tail) into the reuse buffer, stopping at
+      // the first dead one. We need the head + tail positions for the gradient.
+      let live = 0;
+      for (let n = 0; n < count; n++) {
+        const i = (head - n + CAP) % CAP;
+        if (n > 0 && 1 - (now - pt[i]) / TRAIL_LIFE_MS <= 0) break;
+        lpx[live] = px[i];
+        lpy[live] = py[i];
+        live++;
+      }
+      if (live < 2) return false;
+
+      const hx = lpx[0], hy = lpy[0];                 // head (on the ball)
+      const tx = lpx[live - 1], ty = lpy[live - 1];   // tail tip
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalCompositeOperation = 'lighter';       // additive glow on the dark bg
+      ctx.globalAlpha = 1;
+
+      // Build ONE smooth path through the points with quadratic-midpoint
+      // smoothing (curve, not faceted), then stroke it a SINGLE time.
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      for (let n = 1; n < live - 1; n++) {
+        const mx = (lpx[n] + lpx[n + 1]) / 2;
+        const my = (lpy[n] + lpy[n + 1]) / 2;
+        ctx.quadraticCurveTo(lpx[n], lpy[n], mx, my);
+      }
+      ctx.lineTo(tx, ty);
+
+      // Gradient along the head→tail axis: bright at the head, fading to nothing
+      // at the tail. This is the comet taper, done as one continuous fill so there
+      // are no per-segment seams (no dashing).
+      // Gradient fades the beam from its head down to nothing at the tail. The
+      // head stops just SHORT of full strength and the dot itself is a separate
+      // opaque CSS element — so the DOT never lights up / haloes (per the
+      // reference: a clean solid ball with only a thin beam behind it). There is
+      // deliberately NO radial glow around the head.
+      const grad = ctx.createLinearGradient(hx, hy, tx, ty);
+      grad.addColorStop(0, `rgba(${TRAIL_RGB}, ${TRAIL_ALPHA_MAX})`);
+      grad.addColorStop(0.35, `rgba(${TRAIL_RGB}, ${TRAIL_ALPHA_MAX * 0.5})`);
+      grad.addColorStop(1, `rgba(${TRAIL_RGB}, 0)`);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = TRAIL_WIDTH_MAX;
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;                            // restore for cleanliness
+      ctx.globalCompositeOperation = 'source-over';
+      return true;
+    };
+
+    const loop = (): void => {
+      // Pause entirely when the tab is hidden (mirrors the hero scene loop).
+      if (document.hidden) { raf = 0; return; }
+      const now = performance.now();
+
+      // The ball: pinned to the raw pointer (no easing) so the cursor is exact.
+      cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+
+      // Ease the tail anchor toward the ball; spawn points along the path it
+      // covers this frame so a fast move lays a dense, curving trail (not one
+      // far-apart pair). This interpolation is what lets the tail BEND.
+      const lastX = count ? px[head] : easeX;
+      const lastY = count ? py[head] : easeY;
+      easeX += (targetX - easeX) * POINT_EASE;
+      easeY += (targetY - easeY) * POINT_EASE;
+
+      const dx = easeX - lastX;
+      const dy = easeY - lastY;
+      const dist = Math.hypot(dx, dy);
+      if (count === 0) {
+        pushPoint(easeX, easeY, now);
+      } else if (dist >= SPAWN_STEP) {
+        // Walk the segment in SPAWN_STEP increments, stamping a point each step.
+        const steps = Math.min(CAP, Math.floor(dist / SPAWN_STEP));
+        const ux = dx / dist;
+        const uy = dy / dist;
+        for (let s = 1; s <= steps; s++) {
+          const d = s * SPAWN_STEP;
+          pushPoint(lastX + ux * d, lastY + uy * d, now);
+        }
+      }
+
+      const alive = drawTrail(now);
+
+      // Idle test: the eased anchor has caught the ball AND nothing is left to
+      // draw → reset and STOP the loop (no frame scheduled). Re-armed on move.
+      const caughtUp = (targetX - easeX) ** 2 + (targetY - easeY) ** 2 < REST_EPS_SQ;
+      if (caughtUp && !alive) {
+        head = 0;
+        count = 0;
+        if (ctx) ctx.clearRect(0, 0, viewW, viewH);
+        raf = 0;
+        return;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+
+    // (Re)start the draw loop only if it isn't already running (and we animate).
+    const kick = (): void => {
+      if (raf === 0 && !reduceMotion && !document.hidden) {
+        raf = requestAnimationFrame(loop);
+      }
+    };
+
+    const onMove = (event: MouseEvent): void => {
+      targetX = event.clientX;
+      targetY = event.clientY;
+
+      // First real movement: reveal the cursor (avoids a stray dot parked in the
+      // top-left before the pointer has been located). Snap the anchor onto the
+      // ball and empty the ring so no tail streaks in from the screen centre.
+      if (!revealed) {
+        revealed = true;
+        easeX = targetX;
+        easeY = targetY;
+        head = 0;
+        count = 0;
+        cursor.style.opacity = '1';
+        if (canvas) canvas.style.opacity = '1';
+      }
+
+      // Interactive hit-test. The target may be a child of the link/button, so
+      // walk up with closest(); also honour any element whose *computed* cursor
+      // is `pointer` (covers elements styled interactive without a semantic tag).
+      const target = event.target as Element | null;
+      let interactive = false;
+      if (target) {
+        interactive = !!target.closest(INTERACTIVE_SELECTOR);
+        if (!interactive && target instanceof Element) {
+          interactive = getComputedStyle(target).cursor === 'pointer';
+        }
+      }
+      cursor.classList.toggle('cursor--interactive', interactive);
+
+      // Reduced motion: write the ball directly (the loop never runs). Otherwise
+      // (re)start the loop so the tail animates and then idles when it settles.
+      if (reduceMotion) {
+        cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+      } else {
+        kick();
+      }
+    };
+
+    // Hide when the pointer leaves the window, restore when it returns — so the
+    // ball doesn't hang frozen at the last edge position. On leave, empty the
+    // ring and kick one frame so the canvas clears then parks.
+    const onLeave = (): void => {
+      cursor.style.opacity = '0';
+      if (canvas) canvas.style.opacity = '0';
+      head = 0;
+      count = 0;
+      kick();
+    };
+    const onEnter = (): void => {
+      if (revealed) {
+        cursor.style.opacity = '1';
+        if (canvas) canvas.style.opacity = '1';
+      }
+    };
+
+    // Restart the loop when the tab becomes visible again (it self-parks on hide).
+    const onVisibility = (): void => {
+      if (!document.hidden) kick();
+    };
+
+    // Debounced resize: re-size the backing store, then kick a redraw.
+    let resizeTimer = 0;
+    const onResize = (): void => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        resizeCanvas();
+        kick();
+      }, 150);
+    };
+
+    resizeCanvas();
+
+    document.addEventListener('mousemove', onMove, { passive: true });
+    document.addEventListener('mouseleave', onLeave);
+    document.addEventListener('mouseenter', onEnter);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('resize', onResize);
+
+    // Clean up on page hide (covers bfcache / navigation away). Belt-and-braces
+    // for an MPA, but cheap and correct.
+    window.addEventListener(
+      'pagehide',
+      () => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        window.clearTimeout(resizeTimer);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseleave', onLeave);
+        document.removeEventListener('mouseenter', onEnter);
+        document.removeEventListener('visibilitychange', onVisibility);
+        window.removeEventListener('resize', onResize);
+      },
+      { once: true },
+    );
+  })();
+</script>
