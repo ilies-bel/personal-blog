@@ -639,26 +639,41 @@ export const diskVertexShader = /* glsl */ `
         pos  = surf;
         heat = m;
 
-        // === CLICK ERUPTIONS: geyser jet + travelling surface ripple ==========
+        // === CLICK ERUPTIONS: geyser COLUMN + travelling surface ripple =======
         // Physical VERTEX displacement (this is a point cloud, unlike the mesh's
-        // fragment-only recolour): points near the click JET OUTWARD along their own
-        // radial direction, and a ring wave expands across the curved surface, so the
-        // photosphere visibly bulges + ripples. Gated to the RED GIANT (vSunRed=1) so
-        // the gold swap-in ball / yellow placeholder never erupt; idle slots (w=0) are
-        // skipped, so it's a no-op until a click fires. Chord distance is measured in
-        // the UNSPUN frame (sphereUnspun vs the stored-unspun ed) — the spin is thereby
-        // cancelled, while the jet pushes along the SPUN 'sphere' dir so the eruption
-        // rides the rotating limb at the clicked spot. Bigger hold (intensity) → taller
-        // jet + wider/stronger ripple + larger footprint. CONSTANTS mirror the mesh feel.
-        float eruptJet = 0.0;   // accumulated outward jet displacement (× sunR0)
-        float eruptRip = 0.0;   // accumulated radial ripple wobble (× sunR0, signed)
-        // JET_MAX: a full eruption sprays the jet root out ~38% of the radius at peak —
-        // a bright prominence arcing off the limb (tuned to the reference solar plume).
-        const float JET_MAX = 0.38;
+        // fragment-only recolour). The JET is a real volcanic GEYSER: only a tiny cap
+        // of grains at the vent launches, and it launches along ONE shared axis (the
+        // eruption-centre normal) so the grains shoot up as a TALL, NARROW collimated
+        // column that sprays off the limb — NOT a hemisphere of surface bulging out
+        // along each point's own radius (which read as a rounded blister/spot). The
+        // travelling RIPPLE is unchanged: a ring wave that wobbles each point along its
+        // OWN radial 'sphere' dir, which is correct for a surface wave. Gated to the
+        // RED GIANT (vSunRed=1) so the gold swap-in ball / yellow placeholder never
+        // erupt; idle slots (w=0) are skipped, so it's a no-op until a click fires.
+        // Chord distance is measured in the UNSPUN frame (sphereUnspun vs the
+        // stored-unspun ed) — the spin is thereby cancelled — while the column launches
+        // along edNow (ed re-spun into the CURRENT frame, exactly as the surface spins
+        // 'sphere'), so the geyser sticks to the clicked spot as the limb rotates.
+        // Bigger hold (intensity) → taller column reaching farther off the limb + wider/
+        // stronger ripple. CONSTANTS mirror the mesh geyser feel, but the giant keeps red.
+        vec3  eruptCol = vec3(0.0);  // accumulated COLUMN launch along the shared axis (× sunR0)
+        float eruptRip = 0.0;        // accumulated radial ripple wobble (× sunR0, signed)
+        // COL_MAX: at peak intensity the FURTHEST grains in the plume travel ~0.95×
+        // radius off the vent — a tall prominence visibly clearing the silhouette. The
+        // dense base sits much lower; only the sparse heavy tail reaches this far.
+        const float COL_MAX = 0.95;
         for(int i = 0; i < N_ERUPT; i++){
           float inten = uErupt[i].w;
           if(inten <= 0.0) continue;                       // idle slot
           vec3  ed  = normalize(uErupt[i].xyz);            // eruption centre (UNSPUN frame)
+          // edNow = the eruption axis re-spun into the CURRENT frame, the SAME way the
+          // surface spins 'sphere' (rotateAxis about the ~23° tilted pole by uGiantSpin).
+          // This is the column's launch direction — the geyser shoots straight up off
+          // the vent along it, and it tracks the rotating limb so the plume stays glued
+          // to the clicked spot. Declared locally because the surface 'spinAxis' above
+          // is scoped to its own block.
+          vec3 spinAxis = normalize(vec3(0.39, 0.92, 0.0)); // ~23° tilt off vertical (matches surface)
+          vec3 edNow    = rotateAxis(ed, spinAxis, uGiantSpin);
           float age = uEruptAge[i];
           float life = clamp(age / ERUPT_LIFE, 0.0, 1.0);
           // chord distance on the unit sphere from THIS particle (unspun) to the
@@ -667,16 +682,31 @@ export const diskVertexShader = /* glsl */ `
           // the curved surface from the click point.
           float cd = length(sphereUnspun - ed);
 
-          // -- JET: a bright spray erupting OUT at the click point. A Gaussian on the
-          // chord distance concentrates it at the centre; the footprint widens with
-          // intensity. rise = sin(life*PI) makes it erupt → peak → settle over the life.
-          // A touch of per-particle scatter (aSeed) makes the root read as discrete
-          // particles spraying, not a smooth bulge.
-          float spread = 0.16 + 0.12 * inten;              // angular footprint of the base
-          float core   = exp(-pow(cd / spread, 2.0));      // concentration at the click point
+          // -- JET / GEYSER COLUMN: only a TIGHT cap of grains at the vent erupts.
+          // 'spread' is a SMALL angular footprint (≈0.07 at a tap, ≈0.16 at a full hold)
+          // so the base is a narrow vent — not a hemisphere. 'core' is the Gaussian gate
+          // that selects that cap; everything outside it stays put (the rest of the
+          // giant is untouched). rise = sin(life*PI) makes it erupt → peak → settle.
+          float spread = 0.07 + 0.09 * inten;              // TIGHT angular footprint of the vent
+          float core   = exp(-pow(cd / spread, 2.0));      // cap selector — narrow vent, not a dome
           float rise   = sin(life * 3.14159265);           // 0→1→0: erupt, peak, settle
-          float scatter = 0.85 + 0.30 * aSeed;             // per-grain spray variety
-          eruptJet += JET_MAX * inten * core * rise * scatter;
+          // Per-grain HEIGHT with a HEAVY TAIL: pow(rand, 3.5) keeps MOST grains low
+          // (the dense glowing base of the fountain) while a few fly far (the sparse
+          // arcing embers off the limb). aSeed/aU give each grain a stable, distinct
+          // throw so the plume reads as discrete spraying particles, not a solid spike.
+          float grnd   = fract(aSeed*1.7 + aU*2.3);        // stable per-grain [0,1)
+          float tail    = pow(grnd, 3.5);                  // heavy-tailed: most low, few high
+          float height  = COL_MAX * inten * core * rise * (0.18 + 0.82 * tail);
+          // Launch the cap MOSTLY along the shared column axis edNow (the collimated
+          // up-shot), with a SMALL fraction along each grain's own radius so the very
+          // base fans out a touch (a fountain mouth, not a pencil line). The dominant
+          // term is edNow → a tall narrow column, the opposite of a radial bulge.
+          eruptCol += height * (0.85 * edNow + 0.15 * sphere);
+          // Tiny lateral jitter near the top so high-flying grains scatter sideways into
+          // a spray/arc instead of a clean spike. hash33 gives a stable per-grain offset;
+          // scaled by tail so only the far grains drift (the base stays collimated).
+          vec3 jit = (hash33(vec3(aSeed*31.0, aU*17.0, aPhase*7.0)) * 2.0 - 1.0);
+          eruptCol += jit * (height * tail * 0.18);
 
           // -- RIPPLE: an expanding ring wave in chord distance. radius marches outward
           // with life; reach + crest width scale with intensity. A Gaussian crest gives
@@ -693,14 +723,18 @@ export const diskVertexShader = /* glsl */ `
           // wave passes (signed: the crest lifts the surface).
           eruptRip += ripple * 0.06;
 
-          // accumulate the fragment glow: hot white at the jet root, warm on the ripple
-          // crest. Clamped per-slot contribution; the total is clamped after the loop.
-          vEruptGlow += clamp(core*rise*1.4 + ripple*1.2, 0.0, 2.0);
+          // accumulate the fragment glow: hot at the column root, warm on the ripple
+          // crest. (height already encodes the per-grain tail, so far grains glow as the
+          // plume.) Clamped per-slot contribution; the total is clamped after the loop.
+          vEruptGlow += clamp(height*4.0 + ripple*1.2, 0.0, 2.0);
         }
         vEruptGlow = clamp(vEruptGlow, 0.0, 2.0);
-        // apply the displacement along the SPUN radial dir so it rides the rotating
-        // body; (eruptJet + eruptRip) pushes points OUTWARD at the click + ripple crest.
-        pos += sphere * ((eruptJet + eruptRip) * sunR0);
+        // apply the column launch (along the shared spun axis, in WORLD/unit dir) and the
+        // radial ripple wobble (along this point's own SPUN 'sphere' dir, a true surface
+        // wave). Both scaled to the giant's radius. The column is tall+narrow (a geyser),
+        // the ripple is a shallow travelling ring — the spot/blister bulge is gone.
+        pos += eruptCol * sunR0;
+        pos += sphere * (eruptRip * sunR0);
 
         // === (B) atmosphere: loops / prominences / spicules =================
         // Pick a stable subset for the atmosphere using per-particle hashes (no
@@ -1551,14 +1585,22 @@ export const diskFragmentShader = /* glsl */ `
           pcol = mix(pcol, hotMid,   smoothstep(0.0, 0.6, heatK));
           pcol = mix(pcol, hotWhite, smoothstep(0.55, 1.0, heatK));
 
-          // CLICK-ERUPTION HEAT: where points jet out / the ripple crest passes
-          // (vEruptGlow > 0) the photosphere flares HOT — warm orange on the ripple
-          // crest, white-hot at the jet root — so the erupting plume glows like the
-          // mesh's geyser. Gated by vSunRed (red giant only); tasteful (additive,
-          // capped) so it never blows the whole giant white. No-op when vEruptGlow=0.
+          // CLICK-ERUPTION HEAT: where points launch into the geyser column / the
+          // ripple crest passes (vEruptGlow > 0) the plasma flares HOT — but it stays in
+          // the RED-GIANT palette, NEVER whitening. The giant is blood-red, so its
+          // eruption is hot RED plasma: it ramps from the giant's own blood-red up to a
+          // bright RED-ORANGE at the column root (the equivalent of the mesh eruption's
+          // fully-red end), staying in the same hue family as the surrounding surface —
+          // brighter and more saturated, but no gold/white/pink. Gated by vSunRed (red
+          // giant only); additive + capped so it can't blow to white under bloom. No-op
+          // when vEruptGlow=0. (Stops mirror the red-giant ramp r3..r4 in sun.glsl.ts.)
           float eg = clamp(vEruptGlow, 0.0, 2.0) * vSunRed;
-          pcol = mix(pcol, vec3(1.0, 0.52, 0.16), smoothstep(0.0, 0.9, eg));   // hot orange ramp
-          pcol += vec3(1.0, 0.82, 0.55) * smoothstep(0.7, 1.8, eg) * 0.6;      // white-hot jet root
+          vec3 eRed  = vec3(0.90, 0.18, 0.04);   // blood red (giant surface, hotter than body)
+          vec3 eOrng = vec3(1.00, 0.34, 0.08);   // bright red-orange (plume body)
+          vec3 eRoot = vec3(1.00, 0.45, 0.12);   // hottest RED-ORANGE at the column root (no white)
+          pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume reddens hot
+          pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter red-orange up the column
+          pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // red-orange glow at the root (additive, NOT white)
         }
       } else if(vPlaceholder < 2.9){
         // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from

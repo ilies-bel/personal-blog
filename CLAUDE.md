@@ -58,7 +58,7 @@ engine is framework-agnostic (React only mounts/unmounts it):
     yellow star, the nebula extent AND the gravity-sim seed — do **not** repurpose it to
     resize the red giant alone; **`uGiantScale`** is the red-giant-only multiplier (1.0
     everywhere else, so the nebula/dot/sun never balloon). **`uGiantSpin`** (radians,
-    `t * 2π/60`) rolls the photosphere on a fixed ~23°-tilted pole so the star turns on
+    `t * 2π/180`) rolls the photosphere on a fixed ~23°-tilted pole so the star turns on
     its own axis. The big off-centre "vast limb" framing is **NOT** a geometry offset — it
     is a **camera move** (`RED_GIANT_PARK` in createScene): once the giant is grown the
     render loop slides the camera position + its look target by the same world vector

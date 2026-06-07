@@ -183,10 +183,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const NEAR_FACTOR = 0.42; // how close the travelling begins (× resting distance)
   const INTRO_DUR = 6.0; // seconds for the dezoom
   const ROTATE_SPEED = 0.018; // rad/s of resting drift
-  // Red-giant axial spin: ~one rotation per 60 s on its tilted pole (2π/60). Slow
-  // and cinematic — the surface rolls, the camera no longer orbits it (see the
-  // red-giant orbit freeze below).
-  const RED_GIANT_SPIN_RATE = (Math.PI * 2) / 60; // rad/s
+  // Red-giant axial spin: ~one rotation per 180 s on its tilted pole (2π/180). Slow
+  // and cinematic — 3× slower than before — the surface barely rolls, the camera no
+  // longer orbits it (see the red-giant orbit freeze below).
+  const RED_GIANT_SPIN_RATE = (Math.PI * 2) / 180; // rad/s
   // Red-giant camera-composition offset. The forward camera rig owns the real pose;
   // this baked world vector slides the camera (and its look target) by the same
   // amount during the red-giant beat to frame the grown orb off-centre without
