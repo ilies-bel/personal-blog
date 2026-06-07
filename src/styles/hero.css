@@ -25,7 +25,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Soft cobalt-room vignette: brightest off-centre where the object sits,
+  /* Soft graphite-room vignette: brightest off-centre where the object sits,
      deepening to the room colour at the edges so text reads cleanly over it. */
   background:
     radial-gradient(120% 90% at 50% 42%,
@@ -37,12 +37,12 @@
 /* Article variant: the SAME pinned scene but at the BLACK-HOLE frame, whose
    photon ring is a bright full-width white band — far hotter than About's smoky
    nebula. The goal here is NOT to bury it but to make the article read as the
-   SAME ROOM as the hero: the ring + cobalt glow should be clearly felt in the
+   SAME ROOM as the hero: the ring + warm graphite glow should be clearly felt in the
    header band and the side gutters, while the centred reading column (≈--max
    wide) stays deepened toward --bg so body copy holds AA. Three moves:
-     1. brightness 0.82 lets the ring survive as a real cobalt glow (not the old
-        crushed grey smudge); saturate + sepia → hue-rotate(186deg) re-tint the
-        white light toward the cobalt room so it reads on-palette, not neutral;
+     1. brightness 0.82 lets the ring survive as real white light (not the old
+        crushed grey smudge); a touch of sepia tints the glare toward the Golden
+        Record room so it reads on-palette, not neutral;
      2. opacity 0.32 makes it plainly perceptible — a felt presence, not a flat
         dark page;
      3. an ANISOTROPIC wash (not the old uniform radial) that protects the
@@ -57,13 +57,13 @@
    positions where the fixed ring sits behind headings and body copy. */
 body.article-page .bh-backdrop {
   opacity: 0.4;
-  filter: saturate(0.66) brightness(0.86) sepia(0.16) hue-rotate(186deg);
+  filter: saturate(0.72) brightness(0.86) sepia(0.18);
 }
 body.article-page .bh-backdrop::after {
   /* Column-ellipse wash: a single elliptical pool of --bg centred on the
      reading measure — narrow on X (≈column width), tall on Y — that deepens the
      CENTRE column toward the room colour while staying TRANSPARENT in the side
-     gutters, so the photon ring + cobalt glow read clearly beside the text but
+     gutters, so the photon ring + graphite/gold glow read clearly beside the text but
      never behind the lines. A faint bottom-floor linear sinks the very base
      (short articles / footer) to --bg. The header band (top, no body copy) is
      left brightest on purpose so the ring is felt strongest there. */

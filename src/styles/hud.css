@@ -4,7 +4,7 @@
 .hud-system {
   --hud-line: color-mix(in oklch, var(--fg) 34%, transparent);
   --hud-line-dim: color-mix(in oklch, var(--fg) 16%, transparent);
-  --hud-amber: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+  --hud-gold: color-mix(in oklch, var(--highlight) 86%, var(--fg));
   position: fixed;
   left: clamp(1.25rem, 5vw, 5rem);
   top: 50%;
@@ -132,26 +132,26 @@
 .hud-nav-button[data-active='true']::before,
 .hud-nav-button[data-selected='true']::before {
   width: 1.1rem;
-  background: var(--hud-amber);
+  background: var(--hud-gold);
 }
 /* Scroll-spy "you are here": the stage the scroll position maps to, when not
    already lit by hover/focus or a committed selection. Quiet on purpose — it
    does NOT expand the rail (no layout shift as you scroll); it just lifts the
-   glyph out of --fg-faint and gives the connector tick a dim amber so the eye
+   glyph out of --fg-faint and gives the connector tick a dim gold so the eye
    can find the current stage at a glance. */
 .hud-nav-button[data-current='true'] {
   color: color-mix(in oklch, var(--fg-dim) 78%, var(--fg));
 }
 .hud-nav-button[data-current='true']::before {
   width: 0.78rem;
-  background: color-mix(in oklch, var(--hud-amber) 46%, var(--hud-line-dim));
+  background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
 .hud-nav-button:focus-visible {
-  outline: 1px solid var(--hud-amber);
+  outline: 1px solid var(--hud-gold);
   outline-offset: 0.25rem;
 }
 /* The glyph is an SVG (in public/glyphs/) applied as a mask and painted with the
-   button's currentColor, so the rail's faint → amber → current color transitions
+   button's currentColor, so the rail's faint → gold → current color transitions
    flow through the icon for free. --glyph-mask is set per-row inline in the JSX.
    drop-shadow replaces the old text-shadow (it follows the masked alpha shape). */
 .hud-nav-glyph {
@@ -172,7 +172,7 @@
   mask-size: contain;
   filter:
     drop-shadow(0 0 16px rgba(0, 0, 0, 1))
-    drop-shadow(0 0 10px color-mix(in oklch, var(--hud-amber) 26%, transparent));
+    drop-shadow(0 0 10px color-mix(in oklch, var(--hud-gold) 26%, transparent));
   transform-origin: 50% 50%;
 }
 .hud-nav-copy {
@@ -285,11 +285,11 @@
   transition: color 0.18s ease, border-color 0.18s ease;
 }
 .hud-nav-panel-link:hover {
-  color: var(--hud-amber);
-  border-color: var(--hud-amber);
+  color: var(--hud-gold);
+  border-color: var(--hud-gold);
 }
 .hud-nav-panel-link:focus-visible {
-  outline: 1px solid var(--hud-amber);
+  outline: 1px solid var(--hud-gold);
   outline-offset: 0.25rem;
 }
 

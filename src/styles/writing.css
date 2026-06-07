@@ -82,9 +82,9 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(135deg, color-mix(in oklch, var(--accent) 16%, transparent), transparent 46%),
-    radial-gradient(28rem 18rem at 88% 12%, color-mix(in oklch, var(--highlight) 13%, transparent), transparent 72%);
-  opacity: 0.7;
+    linear-gradient(135deg, color-mix(in oklch, var(--highlight) 12%, transparent), transparent 46%),
+    radial-gradient(28rem 18rem at 88% 12%, color-mix(in oklch, var(--ember) 10%, transparent), transparent 72%);
+  opacity: 0.74;
   pointer-events: none;
 }
 
@@ -140,9 +140,9 @@
 
 .writing-index-card {
   padding: 1.15rem;
-  border-color: color-mix(in oklch, var(--signal-cyan) 24%, var(--line));
+  border-color: color-mix(in oklch, var(--accent) 16%, var(--line));
   background:
-    linear-gradient(140deg, color-mix(in oklch, var(--signal-cyan) 6%, transparent), transparent 52%),
+    linear-gradient(140deg, color-mix(in oklch, var(--highlight) 5%, transparent), transparent 52%),
     color-mix(in oklch, var(--bg-soft) 72%, transparent);
 }
 
@@ -156,7 +156,7 @@
   display: grid;
   gap: 0.35rem;
   padding: 1rem 0;
-  border-bottom: 1px solid color-mix(in oklch, var(--signal-cyan) 22%, var(--line));
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 12%, var(--line));
 }
 
 .writing-index-card div:first-child {
@@ -173,7 +173,7 @@
   font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: color-mix(in oklch, var(--signal-cyan) 76%, var(--fg));
+  color: var(--fg-faint);
 }
 
 .writing-index-card dd {
@@ -202,7 +202,7 @@
 }
 
 .writing-row:hover {
-  border-bottom-color: color-mix(in oklch, var(--signal-cyan) 30%, var(--line));
+  border-bottom-color: color-mix(in oklch, var(--accent) 24%, var(--line));
   background: color-mix(in oklch, var(--bg-soft) 62%, transparent);
 }
 
@@ -264,13 +264,23 @@
   align-items: center;
   min-height: 1.55rem;
   padding: 0.16rem 0.55rem;
-  border: 1px solid color-mix(in oklch, var(--signal-cyan) 42%, var(--line));
+  border: 1px solid var(--line);
   border-radius: var(--radius-pill);
-  color: color-mix(in oklch, var(--signal-cyan) 82%, var(--fg));
+  color: var(--fg-faint);
   font-family: var(--font-mono);
   font-size: 0.68rem;
   line-height: 1;
-  background: color-mix(in oklch, var(--signal-cyan) 7%, transparent);
+  background: color-mix(in oklch, var(--bg-soft) 64%, transparent);
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.writing-row:hover .writing-tags span {
+  border-color: color-mix(in oklch, var(--accent) 28%, var(--line));
+  color: color-mix(in oklch, var(--accent-strong) 56%, var(--fg));
+  background: color-mix(in oklch, var(--ember) 7%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
