@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {
   sunSurfaceVert, sunSurfaceFrag, sunGlowVert, sunGlowFrag,
   sunCoronaVert, sunCoronaFrag, sunStarVert, sunStarFrag, sunLoopVert, sunLoopFrag,
+  SUN_ERUPT_SLOTS,
 } from '../shaders/sun.glsl';
 
 export const STAR_BACK_BASE_BRIGHT = 2.2;
@@ -10,6 +11,10 @@ export const STAR_BACK_BASE_BRIGHT = 2.2;
 export interface SunRig {
   group: THREE.Group;
   surfaceMat: THREE.ShaderMaterial;
+  // The photosphere mesh itself. Exposed so the render loop's click raycaster can
+  // target ONLY the solid surface (clicks on the surrounding corona/loops shouldn't
+  // erupt). Its live world transform is what the raycaster intersects.
+  surface: THREE.Mesh;
   glowMat: THREE.ShaderMaterial;
   coronaMat: THREE.ShaderMaterial;
   loopMat: THREE.ShaderMaterial;
@@ -35,8 +40,25 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
 
   // --- (A) photosphere mesh ---
   // uRed (0 yellow → 1 red giant) reddens + dims the surface for the inflation.
+  // uErupt/uEruptAge host up to SUN_ERUPT_SLOTS concurrent click eruptions: each
+  // slot is a vec4 (xyz = object-space eruption-centre direction, w = intensity)
+  // plus an age in seconds. All start idle (intensity 0). The render loop owns the
+  // JS-side pool and copies it into these arrays each frame (it mutates the same
+  // Vector4 / number entries in place, so there is no per-frame allocation).
+  const uEruptInit: THREE.Vector4[] = [];
+  const uEruptAgeInit: number[] = [];
+  for (let i = 0; i < SUN_ERUPT_SLOTS; i++) {
+    uEruptInit.push(new THREE.Vector4(0, 1, 0, 0)); // dir +Y, intensity 0 = idle
+    uEruptAgeInit.push(0);
+  }
   const surfaceMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uRed: { value: 0 }, uBlue: { value: 0 } },
+    uniforms: {
+      uTime: { value: 0 },
+      uRed: { value: 0 },
+      uBlue: { value: 0 },
+      uErupt: { value: uEruptInit },
+      uEruptAge: { value: uEruptAgeInit },
+    },
     vertexShader: sunSurfaceVert,
     fragmentShader: sunSurfaceFrag,
   });
@@ -424,5 +446,5 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     starMat.dispose();
   };
 
-  return { group, surfaceMat, glowMat, coronaMat, loopMat, starMat, starBack, corona, dispose };
+  return { group, surfaceMat, surface, glowMat, coronaMat, loopMat, starMat, starBack, corona, dispose };
 }

@@ -45,6 +45,9 @@ export const DEBUG_WINDOW_KEYS = {
   nebLight: '__bhNebLight',
   backdropStage: '__bhBackdropStage',
   streak: '__bhStreak',
+  /** Hold a click eruption (0..1 intensity) at a fixed camera-facing point so the
+   *  geyser + ripple can be inspected without actually clicking the star. */
+  erupt: '__bhErupt',
 } as const;
 
 /** Read a numeric debug-hook override off window, or undefined if unset. */
