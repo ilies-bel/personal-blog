@@ -47,6 +47,12 @@ body:not(.bare)::after {
   opacity: 0.28;
 }
 
+/* Article pages carry the live black-hole backdrop, which already supplies the
+   cobalt atmosphere. The standard corner glow would double up and muddy it, so
+   it's dropped here; the faint grid (::after) stays — it adds quiet structure and
+   never competes with the dim backdrop. */
+body.article-page::before { display: none; }
+
 ::selection {
   background: color-mix(in oklch, var(--accent) 48%, transparent);
   color: var(--fg);

@@ -34,6 +34,34 @@
       var(--bg) 100%);
 }
 
+/* Article variant: the SAME pinned scene but at the BLACK-HOLE frame, whose
+   photon ring is a bright full-width white band — far hotter than About's smoky
+   nebula — so it's pushed MUCH further back. Barely-there cobalt atmosphere,
+   never a feature behind reading copy. Three moves:
+     1. brightness 0.42 crushes the white ring; the sepia → hue-rotate(186deg)
+        pair re-tints the now-grey light toward the cobalt room so the faint
+        smudge that survives reads on-palette, not neutral;
+     2. opacity 0.14 keeps it perceptible (a cool horizontal haze) without
+        letting the ring compete — well under the ~6% effective presence target
+        once the wash is layered;
+     3. a room-coloured radial wash that's already half-closed at the centre
+        (where the ring + text live) and near-solid --bg by mid-frame, so prose
+        always sits on essentially the room colour and body text keeps its full
+        ≥7:1 contrast even as the fixed ring passes behind it on scroll.
+   Scoped to body.article-page (the post layout). Tuned by eye against scroll
+   positions where the fixed ring sits behind headings and body copy. */
+body.article-page .bh-backdrop {
+  opacity: 0.14;
+  filter: saturate(0.45) brightness(0.42) sepia(0.22) hue-rotate(186deg);
+}
+body.article-page .bh-backdrop::after {
+  background:
+    radial-gradient(120% 95% at 50% 46%,
+      color-mix(in oklch, var(--bg) 50%, transparent) 0%,
+      color-mix(in oklch, var(--bg) 84%, transparent) 55%,
+      var(--bg) 100%);
+}
+
 /* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
 .bh-identity {
   position: fixed;
