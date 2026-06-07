@@ -93,9 +93,8 @@ engine is framework-agnostic (React only mounts/unmounts it):
 
 `src/styles/global.css` is a thin aggregator that `@import`s per-concern partials in cascade
 order: `tokens.css` (the single source of CSS custom properties) → `base.css` → `chrome.css`
-→ `scene.css` → `hero.css` → `hud.css` → `prose.css` → `about.css` → `debug.css` (dev-only
-overlays). Add new rules to the partial that owns the concern; only `tokens.css` defines
-`:root` variables.
+→ `scene.css` → `hero.css` → `hud.css` → `prose.css` → `about.css`. Add new rules to the
+partial that owns the concern; only `tokens.css` defines `:root` variables.
 
 ## Debugging & verification
 
@@ -113,15 +112,6 @@ overlays). Add new rules to the partial that owns the concern; only `tokens.css`
   (front gas brighter, far/buried gas dimmer & bluer → 3D volume). There is no star inside the
   cloud, so the "light" is the gas occluding itself toward the camera plus a depth fade, not a
   point source. Set `__bhMorph≈4.0` (full nebula) AND `__bhNebLight` to A/B the look.
-- **`window.__bhGiantR`** (a number) and **`window.__bhGiantCenter`** (`[x, y, z]`) live-tune the
-  **red giant** only: `__bhGiantR` reads in effective-`uGiantR` world units and drives the
-  red-giant-only `uGiantScale` (= value / 4.2), so resizing the orb never touches the nebula/dot/
-  sun/sim; `__bhGiantCenter` retargets the **camera park vantage** `RED_GIANT_PARK` (the orb stays
-  centred at origin — these move the CAMERA to frame the grown giant off-centre). Both default to
-  the shipped look (`uGiantScale` 17.6/4.2, park `[18, -12, 26]`). Set `__bhMorph≈1.9` to frame the
-  parked orb while tuning. A **dev-only slider panel** (`src/hero/components/RedGiantDebugPanel.tsx`,
-  mounted from `index.astro` behind `import.meta.env.DEV`) writes these hooks via UI; nothing ships
-  in prod.
 - **`scratchpad/*.mjs`** — Playwright capture scripts that spin up the dev server, scroll or
   force `__bhMorph`/`__bhFlash`, and save screenshots (`scratchpad/state-N-*.png`, `nova-*.png`,
   `live-*.png`, etc.) for reviewing each state. `scratchpad/` is a workspace for probes/

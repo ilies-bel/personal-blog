@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugVec3 } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
@@ -185,13 +185,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const ROTATE_SPEED = 0.018; // rad/s of resting drift
   // Red-giant axial spin: ~one rotation per 60 s on its tilted pole (2π/60). Slow
   // and cinematic — the surface rolls, the camera no longer orbits it (see the
-  // red-giant orbit freeze below). The base radius the size slider divides by so
-  // __bhGiantR keeps its world-units feel against the red-giant-only uGiantScale.
+  // red-giant orbit freeze below).
   const RED_GIANT_SPIN_RATE = (Math.PI * 2) / 60; // rad/s
-  const RED_GIANT_BASE_R = 4.2; // = buildDisk's base uGiantR (the scale's denominator)
-  // Debug retarget for the red-giant camera composition. The forward camera rig
-  // owns the real pose; this offset is only a development shim for the old tuning
-  // panel so it can still nudge the red hold without moving the star geometry.
+  // Red-giant camera-composition offset. The forward camera rig owns the real pose;
+  // this baked world vector slides the camera (and its look target) by the same
+  // amount during the red-giant beat to frame the grown orb off-centre without
+  // moving the star geometry (the orb stays centred at origin).
   const RED_GIANT_PARK = new THREE.Vector3(0, 0, 0);
 
   let mouseX = 0;
@@ -381,18 +380,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // balloons the nebula/dot/sun states or the gravity-sim seed (all share the base
     // uGiantR). lifecycle.giantScale ramps it from a SMALL newborn star (tiny vs the black
     // hole) up to the full bloated size as the camera comes in (the scale-contrast reveal).
-    // DEBUG: window.__bhGiantR overrides it live; unset → the lifecycle-driven value.
-    const giantScaleOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantRadius);
-    const giantScaleValue =
-      typeof giantScaleOverride === 'number' ? giantScaleOverride / RED_GIANT_BASE_R : look.giantScale;
-    diskMatPrimary.uniforms.uGiantScale.value = giantScaleValue;
-    diskMatSecondary.uniforms.uGiantScale.value = giantScaleValue;
+    diskMatPrimary.uniforms.uGiantScale.value = look.giantScale;
+    diskMatSecondary.uniforms.uGiantScale.value = look.giantScale;
     // The orb stays centred (uGiantCenter = origin); its off-centre FRAMING is the
-    // camera park below. DEBUG: window.__bhGiantCenter = [x, y, z] retargets the PARK
-    // VANTAGE live so the framing can be re-dialled with the slider panel; unset → the
-    // baked RED_GIANT_PARK. (It no longer moves the geometry — the star is at origin.)
-    const giantCenterOverride = readDebugVec3(DEBUG_WINDOW_KEYS.giantCenter);
-    if (giantCenterOverride) RED_GIANT_PARK.set(giantCenterOverride[0], giantCenterOverride[1], giantCenterOverride[2]);
+    // baked camera park below (RED_GIANT_PARK), not a geometry move — the star is at origin.
     // Axial spin: roll the red-giant photosphere on its own tilted pole (≈23°) at a
     // slow, cinematic rate (~60 s / rotation). t accumulates seconds, so the angle
     // grows monotonically; the shader gates it to the displayed red giant only.

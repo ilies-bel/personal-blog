@@ -45,10 +45,6 @@ export const DEBUG_WINDOW_KEYS = {
   nebLight: '__bhNebLight',
   backdropStage: '__bhBackdropStage',
   streak: '__bhStreak',
-  /** Override the red-giant sphere radius (uGiantR), in world units. */
-  giantRadius: '__bhGiantR',
-  /** Override the red-giant world-space offset (uGiantCenter), as [x, y, z]. */
-  giantCenter: '__bhGiantCenter',
 } as const;
 
 /** Read a numeric debug-hook override off window, or undefined if unset. */
@@ -56,15 +52,4 @@ export function readDebugNumber(key: string): number | undefined {
   if (typeof window === 'undefined') return undefined;
   const value = (window as unknown as Record<string, unknown>)[key];
   return typeof value === 'number' ? value : undefined;
-}
-
-/** Read a 3-number debug-hook override (e.g. a position) off window as a tuple,
- *  or undefined if unset or malformed. */
-export function readDebugVec3(key: string): [number, number, number] | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const value = (window as unknown as Record<string, unknown>)[key];
-  if (!Array.isArray(value) || value.length < 3) return undefined;
-  const [x, y, z] = value;
-  if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return undefined;
-  return [x, y, z];
 }
