@@ -131,3 +131,18 @@ overlays). Add new rules to the partial that owns the concern; only `tokens.css`
 
 - `npm run dev` — Astro dev server.
 - `npm run build` — production build.
+
+## Workflow
+
+**All work must be done by a subagent in an isolated git worktree, then merged back.**
+Do not edit files on the main checkout directly. For every task:
+
+1. Spawn a subagent (the `Agent` tool) to do the actual work, running it with
+   `isolation: "worktree"` so it operates on its own copy of the repo.
+2. Let the subagent implement, build (`npm run build`), and verify its change inside
+   that worktree.
+3. Only once the work is complete and verified, merge the worktree branch back into
+   `main`.
+
+The main working tree stays clean; every change lands through a worktree-isolated
+subagent and a merge — never via a direct edit on `main`.

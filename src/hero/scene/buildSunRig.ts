@@ -60,7 +60,11 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
   // --- (C) soft corona haze (camera-facing billboard) ---
   // uDiskFrac is the disc radius as a fraction of the billboard half-size; it is
   // updated per frame as the rig scales so the halo hugs the growing photosphere.
-  const coronaHalf = R * 4.0;
+  // Half-size pulled in (R*4.0 → R*2.4): with the steeper falloff in sunCoronaFrag
+  // the halo is now a tight rim glow, so the billboard doesn't need to span far —
+  // a smaller plane keeps uDiskFrac larger (disc fills more of the quad) so the
+  // glow stays anchored right at the rim instead of floating out in dead space.
+  const coronaHalf = R * 2.4;
   const coronaMat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf }, uRed: { value: 0 }, uFade: { value: 1 } },
     vertexShader: sunCoronaVert,
@@ -295,28 +299,32 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     CUR.dir = Math.random() < 0.5 ? 0 : 1;
   };
 
-  // More PROMINENT flares for the yellow star: more loop arcades, more of them
-  // "big", and noticeably more (and taller) erupting prominences than the ported
-  // reference — so the active yellow sun reads as energetic, not calm.
-  const NA = 22; // loop arcades (was 16)
+  // The reference sun's activity is dominated by graceful ARCING coronal LOOPS that
+  // curve off the limb and return to the surface — NOT straight erupting spikes. So
+  // the loop arcades are the hero (kept plentiful) and the straight prominences are
+  // cut right back (they were reading as an urchin of spikes). The loops also arc a
+  // touch higher so the rainbow-arc shape is unmistakable.
+  const NA = 24; // loop arcades — the dominant feature
   for (let i = 0; i < NA; i++) {
     setLife();
-    const big = i < 7; // more big arcades (was 4)
+    const big = i < 8; // a good number of dramatic, tall arcades
     buildLoops({
       c: randDir(),
-      sep: 0.13 + Math.random() * (big ? 0.19 : 0.12),
+      sep: 0.15 + Math.random() * (big ? 0.20 : 0.13), // wider feet → broader arcs
       nArch: big ? 14 + Math.floor(Math.random() * 8) : 6 + Math.floor(Math.random() * 6),
-      kBase: (big ? 0.4 : 0.22) + Math.random() * 0.18, // arch higher off the limb
+      kBase: (big ? 0.46 : 0.26) + Math.random() * 0.18, // arch higher off the limb (taller rainbow)
       archLean: (Math.random() * 2 - 1) * (big ? 0.7 : 0.5),
       fan: 0.07 + Math.random() * 0.06,
       spanAz: Math.random() * Math.PI * 2,
     });
   }
-  const NP = 15; // erupting prominences / jets (was 9)
+  // Straight erupting prominences: CUT from 15 → 4 and made shorter. A few jets read
+  // as energetic; fifteen tall ones read as a spiky sea-urchin that hides the disc.
+  const NP = 4;
   for (let i = 0; i < NP; i++) {
     setLife();
     CUR.dir = 0; // prominences always spray base -> tip
-    buildProminence(randDir(), 0.7 + Math.random() * 0.8); // taller/denser (was 0.5+0.7)
+    buildProminence(randDir(), 0.45 + Math.random() * 0.45); // shorter/denser, not towering spikes
   }
 
   const loopGeo = new THREE.BufferGeometry();

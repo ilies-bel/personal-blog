@@ -117,37 +117,53 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     col = mix(col, c3, smoothstep(0.55,0.78,m));
     col = mix(col, c4, smoothstep(0.80,0.96,m));
 
+    // chromospheric network: the dark lava filaments between bright cells. Deepened
+    // (mask 0.55 → 0.80, darker troughs) so the surface reads as the reference's
+    // high-contrast molten texture, not a smooth gold wash.
     float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
-    float chMask = smoothstep(0.12, -0.05, ch);
-    col = mix(col, mix(vec3(0.20,0.030,0.0), vec3(0.08,0.006,0.0), uRed), chMask*0.55);
+    float chMask = smoothstep(0.16, -0.05, ch);
+    col = mix(col, mix(vec3(0.14,0.018,0.0), vec3(0.06,0.004,0.0), uRed), chMask*0.80);
 
-    float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.45,0.2,m);
-    col = mix(col, vec3(0.06,0.01,0.0), spot*0.6);
+    // sunspots: darker + slightly broader so they punch as the reference's dark pores.
+    float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.48,0.2,m);
+    col = mix(col, vec3(0.04,0.006,0.0), spot*0.72);
 
+    // granulation: crisp distinct mottling (lava-cell texture of the reference). Floor
+    // raised (0.72 → 0.95) so the troughs stay LUMINOUS — the reference disc is a bright
+    // glowing surface, not a dark one with bright speckles. Keeps a strong swing for the
+    // cell contrast, but the average is now well above 1.0 so the whole disc reads bright.
     float gran = fbm(p*7.0 + t*1.0);
-    col *= 0.86 + 0.26*(gran*0.5+0.5);
+    float gran2 = fbm(p*15.0 - t*0.6);
+    col *= 0.95 + 0.50*(gran*0.5+0.5) + 0.10*(gran2*0.5+0.5);
 
     // bright active-region speckle fades out toward the (quiet) red giant. On the
     // yellow star these are the white-hot flare patches of the reference, so they
     // run hot and bright; they cool to a dim glow as the surface reddens (uRed→1).
-    float ar = smoothstep(0.86, 0.99, m) * (1.0 - 0.85*uRed);
-    col += ar * mix(vec3(1.3,1.05,0.55), vec3(0.5,0.28,0.07), uRed);
+    // Tightened threshold (0.86 → 0.90) so the white-hot patches stay as discrete
+    // flare points instead of flooding the whole crest white.
+    float ar = smoothstep(0.90, 0.99, m) * (1.0 - 0.85*uRed);
+    col += ar * mix(vec3(1.15,0.92,0.46), vec3(0.5,0.28,0.07), uRed);
 
     vec3 vd = normalize(-vViewPos);
     float fres = 1.0 - max(dot(vd, vViewN), 0.0);
-    float limb = pow(fres, 2.0);
-    // bright yellow-white limb → dusky red limb; weaken it for the red giant. The
-    // yellow star's limb glows hot (the luminous rim of the reference), so the gold
-    // limb colour is pushed past 1 and the additive rim lift is stronger.
-    vec3 limbCol = mix(vec3(1.45,1.18,0.62), vec3(0.78,0.18,0.04), uRed);
-    col = mix(col, limbCol, limb*mix(0.80, 0.5, uRed));
-    col += limb * mix(vec3(1.0,0.62,0.20), vec3(0.26,0.05,0.01), uRed);
+    // The reference has a THICK bright yellow-white photosphere rim wrapping the disc.
+    // Two terms: a wide soft brightening band (pow 1.8) that lifts the outer third of
+    // the disc toward bright gold, and a tight hot edge (pow 5.0) for the crisp white-
+    // gold rim line right at the silhouette. Together they read as a luminous wrapping
+    // rim, not a hard dark edge, while the disc centre keeps its lava detail.
+    float limbWide = pow(fres, 1.8);
+    float limbEdge = pow(fres, 5.0);
+    vec3 limbCol = mix(vec3(1.30,1.10,0.62), vec3(0.78,0.18,0.04), uRed);
+    col = mix(col, limbCol, limbWide*mix(0.55, 0.5, uRed));
+    col += limbEdge * mix(vec3(1.05,0.78,0.34), vec3(0.26,0.05,0.01), uRed);
 
     // overall luminance: bright gold sun → dim matte red giant (light leads size).
-    // The yellow-star multiplier is dialled back from the old blazing value so the
-    // photosphere mottling/granulation reads with detail instead of blowing out to
-    // glare under the swap bloom (still a proper main-sequence star, not an ember).
-    col *= mix(1.42, 0.5, uRed);
+    // The yellow-star multiplier is pulled DOWN from the old blazing 1.42 to 1.18 so
+    // the photosphere sits just below the tone-map clip point: the granulation/
+    // mottling/sunspots all read with detail like the reference, instead of the crests
+    // blowing out to a featureless white ball under exposure + bloom — while staying a
+    // bright, saturated gold sun (1.06 read too dusky/brown).
+    col *= mix(1.70, 0.5, uRed);
 
     // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
     // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
@@ -163,7 +179,7 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     bcol = mix(bcol, b2, smoothstep(0.34,0.58,m));
     bcol = mix(bcol, b3, smoothstep(0.55,0.78,m));
     bcol = mix(bcol, b4, smoothstep(0.80,0.96,m));
-    bcol += limb * vec3(0.30, 0.45, 0.70);   // cool limb glow
+    bcol += limbWide * vec3(0.30, 0.45, 0.70);   // cool limb glow
     bcol *= 1.25;                             // young star is luminous
     col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
     gl_FragColor = vec4(col, 1.0);
@@ -180,11 +196,12 @@ export const sunGlowVert = /* glsl */ `
 export const sunGlowFrag = /* glsl */ `
   uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
   void main(){ vec3 vd=normalize(-vP);
-    // softer falloff (1.7, was 2.2) so the chromosphere reads as a luminous yellow
-    // halo wrapping the photosphere; additive lift pulled back from 2.6 so the glow
-    // shell doesn't blow out into glare over the surface at the swap.
-    float i=pow(1.0-max(dot(vd,vN),0.0), 1.7);
-    gl_FragColor=vec4(uColor*i*1.85, 1.0); }`;
+    // Falloff 2.3 (between the old broad 1.7 and the too-tight 3.0): a THICK bright rim
+    // ring wrapping the photosphere like the reference's luminous edge, but still
+    // anchored to the disc — not a screen-wide halo. Lift 1.5 so the rim genuinely
+    // glows yellow-white without bleaching the silhouette to a featureless ball.
+    float i=pow(1.0-max(dot(vd,vN),0.0), 2.3);
+    gl_FragColor=vec4(uColor*i*1.5, 1.0); }`;
 
 // --- soft corona haze (camera-facing additive billboard) ---
 
@@ -206,18 +223,20 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     float r = length(pp);
     float a = atan(pp.y, pp.x);
     float df = uDiskFrac;
-    float halo = exp(-max(r-df,0.0)*7.0);
+    // STEEPER halo falloff (7.0 → 16.0) and SHORTER streamer reach (2.0 → 6.0) so the
+    // corona is a tight warm glow clinging to the rim, not a screen-wide soft wash.
+    float halo = exp(-max(r-df,0.0)*16.0);
     float st = fbm(vec3(cos(a)*0.8, sin(a)*0.8, uTime*0.02));
     st = st*0.5+0.5;
-    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*2.0);
-    float corona = halo*0.50 + streamer*0.22;
+    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*6.0);
+    float corona = halo*0.50 + streamer*0.18;
     corona *= smoothstep(df-0.02, df+0.04, r);
     corona *= smoothstep(1.0, df+0.05, r);
     vec3 c = mix(vec3(1.20,0.78,0.30), vec3(1.30,1.02,0.52), st*0.7);
     c = mix(c, vec3(0.85,0.20,0.05), uRed);          // gold corona → dim red haze
-    // brighter base (1.05, was 0.6) so the yellow star sits in a wide luminous halo
-    // like the reference; the red giant still dims to a faint haze (×0.35).
-    gl_FragColor = vec4(c*corona*1.05*mix(1.0, 0.35, uRed)*uFade, 1.0);
+    // base pulled DOWN (1.05 → 0.55) so the tight rim glow doesn't add up into a broad
+    // bloom-feeding wash; the red giant still dims further to a faint haze (×0.35).
+    gl_FragColor = vec4(c*corona*0.55*mix(1.0, 0.35, uRed)*uFade, 1.0);
   }`;
 
 // --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
