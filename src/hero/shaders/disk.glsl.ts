@@ -465,13 +465,13 @@ export const diskVertexShader = /* glsl */ `
       // turns rigidly with the body via rotateAxis(uGiantSpin) above). An independent
       // +Y time-advection ('churn') used to crawl the cells across the surface in their
       // OWN drift direction, so the mottling slid against the rotation instead of turning
-      // WITH it. On the RED GIANT we nearly KILL that drift (×0.1 → a barely-perceptible
-      // slow boil, which real granulation has) so the cells are essentially a rigid
-      // function of the spun sphere and rotate coherently into view. OTHER branches
-      // (nebula boil / explosion turbulence, which reuse this default path's gran/heat)
-      // keep the FULL churn so their time-evolution is unchanged — the cut is gated to
-      // rgActive only via a red-giant-zeroed factor.
-      float churnT = uTime * 0.025 * mix(1.0, 0.1, rgActive);  // red giant → 10% drift (near-rigid); else full
+      // WITH it. On the RED GIANT we now KILL that drift ENTIRELY (×0.0): churn = vec3(0),
+      // so the cells are a PURE RIGID function of the spun sphere — a fixed texture painted
+      // on the body that rotates coherently into view with uGiantSpin, with ZERO independent
+      // boil/shimmer. OTHER branches (nebula boil / explosion turbulence, which reuse this
+      // default path's gran/heat) keep the FULL churn so their time-evolution is unchanged —
+      // the kill is gated to rgActive only, via the red-giant-zeroed factor below.
+      float churnT = uTime * 0.025 * mix(1.0, 0.0, rgActive);   // red giant → ZERO drift (rigid, fully spin-locked); else full
       vec3 churn = vec3(0.0, churnT, 0.0);
       vec2 cell = cellular(sphere*uGranScale + churn);
       float granCells = 1.0 - smoothstep(0.0, 0.5, cell.x);    // bright granule centres
@@ -609,13 +609,15 @@ export const diskVertexShader = /* glsl */ `
         // KEEP 0.18 IN SYNC with SUN_RIG_RADIUS's factor so the swap stays seamless.
         sunRadFac *= mix(0.18, 1.0, uYrGrow);
         // ROTATION-LOCK (red giant only): the photosphere mottle 'm' is built from the
-        // SPUN 'sphere'/'sp', so it already rotates rigidly with the body. The 'tt'
-        // time term used to ADVECT the fbm lookups in their own time-drift, making the
+        // SPUN 'sphere'/'sp' (sp = sphere*1.25, and 'sphere' was already rolled by
+        // rotateAxis(uGiantSpin) above), so it already rotates rigidly with the body. The
+        // 'tt' time term used to ADVECT the fbm lookups in their own time-drift, making the
         // mottling slide across the surface instead of rotating WITH it. On the RED GIANT
-        // we cut 'tt' to ~10% (a faint residual boil; real granulation does evolve) so the
-        // SAME cells rotate into view rather than crawling. The YELLOW SUN keeps its full
-        // 'tt' boil (that path is gated by redGiant<0.5), so its look is unchanged.
-        float tt = uTime * 0.05 * mix(1.0, 0.1, redGiant);
+        // we now ZERO 'tt' (×0.0): every fbm lookup depends ONLY on the spun 'sp', so the
+        // mottle is a PURE RIGID texture that rotates with the body — ZERO independent boil.
+        // The YELLOW SUN keeps its full 'tt' boil (that path is gated by redGiant<0.5, which
+        // is 0 for the yellow sun → mix picks 1.0), so its look is unchanged.
+        float tt = uTime * 0.05 * mix(1.0, 0.0, redGiant);   // red giant → ZERO boil (fully spin-locked); yellow sun keeps full tt
 
         // === (A) photosphere field ==========================================
         // Big swirling convection cells (the reference's flowing mottle), NOT
