@@ -12,9 +12,9 @@ import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
-import type { SceneHooks } from './types';
+import type { SceneHandle, SceneHooks } from './types';
 
-export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): () => void {
+export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): SceneHandle {
   const diskParticles = tuneParticlesForDevice();
   const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
   void bCritShadow;
@@ -312,6 +312,32 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     e.age = 0;
   };
 
+  // Shared red-giant raycast: map a client point to canvas NDC, cast through the
+  // live camera, and intersect the giant's invisible origin sphere (radius =
+  // uGiantR × uGiantScale, the held ≈8.5-unit giant). Returns whether it hit and,
+  // on a hit, leaves the world hit point in `giantHitPoint` for the caller. Reuses
+  // the scratch ndc/raycaster/sphere/vec3 — no per-call allocation — so both the
+  // click handler AND the cursor hit-test (hitTestGiant below) can drive it.
+  const giantSphereHit = (clientX: number, clientY: number): boolean => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    eruptPointerNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -(((clientY - rect.top) / rect.height) * 2 - 1),
+    );
+    eruptRaycaster.setFromCamera(eruptPointerNdc, camera);
+    giantSphere.radius =
+      (diskMatPrimary.uniforms.uGiantR.value as number) * (diskMatPrimary.uniforms.uGiantScale.value as number);
+    return eruptRaycaster.ray.intersectSphere(giantSphere, giantHitPoint) !== null;
+  };
+
+  // Cursor hit-test exposed to HeroIsland (→ window.__bhHitGiant → the custom
+  // cursor's hexagon). Cheap no-op unless the settled, full-size, idle red giant is
+  // the body on screen (redGiantClickable — the same beat gate the click path uses),
+  // so the hexagon only appears during the red-giant beat AND over its projected disk.
+  const hitTestGiant = (clientX: number, clientY: number): boolean =>
+    redGiantClickable && giantSphereHit(clientX, clientY);
+
   // Unified pointerdown: the mesh and the particle giant are never both clickable, so
   // we branch on which body is on screen. The handler maps the pointer to canvas NDC
   // once, then raycasts the active body (the mesh surface, OR the giant's invisible
@@ -338,10 +364,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // --- particle RED-GIANT path: raycast an invisible sphere at the world origin. ---
       // The giant is centred at the origin (RED_GIANT_PARK = (0,0,0)) and the point
       // cloud has no parent transform, so world == the giant's spun frame. Effective
-      // world radius = uGiantR × uGiantScale (the held medium-dense giant, ≈8.5).
-      giantSphere.radius =
-        (diskMatPrimary.uniforms.uGiantR.value as number) * (diskMatPrimary.uniforms.uGiantScale.value as number);
-      if (!eruptRaycaster.ray.intersectSphere(giantSphere, giantHitPoint)) return;
+      // world radius = uGiantR × uGiantScale (the held medium-dense giant, ≈8.5). The
+      // raycast itself is the shared giantSphereHit (also used by the cursor hit-test),
+      // which leaves the world hit point in giantHitPoint on a hit.
+      if (!giantSphereHit(e.clientX, e.clientY)) return;
       // world hit → unit dir (giant at origin, so world == spun local). UNSPIN by the
       // current uGiantSpin about the SAME tilted axis the shader uses, so the stored dir
       // is in the giant's UNSPUN frame (the shader compares it against the unspun sphere
@@ -720,7 +746,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // the yellow swap at stage ~2.5+) and not collapsing (kCollapse≈0). That isolates
     // the calm red-giant beat (stage ≈ 2.05→2.5) and excludes the yellow→red swap
     // flash, the shrink, the collapse, the nebula, the dot and the yellow mesh. The
-    // cloud must also actually be drawn this frame. Read by the pointerdown handler.
+    // cloud must also actually be drawn this frame. Read by the pointerdown handler
+    // AND by hitTestGiant (the beat gate for the interactive-hexagon cursor).
     redGiantClickable =
       look.cloudSide &&
       look.cloudShown &&
@@ -1020,35 +1047,42 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   frame();
 
   // --- teardown ---
-  return () => {
-    stopped = true;
-    cancelAnimationFrame(raf);
-    window.removeEventListener('resize', onResize);
-    window.removeEventListener('pointermove', onPointerMove);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    // click-eruption listeners (only attached when motion is enabled) — these live on
-    // `window`, not the canvas, because the scroll-track overlay swallows canvas-targeted
-    // pointer events; detach them from the same target we added them to.
-    window.removeEventListener('pointerdown', onPointerDownSun);
-    window.removeEventListener('pointerup', onPointerUpSun);
-    window.removeEventListener('pointercancel', cancelHold);
-    window.removeEventListener('pointerleave', cancelHold);
+  // The returned value is the dispose function (same call contract as before) with
+  // hitTestGiant bolted on (Object.assign), so HeroIsland can publish the cursor
+  // hit-test on window while existing `dispose()` callers stay untouched.
+  const dispose: SceneHandle = Object.assign(
+    () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      // click-eruption listeners (only attached when motion is enabled) — these live on
+      // `window`, not the canvas, because the scroll-track overlay swallows canvas-targeted
+      // pointer events; detach them from the same target we added them to.
+      window.removeEventListener('pointerdown', onPointerDownSun);
+      window.removeEventListener('pointerup', onPointerUpSun);
+      window.removeEventListener('pointercancel', cancelHold);
+      window.removeEventListener('pointerleave', cancelHold);
 
-    // Each rig disposes its own geos + materials (and, for post, the composer +
-    // bloom + grade material) — construction and teardown are now co-located in
-    // the build*() factories, so this just calls each rig's dispose().
-    postRig.dispose();
-    diskRig.dispose();
-    starRig.dispose();
-    distantStarRig.dispose();
-    warpRig.dispose();
-    streakRig.dispose();
-    ringRig.dispose();
-    sunRig.dispose();
-    gravitySim.dispose();
-    renderer.dispose();
-    if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
-  };
+      // Each rig disposes its own geos + materials (and, for post, the composer +
+      // bloom + grade material) — construction and teardown are now co-located in
+      // the build*() factories, so this just calls each rig's dispose().
+      postRig.dispose();
+      diskRig.dispose();
+      starRig.dispose();
+      distantStarRig.dispose();
+      warpRig.dispose();
+      streakRig.dispose();
+      ringRig.dispose();
+      sunRig.dispose();
+      gravitySim.dispose();
+      renderer.dispose();
+      if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
+    },
+    { hitTestGiant },
+  );
+  return dispose;
 }
 
 // ---------------------------------------------------------------------------

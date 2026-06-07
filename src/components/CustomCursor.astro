@@ -438,6 +438,15 @@
           interactive = getComputedStyle(target).cursor === 'pointer';
         }
       }
+      // Hero red giant: its rendered SURFACE is interactive too. The cursor can't
+      // import three.js / the scene, so the live hero (HeroIsland) publishes a
+      // beat-gated sphere hit-test on window.__bhHitGiant; OR it in only when not
+      // already interactive (so the cheap DOM checks win first). The hook is absent
+      // on pages without the scrollable hero, so the typeof guard no-ops there.
+      if (!interactive) {
+        const hit = (window as unknown as { __bhHitGiant?: (x: number, y: number) => boolean }).__bhHitGiant;
+        if (typeof hit === 'function' && hit(targetX, targetY)) interactive = true;
+      }
       cursor.classList.toggle('cursor--interactive', interactive);
 
       // Reduced motion: write the ball directly (the loop never runs). Otherwise
