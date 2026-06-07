@@ -1,6 +1,6 @@
 /* Final exploration HUD — appears only after the last cinematic beat. The default
-   state is a glyph instrument rail; labels, destination and connector line exist
-   only on active hover/focus/selection so the animation stays the visual subject. */
+   state is a glyph instrument rail; labels and destination expand on hover/focus
+   so the animation stays the visual subject. */
 .hud-system {
   --hud-line: color-mix(in oklch, var(--fg) 34%, transparent);
   --hud-line-dim: color-mix(in oklch, var(--fg) 16%, transparent);
@@ -100,12 +100,8 @@
   width: 2.45rem;
   height: 2.32rem;
   padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--fg-faint);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  text-decoration: none;
   overflow: visible;
   transition:
     width 0.34s var(--ease-out-quint),
@@ -124,21 +120,21 @@
     width 0.22s var(--ease-out-quint),
     background-color 0.2s ease;
 }
-.hud-nav-button[data-active='true'],
-.hud-nav-button[data-selected='true'] {
+.hud-nav-button:hover,
+.hud-nav-button:focus-visible {
   width: 11.7rem;
   color: var(--fg);
 }
-.hud-nav-button[data-active='true']::before,
-.hud-nav-button[data-selected='true']::before {
+.hud-nav-button:hover::before,
+.hud-nav-button:focus-visible::before {
   width: 1.1rem;
   background: var(--hud-gold);
 }
 /* Scroll-spy "you are here": the stage the scroll position maps to, when not
-   already lit by hover/focus or a committed selection. Quiet on purpose — it
-   does NOT expand the rail (no layout shift as you scroll); it just lifts the
-   glyph out of --fg-faint and gives the connector tick a dim gold so the eye
-   can find the current stage at a glance. */
+   already lit by hover or focus. Quiet on purpose: it does NOT expand the rail
+   (no layout shift as you scroll); it just lifts the glyph out of --fg-faint and
+   gives the connector tick a dim gold so the eye can find the current stage at a
+   glance. */
 .hud-nav-button[data-current='true'] {
   color: color-mix(in oklch, var(--fg-dim) 78%, var(--fg));
 }
@@ -151,7 +147,7 @@
   outline-offset: 0.25rem;
 }
 /* The glyph is an SVG (in public/glyphs/) applied as a mask and painted with the
-   button's currentColor, so the rail's faint → gold → current color transitions
+   link's currentColor, so the rail's faint to gold to current color transitions
    flow through the icon for free. --glyph-mask is set per-row inline in the JSX.
    drop-shadow replaces the old text-shadow (it follows the masked alpha shape). */
 .hud-nav-glyph {
@@ -189,15 +185,14 @@
     opacity 0.2s ease,
     transform 0.34s var(--ease-out-quint);
 }
-.hud-nav-button[data-active='true'] .hud-nav-copy,
-.hud-nav-button[data-selected='true'] .hud-nav-copy {
+.hud-nav-button:hover .hud-nav-copy,
+.hud-nav-button:focus-visible .hud-nav-copy {
   max-width: 8.6rem;
   opacity: 1;
   transform: none;
 }
 .hud-nav-title,
-.hud-nav-destination,
-.hud-nav-object {
+.hud-nav-destination {
   font-family: var(--font-mono);
   text-transform: uppercase;
 }
@@ -219,78 +214,8 @@
     0 0 18px rgba(0, 0, 0, 1),
     0 0 4px rgba(0, 0, 0, 0.95);
 }
-.hud-nav-connector {
-  display: none;
-}
-.hud-nav-connector::after {
-  content: '';
-  position: absolute;
-  right: -0.2rem;
-  top: 50%;
-  width: 0.42rem;
-  height: 0.42rem;
-  border-top: 1px solid var(--hud-line);
-  border-right: 1px solid var(--hud-line);
-  transform: translateY(-50%) rotate(45deg);
-}
-.hud-nav-button[data-active='true'] .hud-nav-connector,
-.hud-nav-button[data-selected='true'] .hud-nav-connector {
-  opacity: 0.72;
-  transform: translateY(-50%) scaleX(1);
-}
-.hud-nav-object {
-  display: none;
-}
 .hud-nav-mobile-readout {
   display: none;
-}
-.hud-nav-brief {
-  display: grid;
-  gap: 0.55rem;
-  max-width: 15.5rem;
-  margin: 0.65rem 0 0 2.35rem;
-}
-.hud-nav-brief p {
-  margin: 0;
-  color: color-mix(in oklch, var(--fg-dim) 86%, var(--fg));
-  font-size: 0.78rem;
-  line-height: 1.45;
-  text-wrap: pretty;
-  text-shadow:
-    0 0 18px rgba(0, 0, 0, 1),
-    0 0 4px rgba(0, 0, 0, 0.95);
-}
-.hud-nav-brief-meta {
-  width: max-content;
-  color: var(--fg-faint);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  line-height: 1;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-shadow:
-    0 0 18px rgba(0, 0, 0, 1),
-    0 0 4px rgba(0, 0, 0, 0.95);
-}
-.hud-nav-panel-link {
-  display: inline-flex;
-  width: max-content;
-  color: var(--fg);
-  font-size: 0.68rem;
-  line-height: 1;
-  letter-spacing: 0.12em;
-  text-decoration: none;
-  border-bottom: 1px solid var(--hud-line);
-  padding-bottom: 0.18rem;
-  transition: color 0.18s ease, border-color 0.18s ease;
-}
-.hud-nav-panel-link:hover {
-  color: var(--hud-gold);
-  border-color: var(--hud-gold);
-}
-.hud-nav-panel-link:focus-visible {
-  outline: 1px solid var(--hud-gold);
-  outline-offset: 0.25rem;
 }
 
 @media (max-width: 46rem) {
@@ -332,8 +257,8 @@
     width: 2.45rem;
     height: 2.55rem;
   }
-  .hud-nav-button[data-active='true'],
-  .hud-nav-button[data-selected='true'] {
+  .hud-nav-button:hover,
+  .hud-nav-button:focus-visible {
     width: clamp(8.2rem, 39vw, 10.8rem);
   }
   .hud-nav-button::before {
@@ -352,9 +277,6 @@
   .hud-nav-destination {
     font-size: 0.6rem;
   }
-  .hud-nav-connector {
-    display: none;
-  }
   .hud-nav-mobile-readout {
     display: flex;
     justify-content: center;
@@ -370,15 +292,6 @@
   }
   .hud-nav-mobile-readout span:first-child {
     color: var(--fg);
-  }
-  .hud-nav-brief {
-    justify-items: center;
-    max-width: min(28rem, 100%);
-    margin: 0.45rem 0 0;
-    text-align: center;
-  }
-  .hud-nav-brief-meta {
-    justify-self: center;
   }
 }
 

@@ -1,78 +1,63 @@
 import type { CSSProperties } from 'react';
 
-export type HudTargetId = 'end' | 'collapse' | 'expansion' | 'rebirth' | 'beginning';
+export type HudTargetId = 'beginning' | 'nebula' | 'yellow' | 'red' | 'end';
 
 export interface HudNavItem {
   id: HudTargetId;
-  /** Public path to the row's mask glyph SVG (painted with the button's currentColor). */
+  /** Public path to the row's mask glyph SVG (painted with the link's currentColor). */
   glyphSrc: string;
   motion: 'pulse' | 'breathe' | 'drift' | 'flicker' | 'still';
   label: string;
   destination: string;
-  object: string;
   stage: number;
-  progress: number;
-  body: string;
-  href?: string;
+  href: string;
 }
 
 export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
+  {
+    id: 'beginning',
+    glyphSrc: 'glyphs/glyph-dot.svg',
+    motion: 'still',
+    label: 'THE BEGINNING',
+    destination: 'About',
+    stage: 4.7,
+    href: 'about',
+  },
+  {
+    id: 'nebula',
+    glyphSrc: 'glyphs/glyph-nebula.svg',
+    motion: 'breathe',
+    label: 'NEBULA',
+    destination: 'Writing',
+    stage: 3.5,
+    href: 'writing',
+  },
+  {
+    id: 'yellow',
+    glyphSrc: 'glyphs/glyph-yellow-star.svg',
+    motion: 'flicker',
+    label: 'YELLOW STAR',
+    destination: 'Projects',
+    stage: 2.9,
+    href: 'projects',
+  },
+  {
+    id: 'red',
+    glyphSrc: 'glyphs/glyph-red-giant.svg',
+    motion: 'drift',
+    label: 'GRAVEYARD',
+    destination: 'Graveyard',
+    stage: 2.05,
+    href: 'graveyard',
+  },
   {
     id: 'end',
     glyphSrc: 'glyphs/glyph-black-hole.svg',
     motion: 'pulse',
     label: 'BLACK HOLE',
-    destination: 'Inspirations',
-    object: 'black hole',
+    destination: 'Inspiration',
     stage: 0,
-    progress: 0.97,
-    body: 'References, atmospheres, and systems that survive the collapse.',
-  },
-  {
-    id: 'collapse',
-    glyphSrc: 'glyphs/glyph-collapse.svg',
-    motion: 'breathe',
-    label: 'COLLAPSE',
-    destination: 'Projects',
-    object: 'stellar collapse',
-    stage: 0.82,
-    progress: 0.66,
-    body: 'Selected builds under pressure: constraints, tradeoffs, and what held.',
-  },
-  {
-    id: 'expansion',
-    glyphSrc: 'glyphs/glyph-red-giant.svg',
-    motion: 'drift',
-    label: 'RED GIANT',
-    destination: 'Writing',
-    object: 'red giant',
-    stage: 2.05,
-    progress: 0.54,
-    body: 'Notes on code, interfaces, tooling, and the systems around them.',
-    href: 'writing',
-  },
-  {
-    id: 'rebirth',
-    glyphSrc: 'glyphs/glyph-yellow-star.svg',
-    motion: 'flicker',
-    label: 'YELLOW STAR',
-    destination: 'Experiments',
-    object: 'yellow star',
-    stage: 2.9,
-    progress: 0.26,
-    body: 'Small prototypes and simulations where the next thing starts forming.',
-  },
-  {
-    id: 'beginning',
-    glyphSrc: 'glyphs/glyph-nebula.svg',
-    motion: 'still',
-    label: 'NEBULA',
-    destination: 'About me',
-    object: 'nebula',
-    stage: 3.5,
-    progress: 0.06,
-    body: 'The quiet frame behind the work: engineer, writer, builder on the web.',
-    href: 'about',
+    href: 'posts/thanks-for-scrolling-to-the-bottom',
   },
 ];
 
@@ -103,20 +88,10 @@ export function hudIdForStage(stage: number): HudTargetId {
 
 interface HudNavigationProps {
   visible: boolean;
-  /** The highlighted target: preview > committed selection > scroll position.
-   *  Resolved upstream so the readout + loud "active" treatment track it. */
-  activeId: HudTargetId | null;
-  /** The committed (clicked) target — rendered louder than a scroll highlight. */
-  selectedId: HudTargetId | null;
   /** The target the current scroll position maps to (scroll-spy "you are here").
-   *  Drives a quiet ambient marker, distinct from the deliberate active/selected
-   *  treatments, so the rail reflects scroll even when idle. */
+   *  Drives a quiet ambient marker so the rail reflects scroll position. */
   currentId: HudTargetId | null;
   base: string;
-  onPreview: (id: HudTargetId) => void;
-  onPreviewEnd: () => void;
-  onActivate: (id: HudTargetId) => void;
-  onClearSelection: () => void;
 }
 
 function resolveHref(base: string, href: string): string {
@@ -131,65 +106,33 @@ function resolveAsset(base: string, src: string): string {
 
 export default function HudNavigation({
   visible,
-  activeId,
-  selectedId,
   currentId,
   base,
-  onPreview,
-  onPreviewEnd,
-  onActivate,
-  onClearSelection,
 }: HudNavigationProps) {
-  const activeItem = activeId ? HUD_NAV_BY_ID[activeId] : null;
-  const selectedItem = selectedId ? HUD_NAV_BY_ID[selectedId] : null;
-  const panelItem = selectedItem ?? activeItem;
-  // The mobile readout names the stage in focus: a deliberate preview/selection
-  // if there is one, otherwise the scroll-spy current stage so it tracks scroll.
-  const readoutItem = activeItem ?? (currentId ? HUD_NAV_BY_ID[currentId] : null);
+  // The mobile readout names the stage the scroll position is currently on.
+  const readoutItem = currentId ? HUD_NAV_BY_ID[currentId] : null;
 
   return (
-    <div className="hud-system" data-visible={visible} onMouseLeave={onPreviewEnd}>
+    <div className="hud-system" data-visible={visible}>
       <nav
         className="hud-nav"
         aria-label="Explore portfolio stages"
         aria-hidden={!visible}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            onPreviewEnd();
-            onClearSelection();
-          }
-        }}
       >
         <ol className="hud-nav-list">
           {HUD_NAV_ITEMS.map((item) => {
-            const isActive = activeId === item.id;
-            const isSelected = selectedId === item.id;
-            // Scroll-spy "you are here": where the scroll position sits in the
-            // lifecycle. This is the visitor's real location in the set, so it owns
-            // aria-current. The quiet visual marker is suppressed when the same row
-            // is already lit louder by a hover/focus preview or selection, so the
-            // two treatments never double up.
             const isCurrent = currentId === item.id;
-            const showCurrentMarker = isCurrent && !isActive && !isSelected;
 
             return (
               <li className="hud-nav-row" key={item.id}>
-                <button
+                <a
                   className="hud-nav-button"
-                  data-active={isActive || isSelected}
-                  data-selected={isSelected}
-                  data-current={showCurrentMarker}
+                  href={resolveHref(base, item.href)}
                   data-motion={item.motion}
-                  type="button"
-                  aria-label={`${item.label}. ${item.destination}. ${item.object}.`}
+                  data-current={isCurrent}
+                  aria-label={`${item.label}. ${item.destination}.`}
                   tabIndex={visible ? 0 : -1}
                   aria-current={isCurrent ? 'location' : undefined}
-                  aria-expanded={isActive || isSelected}
-                  aria-pressed={isSelected}
-                  onFocus={() => onPreview(item.id)}
-                  onBlur={onPreviewEnd}
-                  onMouseEnter={() => onPreview(item.id)}
-                  onClick={() => onActivate(item.id)}
                 >
                   <span
                     className="hud-nav-glyph"
@@ -200,10 +143,7 @@ export default function HudNavigation({
                     <span className="hud-nav-title">{item.label}</span>
                     <span className="hud-nav-destination">{item.destination}</span>
                   </span>
-                  <span className="hud-nav-connector" aria-hidden="true">
-                    <span className="hud-nav-object">{item.object}</span>
-                  </span>
-                </button>
+                </a>
               </li>
             );
           })}
@@ -220,19 +160,6 @@ export default function HudNavigation({
           <span>{readoutItem.label}</span>
           <span>{readoutItem.destination}</span>
         </p>
-      )}
-
-      {panelItem && (
-        <div className="hud-nav-brief" aria-live="polite">
-          <p>{panelItem.body}</p>
-          {panelItem.href ? (
-            <a className="hud-nav-panel-link" href={resolveHref(base, panelItem.href)}>
-              Open {panelItem.destination}
-            </a>
-          ) : (
-            <span className="hud-nav-brief-meta">Stage pinned</span>
-          )}
-        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 // Shared state for the hero island: the scroll-driven snapshot the presentational
-// sub-components render from, plus the HUD action callbacks. HeroIsland provides
-// it; ManifestoOverlay / HeroIdentity / ScrollHint consume it. Frame-cadence
-// values that must NOT trigger React renders stay as refs inside HeroIsland — only
+// sub-components render from. HeroIsland provides it; ManifestoOverlay /
+// HeroIdentity / ScrollHint / ExplorationHud consume it. Frame-cadence values
+// that must NOT trigger React renders stay as refs inside HeroIsland — only
 // render-relevant snapshots live here.
 import { createContext, useContext, type ReactNode } from 'react';
 import type { ScrollDirection } from '../lib/constants';
@@ -16,25 +16,18 @@ export interface SceneState {
   reduced: boolean;
   /** True once the final exploration HUD has taken over. */
   explorationMode: boolean;
-  /** HUD target under a deliberate hover/focus preview, or the committed
-   *  selection (preview wins). Drives the loud active treatment (rail expands,
-   *  label revealed). Scroll does NOT feed this — see scrollHudId. */
-  activeHudId: HudTargetId | null;
-  /** HUD target the visitor has committed to (click). Owns the inline route link. */
-  selectedHudId: HudTargetId | null;
   /** HUD target the current scroll position maps to — the last lifecycle stage
    *  scrolled past. Drives the quiet "you are here" marker so the rail tracks
-   *  scroll even when nothing is hovered or selected, without expanding. */
+   *  scroll position without expanding. */
   scrollHudId: HudTargetId | null;
   /** import.meta.env.BASE_URL, resolved once. */
   base: string;
 }
 
 export interface SceneActions {
-  onHudPreview: (id: HudTargetId) => void;
-  onHudPreviewEnd: () => void;
-  onHudActivate: (id: HudTargetId) => void;
-  onHudClearSelection: () => void;
+  // Reserved for future on-star marker wiring. No HUD callbacks remain
+  // after the hover/selection machinery was removed.
+  _placeholder?: never;
 }
 
 const SceneStateCtx = createContext<SceneState | null>(null);

@@ -5,7 +5,7 @@
 // NOT trigger React renders are kept as refs; render-relevant snapshots are
 // published through SceneStateProvider and consumed by the presentational
 // sub-components (HeroIdentity / ManifestoOverlay / ScrollHint). The HUD keeps its
-// own prop interface, fed from the same state + actions.
+// own prop interface, fed from the same state.
 //
 // The three.js scene (renderer, rigs, GLSL, the per-frame loop) lives in
 // ../scene/createScene; the timeline + copy live in ../beats (shared with
@@ -13,12 +13,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
-import { legacyStageForProgress, progressForLegacyStage } from '../timeline';
-import { HUD_NAV_BY_ID, hudIdForStage, type HudTargetId } from '../HudNavigation';
+import { legacyStageForProgress } from '../timeline';
+import { hudIdForStage, type HudTargetId } from '../HudNavigation';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
-  HUD_SELECTED_STORAGE_KEY,
   SCROLL_DOWN,
   SCROLL_UP,
   type ScrollDirection,
@@ -43,7 +42,7 @@ declare global {
     /** Published by the live hero (this component) so the standalone custom-cursor
      *  IIFE can ask whether a screen point is over the red giant's surface — the
      *  cursor shows its interactive hexagon there. Absent on pages without the
-     *  scrollable hero (about, …). Key literal = CURSOR_WINDOW_KEYS.hitGiant. */
+     *  scrollable hero (about, ...). Key literal = CURSOR_WINDOW_KEYS.hitGiant. */
     __bhHitGiant?: (clientX: number, clientY: number) => boolean;
   }
 }
@@ -51,7 +50,7 @@ declare global {
 interface HeroIslandProps {
   /** Backdrop mode: render only the scene canvas (no manifesto beats, no chrome,
    *  no scroll subscription) pinned to a fixed lifecycle frame. Used by reading
-   *  pages (about, …) that want the signature object as a dimmed, static backdrop
+   *  pages (about, ...) that want the signature object as a dimmed, static backdrop
    *  behind their copy — the same room as the hero, pushed back. */
   backdrop?: boolean;
   /** The lifecycle frame to pin in backdrop mode, in getStage transition-space
@@ -84,19 +83,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   const [reduced, setReduced] = useState(false);
   const [motionPreferenceVersion, setMotionPreferenceVersion] = useState(0);
   const [explorationMode, setExplorationMode] = useState(false);
-  const [previewHudId, setPreviewHudId] = useState<HudTargetId | null>(null);
-  const [selectedHudId, setSelectedHudId] = useState<HudTargetId | null>(() => {
-    try {
-      const stored = localStorage.getItem(HUD_SELECTED_STORAGE_KEY);
-      return stored && stored in HUD_NAV_BY_ID ? (stored as HudTargetId) : null;
-    } catch {
-      return null;
-    }
-  });
   const explorationModeRef = useRef(false);
   const explorationTimerRef = useRef<number | null>(null);
-  const selectedHudRef = useRef<HudTargetId | null>(selectedHudId);
-  const activeHudRef = useRef<HudTargetId | null>(selectedHudId);
   // Whether the opening chrome (name + menu) is currently shown. Tracked in a ref
   // so the scroll callback only touches the DOM on an actual transition.
   const chromeVisibleRef = useRef(true);
@@ -183,12 +171,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       const delta = scrollState.progress - lastProgressRef.current;
       if (delta > DIRECTION_DEADZONE) setDirection(SCROLL_DOWN);
       else if (delta < -DIRECTION_DEADZONE) setDirection(SCROLL_UP);
-      if (explorationModeRef.current && selectedHudRef.current && Math.abs(delta) > DIRECTION_DEADZONE) {
-        selectedHudRef.current = null;
-        activeHudRef.current = null;
-        setSelectedHudId(null);
-        try { localStorage.removeItem(HUD_SELECTED_STORAGE_KEY); } catch { /* noop */ }
-      }
       lastProgressRef.current = scrollState.progress;
       // Cinematic chrome: the name (.bh-identity) and the top-right menu
       // (.overlay-blog, owned by the layout) belong to the opening frame only. Once
@@ -217,23 +199,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
     // One normalized forward progress value owns the public choreography. The
     // shader stage is a legacy implementation coordinate derived from it.
-    const getStage = (): number => {
-      const activeItem = explorationModeRef.current && !isReduced && activeHudRef.current
-        ? HUD_NAV_BY_ID[activeHudRef.current]
-        : null;
-      return activeItem?.stage ?? legacyStageForProgress(progressRef.current);
-    };
-    const getProgress = (): number => {
-      const activeItem = explorationModeRef.current && !isReduced && activeHudRef.current
-        ? HUD_NAV_BY_ID[activeHudRef.current]
-        : null;
-      return activeItem ? activeItem.progress ?? progressForLegacyStage(activeItem.stage) : progressRef.current;
-    };
+    const getStage = (): number => legacyStageForProgress(progressRef.current);
+    const getProgress = (): number => progressRef.current;
 
     const dispose = createScene(host, isReduced, {
       getStage,
       getProgress,
-      getFocusTarget: () => activeHudRef.current,
+      getFocusTarget: () => null,
       isExplorationMode: () => explorationModeRef.current,
     });
     // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
@@ -253,41 +225,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   const base = import.meta.env.BASE_URL ?? '/';
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
-  // same forward-progress → shader-stage expression the scene uses.
-  const scrollHudId = explorationMode ? hudIdForStage(legacyStageForProgress(progress)) : null;
-  // The loud "active" treatment (rail expands, label revealed) is reserved for a
-  // deliberate hover/focus preview or a committed selection — NOT scroll. Scroll
-  // gets the quiet `scrollHudId` marker below, so the rail never expands/collapses
-  // just from scrolling past a stage.
-  const activeHudId = explorationMode ? previewHudId ?? selectedHudId : null;
-
-  const handleHudPreview = (id: HudTargetId): void => {
-    if (!explorationModeRef.current) return;
-    activeHudRef.current = id;
-    setPreviewHudId(id);
-  };
-
-  const handleHudPreviewEnd = (): void => {
-    setPreviewHudId(null);
-    activeHudRef.current = selectedHudRef.current;
-  };
-
-  const handleHudActivate = (id: HudTargetId): void => {
-    if (!explorationModeRef.current) return;
-    selectedHudRef.current = id;
-    activeHudRef.current = id;
-    setPreviewHudId(null);
-    setSelectedHudId(id);
-    try { localStorage.setItem(HUD_SELECTED_STORAGE_KEY, id); } catch { /* noop */ }
-  };
-
-  const handleHudClearSelection = (): void => {
-    selectedHudRef.current = null;
-    activeHudRef.current = null;
-    setPreviewHudId(null);
-    setSelectedHudId(null);
-    try { localStorage.removeItem(HUD_SELECTED_STORAGE_KEY); } catch { /* noop */ }
-  };
+  // same forward-progress to shader-stage expression the scene uses.
+  const scrollHudId: HudTargetId | null = explorationMode
+    ? hudIdForStage(legacyStageForProgress(progress))
+    : null;
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own
   // chrome and copy, and dims this layer via CSS (.bh-backdrop).
@@ -301,13 +242,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   return (
     <SceneStateProvider
-      state={{ progress, direction, reduced, explorationMode, activeHudId, selectedHudId, scrollHudId, base }}
-      actions={{
-        onHudPreview: handleHudPreview,
-        onHudPreviewEnd: handleHudPreviewEnd,
-        onHudActivate: handleHudActivate,
-        onHudClearSelection: handleHudClearSelection,
-      }}
+      state={{ progress, direction, reduced, explorationMode, scrollHudId, base }}
+      actions={{}}
     >
       <div className="bh-root" data-exploring={explorationMode}>
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
