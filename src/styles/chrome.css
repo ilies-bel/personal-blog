@@ -14,15 +14,9 @@
   top: 0;
   z-index: 2;
 }
-.site-header .brand {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: -0.03em;
-  color: var(--fg);
-  text-decoration: none;
-}
-.site-header .brand .dot { color: var(--accent); }
+/* The brand is the shared identity lockup (.bh-identity-lockup, hero.css) — the
+   hero's name + role stack, used as the same mark sitewide. The header only owns
+   its placement; the lockup owns the look. */
 
 /* The nav pill — a rounded capsule of links with the current page highlighted. */
 .nav-pill {

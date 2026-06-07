@@ -111,6 +111,26 @@ body.article-page .bh-backdrop::after {
 .bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
 .bh-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 
+/* The SAME identity lockup, reused as the sitewide brand mark on the reading-page
+   header (.site-header .brand) and the about overlay (.overlay-brand) — see
+   BaseLayout. It is the hero's name + role stack, so the logo is one consistent
+   mark everywhere, not a separate small wordmark per surface. The two surfaces
+   keep their own positioning (sticky header vs fixed overlay); this only owns the
+   stacked name/role look + hover/focus, mirroring .bh-identity above. */
+.bh-identity-lockup {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-decoration: none;
+  color: inherit;
+}
+.bh-identity-lockup:hover .bh-identity-name { color: var(--accent-strong); }
+.bh-identity-lockup:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+/* On the reading-page header there is no canvas behind the mark, so drop the
+   heavy legibility text-shadow the hero/about need over the moving scene. */
+.site-header .bh-identity-lockup .bh-identity-name,
+.site-header .bh-identity-lockup .bh-identity-role { text-shadow: none; }
+
 /* Cinematic chrome: the name (.bh-identity) and the top-right menu (.overlay-blog,
    scene.css) belong to the opening frame only. Once scroll leaves the top the
    island adds body.is-scrolled and both fade up-and-out so the scene plays without
