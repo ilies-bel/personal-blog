@@ -74,14 +74,14 @@
   padding: clamp(1.75rem, 5vw, 3.25rem) clamp(1.5rem, 4vw, 2.75rem);
 }
 /* Top-left + bottom-right bracket corners: two pseudo-elements, each an L drawn
-   from two adjacent borders at low-alpha cobalt. */
+   from two adjacent borders at low-alpha brass. */
 .about-panel::before,
 .about-panel::after {
   content: '';
   position: absolute;
   width: clamp(1.4rem, 3vw, 2.2rem);
   height: clamp(1.4rem, 3vw, 2.2rem);
-  border: 1px solid color-mix(in oklch, var(--accent) 34%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 24%, transparent);
   pointer-events: none;
 }
 .about-panel::before {
@@ -133,14 +133,16 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-top: clamp(2rem, 6vh, 3.5rem);
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in oklch, var(--accent) 14%, var(--line));
   border-radius: var(--radius-md);
-  background: color-mix(in oklch, var(--bg-soft) 58%, transparent);
+  background:
+    linear-gradient(140deg, color-mix(in oklch, var(--ember) 5%, transparent), transparent 58%),
+    color-mix(in oklch, var(--bg-soft) 58%, transparent);
   overflow: hidden;
 }
 .about-principles div {
   padding: 1rem;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid color-mix(in oklch, var(--accent) 10%, var(--line));
 }
 .about-principles div:last-child { border-right: 0; }
 .about-principles span {
@@ -202,7 +204,7 @@
 
   .about-principles div {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid color-mix(in oklch, var(--accent) 10%, var(--line));
   }
 
   .about-principles div:last-child {

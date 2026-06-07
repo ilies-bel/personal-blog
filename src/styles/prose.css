@@ -9,7 +9,7 @@
   line-height: 1.78;
 }
 /* The article header is a page-hero in the same language as the writing index
-   and About: a mono kicker (one rare amber signal), a display title at the
+   and About: a mono kicker (one rare gold signal), a display title at the
    section-opener scale (a notch quieter than the index so the article stays a
    reading destination), a muted lead, then the instrument-readout meta. Subtle
    text-shadows keep it crisp over the faint black-hole backdrop. */
@@ -19,7 +19,7 @@
   border-bottom: 1px solid var(--line);
 }
 
-/* Back to writing — the bracket affordance from About's Close: a mono cobalt
+/* Back to writing — the bracket affordance from About's Close: a mono gold
    label led by an L-bracket that tightens inward on hover (a viewfinder gesture),
    so it reads as the same chrome family as the rest of the site. */
 .article-back {
@@ -53,7 +53,7 @@
   border-radius: 3px;
 }
 
-/* The one warm signal: an amber mono kicker, matching .writing-kicker. */
+/* The one warm signal: a gold mono kicker, matching .writing-kicker. */
 .article-header .article-kicker {
   margin: 0 0 0.85rem;
   width: max-content;
@@ -160,7 +160,7 @@
 }
 
 /* Over the faint black-hole backdrop, give plain body copy and headings a whisper
-   of dark text-shadow so they stay crisp even where the cobalt smudge brightens.
+   of dark text-shadow so they stay crisp even where the warm smudge brightens.
    (Code, pre and blockquote already sit on a solid --bg-soft panel, so they're
    exempt.) Kept very subtle — legibility insurance, not a glow effect. */
 body.article-page .prose p,

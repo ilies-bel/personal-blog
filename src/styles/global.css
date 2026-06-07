@@ -1,7 +1,8 @@
-/* Sitewide styles — "The Blue-Hour Terminal": a dark cobalt/indigo room lit by
-   the glow of a display, with one warm amber light. The HERO is the showpiece;
-   the reading experience (header, prose, footer) is the calm after, lit by the
-   SAME palette in the SAME type system. One room, not two sites stitched together.
+/* Sitewide styles — "The Golden Record Room": warm graphite surfaces, white
+   gravitational light, and rare aged-gold instrument marks. The HERO is the
+   showpiece; the reading experience (header, prose, footer) is the calm after,
+   lit by the SAME palette in the SAME type system. One room, not two sites
+   stitched together.
 
    This file is an aggregator: each concern lives in its own stylesheet, imported
    below in cascade order (tokens first so every later file can use var()). Vite
