@@ -12,28 +12,30 @@ interface StarMarkerProps {
   markerFrameRef: React.RefObject<MarkerFrame | null>;
 }
 
-// Settled-window stage thresholds (same as createScene.ts — kept here as the
-// single source of truth for the component's "which item is active" logic).
+// Settled-window stage thresholds (MUST stay byte-identical to the settled
+// check in createScene.ts onMarkerFrame block — both files gate marker
+// visibility on the same stage ranges). Widened so each state dwells across
+// ≈2-3 consecutive 5% scroll samples.
 // Returns the HudNavItem whose stage window contains `stage`, or null if mid-transition.
 function settledItemForStage(stage: number): HudNavItem | null {
-  // dot: stage 4.45 - 4.72
-  if (stage >= 4.45 && stage <= 4.72) {
+  // dot: stage 4.40 - 4.72  (p≈0.00-0.06)
+  if (stage >= 4.40 && stage <= 4.72) {
     return HUD_NAV_ITEMS.find((i) => i.id === 'beginning') ?? null;
   }
-  // nebula: stage 3.38 - 3.56
-  if (stage >= 3.38 && stage <= 3.56) {
+  // nebula: stage 3.28 - 3.68  (p≈0.15-0.27)
+  if (stage >= 3.28 && stage <= 3.68) {
     return HUD_NAV_ITEMS.find((i) => i.id === 'nebula') ?? null;
   }
-  // yellow star: stage 2.85 - 3.04
-  if (stage >= 2.85 && stage <= 3.04) {
+  // yellow star: stage 2.82 - 3.05  (p≈0.30-0.42)
+  if (stage >= 2.82 && stage <= 3.05) {
     return HUD_NAV_ITEMS.find((i) => i.id === 'yellow') ?? null;
   }
-  // red giant: stage 2.00 - 2.38
-  if (stage >= 2.0 && stage <= 2.38) {
+  // red giant: stage 1.98 - 2.40  (p≈0.46-0.68)
+  if (stage >= 1.98 && stage <= 2.40) {
     return HUD_NAV_ITEMS.find((i) => i.id === 'red') ?? null;
   }
-  // black hole: stage 0.00 - 0.13
-  if (stage >= 0.0 && stage <= 0.13) {
+  // black hole: stage 0.00 - 0.35  (p≈0.82-1.00, post-supernova only)
+  if (stage >= 0.0 && stage <= 0.35) {
     return HUD_NAV_ITEMS.find((i) => i.id === 'end') ?? null;
   }
   return null;

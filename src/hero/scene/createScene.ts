@@ -920,17 +920,20 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
       // Settled windows in stage space: a settled state is one where the lifecycle
       // is dwelling on a recognisable object rather than mid-transition.
-      //   dot     4.45 - 4.72
-      //   nebula  3.38 - 3.56
-      //   yellow  2.85 - 3.04
-      //   red     2.00 - 2.38
-      //   black   0.00 - 0.13
+      // Widened so each state has room to breathe (≈2-3 consecutive 5% scroll
+      // samples show the marker). Keep in sync with settledItemForStage() in
+      // StarMarker.tsx — identical thresholds required.
+      //   dot     4.40 - 4.72  (p≈0.00-0.06, full dot hold)
+      //   nebula  3.28 - 3.68  (p≈0.15-0.27, settled cloud dwell)
+      //   yellow  2.82 - 3.05  (p≈0.30-0.42, ignition + contemplation hold)
+      //   red     1.98 - 2.40  (p≈0.46-0.68, red-giant approach + full hold)
+      //   black   0.00 - 0.35  (p≈0.82-1.00, post-supernova black hole)
       const settled =
-        (stage >= 4.45 && stage <= 4.72) ||
-        (stage >= 3.38 && stage <= 3.56) ||
-        (stage >= 2.85 && stage <= 3.04) ||
-        (stage >= 2.00 && stage <= 2.38) ||
-        (stage >= 0.00 && stage <= 0.13);
+        (stage >= 4.40 && stage <= 4.72) ||
+        (stage >= 3.28 && stage <= 3.68) ||
+        (stage >= 2.82 && stage <= 3.05) ||
+        (stage >= 1.98 && stage <= 2.40) ||
+        (stage >= 0.00 && stage <= 0.35);
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });
     }
 
