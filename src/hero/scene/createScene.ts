@@ -82,14 +82,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor the red giant CONTRACTS into. The red giant's
-  // TRUE world radius is uGiantR (4.2) × uGiantScale (8.5/4.2) = 8.5 units (the held
-  // medium-dense giant, trimmed ~6% from 9.0). So the dying star lands at 8.5 × 0.18 ≈
-  // 1.53 — the exact size the cloud shrinks to. NOTE: the cloud's grow factor in the
-  // vertex shader (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold particle
-  // sphere is size-matched to the mesh at the swap (no pop). Keep this uGiantScale in
-  // sync with buildDisk + lifecycle's GIANT_FULL.
-  const RED_GIANT_RADIUS = 4.2 * (8.5 / 4.2); // = 8.5; uGiantR × uGiantScale (held giant)
-  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.53
+  // TRUE world radius is uGiantR (4.2) × uGiantScale (9.0/4.2) = 9.0 units (the held
+  // medium-dense giant). So the dying star lands at 9.0 × 0.18 ≈ 1.62 — the exact size
+  // the cloud shrinks to. NOTE: the cloud's grow factor in the vertex shader
+  // (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold particle sphere is
+  // size-matched to the mesh at the swap (no pop). Keep this uGiantScale in sync with
+  // buildDisk + lifecycle's GIANT_FULL.
+  const RED_GIANT_RADIUS = 4.2 * (9.0 / 4.2); // = 9.0; uGiantR × uGiantScale (held giant)
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.62
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
@@ -190,8 +190,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // Red-giant camera-composition offset. The forward camera rig owns the real pose;
   // this baked world vector slides the camera (and its look target) by the same
   // amount during the red-giant beat to frame the grown orb off-centre without
-  // moving the star geometry (the orb stays centred at origin).
-  const RED_GIANT_PARK = new THREE.Vector3(0, 0, 0);
+  // moving the star geometry (the orb stays centred at origin). This vantage
+  // (+X right, -Y down, +Z back) pushes the camera to a LOWER-LEFT offset, which
+  // throws the grown giant into the UPPER-RIGHT of the frame with its limb curving
+  // across — the dialed-in target composition.
+  const RED_GIANT_PARK = new THREE.Vector3(5, -3, 7);
 
   let mouseX = 0;
   let mouseY = 0;
@@ -242,9 +245,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // --- CLICK ERUPTIONS on the PARTICLE red giant (geyser jet + surface ripple) ----
   // The red giant is a DIFFERENT body from the yellow star: it's the ~1.2M-point GPU
   // particle cloud (the disk rig), not the sun-rig mesh. So it has NO mesh to raycast.
-  // Instead we intersect an invisible sphere at the world origin (the giant is centred
-  // there — RED_GIANT_PARK is (0,0,0) and the point cloud has no parent transform, so
-  // world space == the giant's spun frame). A SEPARATE pool/uniforms keeps the two
+  // Instead we intersect an invisible sphere at the world origin (the giant geometry
+  // stays centred there — RED_GIANT_PARK is a CAMERA move, not a geometry offset — and
+  // the point cloud has no parent transform, so world space == the giant's spun frame).
+  // A SEPARATE pool/uniforms keeps the two
   // effects decoupled (mesh and giant are never on screen at once). The same shape as
   // the mesh pool above so the spawn/age/copy logic is identical.
   const giantEruptPool: Eruption[] = Array.from(
@@ -314,7 +318,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
   // Shared red-giant raycast: map a client point to canvas NDC, cast through the
   // live camera, and intersect the giant's invisible origin sphere (radius =
-  // uGiantR × uGiantScale, the held ≈8.5-unit giant). Returns whether it hit and,
+  // uGiantR × uGiantScale, the held ≈9.0-unit giant). Returns whether it hit and,
   // on a hit, leaves the world hit point in `giantHitPoint` for the caller. Reuses
   // the scratch ndc/raycaster/sphere/vec3 — no per-call allocation — so both the
   // click handler AND the cursor hit-test (hitTestGiant below) can drive it.
@@ -362,9 +366,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       holdStart = performance.now();
     } else {
       // --- particle RED-GIANT path: raycast an invisible sphere at the world origin. ---
-      // The giant is centred at the origin (RED_GIANT_PARK = (0,0,0)) and the point
-      // cloud has no parent transform, so world == the giant's spun frame. Effective
-      // world radius = uGiantR × uGiantScale (the held medium-dense giant, ≈8.5). The
+      // The giant geometry stays centred at the origin (RED_GIANT_PARK only slides the
+      // CAMERA, not the geometry) and the point cloud has no parent transform, so world
+      // == the giant's spun frame. Effective world radius = uGiantR × uGiantScale (the
+      // held medium-dense giant, ≈9.0). The
       // raycast itself is the shared giantSphereHit (also used by the cursor hit-test),
       // which leaves the world hit point in giantHitPoint on a hit.
       if (!giantSphereHit(e.clientX, e.clientY)) return;

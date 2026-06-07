@@ -91,7 +91,7 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     // (the supernova collapses centred, the star grows centred). The big off-centre
     // "vast limb" framing is a CAMERA move (see createScene's red-giant park), NOT a
     // geometry offset — so uGiantCenter defaults to origin.
-    uGiantScale: { value: 8.5 / 4.2 }, // red-giant-only radius ×base. MEDIUM (~8.5, dense) not
+    uGiantScale: { value: 9.0 / 4.2 }, // red-giant-only radius ×base. MEDIUM (~9.0, dense) not
     //   the old bloated ~17.6 — the fixed grain count goes sparse on a huge sphere. The
     //   lifecycle ramps this during the reveal (small newborn → this held size); kept in
     //   sync with lifecycle's GIANT_FULL so the held giant doesn't pop.
