@@ -206,9 +206,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let raf = 0;
   let stopped = false;
 
-  // easeOut (cubic) + smoothstep01 are the single-source-of-truth easings, now
-  // owned by lifecycle.ts (imported above). The stateful clock below still needs
-  // them: easeOut for the intro dezoom ramp, smoothstep01 for the nova rise.
+  // easeOut (cubic) is a single-source-of-truth easing owned by lifecycle.ts
+  // (imported above). The intro dezoom ramp below still uses it. The supernova
+  // `nova` is now a clockless Gaussian in `stage` (see frame()), so no nova-rise
+  // easing is needed here.
 
   // The lifecycle position is eased toward its scroll target each frame so a
   // flick of the wheel glides through the transitions instead of snapping.
@@ -224,34 +225,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let prevStreakStage = stage;
   let streakDir = 1;
 
-  // --- supernova whiteout: a TIME-based flash envelope, decoupled from scroll ---
-  // The old flash was a Gaussian in `morph` (scroll position) ~0.1 wide, so a fast
-  // scroll skipped it entirely. Instead we TRIGGER on the breakout crossing and run
-  // our own clock to completion, so the blast is always seen at full length no
-  // matter how fast the visitor scrolls. `nova` (0..1) is the master envelope that
-  // drives the whiteout pass + the particle/bloom/exposure beats.
-  let novaStart = -1;     // performance.now() ms at fire; -1 = idle
-  let novaArmed = true;   // hysteresis latch: re-arm only after leaving the band
-  let prevMorph = Math.min(1, stage);      // previous-frame morph, for crossing detection
-  // direction the blast plays, latched at fire and held for the whole envelope:
-  //   +1 EXPLODE  — scroll UP, red giant → black hole (morph FALLING through 0.5),
-  //                 time forward: a star collapses, detonates, blasts outward.
-  //   -1 IMPLODE  — scroll DOWN, black hole → red giant (morph RISING through 0.5),
-  //                 time backward: the "un-explosion", light gathers inward.
-  let novaDir = 1;
-  const NOVA_TRIGGER = 0.5;  // breakout (where the legacy flash fired)
-  const NOVA_ARM = 0.12;     // must move |morph-0.5| beyond this to re-arm
-  // PUNCHY, not a wash: rise fast, hold a beat, decay quickly so the screen flash
-  // is felt as an impact and the remnant is revealed almost immediately. The old
-  // 0.68s decay let the bleach dwell ~0.84s and read as a grey loading screen;
-  // total dwell is now ~0.48s. The particle shock-breakout (disk uFlash) keeps
-  // going on its own morph schedule, so the BLAST is still substantial — only the
-  // screen-white envelope is tightened.
-  const NOVA_RISE = 0.08;    // s: dark → peak accent
-  const NOVA_HOLD = 0.05;    // s: brief peak, not a white loading screen
-  const NOVA_DECAY = 0.35;   // s: quick cool-out, reveal the remnant fast
-  const NOVA_DUR = NOVA_RISE + NOVA_HOLD + NOVA_DECAY;
-  const NOVA_COOLDOWN = 1200; // ms minimum between fires (anti-strobe backstop)
+  // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
+  // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
+  // breakout (stage 0.5 == morph 0.5), computed inline in frame(). It depends ONLY
+  // on scroll position, so it is identical every visit and replays symmetrically
+  // when scrubbed in either direction (the supernova is fully reversible). No
+  // performance.now() clock, no trigger/arm latch, no direction-at-fire state.
   // Nebula-intro flash — REMOVED (it read as a cheap grey exposure glitch as the
   // nebula appeared). Only the previous-stage tracker survives so the crossing is
   // still computed for clarity; the whiteout never fires. See the block in frame().
@@ -289,51 +268,29 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       stage = morphOverride;
       progress = progressForLegacyStage(morphOverride);
     }
-    // `morph` (= min(1, stage)) is needed HERE for the stateful nova clock's
-    // breakout-crossing detection below; lifecycle() recomputes it from the same
-    // formula for the look scalars. (Kept local + cheap — it's the clock's input.)
+    // `morph` (= min(1, stage)) drives the transition-1 uniforms below;
+    // lifecycle() recomputes it from the same formula for the look scalars.
     const morph = Math.min(1, stage);              // transition 1 progress (0..1)
 
     // --- transition 1: reverse supernova ---
     diskMatPrimary.uniforms.uMorph.value = morph;
     diskMatSecondary.uniforms.uMorph.value = morph;
     ringMat.uniforms.uMorph.value = morph;
-    // --- supernova flash: time-based envelope, fired on the breakout crossing ---
-    // Detect a crossing of the breakout (morph through 0.5) in EITHER scroll
-    // direction. Fire once, then latch: re-arm only after morph has clearly left
-    // the band (so parking on 0.5 or jittering at the edge can't machine-gun it),
-    // with a hard cooldown as an anti-strobe backstop. Reduced-motion never fires.
-    const crossed = (prevMorph < NOVA_TRIGGER) !== (morph < NOVA_TRIGGER);
-    if (
-      crossed && novaArmed && !reduced && !exploring &&
-      (novaStart < 0 || now - novaStart > NOVA_COOLDOWN)
-    ) {
-      novaStart = now;
-      novaArmed = false;
-      // latch the blast direction from how morph crossed the breakout: RISING
-      // (scroll down, BH→giant) plays the IMPLODE; FALLING (scroll up, giant→BH)
-      // plays the EXPLODE. Held until the next fire so the whole envelope is one
-      // coherent direction even if the scroll reverses mid-blast.
-      novaDir = morph > prevMorph ? -1 : 1;
-    }
-    if (!novaArmed && Math.abs(morph - NOVA_TRIGGER) > NOVA_ARM) novaArmed = true;
-    prevMorph = morph;
-    // evaluate the envelope on its OWN clock (rise → hold → ease-out decay), so it
-    // always plays to completion regardless of where scroll has gone meanwhile.
-    let nova = 0;
-    if (novaStart >= 0) {
-      const te = (now - novaStart) / 1000; // seconds since fire
-      if (te >= NOVA_DUR) novaStart = -1; // expired → idle
-      else if (te < NOVA_RISE) nova = smoothstep01(te / NOVA_RISE);
-      else if (te < NOVA_RISE + NOVA_HOLD) nova = 1.0;
-      else {
-        const p = (te - NOVA_RISE - NOVA_HOLD) / NOVA_DECAY; // 0..1 across the tail
-        nova = 1.0 - p * p * (3.0 - 2.0 * p); // smoothstep ease-out (light dissipating)
-      }
-    }
+    // Scroll-anchored supernova: a deterministic Gaussian in `stage`. No clock —
+    // `nova` depends ONLY on scroll position, so it is identical every visit and
+    // replays symmetrically when scrubbed in either direction (fully reversible).
+    // Centered on 0.62, where the disk's STRUCTURED shock-breakout (the shell +
+    // radial fingers, gated in disk.glsl by morphFlare/shellLight ~0.46→0.70) is
+    // fully formed — so the flash + the uFlash particle-core punch reinforce that
+    // structure instead of washing the pre-structure dense bulk at ~0.50 (which read
+    // as a flat loading-screen bloom). Sigma 0.13 keeps the punch off the bulk below
+    // and out of the black hole above.
+    const NOVA_CENTER = 0.62;
+    const NOVA_SIGMA = 0.13;
+    let nova = reduced ? 0 : Math.exp(-Math.pow((stage - NOVA_CENTER) / NOVA_SIGMA, 2));
     // DEBUG: window.__bhFlash pins the envelope to a held value so capture scripts
-    // can screenshot the rise/peak/decay (the time-based flash would otherwise
-    // expire during their settle wait). Pairs with __bhMorph (which pins stage).
+    // can screenshot any point of the blast independent of scroll. Pairs with
+    // __bhMorph (which pins stage — which now also drives nova deterministically).
     const flashOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flash);
     if (typeof flashOverride === 'number') nova = Math.max(0, Math.min(1, flashOverride));
 
@@ -356,16 +313,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // bloom that keeps the dark corners, never an edge-to-edge loading whiteout.
     // The physical radial particle shock-breakout (disk uFlash) does the heavy
     // lifting; this pass is just the warm bloom punch over it. See NovaShader.
-    const novaScreen = nova * 0.5;
+    const novaScreen = nova * 0.72;
     const nebulaScreen = nebulaFlash * 0.5; // debug-only path; 0 in normal play
     const screenNova = Math.max(novaScreen, nebulaScreen);
     const nebulaFlashOwnsScreen = nebulaScreen > novaScreen;
     novaPass.uniforms.uNova.value = screenNova;
-    novaPass.uniforms.uPeak.value = 0.78; // filmic cap — peak stays under pure white
+    novaPass.uniforms.uPeak.value = 0.88; // filmic cap — peak stays under pure white
     // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
     // so a capture script can inspect either variant without scrolling to trigger it.
+    // With the clock gone the default is a constant +1 (forward lifecycle = the star
+    // detonating outward = EXPLODE), still overridable by __bhFlashDir.
     const flashDirOverride = readDebugNumber(DEBUG_WINDOW_KEYS.flashDir);
-    novaPass.uniforms.uNovaDir.value = nebulaFlashOwnsScreen ? 1 : typeof flashDirOverride === 'number' ? flashDirOverride : novaDir;
+    novaPass.uniforms.uNovaDir.value = nebulaFlashOwnsScreen ? 1 : typeof flashDirOverride === 'number' ? flashDirOverride : 1;
 
     // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
     // This is the second piece of the stateful clock (time-based intro ramp); like

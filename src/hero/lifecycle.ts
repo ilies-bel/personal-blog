@@ -17,16 +17,17 @@
 // Given the inputs the frame loop already derives, it returns ALL the computed
 // scalars (the look/bloom/exposure/grade/camera-shape values) as one typed
 // `StarState`. The frame loop becomes a thin impure shell: it reads the genuinely
-// STATEFUL clock (the eased `stage`, the time-based supernova `nova` envelope, the
-// `intro` dezoom timing), passes those already-computed scalars in here, and then
-// just WRITES the returned StarState into uniforms/bloom/grade/camera.
+// STATEFUL clock (the eased `stage`, the `intro` dezoom timing), resolves the
+// scroll-anchored supernova `nova`, passes those already-computed scalars in here,
+// and then just WRITES the returned StarState into uniforms/bloom/grade/camera.
 //
 // IMPORTANT — what is NOT here: the irreducibly stateful clock stays in frame().
-// Specifically the supernova `nova` trigger + envelope (novaStart/novaArmed/
-// prevMorph), the `intro`/dezoom ramp, and the per-frame `stage` smoothing are
-// time- and history-dependent, so they cannot be pure. Their already-resolved
-// scalar RESULTS (`stage`, `t`, `nova`, `intro`) are passed IN; this function is a
-// pure function of those inputs.
+// Specifically the `intro`/dezoom ramp and the per-frame `stage` smoothing are
+// time- and history-dependent, so they cannot be pure. The supernova `nova` is now
+// a PURE function of `stage` (a clockless, scroll-anchored Gaussian), resolved in
+// frame() and passed IN the same way. Their already-resolved scalar RESULTS
+// (`stage`, `t`, `nova`, `intro`) are passed IN; this function is a pure function
+// of those inputs.
 //
 // The formulas below are a faithful, order-preserving extraction of the original
 // inline math: every value is computed by the same expression, in the same order,
@@ -279,8 +280,9 @@ export function lifecycle(input: LifecycleInput): StarState {
   // to the black-hole machinery.
   const giant = smoothstep01((stage - 0.46) / 0.04);
 
-  // --- supernova flash: time-based envelope, fired on the breakout crossing ---
-  // the particle-side shock-breakout glow follows the SAME time envelope as the
+  // --- supernova flash: scroll-anchored envelope (Gaussian in stage), so the
+  // particle blast is deterministic and reversible ---
+  // the particle-side shock-breakout glow follows the SAME envelope as the
   // whiteout, so the additive blast core peaks together with the screen flash.
   const flash = 1.45 * nova;
 
@@ -428,8 +430,9 @@ export function lifecycle(input: LifecycleInput): StarState {
   // red giant is meant to be DIM, so pull bloom right down once it forms.
   const flareAmt = Math.min(1, Math.max(0, (morph - 0.46) / 0.54));
   // SEED window (matches the shader's dark-core dip): the collapsed matter must
-  // read as a small DARK point, not a bloomed glow. Narrow + EARLY (centred 0.45).
-  const seedZone = Math.exp(-Math.pow((morph - 0.45) / 0.035, 2.0));
+  // read as a small DARK point, not a bloomed glow. Narrow + EARLY (centred 0.42)
+  // so it releases by the breakout and stops cancelling the flash.
+  const seedZone = Math.exp(-Math.pow((morph - 0.42) / 0.035, 2.0));
   // brief bloom spike at the breakout — the loudest visual beat — but suppressed
   // inside the seed window so it doesn't re-inflate the dark seed into a glow.
   let bloomStrength = cfg.bloomStr * (1 - 0.7 * flareAmt) + nova * 0.55 * (1 - 0.9 * seedZone);

@@ -998,7 +998,7 @@ export const diskVertexShader = /* glsl */ `
     // morphFlare ramps FAST (done by ~0.66) so the structured hollow-shell
     // remnant takes over from the bright dense bulk as soon as the blast starts
     // — otherwise the bright implosion glow lingers and buries the radial rays.
-    float morphFlare   = smoothstep(0.47, 0.66, uMorph);
+    float morphFlare   = smoothstep(0.46, 0.70, uMorph);
     bright *= 1.0 + 1.2*morphImplode*(1.0 - morphFlare);  // hotter as it compresses
     // SEED BLACK HOLE: just before the flash the collapsed matter darkens so it
     // reads as a tiny dense seed (a small black hole) — the light has fallen into
@@ -1014,7 +1014,7 @@ export const diskVertexShader = /* glsl */ `
     float coreDark = 1.0 - smoothstep(uRin*0.15, uRin*0.6, r); // 1 deep in the core
     // centred just BEFORE the flash and narrow, so the core is near-black at the
     // seed but releases by the breakout (0.50) → the loud flash survives.
-    float seedDip = exp(-pow((uMorph-0.45)/0.04, 2.0));
+    float seedDip = exp(-pow((uMorph-0.42)/0.04, 2.0));
     bright *= 1.0 - 0.97*seedDip*coreDark;
     // peak-compression dip — edge-shaping; the JS uBright cut + the ceiling
     // below do the heavy lifting against a whiteout, this softens the burst rim.
@@ -1028,7 +1028,7 @@ export const diskVertexShader = /* glsl */ `
     // is unchanged — only the central blob is removed.
     // narrow + early so it darkens the seed (≤0.47) but is RELEASED by the flash
     // peak (0.50) — otherwise it eats the loud breakout the user wants to keep.
-    float seedSuppress = exp(-pow((uMorph-0.45)/0.035, 2.0));   // 1 at seed → 0 by flash
+    float seedSuppress = exp(-pow((uMorph-0.42)/0.035, 2.0));   // 1 at seed → 0 by flash
     float flashGate = (1.0 - 0.92*coreDark) * (1.0 - 0.80*seedSuppress*coreDark);
     bright += uFlash * (0.85 + 1.1*pv) * (0.6 + 0.4*useMag) * flashGate;
     // accretion stream: light ONLY on the strained infalling matter just OUTSIDE
@@ -1054,7 +1054,7 @@ export const diskVertexShader = /* glsl */ `
     float band       = exp(-pow((r - shellFront)/shellW, 2.0));
     // brighter, launches earlier — a wall of light sweeping outward. The shell is
     // LOW-density (matter has spread), so it can be bright without a whiteout.
-    float shellLight = band * (1.0 - 0.3*flare) * 5.2 * smoothstep(0.49, 0.60, uMorph);
+    float shellLight = band * (1.0 - 0.3*flare) * 5.2 * smoothstep(0.46, 0.66, uMorph);
     bright += shellLight * (0.6 + 1.2*pv);
 
     // remnant: a HOLLOW expanding shell of radial rays. The matter has left the
