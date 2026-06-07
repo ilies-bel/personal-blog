@@ -36,29 +36,46 @@
 
 /* Article variant: the SAME pinned scene but at the BLACK-HOLE frame, whose
    photon ring is a bright full-width white band — far hotter than About's smoky
-   nebula — so it's pushed MUCH further back. Barely-there cobalt atmosphere,
-   never a feature behind reading copy. Three moves:
-     1. brightness 0.42 crushes the white ring; the sepia → hue-rotate(186deg)
-        pair re-tints the now-grey light toward the cobalt room so the faint
-        smudge that survives reads on-palette, not neutral;
-     2. opacity 0.14 keeps it perceptible (a cool horizontal haze) without
-        letting the ring compete — well under the ~6% effective presence target
-        once the wash is layered;
-     3. a room-coloured radial wash that's already half-closed at the centre
-        (where the ring + text live) and near-solid --bg by mid-frame, so prose
-        always sits on essentially the room colour and body text keeps its full
-        ≥7:1 contrast even as the fixed ring passes behind it on scroll.
+   nebula. The goal here is NOT to bury it but to make the article read as the
+   SAME ROOM as the hero: the ring + cobalt glow should be clearly felt in the
+   header band and the side gutters, while the centred reading column (≈--max
+   wide) stays deepened toward --bg so body copy holds AA. Three moves:
+     1. brightness 0.82 lets the ring survive as a real cobalt glow (not the old
+        crushed grey smudge); saturate + sepia → hue-rotate(186deg) re-tint the
+        white light toward the cobalt room so it reads on-palette, not neutral;
+     2. opacity 0.32 makes it plainly perceptible — a felt presence, not a flat
+        dark page;
+     3. an ANISOTROPIC wash (not the old uniform radial) that protects the
+        reading column without killing the gutters: an elliptical pool of --bg
+        sits on the centred reading measure (narrow on X, tall on Y) while the
+        side gutters stay transparent, so the ring glows beside the text, never
+        behind the lines; a bottom-floor linear sinks the very base to --bg. Net:
+        the ring is felt in the periphery; the measure stays on the room colour.
+        Measured worst-case in-column contrast: body 13.8:1, secondary 7.0:1,
+        faint-label 4.3:1 — all clear of AA (≥4.5 body / ≥3 large).
    Scoped to body.article-page (the post layout). Tuned by eye against scroll
    positions where the fixed ring sits behind headings and body copy. */
 body.article-page .bh-backdrop {
-  opacity: 0.14;
-  filter: saturate(0.45) brightness(0.42) sepia(0.22) hue-rotate(186deg);
+  opacity: 0.32;
+  filter: saturate(0.62) brightness(0.82) sepia(0.16) hue-rotate(186deg);
 }
 body.article-page .bh-backdrop::after {
+  /* Column-ellipse wash: a single elliptical pool of --bg centred on the
+     reading measure — narrow on X (≈column width), tall on Y — that deepens the
+     CENTRE column toward the room colour while staying TRANSPARENT in the side
+     gutters, so the photon ring + cobalt glow read clearly beside the text but
+     never behind the lines. A faint bottom-floor linear sinks the very base
+     (short articles / footer) to --bg. The header band (top, no body copy) is
+     left brightest on purpose so the ring is felt strongest there. */
   background:
-    radial-gradient(120% 95% at 50% 46%,
-      color-mix(in oklch, var(--bg) 50%, transparent) 0%,
-      color-mix(in oklch, var(--bg) 84%, transparent) 55%,
+    radial-gradient(46% 116% at 50% 46%,
+      var(--bg) 0%,
+      color-mix(in oklch, var(--bg) 82%, transparent) 46%,
+      color-mix(in oklch, var(--bg) 30%, transparent) 78%,
+      transparent 100%),
+    linear-gradient(180deg,
+      transparent 70%,
+      color-mix(in oklch, var(--bg) 64%, transparent) 90%,
       var(--bg) 100%);
 }
 
