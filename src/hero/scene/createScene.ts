@@ -962,7 +962,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         let dz = e.dir.z;
         let dw = e.intensity;
         let dage = e.age;
-        if (typeof giantEruptOverride === 'number' && i === giantEruptPool.length - 1) {
+        // DEBUG override: only commandeer the last slot when it is IDLE (no live click
+        // eruption in it). Without this guard the override re-stamped the last slot EVERY
+        // frame, clobbering a real click eruption that happened to land there and resetting
+        // its age — so a debug-driven plume could "undo" a player's eruption (see #2). With
+        // the e.intensity<=0 guard, a live click in the last slot wins and the override
+        // simply yields until that eruption finishes. (In normal play the hook is unset, so
+        // this whole branch is dead code and the pool plays untouched.)
+        if (
+          typeof giantEruptOverride === 'number' &&
+          i === giantEruptPool.length - 1 &&
+          e.intensity <= 0
+        ) {
           // park a held eruption facing the camera: camera world position → unit dir from
           // the origin-centred giant toward the viewer, then UNSPIN it by -uGiantSpin about
           // the shader's tilted axis so it lands at the camera-facing spot on the spinning

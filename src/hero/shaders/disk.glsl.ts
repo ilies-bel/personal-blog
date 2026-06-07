@@ -450,7 +450,18 @@ export const diskVertexShader = /* glsl */ `
       }
 
       // -- multi-scale granulation (Voronoi cells + warped fbm + supergranules) --
-      vec3 churn = vec3(0.0, uTime*0.025, 0.0);
+      // ROTATION-LOCK: the granulation is sampled from the SPUN 'sphere' (it already
+      // turns rigidly with the body via rotateAxis(uGiantSpin) above). An independent
+      // +Y time-advection ('churn') used to crawl the cells across the surface in their
+      // OWN drift direction, so the mottling slid against the rotation instead of turning
+      // WITH it. On the RED GIANT we nearly KILL that drift (×0.1 → a barely-perceptible
+      // slow boil, which real granulation has) so the cells are essentially a rigid
+      // function of the spun sphere and rotate coherently into view. OTHER branches
+      // (nebula boil / explosion turbulence, which reuse this default path's gran/heat)
+      // keep the FULL churn so their time-evolution is unchanged — the cut is gated to
+      // rgActive only via a red-giant-zeroed factor.
+      float churnT = uTime * 0.025 * mix(1.0, 0.1, rgActive);  // red giant → 10% drift (near-rigid); else full
+      vec3 churn = vec3(0.0, churnT, 0.0);
       vec2 cell = cellular(sphere*uGranScale + churn);
       float granCells = 1.0 - smoothstep(0.0, 0.5, cell.x);    // bright granule centres
       float edge      = cell.y - cell.x;                       // ~0 on cell boundary
@@ -586,7 +597,14 @@ export const diskVertexShader = /* glsl */ `
         // full red-giant radius at uYrGrow=1. No-op (×1.0) everywhere else.
         // KEEP 0.18 IN SYNC with SUN_RIG_RADIUS's factor so the swap stays seamless.
         sunRadFac *= mix(0.18, 1.0, uYrGrow);
-        float tt = uTime * 0.05;
+        // ROTATION-LOCK (red giant only): the photosphere mottle 'm' is built from the
+        // SPUN 'sphere'/'sp', so it already rotates rigidly with the body. The 'tt'
+        // time term used to ADVECT the fbm lookups in their own time-drift, making the
+        // mottling slide across the surface instead of rotating WITH it. On the RED GIANT
+        // we cut 'tt' to ~10% (a faint residual boil; real granulation does evolve) so the
+        // SAME cells rotate into view rather than crawling. The YELLOW SUN keeps its full
+        // 'tt' boil (that path is gated by redGiant<0.5), so its look is unchanged.
+        float tt = uTime * 0.05 * mix(1.0, 0.1, redGiant);
 
         // === (A) photosphere field ==========================================
         // Big swirling convection cells (the reference's flowing mottle), NOT
@@ -658,10 +676,12 @@ export const diskVertexShader = /* glsl */ `
         // stronger ripple. CONSTANTS mirror the mesh geyser feel, but the giant keeps red.
         vec3  eruptCol = vec3(0.0);  // accumulated COLUMN launch along the shared axis (× sunR0)
         float eruptRip = 0.0;        // accumulated radial ripple wobble (× sunR0, signed)
-        // COL_MAX: at peak intensity the FURTHEST grains in the plume travel ~0.95×
-        // radius off the vent — a tall prominence visibly clearing the silhouette. The
-        // dense base sits much lower; only the sparse heavy tail reaches this far.
-        const float COL_MAX = 0.95;
+        // COL_MAX: at peak intensity the FURTHEST grains in the plume travel ~1.6×
+        // radius off the vent — a TALL dramatic prominence shooting well clear of the
+        // limb (raised from 0.95). The heavy-tail throw (pow(grnd,3.5) below) keeps MOST
+        // grains low so the base stays dense and the column stays collimated; only the
+        // sparse top grains reach this far, so it reads as a tall geyser, not a spray ball.
+        const float COL_MAX = 1.6;
         for(int i = 0; i < N_ERUPT; i++){
           float inten = uErupt[i].w;
           if(inten <= 0.0) continue;                       // idle slot
@@ -708,13 +728,18 @@ export const diskVertexShader = /* glsl */ `
           vec3 jit = (hash33(vec3(aSeed*31.0, aU*17.0, aPhase*7.0)) * 2.0 - 1.0);
           eruptCol += jit * (height * tail * 0.18);
 
-          // -- RIPPLE: an expanding ring wave in chord distance. radius marches outward
-          // with life; reach + crest width scale with intensity. A Gaussian crest gives
-          // the travelling bright leading edge; it fades over the life and is damped as
-          // it nears the travel limit so it doesn't pop off the edge.
-          float reach   = 0.45 + 1.15 * inten;             // how far the ring travels (chord units)
+          // -- RIPPLE: a LOCAL expanding ring wave in chord distance. It reads as a SHORT
+          // disturbance rippling out a modest distance from the geyser BASE and dying —
+          // NOT a giant ring crossing the whole limb. reach is now ~HALVED (≈0.22 tap →
+          // ≈0.67 full hold, vs the old 0.45→1.60) so even a full hold's crest only travels
+          // a small cap around the click and never sweeps over a neighbouring vent (which
+          // used to let one eruption's ring visually wash over another's — see #2). radius
+          // marches outward with life; a TIGHT Gaussian crest gives the bright travelling
+          // leading edge; it fades over the life and is damped as it nears the (now near)
+          // travel limit so the ring dies LOCALLY instead of popping off the silhouette.
+          float reach   = 0.22 + 0.45 * inten;             // LOCAL ring-travel cap (chord units) — ~half the old reach
           float radius  = reach * life;                    // ring radius marches outward with age
-          float width   = 0.10 + 0.22 * inten;             // crest thickness widens with intensity
+          float width   = 0.09 + 0.13 * inten;             // TIGHT crest — a narrow local ring, not a broad swell
           float off     = cd - radius;
           float crest   = exp(-pow(off / width, 2.0));     // bright travelling crest
           float ripFade = (1.0 - life) * (1.0 - smoothstep(reach*0.7, reach, cd));
@@ -1595,12 +1620,18 @@ export const diskFragmentShader = /* glsl */ `
           // giant only); additive + capped so it can't blow to white under bloom. No-op
           // when vEruptGlow=0. (Stops mirror the red-giant ramp r3..r4 in sun.glsl.ts.)
           float eg = clamp(vEruptGlow, 0.0, 2.0) * vSunRed;
-          vec3 eRed  = vec3(0.90, 0.18, 0.04);   // blood red (giant surface, hotter than body)
-          vec3 eOrng = vec3(1.00, 0.34, 0.08);   // bright red-orange (plume body)
-          vec3 eRoot = vec3(1.00, 0.45, 0.12);   // hottest RED-ORANGE at the column root (no white)
+          // The plume must read as hot RED plasma, NOT orange: green & blue are dropped
+          // across all three stops so the hue sits firmly red. The old stops (0.18/0.34/0.45
+          // green, up to 0.12 blue) skewed orange; these sit at 0.12/0.22/0.30 green with
+          // ≤0.06 blue. NO white, NO bright orange — the hottest root only reaches a
+          // saturated red-orange. Gated by vSunRed (red giant only). The grains carry these
+          // colours as they arc off the limb, so the geyser particles themselves are red.
+          vec3 eRed  = vec3(0.85, 0.12, 0.02);   // blood red (giant surface, hotter than body)
+          vec3 eOrng = vec3(1.00, 0.22, 0.05);   // saturated RED (plume body) — low green, less orange
+          vec3 eRoot = vec3(1.00, 0.30, 0.06);   // hottest SATURATED RED-ORANGE at the root (no white, no bright orange)
           pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume reddens hot
-          pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter red-orange up the column
-          pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // red-orange glow at the root (additive, NOT white)
+          pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter saturated red up the column
+          pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // saturated red glow at the root (additive, NOT white)
         }
       } else if(vPlaceholder < 2.9){
         // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from
