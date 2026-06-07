@@ -27,6 +27,7 @@ import {
   EXPLORATION_TRIGGER_AT,
   EXPLORATION_REVEAL_DELAY_MS,
   DEBUG_WINDOW_KEYS,
+  CURSOR_WINDOW_KEYS,
   readDebugNumber,
 } from '../lib/constants';
 import { createScene } from '../scene/createScene';
@@ -35,6 +36,16 @@ import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
 import ScrollHint from './ScrollHint';
+
+declare global {
+  interface Window {
+    /** Published by the live hero (this component) so the standalone custom-cursor
+     *  IIFE can ask whether a screen point is over the red giant's surface — the
+     *  cursor shows its interactive hexagon there. Absent on pages without the
+     *  scrollable hero (about, …). Key literal = CURSOR_WINDOW_KEYS.hitGiant. */
+    __bhHitGiant?: (clientX: number, clientY: number) => boolean;
+  }
+}
 
 interface HeroIslandProps {
   /** Backdrop mode: render only the scene canvas (no manifesto beats, no chrome,
@@ -182,10 +193,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       getFocusTarget: () => activeHudRef.current,
       isExplorationMode: () => explorationModeRef.current,
     });
+    // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
+    // can't import scene/three code). Published on window under the __bh* hook
+    // convention; deleted on unmount so other pages never see a stale closure.
+    window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
     return () => {
       clearExplorationTimer();
       unsub();
       tracker.stop();
+      delete window[CURSOR_WINDOW_KEYS.hitGiant];
       dispose();
       // Leave the body in a clean state if the island unmounts mid-scroll.
       document.body.classList.remove(SCROLLED_BODY_CLASS);

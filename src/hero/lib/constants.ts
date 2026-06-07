@@ -56,6 +56,17 @@ export const DEBUG_WINDOW_KEYS = {
   giantErupt: '__bhGiantErupt',
 } as const;
 
+// --- cross-layer cursor bridge (window.__bh*) ------------------------------
+// Not a debug-capture hook: a real runtime function the scene publishes so the
+// standalone custom-cursor IIFE (src/components/CustomCursor.astro) can ask
+// whether a point is over the red giant — without importing three.js / the
+// scene. HeroIsland sets it on mount and deletes it on unmount. The cursor reads
+// the SAME literal name (it can't import this module), so keep the two in sync.
+export const CURSOR_WINDOW_KEYS = {
+  /** (clientX, clientY) → boolean: is the point over the live red-giant surface? */
+  hitGiant: '__bhHitGiant',
+} as const;
+
 /** Read a numeric debug-hook override off window, or undefined if unset. */
 export function readDebugNumber(key: string): number | undefined {
   if (typeof window === 'undefined') return undefined;
