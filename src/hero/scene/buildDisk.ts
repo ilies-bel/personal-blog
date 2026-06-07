@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { simDimensions } from '../gravitySim';
-import { diskVertexShader, diskFragmentShader } from '../shaders/disk.glsl';
+import { diskVertexShader, diskFragmentShader, DISK_ERUPT_SLOTS } from '../shaders/disk.glsl';
 import type { Uniforms } from './types';
 
 export interface DiskRig {
@@ -123,6 +123,16 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uSimPosB: { value: null }, // snapshot B (next baked frame)
     uSimMix: { value: 0 }, // 0 → A, 1 → B (inter-snapshot blend)
     uSimBlend: { value: 0 }, // 0 = analytic placement, 1 = fully sim-driven
+    // --- CLICK ERUPTIONS on the particle red giant (geyser jet + surface ripple) ---
+    // Up to DISK_ERUPT_SLOTS concurrent eruptions, mirroring the yellow-star mesh's
+    // uErupt/uEruptAge (buildSunRig.ts). Each slot is a vec4 (xyz = UNSPUN object-space
+    // eruption-centre dir, w = intensity 0..1) plus an age in seconds; all start idle
+    // (intensity 0). The render loop owns a JS pool and copies it into these arrays each
+    // frame. NOTE: secondary = primary.clone() DEEP-clones these arrays (UniformsUtils),
+    // so the render loop writes BOTH disk materials separately (as it does for uGiant
+    // etc.) — see createScene's giant-eruption pool advance.
+    uErupt: { value: Array.from({ length: DISK_ERUPT_SLOTS }, () => new THREE.Vector4(0, 1, 0, 0)) },
+    uEruptAge: { value: Array.from({ length: DISK_ERUPT_SLOTS }, () => 0) },
   };
 
   const primary = new THREE.ShaderMaterial({

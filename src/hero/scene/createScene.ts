@@ -232,6 +232,34 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let holdStart = 0;
   let holdDir: THREE.Vector3 | null = null;
 
+  // --- CLICK ERUPTIONS on the PARTICLE red giant (geyser jet + surface ripple) ----
+  // The red giant is a DIFFERENT body from the yellow star: it's the ~1.2M-point GPU
+  // particle cloud (the disk rig), not the sun-rig mesh. So it has NO mesh to raycast.
+  // Instead we intersect an invisible sphere at the world origin (the giant is centred
+  // there — RED_GIANT_PARK is (0,0,0) and the point cloud has no parent transform, so
+  // world space == the giant's spun frame). A SEPARATE pool/uniforms keeps the two
+  // effects decoupled (mesh and giant are never on screen at once). The same shape as
+  // the mesh pool above so the spawn/age/copy logic is identical.
+  const giantEruptPool: Eruption[] = Array.from(
+    { length: (diskMatPrimary.uniforms.uErupt.value as THREE.Vector4[]).length },
+    () => ({ dir: new THREE.Vector3(0, 1, 0), intensity: 0, age: 0 }),
+  );
+  // Reused instances (no per-frame / hot-path allocation): the giant's raycast sphere,
+  // a scratch world hit point, and the tilted spin axis (MUST match the disk vertex
+  // shader's spinAxis = normalize(vec3(0.39,0.92,0.0)) and uGiantSpin so the stored
+  // local dir un-rotates exactly onto the spinning photosphere — see disk.glsl.ts).
+  const giantSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+  const giantHitPoint = new THREE.Vector3();
+  const giantSpinAxis = new THREE.Vector3(0.39, 0.92, 0.0).normalize();
+  // Updated every frame from the render loop: true only when the settled, full-size,
+  // idle red giant is the visible body (not the yellow swap, the collapse, the nebula,
+  // the dot, or the yellow mesh). The pointerdown handler reads it before raycasting.
+  let redGiantClickable = false;
+  // Pending hold on the giant (mutually exclusive with holdDir — the two bodies are
+  // never both clickable). Stores the UNSPUN local-frame eruption dir + press time.
+  let holdStartGiant = 0;
+  let holdDirGiant: THREE.Vector3 | null = null;
+
   // Write an eruption into the oldest/free slot of the pool (free slots first, else
   // the slot nearest the end of its life) so rapid clicks stack instead of replacing.
   const spawnEruption = (dir: THREE.Vector3, intensity: number): void => {
@@ -254,8 +282,35 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     e.age = 0;
   };
 
+  // Same free/oldest-slot policy as spawnEruption, but into the GIANT'S pool. `dir`
+  // is the UNSPUN local-frame eruption centre (the shader re-tracks it on the spinning
+  // surface), so rapid clicks stack into separate plumes/ripples on the red giant.
+  const spawnGiantEruption = (dir: THREE.Vector3, intensity: number): void => {
+    let slot = 0;
+    let oldest = -1;
+    for (let i = 0; i < giantEruptPool.length; i++) {
+      if (giantEruptPool[i].intensity <= 0) {
+        slot = i;
+        oldest = -1; // found a truly free slot; take it
+        break;
+      }
+      if (giantEruptPool[i].age > oldest) {
+        oldest = giantEruptPool[i].age;
+        slot = i;
+      }
+    }
+    const e = giantEruptPool[slot];
+    e.dir.copy(dir);
+    e.intensity = intensity;
+    e.age = 0;
+  };
+
+  // Unified pointerdown: the mesh and the particle giant are never both clickable, so
+  // we branch on which body is on screen. The handler maps the pointer to canvas NDC
+  // once, then raycasts the active body (the mesh surface, OR the giant's invisible
+  // origin sphere). A press that misses leaves scrolling and other UI untouched.
   const onPointerDownSun = (e: PointerEvent): void => {
-    if (!sunClickable) return;
+    if (!sunClickable && !redGiantClickable) return;
     // NDC of the pointer within the canvas (handles canvas not filling the window).
     const rect = renderer.domElement.getBoundingClientRect();
     eruptPointerNdc.set(
@@ -263,28 +318,56 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       -(((e.clientY - rect.top) / rect.height) * 2 - 1),
     );
     eruptRaycaster.setFromCamera(eruptPointerNdc, camera);
-    const hit = eruptRaycaster.intersectObject(sunRig.surface, false)[0];
-    if (!hit) return;
-    // Convert the world hit point into the surface mesh's LOCAL space and normalize —
-    // that is the same object space as the shader's vObj, so the eruption centre lines
-    // up with the clicked spot regardless of the rig's spin/scale.
-    holdDir = sunRig.surface.worldToLocal(hit.point.clone()).normalize();
-    holdStart = performance.now();
+    if (sunClickable) {
+      // --- yellow-star MESH path: raycast the photosphere mesh directly. ---
+      const hit = eruptRaycaster.intersectObject(sunRig.surface, false)[0];
+      if (!hit) return;
+      // Convert the world hit point into the surface mesh's LOCAL space and normalize —
+      // that is the same object space as the shader's vObj, so the eruption centre lines
+      // up with the clicked spot regardless of the rig's spin/scale.
+      holdDir = sunRig.surface.worldToLocal(hit.point.clone()).normalize();
+      holdStart = performance.now();
+    } else {
+      // --- particle RED-GIANT path: raycast an invisible sphere at the world origin. ---
+      // The giant is centred at the origin (RED_GIANT_PARK = (0,0,0)) and the point
+      // cloud has no parent transform, so world == the giant's spun frame. Effective
+      // world radius = uGiantR × uGiantScale (the held medium-dense giant, ≈8.5).
+      giantSphere.radius =
+        (diskMatPrimary.uniforms.uGiantR.value as number) * (diskMatPrimary.uniforms.uGiantScale.value as number);
+      if (!eruptRaycaster.ray.intersectSphere(giantSphere, giantHitPoint)) return;
+      // world hit → unit dir (giant at origin, so world == spun local). UNSPIN by the
+      // current uGiantSpin about the SAME tilted axis the shader uses, so the stored dir
+      // is in the giant's UNSPUN frame (the shader compares it against the unspun sphere
+      // dir, cancelling the spin — see disk.glsl.ts's eruption block).
+      const giantDir: THREE.Vector3 = giantHitPoint.clone().sub(giantSphere.center).normalize();
+      giantDir.applyAxisAngle(giantSpinAxis, -(diskMatPrimary.uniforms.uGiantSpin.value as number));
+      holdDirGiant = giantDir;
+      holdStartGiant = performance.now();
+    }
   };
 
   const onPointerUpSun = (): void => {
-    if (!holdDir) return; // pointerup with no pending hit on the sun → ignore
-    const holdSeconds = (performance.now() - holdStart) / 1000;
-    // tap still gives a visible small flare (0.25 floor); ~1.5s hold maxes out at 1.0.
-    const intensity = Math.max(0.25, Math.min(1, 0.25 + holdSeconds / ERUPT_HOLD_MAX));
-    spawnEruption(holdDir, intensity);
+    // Same hold→intensity mapping for both bodies (tap floor 0.25, ~1.5s hold = 1.0).
+    if (holdDir) {
+      const holdSeconds = (performance.now() - holdStart) / 1000;
+      const intensity = Math.max(0.25, Math.min(1, 0.25 + holdSeconds / ERUPT_HOLD_MAX));
+      spawnEruption(holdDir, intensity);
+    } else if (holdDirGiant) {
+      const holdSeconds = (performance.now() - holdStartGiant) / 1000;
+      const intensity = Math.max(0.25, Math.min(1, 0.25 + holdSeconds / ERUPT_HOLD_MAX));
+      spawnGiantEruption(holdDirGiant, intensity);
+    }
     holdDir = null;
     holdStart = 0;
+    holdDirGiant = null;
+    holdStartGiant = 0;
   };
 
   const cancelHold = (): void => {
     holdDir = null;
     holdStart = 0;
+    holdDirGiant = null;
+    holdStartGiant = 0;
   };
 
   if (!reduced) {
@@ -623,6 +706,20 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // hold while the mesh is up. Read by the pointerdown handler (which lives outside
     // frame()) so a click while the nebula/forming/black-hole is on screen does nothing.
     sunClickable = sunRig.group.visible && !growing;
+    // RED-GIANT CLICK gate: the particle giant is clickable only when the settled,
+    // FULL-SIZE, idle red giant is the visible body. `cloudSide` is the cloud-rendered
+    // red-giant slot (stage 2.05→2.88); we additionally require it to be at full size
+    // and full red colour (yrGrow/yrColor ≈ 1, i.e. NOT yet shrinking/cooling toward
+    // the yellow swap at stage ~2.5+) and not collapsing (kCollapse≈0). That isolates
+    // the calm red-giant beat (stage ≈ 2.05→2.5) and excludes the yellow→red swap
+    // flash, the shrink, the collapse, the nebula, the dot and the yellow mesh. The
+    // cloud must also actually be drawn this frame. Read by the pointerdown handler.
+    redGiantClickable =
+      look.cloudSide &&
+      look.cloudShown &&
+      look.yrGrow > 0.9 &&
+      look.yrColor > 0.9 &&
+      look.kCollapse < 0.02;
     // The twinkling star backdrop dome is a SEPARATE scene object, so it can sit
     // behind BOTH the yellow star (mesh rig) and the RED GIANT (point cloud) — the
     // two states share one star field — while staying hidden for the black hole
@@ -832,6 +929,56 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
             uEruptAge[i] = e.age;
           }
         }
+      }
+    }
+
+    // --- PARTICLE RED-GIANT click eruptions: advance the pool + copy into BOTH disk
+    // materials' uniforms. The giant is the point cloud (not the mesh), so this runs
+    // independent of sunRig.group.visible — and ALWAYS (not just when the giant is on
+    // screen) so an in-flight eruption keeps ageing/freeing even if you scroll away.
+    // Both disk materials hold DEEP-CLONED uniform arrays (secondary = primary.clone()),
+    // so we write the same pool into each separately — mirroring how uGiant et al. are
+    // set on both diskMatPrimary + diskMatSecondary every frame. Reduced motion never
+    // wired the listeners, so this only runs in the live, motion-on path.
+    if (!reduced) {
+      const dtGiant = Math.min(Math.max(ut - prevEruptT, 0), 0.1); // clamp tab-switch jumps
+      const gErupt = diskMatPrimary.uniforms.uErupt.value as THREE.Vector4[];
+      const gEruptAge = diskMatPrimary.uniforms.uEruptAge.value as number[];
+      const gEruptSec = diskMatSecondary.uniforms.uErupt.value as THREE.Vector4[];
+      const gEruptAgeSec = diskMatSecondary.uniforms.uEruptAge.value as number[];
+      // DEBUG: window.__bhGiantErupt holds a fixed camera-facing eruption (0..1) on the
+      // giant so the jet + ripple can be inspected without clicking (set __bhMorph to a
+      // red-giant stage too — e.g. ≈2.3). Commandeers the last slot, ages on a wrapped
+      // clock so the ripple keeps replaying. Reuses eruptLocalDir (no allocation).
+      const giantEruptOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantErupt);
+      for (let i = 0; i < giantEruptPool.length; i++) {
+        const e = giantEruptPool[i];
+        if (e.intensity > 0) {
+          e.age += dtGiant;
+          if (e.age >= ERUPT_LIFE) e.intensity = 0; // spent → free the slot
+        }
+        let dx = e.dir.x;
+        let dy = e.dir.y;
+        let dz = e.dir.z;
+        let dw = e.intensity;
+        let dage = e.age;
+        if (typeof giantEruptOverride === 'number' && i === giantEruptPool.length - 1) {
+          // park a held eruption facing the camera: camera world position → unit dir from
+          // the origin-centred giant toward the viewer, then UNSPIN it by -uGiantSpin about
+          // the shader's tilted axis so it lands at the camera-facing spot on the spinning
+          // surface (matches the click-path unspin). The plume then erupts at us.
+          eruptLocalDir.copy(camera.position).normalize();
+          eruptLocalDir.applyAxisAngle(giantSpinAxis, -(diskMatPrimary.uniforms.uGiantSpin.value as number));
+          dx = eruptLocalDir.x;
+          dy = eruptLocalDir.y;
+          dz = eruptLocalDir.z;
+          dw = Math.max(0, Math.min(1, giantEruptOverride));
+          dage = ut % ERUPT_LIFE;
+        }
+        gErupt[i].set(dx, dy, dz, dw);
+        gEruptAge[i] = dage;
+        gEruptSec[i].set(dx, dy, dz, dw);
+        gEruptAgeSec[i] = dage;
       }
     }
     prevEruptT = ut;

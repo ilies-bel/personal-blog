@@ -48,6 +48,10 @@ export const DEBUG_WINDOW_KEYS = {
   /** Hold a click eruption (0..1 intensity) at a fixed camera-facing point so the
    *  geyser + ripple can be inspected without actually clicking the star. */
   erupt: '__bhErupt',
+  /** Hold a click eruption (0..1 intensity) at a fixed camera-facing point on the
+   *  PARTICLE red giant so its jet + surface ripple can be inspected without clicking
+   *  (pair with __bhMorph at a red-giant stage, e.g. ≈2.3). */
+  giantErupt: '__bhGiantErupt',
 } as const;
 
 /** Read a numeric debug-hook override off window, or undefined if unset. */

@@ -4,7 +4,23 @@
 import { NEBULA_PLACE_FN } from '../gravitySim';
 import { LENS_GLSL } from './lens.glsl';
 
+// Number of CONCURRENT click eruptions the PARTICLE red giant can host. Mirrors the
+// yellow-star mesh's SUN_ERUPT_SLOTS (sun.glsl.ts) so the two bodies feel identical:
+// the render loop keeps a JS pool of this size and copies it into uErupt/uEruptAge
+// each frame, so rapid clicks stack into separate slots instead of clobbering an
+// in-flight geyser. The giant keeps its OWN pool + uniforms (the mesh and the giant
+// are never on screen at once, but separate pools avoid coupling the two effects).
+export const DISK_ERUPT_SLOTS = 4;
+
 export const diskVertexShader = /* glsl */ `
+  // --- CLICK ERUPTIONS on the particle red giant (geyser jet + surface ripple) ---
+  // N_ERUPT must equal DISK_ERUPT_SLOTS (and matches the mesh's N_ERUPT). ERUPT_LIFE
+  // is the total lifetime of one eruption in seconds — the jet rises+falls and the
+  // ripple expands+fades over this span; the render loop frees the slot at the same
+  // age. Both values are byte-identical to the yellow-star mesh (sun.glsl.ts) so the
+  // two bodies erupt with the same timing/feel.
+  #define N_ERUPT 4
+  #define ERUPT_LIFE 2.4
   attribute float aU;
   attribute float aPhase;
   attribute float aThickN;
@@ -144,6 +160,22 @@ export const diskVertexShader = /* glsl */ `
   uniform float uGiantScale;  // red-giant-ONLY radius multiplier (nebula/dot/sun unaffected)
   uniform float uGranScale;     // granulation cell frequency across the surface
 
+  // --- CLICK ERUPTIONS (geyser jet + travelling surface ripple) --------------
+  // Up to N_ERUPT concurrent click eruptions on the PARTICLE red giant, mirroring
+  // the mesh's uErupt/uEruptAge (sun.glsl.ts) — but here the effect is a VERTEX
+  // displacement (the giant is a point cloud, so points physically jet OUTWARD and
+  // ripple) plus a fragment glow, not the mesh's fragment-only recolour.
+  //   uErupt[i].xyz = the eruption-centre unit direction on the sphere, captured at
+  //     click in the giant's UNSPUN local frame (see the JS unspin in createScene).
+  //     We compare it against the particle's UNSPUN 'sphere' dir, so the spin is
+  //     cancelled consistently and the bump rides the rotating photosphere.
+  //   uErupt[i].w   = intensity 0..1 (click-hold scaled: tap≈0.25 → ~1.5s hold = 1);
+  //     w == 0 means the slot is idle and contributes nothing.
+  //   uEruptAge[i]  = seconds since the eruption fired; the jet envelope + ripple
+  //     radius advance with it and the whole event ends by ERUPT_LIFE.
+  uniform vec4 uErupt[N_ERUPT];
+  uniform float uEruptAge[N_ERUPT];
+
   // Rodrigues axis-angle rotation: spin a vector v about a (unit) axis by 'ang'.
   // Used to roll the whole red-giant photosphere around its own tilted pole.
   vec3 rotateAxis(vec3 v, vec3 axis, float ang){
@@ -196,9 +228,11 @@ export const diskVertexShader = /* glsl */ `
   varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
   varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
   varying float vEaten;   // core-swallow progress (0 = on surface, 1 = fallen to the core)
+  varying float vEruptGlow; // click-eruption heat (jet root + ripple crest) → fragment brighten
 
   void main(){
     vPlaceholder = 0.0; // REVIEW placeholder tag (set in the giant/placeholder block)
+    vEruptGlow = 0.0;   // no eruption by default (set in the red-giant sun branch)
     vSimLife = 1.0;     // default: free gas (no-op outside the collapse window)
     vSunM = 0.0; vSunLimb = 0.0; vSunDark = 0.0; // sun-photosphere channels (set below)
     vSunFlare = 0.0; vSunHot = 0.0;             // sun atmosphere channels
@@ -388,6 +422,13 @@ export const diskVertexShader = /* glsl */ `
       float th = aPhase + aU*6.2831;             // azimuth
       float sp = sqrt(max(0.0, 1.0 - u*u));
       vec3 sphere = vec3(sp*cos(th), u, sp*sin(th));
+      // UNSPUN copy of this particle's surface direction, captured BEFORE the axial
+      // spin below. The click eruptions store their centre dir UNSPUN (the JS side
+      // un-rotates the world hit by -uGiantSpin), so we test chord distance in this
+      // unspun frame — that cancels the spin consistently with no per-eruption respin,
+      // while the jet still displaces along the SPUN 'dir' so the bump rides the
+      // rotating photosphere. (See the eruption block after 'pos = surf'.)
+      vec3 sphereUnspun = sphere;
 
       // Is the DISPLAYED state the red giant? (Not yellow / nebula / dot — those keep
       // uGiant=1 but must NOT take the red-giant spin or size.) Computed here so the
@@ -597,6 +638,69 @@ export const diskVertexShader = /* glsl */ `
         vec3 surf = (sphere * collapseScale * sunRelief + curlOff) * sunR0;
         pos  = surf;
         heat = m;
+
+        // === CLICK ERUPTIONS: geyser jet + travelling surface ripple ==========
+        // Physical VERTEX displacement (this is a point cloud, unlike the mesh's
+        // fragment-only recolour): points near the click JET OUTWARD along their own
+        // radial direction, and a ring wave expands across the curved surface, so the
+        // photosphere visibly bulges + ripples. Gated to the RED GIANT (vSunRed=1) so
+        // the gold swap-in ball / yellow placeholder never erupt; idle slots (w=0) are
+        // skipped, so it's a no-op until a click fires. Chord distance is measured in
+        // the UNSPUN frame (sphereUnspun vs the stored-unspun ed) — the spin is thereby
+        // cancelled, while the jet pushes along the SPUN 'sphere' dir so the eruption
+        // rides the rotating limb at the clicked spot. Bigger hold (intensity) → taller
+        // jet + wider/stronger ripple + larger footprint. CONSTANTS mirror the mesh feel.
+        float eruptJet = 0.0;   // accumulated outward jet displacement (× sunR0)
+        float eruptRip = 0.0;   // accumulated radial ripple wobble (× sunR0, signed)
+        // JET_MAX: a full eruption sprays the jet root out ~38% of the radius at peak —
+        // a bright prominence arcing off the limb (tuned to the reference solar plume).
+        const float JET_MAX = 0.38;
+        for(int i = 0; i < N_ERUPT; i++){
+          float inten = uErupt[i].w;
+          if(inten <= 0.0) continue;                       // idle slot
+          vec3  ed  = normalize(uErupt[i].xyz);            // eruption centre (UNSPUN frame)
+          float age = uEruptAge[i];
+          float life = clamp(age / ERUPT_LIFE, 0.0, 1.0);
+          // chord distance on the unit sphere from THIS particle (unspun) to the
+          // eruption centre (unspun) — 0 at the centre, up to 2 at the antipode. The
+          // ripple is a circle in this distance, so it expands as a true ring across
+          // the curved surface from the click point.
+          float cd = length(sphereUnspun - ed);
+
+          // -- JET: a bright spray erupting OUT at the click point. A Gaussian on the
+          // chord distance concentrates it at the centre; the footprint widens with
+          // intensity. rise = sin(life*PI) makes it erupt → peak → settle over the life.
+          // A touch of per-particle scatter (aSeed) makes the root read as discrete
+          // particles spraying, not a smooth bulge.
+          float spread = 0.16 + 0.12 * inten;              // angular footprint of the base
+          float core   = exp(-pow(cd / spread, 2.0));      // concentration at the click point
+          float rise   = sin(life * 3.14159265);           // 0→1→0: erupt, peak, settle
+          float scatter = 0.85 + 0.30 * aSeed;             // per-grain spray variety
+          eruptJet += JET_MAX * inten * core * rise * scatter;
+
+          // -- RIPPLE: an expanding ring wave in chord distance. radius marches outward
+          // with life; reach + crest width scale with intensity. A Gaussian crest gives
+          // the travelling bright leading edge; it fades over the life and is damped as
+          // it nears the travel limit so it doesn't pop off the edge.
+          float reach   = 0.45 + 1.15 * inten;             // how far the ring travels (chord units)
+          float radius  = reach * life;                    // ring radius marches outward with age
+          float width   = 0.10 + 0.22 * inten;             // crest thickness widens with intensity
+          float off     = cd - radius;
+          float crest   = exp(-pow(off / width, 2.0));     // bright travelling crest
+          float ripFade = (1.0 - life) * (1.0 - smoothstep(reach*0.7, reach, cd));
+          float ripple  = crest * ripFade * inten;
+          // a few % of the radius of radial wobble so the surface visibly ripples as the
+          // wave passes (signed: the crest lifts the surface).
+          eruptRip += ripple * 0.06;
+
+          // accumulate the fragment glow: hot white at the jet root, warm on the ripple
+          // crest. Clamped per-slot contribution; the total is clamped after the loop.
+          vEruptGlow += clamp(core*rise*1.4 + ripple*1.2, 0.0, 2.0);
+        }
+        vEruptGlow = clamp(vEruptGlow, 0.0, 2.0);
+        // apply the displacement along the SPUN radial dir so it rides the rotating
+        // body; (eruptJet + eruptRip) pushes points OUTWARD at the click + ripple crest.
+        pos += sphere * ((eruptJet + eruptRip) * sunR0);
 
         // === (B) atmosphere: loops / prominences / spicules =================
         // Pick a stable subset for the atmosphere using per-particle hashes (no
@@ -1302,6 +1406,7 @@ export const diskFragmentShader = /* glsl */ `
   varying float vYrMix;   // 0 = smooth gold cloud sphere, 1 = granular red giant
   varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
   varying float vEaten;   // core-swallow progress (0 = on surface, 1 = fallen to the core)
+  varying float vEruptGlow; // click-eruption heat (jet root + ripple crest) → hot brightening
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
@@ -1445,6 +1550,15 @@ export const diskFragmentShader = /* glsl */ `
           vec3 hotWhite = vec3(1.0, 0.95, 0.88);               // → near-white core
           pcol = mix(pcol, hotMid,   smoothstep(0.0, 0.6, heatK));
           pcol = mix(pcol, hotWhite, smoothstep(0.55, 1.0, heatK));
+
+          // CLICK-ERUPTION HEAT: where points jet out / the ripple crest passes
+          // (vEruptGlow > 0) the photosphere flares HOT — warm orange on the ripple
+          // crest, white-hot at the jet root — so the erupting plume glows like the
+          // mesh's geyser. Gated by vSunRed (red giant only); tasteful (additive,
+          // capped) so it never blows the whole giant white. No-op when vEruptGlow=0.
+          float eg = clamp(vEruptGlow, 0.0, 2.0) * vSunRed;
+          pcol = mix(pcol, vec3(1.0, 0.52, 0.16), smoothstep(0.0, 0.9, eg));   // hot orange ramp
+          pcol += vec3(1.0, 0.82, 0.55) * smoothstep(0.7, 1.8, eg) * 0.6;      // white-hot jet root
         }
       } else if(vPlaceholder < 2.9){
         // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from
@@ -1511,6 +1625,10 @@ export const diskFragmentShader = /* glsl */ `
       // dot. Ramps only in the back half of the swallow so the bright body holds first.
       float eatenDim = smoothstep(0.45, 1.0, vEaten);
       inten *= 1.0 - 0.82*eatenDim;
+      // CLICK-ERUPTION LIFT: erupting/rippling grains glow brighter so the jet + crest
+      // read as luminous plasma, not just a recolour. Additive on top of the body
+      // brightness; capped so the giant stays in gamut. No-op when vEruptGlow=0.
+      inten *= 1.0 + 1.1*clamp(vEruptGlow, 0.0, 2.0);
     }
     // nebula: per-grain intensity stays MODERATE so the overlapping soft grains
     // accumulate additively into luminous gas WITHOUT clipping to white — the SHO
