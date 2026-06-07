@@ -116,6 +116,8 @@ export interface StarState {
   nebulaShader: boolean;
   /** pale-blue-dot slot active (stage ≥ 4.5). uDot. */
   dot: boolean;
+  /** dot → nebula linear growth, 0 at the point and 1 at the settled cloud. uNebulaGrow. */
+  nebulaGrow: number;
 
   // --- nebula → yellow star: GPGPU gravitational collapse ---
   // Scrolling UP from the nebula (stage 3.5) toward the star (≈3.05), the gas
@@ -296,6 +298,7 @@ export function lifecycle(input: LifecycleInput): StarState {
   const yellow = stage >= 2.5;
   const nebula = stage >= 3.5;
   const dot = stage >= 4.5;
+  const nebulaGrow = Math.min(Math.max((4.5 - stage) / (4.5 - 3.42), 0), 1);
   // Once a later state is active the sphere is held (uGiant pinned to 1) so the
   // placeholder branch has a sphere to reshape; only the latest-reached state shows.
   const laterActive = yellow || nebula || dot;
@@ -761,19 +764,19 @@ export function lifecycle(input: LifecycleInput): StarState {
   // as the whiteout clears, not behind it) so the breath is seen on the reveal.
   const fovKick = reduced ? 0 : 3.0 * shakeAmp;
 
-  // --- hyperspace streaks (nebula → beginning dot) --------------------------
-  // The dezoom from the immersed nebula (stage 3.5) out to the tiny pale-blue dot
-  // (stage 4.5) is staged as a Star Wars "jump to lightspeed": radial light
-  // streaks rush past a central vanishing point. The intensity is a hump over the
-  // window — it punches IN fast as we leave the gas (the jump engages), holds
-  // through the fastest stretch of the pull-back, then eases out as the dot
-  // arrives and the field settles to stillness. Zero (rig hidden) everywhere else.
-  // Reduced motion never jumps. Direction (in/out) is latched in frame() from the
-  // scroll velocity, since it needs history this pure function doesn't carry.
-  const STREAK_LO = 3.5; // immersed nebula (jump engages just as we leave it)
-  const STREAK_HI = 4.5; // beginning dot (smear gone before the dot snaps in)
-  const streakIn = smoothstep01((stage - STREAK_LO) / 0.32); // engage: fast ramp up
-  const streakOut = smoothstep01((stage - (STREAK_HI - 0.42)) / 0.42); // disengage near the dot
+  // --- hyperspace streaks (dot ⇄ nebula) -----------------------------------
+  // Radial light streaks live across the dot approach and linger into the small-
+  // nebula arrival, so the first cloud frame reads as a lightspeed destination
+  // growing toward us. In the reverse read, the same envelope still eases away
+  // before the dot parks. Reduced motion never jumps. Direction (in/out) is
+  // latched in frame() from scroll velocity, since this pure function has no
+  // history.
+  const STREAK_LO = 3.32; // fade across the first nebula-arrival frames
+  const STREAK_HI = 4.72; // top dot frame; keeps the first still point mostly clean
+  const STREAK_IN_WIDTH = 0.36;
+  const STREAK_DOT_FADE = 0.4;
+  const streakIn = smoothstep01((stage - STREAK_LO) / STREAK_IN_WIDTH);
+  const streakOut = smoothstep01((stage - (STREAK_HI - STREAK_DOT_FADE)) / STREAK_DOT_FADE);
   const streak = reduced ? 0 : streakIn * (1 - streakOut);
 
   // azimuth: a small extra sweep during the intro, then steady rotation.
@@ -815,6 +818,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     nebula,
     nebulaShader,
     dot,
+    nebulaGrow,
     collapse,
     simBlend,
     starFormed,

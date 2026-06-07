@@ -107,6 +107,7 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uYellow: { value: 0 },
     uNebula: { value: 0 },
     uDot: { value: 0 },
+    uNebulaGrow: { value: 1 },
     uNebLight: { value: 1 }, // nebula ambient+depth light model strength (0 flat → 1 full)
     // --- yellow star → red giant flash-swap (transition 3, scroll 3→2). These
     //     drive ONLY the point-cloud's gold→red sphere during the yellow⇄red

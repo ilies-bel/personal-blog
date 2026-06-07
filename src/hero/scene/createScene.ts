@@ -597,6 +597,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskMatSecondary.uniforms.uNebula.value = look.nebulaShader ? 1 : 0;
     diskMatPrimary.uniforms.uDot.value = look.dot ? 1 : 0;
     diskMatSecondary.uniforms.uDot.value = look.dot ? 1 : 0;
+    diskMatPrimary.uniforms.uNebulaGrow.value = look.nebulaGrow;
+    diskMatSecondary.uniforms.uNebulaGrow.value = look.nebulaGrow;
 
     // --- nebula → star collapse: BAKED gravity-sim flipbook ---------------------
     // The real chaotic collapse sim is run ONCE and snapshotted into a flipbook at
@@ -764,14 +766,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     ringPts.visible = !look.gravityGone;          // no photon ring around the star
     starSecPts.visible = false;              // secondary lensed star image stays off
 
-    // --- hyperspace streaks: the nebula → beginning-dot jump to lightspeed ----
-    // The nebula's own gas grains trail into long radial Star Wars lanes during the
-    // dezoom out to the beginning dot. look.streak is the intensity hump over the
-    // window (0 elsewhere), so the streak rig is only present while it's hot. The
-    // trail DIRECTION (rushing OUT toward the dot vs pulling IN toward the nebula) is
-    // latched from the eased-stage velocity on a deadzone, so a fast scroll either
-    // way flows the lanes the matching way and a parked frame holds the last flow
-    // instead of stuttering (mirrors the supernova blast-direction latch).
+    // --- hyperspace streaks: dot ⇄ nebula lightspeed approach ---------------
+    // The nebula's own gas grains trail into long radial lanes while the camera
+    // travels between the pale-blue dot and the cloud. look.streak is the intensity
+    // envelope over that window (0 elsewhere), so the streak rig is only present
+    // while it is hot. Direction is latched from eased-stage velocity on a deadzone,
+    // so a fast scroll either way flows the lanes in the matching direction and a
+    // parked frame holds the last flow instead of stuttering.
     const dStreakStage = stage - prevStreakStage;
     if (Math.abs(dStreakStage) > 0.0006) streakDir = dStreakStage > 0 ? 1 : -1;
     prevStreakStage = stage;

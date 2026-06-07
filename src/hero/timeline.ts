@@ -71,6 +71,11 @@ const easeOutExpo = (t: number): number => {
   return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
 };
 
+const DOT_HOLD_END = 0.04;
+const NEBULA_GROW_END = 0.18;
+const STAR_IGNITION_START = 0.316;
+const YELLOW_SETTLE_END = 0.37;
+
 // The public cinematic timeline. The existing shaders still understand the older
 // reverse "stage" coordinates, so this is the single handoff from the new story
 // into the proven morph machinery. `progress` is the RAW scroll value; we run it
@@ -85,50 +90,41 @@ const easeOutExpo = (t: number): number => {
 export function legacyStageForProgress(progress: number): number {
   const p = lifecycleProgress(progress);
 
-  // --- THE PALE-BLUE-DOT OPENING (progress 0.00 -> 0.10) -------------------
+  // --- THE PALE-BLUE-DOT OPENING (progress 0.00 -> 0.18) -------------------
   // The page OPENS on a lone pale-blue speck (the cosmic "you are here"), which
-  // then blooms into the full nebula as you scroll down. The dot state needs
-  // stage >= 4.5 (see lifecycle.ts `dot`), so the top of the arc reaches up to
-  // DOT_STAGE 4.70 — ABOVE the 3.5 nebula ceiling the rest of the arc lives under.
-  // The proven nebula->black-hole arc below is unchanged in stage-space; it is just
-  // shifted into progress 0.10 -> 1.00 (each old breakpoint b -> 0.10 + 0.90*b) so
-  // its relative pacing is preserved exactly and only the opening is new.
-  if (p < 0.04) {
+  // then runs a longer lightspeed approach before the nebula resolves. The dot
+  // state needs stage >= 4.5 (see lifecycle.ts `dot`), so the top of the arc
+  // reaches up to DOT_STAGE 4.70. The nebula first appears smaller, then grows
+  // into its held frame before the collapse window takes over.
+  if (p < DOT_HOLD_END) {
     // DOT HOLD: a near-pixel speck in a vast black field. Barely moves (4.70 -> 4.50)
     // so the opening frame rests as a single quiet point before anything happens.
-    return lerp(4.7, 4.5, smoothstep(segment(p, 0.0, 0.04)));
+    return lerp(4.7, 4.5, smoothstep(segment(p, 0.0, DOT_HOLD_END)));
   }
-  if (p < 0.1) {
-    // DOT -> NEBULA bloom: the speck blossoms into the dispersed cloud (4.50 -> 3.50),
-    // crossing the dot threshold (4.5) into the nebula threshold (3.5). The camera
-    // simultaneously flies in from the far dot vantage to the immersive nebula framing,
-    // so the cloud reads as the dot BLOOMING outward rather than a hard state swap.
-    return lerp(4.5, 3.5, easeInOutCubic(segment(p, 0.04, 0.1)));
+  if (p < NEBULA_GROW_END) {
+    // DOT -> NEBULA grow: linear on purpose. The shader uses the same stage span
+    // to scale the cloud out from the pale-blue point, so easing here would make
+    // the visible growth clump at the end instead of reading as steady travel.
+    return lerp(4.5, 3.42, segment(p, DOT_HOLD_END, NEBULA_GROW_END));
   }
-  if (p < 0.154) {
-    // DISPERSED NEBULA hold: settle on the big round cloud (stage 3.5 -> 3.42, still
-    // safely above the collapse window's 3.5 ceiling so no gas converges yet). The
-    // visitor reads the nebula beat before the gravitational collapse begins.
-    return lerp(3.5, 3.42, smoothstep(segment(p, 0.1, 0.154)));
-  }
-  if (p < 0.316) {
+  if (p < STAR_IGNITION_START) {
     // THE COLLAPSE — the heart of the nebula -> star transition. Stage walks the
     // WHOLE collapse window (3.42 -> 3.02, the lifecycle's [3.0, 3.5] band) across a
     // GENEROUS scroll stretch so the gas visibly streams INWARD and FEEDS the forming
     // star instead of the old 6%-of-scroll flick that skipped the window (which made
     // the star pop "out of nowhere"). easeInOutCubic so the infall accelerates into
     // the middle of the window and eases as the core fills.
-    return lerp(3.42, 3.02, easeInOutCubic(segment(p, 0.154, 0.316)));
+    return lerp(3.42, 3.02, easeInOutCubic(segment(p, NEBULA_GROW_END, STAR_IGNITION_START)));
   }
-  if (p < 0.37) {
+  if (p < YELLOW_SETTLE_END) {
     // IGNITION + CONTEMPLATION: the star has condensed out of the gas; finish into
     // the settled gold (3.02 -> 2.88, the gas-free 2.88->3.0 yellow band) and hold
     // there so the visitor can read the headline on the blazing sun before the red-
     // giant growth resumes the descent.
-    return lerp(3.02, 2.88, easeOutCubic(segment(p, 0.316, 0.37)));
+    return lerp(3.02, 2.88, easeOutCubic(segment(p, STAR_IGNITION_START, YELLOW_SETTLE_END)));
   }
   if (p < 0.514) {
-    return lerp(2.88, 2.05, easeInOutCubic(segment(p, 0.37, 0.514)));
+    return lerp(2.88, 2.05, easeInOutCubic(segment(p, YELLOW_SETTLE_END, 0.514)));
   }
   if (p < 0.658) {
     return 2.05;
@@ -150,14 +146,13 @@ export function legacyStageForProgress(progress: number): number {
 export function progressForLegacyStage(stage: number): number {
   // Inverse of legacyStageForProgress — keep the breakpoints in lockstep with it
   // (both derive from the same progress->stage table). The leading dot bands map
-  // the pale-blue-dot opening (stage 4.70 -> 3.50) onto progress 0.00 -> 0.10.
+  // the pale-blue-dot opening (stage 4.70 -> 3.42) onto progress 0.00 -> 0.18.
   if (stage >= 4.7) return 0.0;
-  if (stage >= 4.5) return lerp(0.0, 0.04, (4.7 - stage) / (4.7 - 4.5));
-  if (stage >= 3.5) return lerp(0.04, 0.1, (4.5 - stage) / (4.5 - 3.5));
-  if (stage >= 3.42) return lerp(0.1, 0.154, (3.5 - stage) / (3.5 - 3.42));
-  if (stage >= 3.02) return lerp(0.154, 0.316, (3.42 - stage) / (3.42 - 3.02));
-  if (stage >= 2.88) return lerp(0.316, 0.37, (3.02 - stage) / (3.02 - 2.88));
-  if (stage >= 2.05) return lerp(0.37, 0.514, (2.88 - stage) / (2.88 - 2.05));
+  if (stage >= 4.5) return lerp(0.0, DOT_HOLD_END, (4.7 - stage) / (4.7 - 4.5));
+  if (stage >= 3.42) return lerp(DOT_HOLD_END, NEBULA_GROW_END, (4.5 - stage) / (4.5 - 3.42));
+  if (stage >= 3.02) return lerp(NEBULA_GROW_END, STAR_IGNITION_START, (3.42 - stage) / (3.42 - 3.02));
+  if (stage >= 2.88) return lerp(STAR_IGNITION_START, YELLOW_SETTLE_END, (3.02 - stage) / (3.02 - 2.88));
+  if (stage >= 2.05) return lerp(YELLOW_SETTLE_END, 0.514, (2.88 - stage) / (2.88 - 2.05));
   if (stage >= 1.05) return 0.586;
   if (stage >= 0.5) return lerp(0.658, 0.748, (1.05 - stage) / (1.05 - 0.5));
   if (stage >= 0.32) return lerp(0.748, 0.82, (0.5 - stage) / (0.5 - 0.32));
@@ -167,45 +162,31 @@ export function progressForLegacyStage(stage: number): number {
 
 // DOT framing: the opening pale-blue speck. Far back and on-axis so the tiny dot
 // sphere (radius ≈ uGiantR*0.018 ≈ 0.076) reads as a near-pixel point in a vast
-// black field. The camera flies IN from here to the immersive nebula framing as the
-// dot blooms into the cloud (progress 0.00 -> 0.10), so the bloom reads as one
-// continuous "the point opens up", not a hard state swap.
+// black field. The camera flies IN from here to the first nebula approach frame as
+// the dot blooms into the cloud, so the bloom reads as travel, not a hard state swap.
 const DOT_VIEW = {
   position: [0.0, 0.0, 78.0] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
 // NEBULA framing: the cloud is a big ROUND volume centred at the origin (extent
-// NR = uGiantR*1.72 ≈ 7.2). The camera sits CLOSE enough that the gas fills the
-// frame and wraps past every edge (immersed), rather than the old far vantage
-// (z≈33) that left the cloud a small boxy patch with black margins. NEBULA_START
-// is the dispersed cloud framed wide-but-filling; NEBULA_GATHERED pushes IN toward
-// the core as the gas begins to converge toward the forming star.
+// NR = uGiantR*1.72 ≈ 7.2). The shader grows the volume linearly from the dot
+// while the camera moves linearly toward this wider, outside-the-cloud stop.
 const NEBULA_START = {
-  // RESTING nebula framing, pulled back ~30% from the tight immersive vantage
-  // (z 13.2 -> 17.16, off-axis offsets scaled to match) so the round cloud sits a
-  // little more WHOLE in the frame — still filling it, but no longer pressed right up
-  // against the gas. The camera then pushes back in toward the core during the
-  // collapse (NEBULA_GATHERED).
-  position: [-0.78, 0.156, 17.16] as Vec3Tuple,
+  // RESTING nebula framing. Farther back than the previous close endpoint, so the
+  // arrival reads as stopping outside the cloud instead of entering the fog.
+  position: [-0.70, 0.14, 39.0] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
-// GATHERED framing: a GENTLE push toward the core as the gas converges. Kept
-// near the resting nebula zoom (z 17.16 -> 14.6, only a slight ~15% push) rather
-// than the old hard dive to z11.2 — the star CONDENSES while the camera is still
-// at roughly the reference-screenshot zoom, so the freshly-formed yellow star
-// reads at the wide framing the user asked for instead of pressed-up-close. The
-// convergence still reads (small inward drift) without slamming into the core.
+// GATHERED framing: a shallow push toward the core as the gas converges. It stays
+// farther back than the old close nebula frame, so the cloud gathers without the
+// camera disappearing into it.
 const NEBULA_GATHERED = {
-  position: [0.3, 0.04, 14.6] as Vec3Tuple,
+  position: [0.18, 0.035, 34.0] as Vec3Tuple,
   target: [0.0, 0.0, 0.0] as Vec3Tuple,
 };
-// YELLOW STAR birth/hold framing. The star must be CREATED at the wide, gas-
-// filling "resting nebula" zoom (≈ NEBULA_START's z17, the framing in the
-// reference screenshot) — NOT the tight gathered core (z≈11.2) nor the old far
-// z≈29.6 hold, both of which made the freshly-ignited star read as way too
-// zoomed-in. So the ignition camera move EASES BACK OUT from the gathered core
-// to this resting vantage as the star condenses, then holds here. A gentle
-// off-axis x/y + the parallax keep the "slight rotation" camera feel alive.
+// YELLOW STAR birth/hold framing. After the wider nebula approach, ignition moves
+// back toward the established yellow-star composition so the new sun can still
+// read as a proper blazing beat rather than a tiny dot at nebula distance.
 const YELLOW_HOLD = {
   position: [0.62, -0.08, 17.4] as Vec3Tuple,
   target: [0.0, -0.02, 0.0] as Vec3Tuple,
@@ -255,35 +236,30 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
   let target = DOT_VIEW.target;
   let parallax = 0.08;
 
-  if (p < 0.1) {
-    // DOT -> NEBULA: ease from the far speck framing into the immersive cloud. The
-    // camera flies in (z 78 -> 19.5) as the dot blooms into the nebula, so the cloud
-    // grows from a point rather than hard-swapping in. On-axis (x≈0) so the lone dot
-    // has no parallax drama before it opens up.
-    const t = easeInOutCubic(segment(p, 0.0, 0.1));
+  if (p < NEBULA_GROW_END) {
+    // DOT -> NEBULA GROW: linear on purpose, matching the shader's point-to-cloud
+    // scale so the nebula expands at a steady rate from the original point.
+    const t = segment(p, DOT_HOLD_END, NEBULA_GROW_END);
     position = mixVec(DOT_VIEW.position, NEBULA_START.position, t);
     target = mixVec(DOT_VIEW.target, NEBULA_START.target, t);
     parallax = 0.04;
-  } else if (p < 0.316) {
-    // NEBULA hold + COLLAPSE: stay immersed and CLOSE while the gas streams inward.
-    // The camera makes only a gentle push toward the gathering core (NEBULA_START ->
-    // NEBULA_GATHERED) across the whole nebula+collapse band, so the cloud appears to
-    // CONVERGE on a fixed focal point (the forming star) rather than the camera flying
-    // out and making the gas look like it expands. The big inward move to the yellow
-    // framing waits for ignition (below).
-    const t = easeInOutCubic(segment(p, 0.1, 0.316));
+  } else if (p < STAR_IGNITION_START) {
+    // NEBULA hold + COLLAPSE: stay wider while the gas streams inward. The camera
+    // makes only a shallow push toward the gathering core, so the cloud gathers
+    // without losing its round silhouette.
+    const t = easeInOutCubic(segment(p, NEBULA_GROW_END, STAR_IGNITION_START));
     position = mixVec(NEBULA_START.position, NEBULA_GATHERED.position, t);
     target = mixVec(NEBULA_START.target, NEBULA_GATHERED.target, t);
     parallax = 0.05;
-  } else if (p < 0.37) {
+  } else if (p < YELLOW_SETTLE_END) {
     // IGNITION: the gas has fed the star; ease out from the immersed core framing to
     // the yellow-star hold as the sun settles into its blazing main-sequence beat.
-    const t = easeOutCubic(segment(p, 0.316, 0.37));
+    const t = easeOutCubic(segment(p, STAR_IGNITION_START, YELLOW_SETTLE_END));
     position = mixVec(NEBULA_GATHERED.position, YELLOW_HOLD.position, t);
     target = mixVec(NEBULA_GATHERED.target, YELLOW_HOLD.target, t);
     parallax = 0.05;
   } else if (p < 0.514) {
-    const t = easeInOutCubic(segment(p, 0.37, 0.514));
+    const t = easeInOutCubic(segment(p, YELLOW_SETTLE_END, 0.514));
     position = mixVec(YELLOW_HOLD.position, RED_COMPOSITION.position, t);
     target = mixVec(YELLOW_HOLD.target, RED_COMPOSITION.target, t);
     parallax = 0.04;

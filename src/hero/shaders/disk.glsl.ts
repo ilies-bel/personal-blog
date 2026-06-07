@@ -199,6 +199,7 @@ export const diskVertexShader = /* glsl */ `
   //       uNebula: yellow star -> nebula
   //       uDot:    nebula      -> pale blue dot
   uniform float uYellow, uNebula, uDot;
+  uniform float uNebulaGrow; // 0 = pale-blue point, 1 = full nebula volume
   // nebula light model strength (0 = flat self-emission, 1 = full ambient+depth+occlusion)
   uniform float uNebLight;
   // --- yellow star → red giant flash-swap channels (point-cloud only) ---
@@ -229,6 +230,7 @@ export const diskVertexShader = /* glsl */ `
   varying float vNeb;    // nebula emission field → colour palette (0 teal OIII → 1 rust SII)
   varying float vNebLane;// nebula lane: 0 = diffuse haze, 1 = filament strand
   varying float vNebLight;// nebula depth/occlusion brightness factor (ambient+depth light model)
+  varying float vNebGrow;// dot→nebula linear growth factor
   // --- yellow (sun) state channels, ported from the standalone Sun render ---
   varying float vSunM;    // warm photosphere noise field (0..1) → colour ramp
   varying float vSunLimb; // limb factor (0 centre → 1 rim) → bright limb glow
@@ -252,6 +254,7 @@ export const diskVertexShader = /* glsl */ `
     vNeb = 0.0;                                 // nebula emission/colour field
     vNebLane = 0.0;                             // nebula lane (0 diffuse, 1 filament)
     vNebLight = 1.0;                            // nebula light factor (1 = full bright; no-op off-nebula)
+    vNebGrow = 1.0;                             // dot→nebula growth (1 outside transition)
     vEaten = 0.0;                               // core-swallow progress (set in the collapse block)
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
@@ -887,6 +890,7 @@ export const diskVertexShader = /* glsl */ `
       }
       // -- nebula: a sprawling emission cloud (Hubble/SHO look) — see block below.
       if(uNebula > 0.5){
+        float nebGrow = clamp(uNebulaGrow, 0.0, 1.0);
         // ===== Emission nebula (Hubble/SHO look) =================================
         // The old version read as a dense orange BALL with radial spokes — a fireball,
         // not a nebula. Real emission nebulae (Eagle, Carina, Orion) are SPRAWLING,
@@ -1039,9 +1043,14 @@ export const diskVertexShader = /* glsl */ `
           heat = 1.3;
           vPlaceholder = 2.5;                               // star sub-tag (→ white-blue)
         }
+        // DOT → NEBULA: every particle begins at the same tiny pale-blue point and
+        // grows linearly to its analytic cloud position. This is the real geometry
+        // growth; the camera move in timeline.ts uses the same linear band.
+        pos = mix(sphere * (uGiantR * 0.018), pos, nebGrow);
+        vNebGrow = nebGrow;
       }
       // -- pale blue dot: collapse to a small, soft, cool sphere ------------
-      if(uDot > 0.5){
+      if(uDot > 0.5 && uNebulaGrow <= 0.001){
         pos = sphere * (uGiantR * 0.018);
         heat = 0.5;
         vPlaceholder = 3.0;
@@ -1467,14 +1476,15 @@ export const diskVertexShader = /* glsl */ `
     // Culled diffuse grains (vNebLane < 0) are sized to 0 so the voids stay black.
     if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
       float sizeRand = 0.7 + 0.6*aSeed;                  // per-particle variety (tighter → smoother overlap)
+      float growSize = max(vNebGrow, 0.05);
       if(vNebLane > 0.5){
-        gl_PointSize = clamp(baseSize * (1.3 + 1.8*vHeat) * sizeRand, 1.2, 8.0); // soft lit thread
+        gl_PointSize = clamp(baseSize * (1.3 + 1.8*vHeat) * sizeRand * growSize, 0.4, 8.0); // soft lit thread
       } else {
         // BIG soft puffs so ~1M grains overlap into continuous smoke (not a grainy
         // starfield). Larger floor/cap than before → fewer hard gaps between grains.
-        gl_PointSize = clamp(baseSize * (3.0 + 3.2*vHeat) * sizeRand, 1.8, 16.0); // soft smoke puff
+        gl_PointSize = clamp(baseSize * (3.0 + 3.2*vHeat) * sizeRand * growSize, 0.4, 16.0); // soft smoke puff
       }
-      if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize*3.0, 2.5, 9.0); // young-star knot (small bright point)
+      if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize * 3.0 * growSize, 0.5, 9.0); // young-star knot (small bright point)
       if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
     }
     if(vPlaceholder > 2.9){
@@ -1497,6 +1507,7 @@ export const diskFragmentShader = /* glsl */ `
   varying float vNeb;    // nebula emission field → colour palette (0 teal OIII → 1 rust SII)
   varying float vNebLane;// nebula lane: 0 = diffuse haze, 1 = filament strand
   varying float vNebLight;// nebula depth/occlusion brightness factor
+  varying float vNebGrow;// dot→nebula linear growth factor
   varying float vSunM;    // warm photosphere field for the yellow-sun ramp
   varying float vSunLimb; // limb factor → bright gold rim glow
   varying float vSunDark; // sunspot/network darkening
@@ -1713,6 +1724,9 @@ export const diskFragmentShader = /* glsl */ `
     }
 
     float inten = vBright * a;
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
+      inten *= clamp(vNebGrow, 0.0, 1.0);
+    }
     // Yellow (sun): the photosphere ramp colour already encodes surface
     // luminance, so drive its intensity mostly from coverage (×a) with a gentle
     // lift — keeps the gold gradient true instead of clipping to white, and lets

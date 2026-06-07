@@ -44,9 +44,10 @@ export const BEATS: ManifestoBeat[] = [
     whisper: 'one good boundary can outlive a thousand generated lines.',
   },
   {
-    // NEBULA — the dispersed cloud hold (stage ~3.5 -> 3.42, progress ~0.10 -> 0.154).
-    at: 0.155,
-    text: { inStart: 0.115, inEnd: 0.135, outStart: 0.205, outEnd: 0.235 },
+    // NEBULA — after the longer lightspeed approach, the cloud grows into the held
+    // frame around progress ~0.18 before the collapse becomes visually active.
+    at: 0.19,
+    text: { inStart: 0.165, inEnd: 0.185, outStart: 0.245, outEnd: 0.275 },
     state: 'nebula',
     down: 'then the dust becomes a system.',
     up: 'shape the dust first.',
