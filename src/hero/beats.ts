@@ -34,10 +34,9 @@ export const BEATS: ManifestoBeat[] = [
   {
     // PALE BLUE DOT — the opening speck (stage ~4.7 at the very top). Copy is
     // fully visible immediately, then fades out before the dot blooms into the
-    // nebula (~0.075). Sits inside the dot hold (progress 0.00 -> 0.04) so the
-    // line reads on the still point.
-    at: 0.02,
-    text: { inStart: 0.0, inEnd: 0.0, outStart: 0.05, outEnd: 0.075 },
+    // nebula. Dot hold is now 0.00 -> 0.055, so the fade-out starts at 0.06.
+    at: 0.025,
+    text: { inStart: 0.0, inEnd: 0.0, outStart: 0.06, outEnd: 0.09 },
     state: 'pale blue dot',
     down: 'I build software that stays understandable.',
     up: 'I build software that stays understandable.',
@@ -45,29 +44,30 @@ export const BEATS: ManifestoBeat[] = [
   },
   {
     // NEBULA — after the longer lightspeed approach, the cloud grows into the held
-    // frame around progress ~0.18 before the collapse becomes visually active.
-    at: 0.19,
-    text: { inStart: 0.165, inEnd: 0.185, outStart: 0.245, outEnd: 0.275 },
+    // frame. NEBULA_GROW_END is now 0.195; collapse starts at 0.33. The text fades
+    // in as the cloud settles (~0.195) and out well before collapse (~0.28).
+    at: 0.21,
+    text: { inStart: 0.185, inEnd: 0.205, outStart: 0.265, outEnd: 0.295 },
     state: 'nebula',
     down: 'One boundary can outlive a thousand generated lines.',
     up: 'One boundary can outlive a thousand generated lines.',
     whisper: 'prompts, diffs, failing tests, half-ideas. raw material, not magic.',
   },
   {
-    // YELLOW STAR — ignites by ~0.316 and dwells in the nearly-flat contemplation
-    // hold through ~0.37 (see legacyStageForProgress), so the headline sits in that
-    // stable window before easing out ahead of the red beat (starts at 0.514).
-    at: 0.33,
-    text: { inStart: 0.29, inEnd: 0.315, outStart: 0.355, outEnd: 0.375 },
+    // YELLOW STAR — ignites by ~0.33 (STAR_IGNITION_START) and dwells through ~0.395
+    // (YELLOW_SETTLE_END). The headline sits in the stable window. RED_HOLD_START is
+    // now 0.524, so the copy fades out well before the red growth begins.
+    at: 0.355,
+    text: { inStart: 0.31, inEnd: 0.335, outStart: 0.375, outEnd: 0.395 },
     state: 'yellow star',
     down: 'Systems grow. Interfaces drift. Complexity compounds.',
     up: 'Systems grow. Interfaces drift. Complexity compounds.',
     whisper: "tests, review, small units, boring choices. that's the craft.",
   },
   {
-    // RED GIANT — the hold band (stage 2.05, progress ~0.514 -> 0.658).
-    at: 0.586,
-    text: { inStart: 0.514, inEnd: 0.55, outStart: 0.62, outEnd: 0.66 },
+    // RED GIANT — the hold band (stage 2.05, progress ~0.524 -> 0.678 with widened holds).
+    at: 0.601,
+    text: { inStart: 0.524, inEnd: 0.562, outStart: 0.638, outEnd: 0.676 },
     state: 'red giant',
     down: 'My work is to keep the center readable.',
     up: 'My work is to keep the center readable.',

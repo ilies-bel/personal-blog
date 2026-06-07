@@ -71,15 +71,18 @@ const easeOutExpo = (t: number): number => {
   return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
 };
 
-const DOT_HOLD_END = 0.04;
-const NEBULA_GROW_END = 0.18;
-const STAR_IGNITION_START = 0.316;
-const YELLOW_SETTLE_END = 0.37;
-// The yellow star HOLDS close + centred across 0.37→YELLOW_HOLD_END so the dive-in
-// resolves into a real beat (headline reads on the blazing sun). Only AFTER this hold
-// does the giant grow + the camera travel out to the corner — so yellow→red reads as
-// ONE move (grow + pull to the final corner) instead of "dive in, then reverse out".
-const YELLOW_HOLD_END = 0.42;
+const DOT_HOLD_END = 0.055;      // widened: 0.04 -> 0.055 (dot holds longer before bloom)
+const NEBULA_GROW_END = 0.195;   // widened: 0.18 -> 0.195 (nebula settles before collapse)
+const STAR_IGNITION_START = 0.33; // widened: 0.316 -> 0.33 (more collapse travel time)
+const YELLOW_SETTLE_END = 0.395;  // widened: 0.37 -> 0.395 (more yellow-star dwell)
+// The yellow star HOLDS close + centred across YELLOW_SETTLE_END→YELLOW_HOLD_END so the
+// dive-in resolves into a real beat (headline reads on the blazing sun). Only AFTER this
+// hold does the giant grow + the camera travel out to the corner — so yellow→red reads
+// as ONE move (grow + pull to the final corner) instead of "dive in, then reverse out".
+const YELLOW_HOLD_END = 0.42;     // strictly between YELLOW_SETTLE_END (0.395) and RED_HOLD_START (0.524)
+// Red-giant hold band. Named so camera and stage use the same numbers.
+const RED_HOLD_START = 0.524;    // widened: 0.514 -> 0.524 (slightly more yellow-to-red travel)
+const RED_HOLD_END = 0.678;      // widened: 0.658 -> 0.678 (more settled red-giant dwell)
 
 // The public cinematic timeline. The existing shaders still understand the older
 // reverse "stage" coordinates, so this is the single handoff from the new story
@@ -134,14 +137,14 @@ export function legacyStageForProgress(progress: number): number {
     // one continuous gesture rather than starting mid-dive-in.
     return 2.88;
   }
-  if (p < 0.514) {
-    return lerp(2.88, 2.05, easeInOutCubic(segment(p, YELLOW_HOLD_END, 0.514)));
+  if (p < RED_HOLD_START) {
+    return lerp(2.88, 2.05, easeInOutCubic(segment(p, YELLOW_HOLD_END, RED_HOLD_START)));
   }
-  if (p < 0.658) {
+  if (p < RED_HOLD_END) {
     return 2.05;
   }
   if (p < 0.748) {
-    return lerp(1.05, 0.5, easeInQuart(segment(p, 0.658, 0.748)));
+    return lerp(1.05, 0.5, easeInQuart(segment(p, RED_HOLD_END, 0.748)));
   }
   if (p < 0.82) {
     return lerp(0.5, 0.32, easeOutCubic(segment(p, 0.748, 0.82)));
@@ -164,10 +167,10 @@ export function progressForLegacyStage(stage: number): number {
   if (stage >= 3.02) return lerp(NEBULA_GROW_END, STAR_IGNITION_START, (3.42 - stage) / (3.42 - 3.02));
   if (stage >= 2.88) return lerp(STAR_IGNITION_START, YELLOW_SETTLE_END, (3.02 - stage) / (3.02 - 2.88));
   // stage 2.88 holds across [YELLOW_SETTLE_END, YELLOW_HOLD_END]; the 2.88→2.05 growth
-  // then maps onto [YELLOW_HOLD_END, 0.514] (in lockstep with legacyStageForProgress).
-  if (stage >= 2.05) return lerp(YELLOW_HOLD_END, 0.514, (2.88 - stage) / (2.88 - 2.05));
-  if (stage >= 1.05) return 0.586;
-  if (stage >= 0.5) return lerp(0.658, 0.748, (1.05 - stage) / (1.05 - 0.5));
+  // then maps onto [YELLOW_HOLD_END, RED_HOLD_START] (in lockstep with legacyStageForProgress).
+  if (stage >= 2.05) return lerp(YELLOW_HOLD_END, RED_HOLD_START, (2.88 - stage) / (2.88 - 2.05));
+  if (stage >= 1.05) return (RED_HOLD_START + RED_HOLD_END) / 2; // mid-hold approx (used for HUD preview)
+  if (stage >= 0.5) return lerp(RED_HOLD_END, 0.748, (1.05 - stage) / (1.05 - 0.5));
   if (stage >= 0.32) return lerp(0.748, 0.82, (0.5 - stage) / (0.5 - 0.32));
   if (stage >= 0.08) return lerp(0.82, 0.946, (0.32 - stage) / (0.32 - 0.08));
   return lerp(0.946, 1.0, (0.08 - Math.max(0, stage)) / 0.08);
@@ -285,17 +288,17 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     position = YELLOW_HOLD.position;
     target = YELLOW_HOLD.target;
     parallax = 0.04;
-  } else if (p < 0.514) {
+  } else if (p < RED_HOLD_START) {
     // YELLOW → RED giant: ONE continuous move. The giant grows (legacyStage 2.88→2.05)
     // while the camera travels from the close centred hold straight out to the corner —
     // a single monotonic gesture (z 17.4→38.2, sliding to the off-centre pose), no
     // dive-then-reverse. easeOutCubic leads the move so it commits promptly and settles
     // into the corner rather than lingering.
-    const t = easeOutCubic(segment(p, YELLOW_HOLD_END, 0.514));
+    const t = easeOutCubic(segment(p, YELLOW_HOLD_END, RED_HOLD_START));
     position = mixVec(YELLOW_HOLD.position, RED_COMPOSITION.position, t);
     target = mixVec(YELLOW_HOLD.target, RED_COMPOSITION.target, t);
     parallax = 0.04;
-  } else if (p < 0.658) {
+  } else if (p < RED_HOLD_END) {
     position = RED_COMPOSITION.position;
     target = RED_COMPOSITION.target;
     parallax = 0.015;
@@ -305,7 +308,7 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     // rather than the old easeInQuart that held the off-centre limb then lurched
     // at the last instant. The star slides from extreme-right-cropped toward the
     // collapse framing as the surface caves in.
-    const t = easeOutCubic(segment(p, 0.658, 0.748));
+    const t = easeOutCubic(segment(p, RED_HOLD_END, 0.748));
     position = mixVec(RED_COMPOSITION.position, COLLAPSE_PULL.position, t);
     target = mixVec(RED_COMPOSITION.target, COLLAPSE_PULL.target, t);
     parallax = 0.0;
@@ -326,8 +329,9 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     parallax = 0.018;
   }
 
-  const redHold = segment(p, 0.514, 0.658);
-  const redHoldWindow = smoothstep(redHold) * (1 - smoothstep(segment(p, 0.622, 0.658)));
+  const redHold = segment(p, RED_HOLD_START, RED_HOLD_END);
+  const redHoldDriftEnd = RED_HOLD_START + (RED_HOLD_END - RED_HOLD_START) * 0.94; // fade drift before hold ends
+  const redHoldWindow = smoothstep(redHold) * (1 - smoothstep(segment(p, redHoldDriftEnd, RED_HOLD_END)));
   const micro = reduced ? 0 : redHoldWindow * Math.sin(time * 0.09) * 0.16;
   if (micro !== 0) {
     position = [position[0] + micro, position[1] - micro * 0.18, position[2] + micro * 0.22];

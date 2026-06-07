@@ -310,3 +310,76 @@
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   StarMarker: a small amber dot+ring anchored to the on-screen star object.
+   Positioned with position: fixed; left/top are written directly by rAF so
+   there are no per-frame React re-renders. Fades in/out when a settled state
+   is on screen. The element is always a real <a> link so it remains keyboard-
+   focusable and follows the standard focus ring below.
+   --------------------------------------------------------------------------- */
+.star-marker {
+  --marker-amber: var(--hud-amber, color-mix(in oklch, var(--highlight) 86%, var(--fg)));
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  /* Centre the anchor on the computed point (offset already baked in by createScene). */
+  translate: -50% -50%;
+  opacity: 0;
+  pointer-events: none;
+  text-decoration: none;
+  transition:
+    opacity 0.45s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.star-marker[data-visible='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Reduced motion: visible but no pulsing animation. Still clickable. */
+.star-marker[data-reduced='true'],
+.star-marker[data-reduced='true'][data-visible='true'] {
+  transition: none;
+}
+
+/* Core dot */
+.star-marker-dot {
+  position: absolute;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: var(--marker-amber);
+  box-shadow:
+    0 0 6px 2px color-mix(in oklch, var(--marker-amber) 55%, transparent),
+    0 0 2px 0px color-mix(in oklch, var(--marker-amber) 90%, transparent);
+}
+/* Expanding ring */
+.star-marker-ring {
+  position: absolute;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--marker-amber) 52%, transparent);
+  animation: star-marker-pulse 2.6s ease-in-out infinite;
+}
+@keyframes star-marker-pulse {
+  0%   { transform: scale(0.72); opacity: 0.7; }
+  60%  { transform: scale(1.18); opacity: 0.18; }
+  100% { transform: scale(0.72); opacity: 0.7; }
+}
+.star-marker:focus-visible {
+  outline: 1px solid var(--marker-amber);
+  outline-offset: 0.3rem;
+  border-radius: 50%;
+}
+/* No animation under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .star-marker-ring {
+    animation: none;
+    transform: scale(1);
+    opacity: 0.45;
+  }
+}

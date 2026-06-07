@@ -907,6 +907,33 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       Math.max(0, Math.min(1, flashOrigin.y * 0.5 + 0.5)),
     );
 
+    // Per-frame marker bridge: project the star's world-origin position to CSS-pixel
+    // coords and call hooks.onMarkerFrame so StarMarker can anchor HTML over the object
+    // without triggering React re-renders. flashOrigin already holds the projected NDC
+    // (recomputed above for the nova pass on the same frame, same camera orientation).
+    // Offset slightly up-and-right of centre so the marker floats off the exact core.
+    if (hooks.onMarkerFrame) {
+      const ndcX = flashOrigin.x;
+      const ndcY = flashOrigin.y;
+      const cssX = (ndcX * 0.5 + 0.5) * window.innerWidth + 28;
+      const cssY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight - 36;
+      const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
+      // Settled windows in stage space: a settled state is one where the lifecycle
+      // is dwelling on a recognisable object rather than mid-transition.
+      //   dot     4.45 - 4.72
+      //   nebula  3.38 - 3.56
+      //   yellow  2.85 - 3.04
+      //   red     2.00 - 2.38
+      //   black   0.00 - 0.13
+      const settled =
+        (stage >= 4.45 && stage <= 4.72) ||
+        (stage >= 3.38 && stage <= 3.56) ||
+        (stage >= 2.85 && stage <= 3.04) ||
+        (stage >= 2.00 && stage <= 2.38) ||
+        (stage >= 0.00 && stage <= 0.13);
+      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });
+    }
+
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
     // Tiny and time-based: it sells one shock event without turning the scroll into
     // a game-camera wobble.

@@ -31,11 +31,13 @@ import {
   readDebugNumber,
 } from '../lib/constants';
 import { createScene } from '../scene/createScene';
+import type { MarkerFrame } from '../scene/types';
 import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
 import ScrollHint from './ScrollHint';
+import StarMarker from './StarMarker';
 
 declare global {
   interface Window {
@@ -71,6 +73,10 @@ function crossedProgressThreshold(previous: number, next: number, threshold: num
 
 export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
+  // Frame-cadence marker data from the scene (position of the star object in CSS px).
+  // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
+  // its own rAF loop. Never triggers React re-renders — that is the whole point.
+  const markerFrameRef = useRef<MarkerFrame | null>(null);
   // Exact scroll progress (0..1) drives the morph through a ref the render loop
   // reads. React receives a lower-frequency visual snapshot for DOM overlays.
   const progressRef = useRef(0);
@@ -207,6 +213,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       getProgress,
       getFocusTarget: () => null,
       isExplorationMode: () => explorationModeRef.current,
+      onMarkerFrame: (m) => { markerFrameRef.current = m; },
     });
     // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
     // can't import scene/three code). Published on window under the __bh* hook
@@ -249,6 +256,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
         <HeroIdentity />
         <ManifestoOverlay />
+        <StarMarker markerFrameRef={markerFrameRef} />
         <ExplorationHud />
         <ScrollHint />
       </div>
