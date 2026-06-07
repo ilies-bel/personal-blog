@@ -67,7 +67,17 @@ export const sunSurfaceVert = /* glsl */ `
     gl_Position = projectionMatrix * mv;
   }`;
 
+// Number of CONCURRENT click eruptions the photosphere can host. The render loop
+// keeps a JS-side pool of the same size and copies it into uErupt/uEruptAge each
+// frame; rapid clicks stack into separate slots so several plumes + ripples can
+// play at once (a single restart-on-click would clobber an in-flight blast).
+export const SUN_ERUPT_SLOTS = 4;
+
 export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
+  #define N_ERUPT 4
+  // ERUPT_LIFE: total lifetime of one eruption in seconds. The plume + ripple both
+  // fade out by here; the render loop frees the slot (intensity→0) at the same age.
+  #define ERUPT_LIFE 2.4
   uniform float uTime;
   // uRed ∈ [0,1]: 0 = yellow star (gold, bright), 1 = red giant (deep red, dim).
   // Drives the photosphere from a hot gold palette toward a cool, matte, deep-red
@@ -77,6 +87,16 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   // "Mass induces heat": while the star is still forming/small it is blue-white
   // hot; as it grows to full mass it cools to yellow. Driven by (1 - starFormed).
   uniform float uBlue;
+  // --- CLICK ERUPTIONS (geyser plume + travelling surface ripple) ------------
+  // uErupt[i].xyz = OBJECT-SPACE unit direction of eruption i's centre on the
+  //   sphere (same space as vObj, so a chord distance to vObj is meaningful).
+  // uErupt[i].w   = intensity 0..1 (click-hold scaled: tap≈0.25 → ~1.5s hold = 1).
+  //   w == 0 means the slot is idle and contributes nothing.
+  // uEruptAge[i]  = seconds since the eruption fired; the ripple radius grows with
+  //   it and the whole event fades out by ERUPT_LIFE. The render loop advances the
+  //   ages and zeroes intensities once spent, so the shader just reads them.
+  uniform vec4 uErupt[N_ERUPT];
+  uniform float uEruptAge[N_ERUPT];
   varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
   void main(){
     vec3 p = vObj * 2.4;
@@ -134,7 +154,13 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // cell contrast, but the average is now well above 1.0 so the whole disc reads bright.
     float gran = fbm(p*7.0 + t*1.0);
     float gran2 = fbm(p*15.0 - t*0.6);
-    col *= 0.95 + 0.50*(gran*0.5+0.5) + 0.10*(gran2*0.5+0.5);
+    // gran3: a FINER third octave (p*28, ~2x gran2) for the dense fine-scale stippling
+    // the reference photosphere shows between the big cells — it busies up the surface
+    // so it reads richly mottled rather than smoothly speckled. Small weight (0.07) and
+    // the floor is dropped 0.95 → 0.90 to fund the extra ~+0.035 mean it adds, so the
+    // average brightness is unchanged (the gold look / network / spots / rim are untouched).
+    float gran3 = fbm(p*28.0 + t*0.4);
+    col *= 0.90 + 0.50*(gran*0.5+0.5) + 0.10*(gran2*0.5+0.5) + 0.07*(gran3*0.5+0.5);
 
     // bright active-region speckle fades out toward the (quiet) red giant. On the
     // yellow star these are the white-hot flare patches of the reference, so they
@@ -182,6 +208,65 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     bcol += limbWide * vec3(0.30, 0.45, 0.70);   // cool limb glow
     bcol *= 1.25;                             // young star is luminous
     col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
+
+    // === CLICK ERUPTIONS ====================================================
+    // A geyser/prominence at the click point: a travelling surface RIPPLE plus an
+    // additive off-limb PLUME. Both read on the gold star AND the red giant, so they
+    // are added AFTER the gold/red/blue recolour above. Hot eruption colour tilts
+    // toward the surface palette so a tap looks like the surface flaring, not a decal.
+    vec3 eruptHot = mix(vec3(1.30,1.02,0.55), vec3(1.10,0.34,0.08), uRed); // gold→red ember
+    // Recompute the (geyser-side) limb factor: a true off-limb plume should glow most
+    // where the surface grazes the silhouette toward the viewer, so we bias the plume
+    // additive by the wide fresnel limb already computed for the rim.
+    for (int i = 0; i < N_ERUPT; i++){
+      float inten = uErupt[i].w;
+      if (inten <= 0.0) continue;                 // idle slot
+      vec3  ed  = normalize(uErupt[i].xyz);       // eruption centre direction (object space)
+      float age = uEruptAge[i];
+      float life = clamp(age / ERUPT_LIFE, 0.0, 1.0);
+      // chord distance on the unit sphere from this fragment to the eruption centre
+      // (cheaper than acos(dot) and monotonic in the geodesic distance) — 0 at the
+      // centre, up to 2 at the antipode. The ring is a circle in this distance, so it
+      // expands as a true circle ACROSS the curved surface from the click point.
+      float cd  = length(vObj - ed);
+
+      // --- travelling ripple (expanding bright shockwave across the photosphere) ---
+      // Radius grows with age; reach + width + strength scale with intensity so a long
+      // press throws a wider, stronger ring that travels further over the surface.
+      float reach  = 0.45 + 1.15 * inten;         // how far the ring travels (chord units)
+      float radius = reach * age / ERUPT_LIFE;    // ring radius marches outward with age
+      float width  = 0.10 + 0.22 * inten;         // crest thickness widens with intensity
+      // signed offset of this fragment from the ring crest; a Gaussian crest gives the
+      // bright leading edge, and a softer trailing lobe (only behind the crest) reads as
+      // the disturbed surface settling back down after the wave has passed.
+      float off    = cd - radius;
+      float crest  = exp(-pow(off / width, 2.0));                 // bright travelling crest
+      float trail  = exp(-pow(max(off, 0.0) / (width*2.2), 2.0)) * 0.35; // settle behind it
+      // fade the whole wave out over its life, and damp it as it reaches max radius so
+      // it doesn't pop off at the travel limit.
+      float ripFade = (1.0 - life) * (1.0 - smoothstep(reach*0.7, reach, cd));
+      float ripple  = (crest + trail) * ripFade * inten;
+      // brighten the surface where the wave is, and PERTURB the granulation as it passes
+      // (a quick fine ripple in the cells riding the crest) so the texture reacts, not
+      // just the luminance.
+      float gripple = fbm(p*9.0 + ed*4.0 + radius*6.0) * 0.5 + 0.5;
+      col += eruptHot * ripple * (0.85 + 0.6 * gripple);
+      col *= 1.0 + 0.30 * ripple;                 // multiplicative lift → cells brighten with it
+
+      // --- geyser plume (bright spray erupting off the surface at the click point) ---
+      // An additive glow tightly centred on the eruption direction (gaussian on the chord
+      // distance) that grows TALLER/brighter with intensity. It rises then falls over the
+      // life (sin envelope) like a fountain, and is biased toward the limb (limbWide) so
+      // it reads as a prominence arcing off the silhouette rather than a flat hot patch.
+      float spread = 0.16 + 0.12 * inten;         // angular footprint of the plume base
+      float core   = exp(-pow(cd / spread, 2.0)); // concentration at the click point
+      float rise   = sin(life * 3.14159);         // 0→1→0: erupt, peak, settle
+      float height = (0.6 + 1.6 * inten) * rise;  // taller plume with longer holds
+      // the plume is hottest at its root and biased to the limb; limbWide lifts the part
+      // grazing the silhouette so the spray appears to leave the surface toward the edge.
+      float plume  = core * height * (0.45 + 0.85 * limbWide);
+      col += eruptHot * plume * 1.4;
+    }
     gl_FragColor = vec4(col, 1.0);
   }`;
 

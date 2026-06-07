@@ -18,12 +18,14 @@ declare module 'three' {
   export class PerspectiveCamera { constructor(...args: any[]); [key: string]: any; }
   export class PlaneGeometry { constructor(...args: any[]); [key: string]: any; }
   export class Points { constructor(...args: any[]); [key: string]: any; }
+  export class Raycaster { constructor(...args: any[]); [key: string]: any; }
   export class Scene { constructor(...args: any[]); [key: string]: any; }
   export class ShaderMaterial { constructor(...args: any[]); [key: string]: any; }
   export class Sphere { constructor(...args: any[]); [key: string]: any; }
   export class Texture { constructor(...args: any[]); [key: string]: any; }
   export class Vector2 { constructor(...args: any[]); [key: string]: any; }
   export class Vector3 { constructor(...args: any[]); [key: string]: any; }
+  export class Vector4 { constructor(...args: any[]); [key: string]: any; }
   export class WebGLRenderer { constructor(...args: any[]); [key: string]: any; }
   export class WebGLRenderTarget { constructor(...args: any[]); [key: string]: any; }
 

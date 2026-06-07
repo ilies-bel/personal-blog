@@ -202,6 +202,99 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   };
   if (!reduced) window.addEventListener('pointermove', onPointerMove);
 
+  // --- CLICK ERUPTIONS on the idle star (geyser plume + surface ripple) ------
+  // Clicking the fully-formed sun-rig mesh fires a prominence at the click point: a
+  // bright plume off the limb plus an expanding ripple across the photosphere. Hold
+  // LONGER → bigger eruption (taller plume, wider/stronger ripple), capped at ~1.5s.
+  // The whole interaction lives in the scene layer (like the pointermove parallax) —
+  // no React. A small fixed pool lets rapid clicks stack instead of clobbering.
+  const ERUPT_LIFE = 2.4; // seconds; must match ERUPT_LIFE in sun.glsl.ts
+  const ERUPT_HOLD_MAX = 1.5; // seconds of hold that maps to a full-intensity blast
+  interface Eruption {
+    dir: THREE.Vector3; // object-space unit direction of the eruption centre
+    intensity: number; // 0 = free slot; >0 = active (click-hold scaled)
+    age: number; // seconds since fired
+  }
+  const eruptPool: Eruption[] = Array.from({ length: sunRig.surfaceMat.uniforms.uErupt.value.length }, () => ({
+    dir: new THREE.Vector3(0, 1, 0),
+    intensity: 0,
+    age: 0,
+  }));
+  // Reused across pointer events / frames so the hot path never allocates.
+  const eruptRaycaster = new THREE.Raycaster();
+  const eruptPointerNdc = new THREE.Vector2();
+  const eruptLocalDir = new THREE.Vector3();
+  // Updated every frame from the render loop: true only when the star mesh is shown
+  // AND fully formed (not growing) — i.e. the settled yellow star or the red-giant
+  // hold when the mesh is visible. The pointerdown handler reads it before raycasting.
+  let sunClickable = false;
+  // Pending hold: set on a pointerdown that HIT the sun, cleared on up/cancel. Stores
+  // the object-space eruption direction captured at press time and the press timestamp.
+  let holdStart = 0;
+  let holdDir: THREE.Vector3 | null = null;
+
+  // Write an eruption into the oldest/free slot of the pool (free slots first, else
+  // the slot nearest the end of its life) so rapid clicks stack instead of replacing.
+  const spawnEruption = (dir: THREE.Vector3, intensity: number): void => {
+    let slot = 0;
+    let oldest = -1;
+    for (let i = 0; i < eruptPool.length; i++) {
+      if (eruptPool[i].intensity <= 0) {
+        slot = i;
+        oldest = -1; // found a truly free slot; take it
+        break;
+      }
+      if (eruptPool[i].age > oldest) {
+        oldest = eruptPool[i].age;
+        slot = i;
+      }
+    }
+    const e = eruptPool[slot];
+    e.dir.copy(dir);
+    e.intensity = intensity;
+    e.age = 0;
+  };
+
+  const onPointerDownSun = (e: PointerEvent): void => {
+    if (!sunClickable) return;
+    // NDC of the pointer within the canvas (handles canvas not filling the window).
+    const rect = renderer.domElement.getBoundingClientRect();
+    eruptPointerNdc.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -(((e.clientY - rect.top) / rect.height) * 2 - 1),
+    );
+    eruptRaycaster.setFromCamera(eruptPointerNdc, camera);
+    const hit = eruptRaycaster.intersectObject(sunRig.surface, false)[0];
+    if (!hit) return;
+    // Convert the world hit point into the surface mesh's LOCAL space and normalize —
+    // that is the same object space as the shader's vObj, so the eruption centre lines
+    // up with the clicked spot regardless of the rig's spin/scale.
+    holdDir = sunRig.surface.worldToLocal(hit.point.clone()).normalize();
+    holdStart = performance.now();
+  };
+
+  const onPointerUpSun = (): void => {
+    if (!holdDir) return; // pointerup with no pending hit on the sun → ignore
+    const holdSeconds = (performance.now() - holdStart) / 1000;
+    // tap still gives a visible small flare (0.25 floor); ~1.5s hold maxes out at 1.0.
+    const intensity = Math.max(0.25, Math.min(1, 0.25 + holdSeconds / ERUPT_HOLD_MAX));
+    spawnEruption(holdDir, intensity);
+    holdDir = null;
+    holdStart = 0;
+  };
+
+  const cancelHold = (): void => {
+    holdDir = null;
+    holdStart = 0;
+  };
+
+  if (!reduced) {
+    renderer.domElement.addEventListener('pointerdown', onPointerDownSun);
+    renderer.domElement.addEventListener('pointerup', onPointerUpSun);
+    renderer.domElement.addEventListener('pointercancel', cancelHold);
+    renderer.domElement.addEventListener('pointerleave', cancelHold);
+  }
+
   const t0 = performance.now();
   let raf = 0;
   let stopped = false;
@@ -224,6 +317,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // deadzone so sub-pixel jitter at rest never flips the lightspeed streak flow).
   let prevStreakStage = stage;
   let streakDir = 1;
+  // previous-frame time (seconds) for the eruption pool's age advance — clamped to a
+  // sane dt so a backgrounded-tab time jump never teleports a ripple across the disc.
+  let prevEruptT = 0;
 
   // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
   // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
@@ -522,6 +618,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // gold particle sphere appears at/just-below the peak (cloudSide) under the
     // same flash → the two textures are never both clearly visible.
     sunRig.group.visible = look.sunRigVisible;
+    // CLICK ERUPTIONS gate: the star is clickable only when its mesh is shown AND it
+    // is fully formed (not growing) — i.e. the settled yellow star or the red-giant
+    // hold while the mesh is up. Read by the pointerdown handler (which lives outside
+    // frame()) so a click while the nebula/forming/black-hole is on screen does nothing.
+    sunClickable = sunRig.group.visible && !growing;
     // The twinkling star backdrop dome is a SEPARATE scene object, so it can sit
     // behind BOTH the yellow star (mesh rig) and the RED GIANT (point cloud) — the
     // two states share one star field — while staying hidden for the black hole
@@ -699,7 +800,41 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       sunRig.coronaMat.uniforms.uTime.value = ut;
       sunRig.loopMat.uniforms.uTime.value = ut;
       sunRig.corona.quaternion.copy(camera.quaternion);
+
+      // --- click eruptions: advance the pool + copy into the surface uniforms -----
+      // Each active eruption ages by the frame's dt; once it outlives ERUPT_LIFE the
+      // slot is freed (intensity 0). Reduced motion never wired the listeners and
+      // never animates, so this only runs in the live, motion-on path.
+      if (!reduced) {
+        const dt = Math.min(Math.max(ut - prevEruptT, 0), 0.1); // clamp tab-switch jumps
+        const uErupt = sunRig.surfaceMat.uniforms.uErupt.value as THREE.Vector4[];
+        const uEruptAge = sunRig.surfaceMat.uniforms.uEruptAge.value as number[];
+        // DEBUG: window.__bhErupt holds a fixed camera-facing eruption (0..1 intensity)
+        // so the geyser + ripple can be inspected without clicking. It commandeers the
+        // last slot and ages on a wrapped clock (so the ripple keeps replaying).
+        const eruptOverride = readDebugNumber(DEBUG_WINDOW_KEYS.erupt);
+        for (let i = 0; i < eruptPool.length; i++) {
+          const e = eruptPool[i];
+          if (e.intensity > 0) {
+            e.age += dt;
+            if (e.age >= ERUPT_LIFE) e.intensity = 0; // spent → free the slot
+          }
+          if (typeof eruptOverride === 'number' && i === eruptPool.length - 1) {
+            // park a held eruption facing the camera: take the camera's WORLD position,
+            // bring it into the surface mesh's local frame and normalize — that points
+            // from the star centre toward the viewer, so the plume erupts at us.
+            eruptLocalDir.copy(camera.position);
+            sunRig.surface.worldToLocal(eruptLocalDir).normalize();
+            uErupt[i].set(eruptLocalDir.x, eruptLocalDir.y, eruptLocalDir.z, Math.max(0, Math.min(1, eruptOverride)));
+            uEruptAge[i] = ut % ERUPT_LIFE;
+          } else {
+            uErupt[i].set(e.dir.x, e.dir.y, e.dir.z, e.intensity);
+            uEruptAge[i] = e.age;
+          }
+        }
+      }
     }
+    prevEruptT = ut;
     // The star backdrop dome twinkles behind both the yellow star and the red
     // giant, so advance its clock whenever IT is visible (the mesh group is hidden
     // for the red giant), independent of the rest of the rig.
@@ -721,6 +856,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('visibilitychange', onVisibilityChange);
+    // click-eruption listeners (only attached when motion is enabled)
+    renderer.domElement.removeEventListener('pointerdown', onPointerDownSun);
+    renderer.domElement.removeEventListener('pointerup', onPointerUpSun);
+    renderer.domElement.removeEventListener('pointercancel', cancelHold);
+    renderer.domElement.removeEventListener('pointerleave', cancelHold);
 
     // Each rig disposes its own geos + materials (and, for post, the composer +
     // bloom + grade material) — construction and teardown are now co-located in
