@@ -931,13 +931,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // HudNavigation.tsx — identical thresholds required.
       //   dot     4.50 - 4.72  (the dot hold, before it blooms)
       //   nebula  3.38 - 3.50  (the grown cloud sitting still, before collapse)
-      //   yellow  2.84 - 2.92  (the flat yellow-star contemplation hold)
+      //   yellow  2.86 - 2.90  (tight around the flat 2.88 hold so the marker drops sooner)
       //   red     2.00 - 2.12  (the flat red-giant hold)
       //   black   0.00 - 0.12  (the settled black hole at the bottom of the arc)
       const settled =
         (stage >= 4.50 && stage <= 4.72) ||
         (stage >= 3.38 && stage <= 3.50) ||
-        (stage >= 2.84 && stage <= 2.92) ||
+        (stage >= 2.86 && stage <= 2.90) ||
         (stage >= 2.00 && stage <= 2.12) ||
         (stage >= 0.00 && stage <= 0.12);
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });

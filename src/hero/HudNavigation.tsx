@@ -215,13 +215,13 @@ export function hudIdForStage(stage: number): HudTargetId {
 // both gate marker visibility on the same stage ranges:
 //   dot     4.50 - 4.72  (the dot hold, before it blooms)
 //   nebula  3.38 - 3.50  (the grown cloud sitting still, before collapse)
-//   yellow  2.84 - 2.92  (the flat yellow-star contemplation hold)
+//   yellow  2.86 - 2.90  (tight around the flat 2.88 hold so the marker drops sooner)
 //   red     2.00 - 2.12  (the flat red-giant hold)
 //   black   0.00 - 0.12  (the settled black hole at the bottom of the arc)
 export function settledIdForStage(stage: number): HudTargetId | null {
   if (stage >= 4.50 && stage <= 4.72) return 'beginning';
   if (stage >= 3.38 && stage <= 3.50) return 'nebula';
-  if (stage >= 2.84 && stage <= 2.92) return 'yellow';
+  if (stage >= 2.86 && stage <= 2.90) return 'yellow';
   if (stage >= 2.00 && stage <= 2.12) return 'red';
   if (stage >= 0.00 && stage <= 0.12) return 'end';
   return null;

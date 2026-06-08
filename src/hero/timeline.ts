@@ -79,7 +79,7 @@ const YELLOW_SETTLE_END = 0.395;  // widened: 0.37 -> 0.395 (more yellow-star dw
 // dive-in resolves into a real beat (headline reads on the blazing sun). Only AFTER this
 // hold does the giant grow + the camera travel out to the corner — so yellow→red reads
 // as ONE move (grow + pull to the final corner) instead of "dive in, then reverse out".
-const YELLOW_HOLD_END = 0.42;     // strictly between YELLOW_SETTLE_END (0.395) and RED_HOLD_START (0.524)
+const YELLOW_HOLD_END = 0.47;     // widened: 0.42 -> 0.47 (yellow star lingers on screen longer before the grow-to-red); strictly between YELLOW_SETTLE_END (0.395) and RED_HOLD_START (0.524)
 // Red-giant hold band. Named so camera and stage use the same numbers.
 const RED_HOLD_START = 0.524;    // widened: 0.514 -> 0.524 (slightly more yellow-to-red travel)
 const RED_HOLD_END = 0.678;      // widened: 0.658 -> 0.678 (more settled red-giant dwell)
