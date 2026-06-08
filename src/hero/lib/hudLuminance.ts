@@ -45,8 +45,10 @@ export interface HudLuminanceControlPoint {
 // states (see CLAUDE.md): 0 = black hole, 0.32 = supernova whiteout, 1.05 =
 // collapse, 2.05 = red giant, 2.9 = yellow star, 3.5 = nebula, 4.7 = pale dot.
 export const HUD_LUMINANCE_TABLE: readonly HudLuminanceControlPoint[] = [
-  // BLACK HOLE — bright horizontal bloom + dense particle noise across the frame.
-  { stage: 0.0, luma: 0.8, noise: 0.85 },
+  // BLACK HOLE — the bright horizontal bloom streak runs straight THROUGH the
+  // left rail's vertical center, so behind the glyphs it's a near-whiteout. Rated
+  // high so the ink is driven hard to its dark endpoint here (the headline frame).
+  { stage: 0.0, luma: 0.92, noise: 0.85 },
   // SUPERNOVA — full whiteout blast.
   { stage: 0.32, luma: 0.95, noise: 0.8 },
   // COLLAPSE — bright core caving in, still busy.
