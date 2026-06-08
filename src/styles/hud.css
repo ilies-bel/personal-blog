@@ -419,6 +419,16 @@
     star-marker-spin 16s linear infinite,
     star-marker-breathe 3s ease-in-out infinite;
 }
+/* When the custom cursor has DOCKED to this marker it becomes the one and only
+   gold inner hex on screen — so hide the marker's own animated gold hex. The
+   cursor IIFE (CustomCursor.astro) sets [data-cursor-docked='true'] on <html>
+   ONLY on a genuine fine-pointer dock, so touch / no-cursor / reduced-motion
+   visitors keep the marker's built-in gold hex and never see it flash away.
+   Wins via specificity (root attr + class) over the locked rule above. */
+:root[data-cursor-docked='true'] .star-marker[data-locked='true'] .star-marker-hex-gold {
+  opacity: 0;
+  animation: none;
+}
 /* Rotation drives the `rotate` property; breathing drives `scale` + opacity.
    Independent properties → they layer instead of clobbering each other. */
 @keyframes star-marker-spin {

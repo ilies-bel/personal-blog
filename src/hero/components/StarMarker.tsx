@@ -25,6 +25,28 @@ interface StarMarkerProps {
   markerFrameRef: React.RefObject<MarkerFrame | null>;
 }
 
+// Handshake with the sitewide custom cursor (CustomCursor.astro). When a marker
+// LOCKS, the cursor "docks": it snaps to the marker centre and renders the gold
+// inner hexagon STATICALLY (the marker's own animated gold hex is hidden so there
+// is exactly one gold hex on screen). The cursor IIFE can't import React/three.js,
+// so — mirroring the window.__bhHitGiant hook — the marker publishes its lock here
+// and the cursor reads it each frame. `x`/`y` are the marker centre in CSS px
+// (the live frame x/y); `hexRadius` is the marker-box half-size in CSS px so the
+// cursor can size its gold inner hex relative to the white outer hex. `active:false`
+// (or null) means no marker is locked → the cursor returns to normal pointer tracking.
+interface MarkerLock {
+  active: boolean;
+  x: number;
+  y: number;
+  hexRadius: number;
+}
+// Local, typed access to the shared global (no `any`; matches the file's
+// `window as unknown as {...}` style used elsewhere for debug hooks).
+type MarkerLockWindow = Window & { __bhMarkerLock?: MarkerLock | null };
+function markerLockWindow(): MarkerLockWindow {
+  return window as unknown as MarkerLockWindow;
+}
+
 // Proximity radii (CSS px from the marker centre). Hysteresis: engage closer than
 // it releases so the lock never flickers at the boundary.
 const LOCK_ENGAGE_RADIUS = 100;
@@ -191,6 +213,21 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
         nextSide = frame.x > window.innerWidth * CARD_FLIP_FRACTION ? 'left' : 'right';
       }
 
+      // Publish the lock to the sitewide cursor every frame it's locked so the
+      // cursor docks to the CURRENT marker centre (and follows it if the marker
+      // drifts while held). Half the marker box (its on-screen width) is the
+      // hexRadius the cursor uses to size its gold inner hex inside the white one.
+      // Cleared to inactive the frame the lock releases (and on unmount below).
+      const w = markerLockWindow();
+      if (nextLocked) {
+        const hexRadius = el ? el.getBoundingClientRect().width / 2 : frame.x; // px
+        w.__bhMarkerLock = { active: true, x: frame.x, y: frame.y, hexRadius };
+      } else if (lastLocked) {
+        // Only clear when WE were the locked marker (avoid stomping another
+        // marker's lock — though only one is ever mounted, this stays correct).
+        w.__bhMarkerLock = { active: false, x: frame.x, y: frame.y, hexRadius: 0 };
+      }
+
       // Only trigger React re-renders when a render-relevant value actually flips.
       if (nextVisible !== lastVisible) {
         lastVisible = nextVisible;
@@ -211,7 +248,11 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
     }
 
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      // Undock the cursor if this marker unmounts while locked.
+      markerLockWindow().__bhMarkerLock = null;
+    };
   }, [markerFrameRef]);
 
   if (!activeItem) return null;

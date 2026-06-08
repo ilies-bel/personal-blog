@@ -143,6 +143,28 @@
     transform: translate(-50%, -50%) scale(1);
   }
 
+  /* DOCKED: the cursor has snapped to a LOCKED star-marker and stands in for the
+     marker's gold inner hexagon. The hex turns GOLD, sizes to sit as a static
+     inner border just inside the marker's white outer hex (--dock-scale is set
+     per-dock by the script from the marker's hexRadius), and does NOT rotate or
+     breathe — crisp and held still. The centre dot stays exactly as-is (still
+     visible, still centred). The aged Voyager-gold below is the resolved value
+     of the site's --highlight token (oklch(0.78 0.085 72)) — the same gold the
+     marker's own inner hex used — hardcoded here because this overlay renders
+     outside the token cascade (mirrors how --cursor-fg is hardcoded above). */
+  .cursor {
+    --cursor-gold: oklch(0.78 0.085 72);
+    --dock-scale: 0.95; /* overwritten per-dock by the script */
+  }
+  .cursor.cursor--docked .cursor__hex {
+    color: var(--cursor-gold);
+    opacity: 0.9;
+    /* No transition while docking IN — it must snap crisp to the marker, not
+       ease the gold in (the swap reads as the cursor BECOMING the inner hex). */
+    transition: none;
+    transform: translate(-50%, -50%) scale(var(--dock-scale));
+  }
+
   /* Reduced motion: keep the cursor fully functional but skip the scale/opacity
      animation — the hexagon snaps in/out instead of easing. The comet tail is
      also suppressed (the script never starts the draw loop under reduced motion,
@@ -266,6 +288,25 @@
     let viewW = window.innerWidth;
     let viewH = window.innerHeight;
 
+    // ---- star-marker DOCK state (handshake with StarMarker.tsx) ----------------
+    // When a star-marker LOCKS it publishes window.__bhMarkerLock = { active, x, y,
+    // hexRadius }. While active the cursor DOCKS: it snaps to (x,y) and HOLDS still
+    // as the marker's gold inner hexagon (static, no trail) instead of tracking the
+    // pointer. We also flag <html data-cursor-docked> so CSS hides the marker's OWN
+    // gold hex (so there's exactly one gold hex — the cursor). Cleared on undock.
+    let docked = false;   // currently standing in for a locked marker's gold hex
+    let dockX = 0;        // marker centre to pin to (CSS px)
+    let dockY = 0;
+    let pointerInside = true; // false while the pointer is outside the window
+    // The marker's white outer hex polygon ≈ hexRadius * 2 * (100/116) px wide
+    // (viewBox -8..108). The gold inner hex should sit at ~0.6× of that (matching
+    // the marker's own inner-hex scale), and the cursor's hex box is 40px wide, so:
+    //   dockScale = (hexRadius * 2 * 100/116 * 0.6) / 40
+    const HEX_VIEWBOX_RATIO = 100 / 116; // polygon span / viewBox span
+    const INNER_HEX_FRACTION = 0.6;      // gold inner hex vs white outer hex
+    const dockScaleFor = (hexRadius: number): number =>
+      (hexRadius * 2 * HEX_VIEWBOX_RATIO * INNER_HEX_FRACTION) / 40;
+
     // Push a point into the ring (overwriting the oldest once full).
     const pushPoint = (x: number, y: number, now: number): void => {
       head = (head + 1) % CAP;
@@ -356,10 +397,63 @@
       return true;
     };
 
+    // Read window.__bhMarkerLock and reconcile the dock state (class, html attr,
+    // dock coords, hex scale). Returns true while docked. Pure-ish: only touches
+    // DOM when the docked state or scale actually changes, so it's cheap to call
+    // every frame. Mirrors how onMove reads window.__bhHitGiant.
+    type MarkerLock = { active: boolean; x: number; y: number; hexRadius: number };
+    let lastDockScale = -1;
+    const syncDock = (): boolean => {
+      const lock = (window as unknown as { __bhMarkerLock?: MarkerLock | null })
+        .__bhMarkerLock;
+      // Only dock while the pointer is actually inside the window (a hidden cursor
+      // must not keep the marker's gold hex suppressed).
+      const active = pointerInside && !!lock && lock.active === true;
+      if (active && lock) {
+        dockX = lock.x;
+        dockY = lock.y;
+        if (!docked) {
+          docked = true;
+          cursor.classList.add('cursor--docked');
+          // Flag the document so hud.css hides the marker's own gold inner hex.
+          document.documentElement.dataset.cursorDocked = 'true';
+        }
+        const scale = dockScaleFor(lock.hexRadius);
+        if (scale !== lastDockScale) {
+          lastDockScale = scale;
+          cursor.style.setProperty('--dock-scale', String(scale));
+        }
+      } else if (docked) {
+        docked = false;
+        cursor.classList.remove('cursor--docked');
+        delete document.documentElement.dataset.cursorDocked;
+        // Snap the tail anchor onto the live pointer and clear the ring so the
+        // trail re-grows cleanly FROM the pointer (no streak from the old dock
+        // position) the instant we undock.
+        easeX = targetX;
+        easeY = targetY;
+        head = 0;
+        count = 0;
+        if (ctx) ctx.clearRect(0, 0, viewW, viewH);
+      }
+      return docked;
+    };
+
     const loop = (): void => {
       // Pause entirely when the tab is hidden (mirrors the hero scene loop).
       if (document.hidden) { raf = 0; return; }
       const now = performance.now();
+
+      // DOCKED: stand still as the marker's gold inner hex. Pin to the marker
+      // centre (NOT the pointer), draw NO trail, and keep the loop alive so we
+      // notice the undock (the marker may release the lock without a mousemove —
+      // e.g. on scroll or focus change). One transform write + one global read
+      // per frame; no canvas work, no allocations.
+      if (syncDock()) {
+        cursor.style.transform = `translate3d(${dockX}px, ${dockY}px, 0)`;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
 
       // The ball: pinned to the raw pointer (no easing) so the cursor is exact.
       cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
@@ -413,6 +507,7 @@
     const onMove = (event: MouseEvent): void => {
       targetX = event.clientX;
       targetY = event.clientY;
+      pointerInside = true;
 
       // First real movement: reveal the cursor (avoids a stray dot parked in the
       // top-left before the pointer has been located). Snap the anchor onto the
@@ -425,6 +520,19 @@
         count = 0;
         cursor.style.opacity = '1';
         if (canvas) canvas.style.opacity = '1';
+      }
+
+      // DOCKED to a locked star-marker: hold still at the marker centre (ignore
+      // the pointer), keep the gold hex, and skip the interactive hit-test +
+      // trail. Under reduced motion the loop never runs, so write the dock
+      // transform here too; otherwise the loop keeps it pinned + watches undock.
+      if (syncDock()) {
+        if (reduceMotion) {
+          cursor.style.transform = `translate3d(${dockX}px, ${dockY}px, 0)`;
+        } else {
+          kick();
+        }
+        return;
       }
 
       // Interactive hit-test. The target may be a child of the link/button, so
@@ -466,9 +574,14 @@
       if (canvas) canvas.style.opacity = '0';
       head = 0;
       count = 0;
+      // The pointer left the window: block docking and let syncDock undock so the
+      // marker's own gold hex returns (the cursor that replaced it is now hidden).
+      pointerInside = false;
+      syncDock();
       kick();
     };
     const onEnter = (): void => {
+      pointerInside = true;
       if (revealed) {
         cursor.style.opacity = '1';
         if (canvas) canvas.style.opacity = '1';
@@ -506,6 +619,9 @@
         if (raf) cancelAnimationFrame(raf);
         raf = 0;
         window.clearTimeout(resizeTimer);
+        // Drop the dock flag so a bfcache restore never starts with a stale
+        // [data-cursor-docked] hiding the next page's marker gold hex.
+        delete document.documentElement.dataset.cursorDocked;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseleave', onLeave);
         document.removeEventListener('mouseenter', onEnter);
