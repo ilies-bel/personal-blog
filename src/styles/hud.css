@@ -455,14 +455,18 @@
   height: 0.36rem;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--marker-line);
-  /* A dark ring first (separates the dot from a bright star) then a faint glow. */
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--bg) 70%, transparent),
-    0 0 5px 1px color-mix(in oklch, var(--marker-line) 45%, transparent);
+  /* Pure white + difference blend = auto-contrast against the canvas behind it:
+     white renders as (255 - background) per channel, so the dot reads dark over
+     bright nebula/yellow-star surfaces and bright over the dark black-hole state.
+     No box-shadow here — a shadow paints separately from the element and would
+     fight the difference blend (muddy ring), so the blend reads cleanly on its own. */
+  background: #fff;
+  mix-blend-mode: difference;
   transition: background 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 .star-marker[data-locked='true'] .star-marker-dot {
+  /* Locked: literal Voyager-gold accent, NOT inverted by the blend. */
+  mix-blend-mode: normal;
   background: var(--marker-gold);
   box-shadow:
     0 0 6px 2px color-mix(in oklch, var(--marker-gold) 50%, transparent),
