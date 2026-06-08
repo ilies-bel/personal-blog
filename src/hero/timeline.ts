@@ -191,29 +191,37 @@ const YELLOW_HOLD = {
   position: [0.62, -0.08, 17.4] as Vec3Tuple,
   target: [0.0, -0.02, 0.0] as Vec3Tuple,
 };
+// RED GIANT "corner" framing. This is ONE continuous-travel destination: the camera
+// flies here in a single move from YELLOW_HOLD as the star grows (no settle-then-park).
+// The off-centre composition is baked straight INTO this pose — the old separate
+// RED_GIANT_PARK add (which double-offset on top of this and ramped out mid-collapse,
+// causing a centre→corner→centre wobble) is gone. This = the dialed-in framing
+// (former RED_COMPOSITION + park (1.3,-4.5,7)): the grown giant fills the upper-right,
+// its limb curving across, viewed from a lower-left vantage.
 const RED_COMPOSITION = {
-  position: [-6.8, -1.05, 31.2] as Vec3Tuple,
-  target: [-9.2, -0.20, 0.0] as Vec3Tuple,
+  position: [-5.5, -5.55, 38.2] as Vec3Tuple,
+  target: [-7.9, -4.7, 7.0] as Vec3Tuple,
 };
-// COLLAPSE: the star is at world origin; the red hold framed it off-centre-RIGHT
-// (RED_COMPOSITION looks at negative-x, ~ -9.2). Instead of snapping the star to
-// dead-centre at the collapse (which made the supernova read as a new, unrelated
-// centred scene), we PULL BACK while EASING the off-centre framing inward — the
-// collapse point inherits the giant's screen position and only drifts toward
-// centre as the blast grows to fill the frame. Target keeps a residual negative-x
-// so the collapse core sits where the limb just was, not jump-cut to centre.
+// COLLAPSE: the giant holds in the corner (above) and STARTS collapsing there. The
+// camera then leaves the corner and travels SLOWLY toward centre while the surface
+// keeps caving in — so this pose stays well off-centre (close to the corner), and the
+// recentring is spread across the whole collapse→supernova→black-hole chain instead of
+// being rushed here. The collapse core inherits the giant's screen position; it only
+// drifts toward centre as the blast grows, never jump-cutting back to dead-centre.
 const COLLAPSE_PULL = {
-  position: [-2.6, -0.5, 25.8] as Vec3Tuple,
-  target: [-2.4, -0.12, 0.0] as Vec3Tuple,
+  position: [-4.4, -3.6, 33.0] as Vec3Tuple,
+  target: [-5.6, -3.0, 4.6] as Vec3Tuple,
 };
-// SUPERNOVA: the blast erupts from that same off-centre point and expands. The
-// camera eases the core the rest of the way to centre AS the shell fills the
-// frame (so the recentre is motivated by the expanding blast, not a cut), with a
-// small continued pull-back — NO push-in spike (the old 27.8 in-out-in
-// rollercoaster is gone; z now moves monotonically outward through the blast).
+// SUPERNOVA: an INTERMEDIATE waypoint on the continuous recentre. The blast erupts
+// from the (still off-centre) collapse point and expands; the camera keeps easing
+// the core toward centre as the shell fills the frame — but only PARTWAY here, so the
+// corner→centre journey is spread smoothly across collapse→supernova→black-hole rather
+// than recentring in one segment. z keeps moving monotonically inward (38.2→33→28→23.2
+// →21.8) — no push-in spike. BLACK_HOLE_SETL below finishes the recentre (it stays the
+// untouched "slightly off-centre, then drifts to centred" black-hole ending).
 const SUPERNOVA_RECOIL = {
-  position: [-0.9, -0.2, 24.8] as Vec3Tuple,
-  target: [-0.7, -0.04, 0.0] as Vec3Tuple,
+  position: [-2.6, -1.7, 28.0] as Vec3Tuple,
+  target: [-2.6, -1.4, 2.2] as Vec3Tuple,
 };
 // BLACK HOLE forms from the settling debris: continue the same gentle inward
 // drift, now fully centred, as the remnant condenses. Monotonic z (24.8 -> 23.2

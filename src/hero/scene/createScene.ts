@@ -187,21 +187,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // and cinematic — 3× slower than before — the surface barely rolls, the camera no
   // longer orbits it (see the red-giant orbit freeze below).
   const RED_GIANT_SPIN_RATE = (Math.PI * 2) / 180; // rad/s
-  // Red-giant camera-composition offset. The forward camera rig owns the real pose;
-  // this baked world vector slides the camera (and its look target) by the same
-  // amount during the red-giant beat to frame the grown orb off-centre without
-  // moving the star geometry (the orb stays centred at origin). This vantage
-  // (+X right, -Y down, +Z back) pushes the camera to a LOWER-LEFT offset, which
-  // throws the grown giant into the UPPER-RIGHT of the frame with its limb curving
-  // across — the dialed-in target composition.
-  const RED_GIANT_PARK = new THREE.Vector3(1.3, -4.5, 7);
-  // The park slides in/out smoothly (parkWeight) instead of snapping on at a hard
-  // progress gate — these are the [start, end] progress bands the weight ramps over.
-  // IN: 0 → full as the giant grows into the beat. OUT: full → 0 as it leaves (the
-  // camera glides back to centre for the collapse/yellow swap). Between them it HOLDS
-  // at full weight across the red-giant hold (~0.47–0.60).
-  const RED_GIANT_PARK_IN: readonly [number, number] = [0.40, 0.47];
-  const RED_GIANT_PARK_OUT: readonly [number, number] = [0.60, 0.66];
+  // Red-giant off-centre framing now lives ENTIRELY in the camera keyframes (timeline's
+  // RED_COMPOSITION → COLLAPSE_PULL → SUPERNOVA_RECOIL): the camera flies from the yellow
+  // hold to the corner in ONE continuous travel, holds + starts collapsing there, then
+  // drifts monotonically toward centre through the supernova into the (unchanged)
+  // black-hole ending. There is no separate "park" add any more — that bolt-on
+  // double-offset on top of the keyframes and ramped out mid-collapse, which is what made
+  // the camera read as centre→corner→centre.
+  // These bands are used ONLY by the dev framing-nudge hooks (RedGiantDebugPanel): they
+  // shape the in/out weight of a live tuning nudge so it matches the beat and never
+  // snaps. Production applies no nudge (the hooks are unset).
+  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.46, 0.514];
+  const RED_GIANT_NUDGE_OUT: readonly [number, number] = [0.62, 0.70];
 
   let mouseX = 0;
   let mouseY = 0;
@@ -253,8 +250,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // The red giant is a DIFFERENT body from the yellow star: it's the ~1.2M-point GPU
   // particle cloud (the disk rig), not the sun-rig mesh. So it has NO mesh to raycast.
   // Instead we intersect an invisible sphere at the world origin (the giant geometry
-  // stays centred there — RED_GIANT_PARK is a CAMERA move, not a geometry offset — and
-  // the point cloud has no parent transform, so world space == the giant's spun frame).
+  // stays centred there — its off-centre FRAMING is a camera move baked into the
+  // red-giant keyframes, not a geometry offset — and the point cloud has no parent
+  // transform, so world space == the giant's spun frame).
   // A SEPARATE pool/uniforms keeps the two
   // effects decoupled (mesh and giant are never on screen at once). The same shape as
   // the mesh pool above so the spawn/age/copy logic is identical.
@@ -373,8 +371,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       holdStart = performance.now();
     } else {
       // --- particle RED-GIANT path: raycast an invisible sphere at the world origin. ---
-      // The giant geometry stays centred at the origin (RED_GIANT_PARK only slides the
-      // CAMERA, not the geometry) and the point cloud has no parent transform, so world
+      // The giant geometry stays centred at the origin (the off-centre framing slides the
+      // CAMERA via the keyframes, not the geometry) and the point cloud has no parent transform, so world
       // == the giant's spun frame. Effective world radius = uGiantR × uGiantScale (the
       // held medium-dense giant, ≈9.0). The
       // raycast itself is the shared giantSphereHit (also used by the cursor hit-test),
@@ -623,7 +621,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskMatPrimary.uniforms.uGiantScale.value = giantScaleValue;
     diskMatSecondary.uniforms.uGiantScale.value = giantScaleValue;
     // The orb stays centred (uGiantCenter = origin); its off-centre FRAMING is the
-    // baked camera park below (RED_GIANT_PARK), not a geometry move — the star is at origin.
+    // camera move baked into the red-giant keyframes, not a geometry move — the star is at origin.
     // Axial spin: roll the red-giant photosphere on its own tilted pole (≈23°) at a
     // slow, cinematic rate (~60 s / rotation). t accumulates seconds, so the angle
     // grows monotonically; the shader gates it to the displayed red giant only.
@@ -876,26 +874,24 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       frameLookTarget.x += mouseX * cameraPose.parallax * 0.35;
       frameLookTarget.y += -mouseY * cameraPose.parallax * 0.18;
     }
-    // DEV: the red-giant framing panel overrides the on-screen X/Y (park x/y) live.
+    // DEV-ONLY framing nudge. The red-giant off-centre composition now lives entirely
+    // in the camera keyframes (timeline's RED_COMPOSITION/COLLAPSE_PULL — one continuous
+    // travel, no separate park add). These hooks let the dev panel nudge that framing
+    // live while tuning; both default to undefined so PRODUCTION applies NO extra offset.
+    // The nudge rides the same in/out weight as the red-giant beat so tuning never
+    // reintroduces a snap. Read off the panel's pos X/Y, then bake into RED_COMPOSITION.
     const giantPosXOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantPosX);
     const giantPosYOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantPosY);
-    const parkX = typeof giantPosXOverride === 'number' ? giantPosXOverride : RED_GIANT_PARK.x;
-    const parkY = typeof giantPosYOverride === 'number' ? giantPosYOverride : RED_GIANT_PARK.y;
-    const parkZ = RED_GIANT_PARK.z;
-    // The off-centre red-giant framing slides IN and OUT smoothly instead of snapping:
-    // parkWeight ramps 0→1 across the lead-in band as the giant grows into the beat,
-    // HOLDS at 1 across the red-giant hold, then ramps 1→0 on the way out so the camera
-    // glides back to the centred pose for the collapse/yellow swap (no jump-cut either way).
-    const parkRampIn = smoothstep01((progress - RED_GIANT_PARK_IN[0]) / (RED_GIANT_PARK_IN[1] - RED_GIANT_PARK_IN[0]));
-    const parkRampOut = smoothstep01((progress - RED_GIANT_PARK_OUT[0]) / (RED_GIANT_PARK_OUT[1] - RED_GIANT_PARK_OUT[0]));
-    const parkWeight = parkRampIn * (1 - parkRampOut);
-    if (parkWeight > 0 && (parkX !== 0 || parkY !== 0 || parkZ !== 0)) {
-      camera.position.x += parkX * parkWeight;
-      camera.position.y += parkY * parkWeight;
-      camera.position.z += parkZ * parkWeight;
-      frameLookTarget.x += parkX * parkWeight;
-      frameLookTarget.y += parkY * parkWeight;
-      frameLookTarget.z += parkZ * parkWeight;
+    if (giantPosXOverride !== undefined || giantPosYOverride !== undefined) {
+      const nudgeX = giantPosXOverride ?? 0;
+      const nudgeY = giantPosYOverride ?? 0;
+      const beatIn = smoothstep01((progress - RED_GIANT_NUDGE_IN[0]) / (RED_GIANT_NUDGE_IN[1] - RED_GIANT_NUDGE_IN[0]));
+      const beatOut = smoothstep01((progress - RED_GIANT_NUDGE_OUT[0]) / (RED_GIANT_NUDGE_OUT[1] - RED_GIANT_NUDGE_OUT[0]));
+      const beatWeight = beatIn * (1 - beatOut);
+      camera.position.x += nudgeX * beatWeight;
+      camera.position.y += nudgeY * beatWeight;
+      frameLookTarget.x += nudgeX * beatWeight;
+      frameLookTarget.y += nudgeY * beatWeight;
     }
     camera.lookAt(frameLookTarget);
 

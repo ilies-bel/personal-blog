@@ -5,16 +5,22 @@
 //   __bhMorph    — pin the lifecycle stage to the red-giant hold (2.05) so the giant
 //                  is on screen without scrolling (the pin checkbox).
 //   __bhGiantSize — red-giant WORLD radius (createScene divides by uGiantR=4.2 → uGiantScale).
-//   __bhGiantPosX — on-screen X position (overrides RED_GIANT_PARK.x, the camera pan).
-//   __bhGiantPosY — on-screen Y position (overrides RED_GIANT_PARK.y).
+//   __bhGiantPosX — framing NUDGE on screen X: a live delta on top of the baked red-giant
+//                   keyframe framing (the camera arc owns the real off-centre pose now).
+//   __bhGiantPosY — framing nudge on screen Y (delta).
+//
+// pos X / pos Y are deltas (0 = the committed keyframe framing). To re-tune the baked
+// composition: nudge until it looks right, read the value, then fold it into timeline's
+// RED_COMPOSITION (and COLLAPSE_PULL) and reset the nudge to 0.
 //
 // Nothing here ships: index.astro mounts it only under import.meta.env.DEV.
 import { useEffect, useState } from 'react';
 import { DEBUG_WINDOW_KEYS } from '../lib/constants';
 
-// Committed defaults (keep in sync with createScene's RED_GIANT_RADIUS / RED_GIANT_PARK).
-const DEFAULTS = { size: 9.0, posX: 5.0, posY: -3.0 };
-// Red-giant hold stage; pinning here forces progress ≈0.514, inside the camera-park window.
+// size: keep in sync with createScene's RED_GIANT_RADIUS / buildDisk uGiantScale (10.5).
+// posX/posY are framing NUDGE deltas — 0 means "the committed keyframe framing".
+const DEFAULTS = { size: 10.5, posX: 0.0, posY: 0.0 };
+// Red-giant hold stage; pinning here forces progress ≈0.514, inside the red-giant beat.
 const PIN_STAGE = 2.05;
 
 type Win = Record<string, unknown>;
