@@ -7,7 +7,11 @@ import { BRAND_NAME, BRAND_ROLE } from '../../consts';
 export default function HeroIdentity() {
   const { base } = useSceneState();
   return (
-    <a className="bh-identity" href={base.replace(/\/+$/, '') || '/'}>
+    <a
+      className="bh-identity"
+      href={base.replace(/\/+$/, '') || '/'}
+      aria-label={`Home — ${BRAND_NAME}, ${BRAND_ROLE}`}
+    >
       <span className="bh-identity-name">{BRAND_NAME}</span>
       <span className="bh-identity-role">{BRAND_ROLE}</span>
     </a>

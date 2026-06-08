@@ -36,10 +36,10 @@ const home = href('').replace(/\/+$/, '') || '/';
     <article class="about-panel">
       <p class="about-kicker">About</p>
 
-      <p class="about-lead">
+      <h1 class="about-lead">
         Hi, I'm {SITE_TITLE}. I build software for the web and write about how it
         works underneath.
-      </p>
+      </h1>
 
       <p class="about-body">
         This is my corner of the internet: technical articles, notes from rabbit
@@ -80,3 +80,12 @@ const home = href('').replace(/\/+$/, '') || '/';
     </article>
   </main>
 </BaseLayout>
+
+{/* Overlay focus management: this page reads as a pseudo-modal floating over the
+    hero scene, so move initial focus to the Close link on load — keyboard users
+    start inside the overlay, with the natural "return to the scene" action in
+    hand. This is a real page (real nav, real links), not a JS dialog, so we do
+    NOT trap focus; just the one initial focus move, which is instant. */}
+<script>
+  document.querySelector<HTMLAnchorElement>('.about-close')?.focus();
+</script>

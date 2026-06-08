@@ -109,6 +109,7 @@ function Row({ label, value, min, max, step, onChange, fmt }: RowProps) {
       <span className="rg-debug__label">{label}</span>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}

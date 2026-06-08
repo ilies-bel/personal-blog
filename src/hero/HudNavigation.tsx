@@ -210,6 +210,11 @@ export default function HudNavigation({
         </ol>
       </nav>
 
+      {/* aria-hidden by design: this readout only re-states the label +
+          destination of the currently-focused/active nav button, which the
+          screen reader already announces from the button's own aria-label.
+          Exposing it too would double-announce the same stage, so it stays
+          visual-only (a glanceable readout for the compact mobile layout). */}
       {readoutItem && (
         <p className="hud-nav-mobile-readout" aria-hidden="true">
           <span>{readoutItem.label}</span>

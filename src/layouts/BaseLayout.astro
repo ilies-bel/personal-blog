@@ -59,6 +59,10 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
     {
       bare ? (
         <Fragment>
+          {/* First focusable element in the body: a skip link that jumps past
+              the corner chrome / scene canvas straight to the main content. */}
+          <a href="#main-content" class="skip-link">Skip to main content</a>
+
           {/* Fixed corner overlay: identity top-left, the blog micro-nav
               top-right. Everything else is the scene canvas behind it. */}
           <a class="overlay-brand bh-identity-lockup" href={href('')}>
@@ -85,12 +89,16 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
             </div>
           </nav>
 
-          <main class="bare-main">
+          <main id="main-content" class="bare-main">
             <slot />
           </main>
         </Fragment>
       ) : (
         <div class="wrap">
+          {/* First focusable element in the body: a skip link that jumps past
+              the header / nav straight to the main content. */}
+          <a href="#main-content" class="skip-link">Skip to main content</a>
+
           <header class="site-header">
             <a class="brand bh-identity-lockup" href={href('')}>
               <span class="bh-identity-name">{BRAND_NAME}</span>
@@ -121,7 +129,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
             </nav>
           </header>
 
-          <main>
+          <main id="main-content">
             <slot />
           </main>
 

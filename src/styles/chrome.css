@@ -2,6 +2,29 @@
    (BaseLayout's non-bare branch). The bare home/about use the overlay in
    scene.css instead. */
 
+/* Skip link — the first focusable element in <body> on every page (both layout
+   branches). Visually hidden until focused, then it slides into the top-left and
+   sits above everything so keyboard users can jump past the chrome/scene straight
+   to #main-content. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 0.9rem;
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform 0.15s ease;
+}
+.skip-link:focus { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+}
+
 .site-header {
   display: flex;
   align-items: center;
