@@ -66,6 +66,126 @@ export const HUD_NAV_BY_ID = HUD_NAV_ITEMS.reduce<Record<HudTargetId, HudNavItem
   return acc;
 }, {} as Record<HudTargetId, HudNavItem>);
 
+// --------------------------------------------------------------------------
+// On-screen star markers (the HUD "target locks" rendered over the live scene).
+//
+// Each entry is ONE marker. A state can own SEVERAL markers (the nebula owns
+// three placeholder "recent article" markers; everything else owns one). All
+// markers for a state are mounted at once and each gates its own visibility on
+// that state being the settled lifecycle state on screen (see StarMarker).
+//
+// POSITIONING — two modes:
+//   • Fixed screen spot (default): `vx`/`vy` are viewport fractions (0..1) of
+//     innerWidth/innerHeight. At tick time the marker sits at
+//     `x = vx*innerWidth, y = vy*innerHeight`, i.e. a fixed spot on the viewport
+//     while its state is on screen. Approximated from the live cloud/star at a
+//     typical desktop viewport — TUNE these freely; they are meant to be nudged.
+//   • Projection-anchored (`anchored: true`): the marker ignores vx/vy and rides
+//     the scene's projected star origin (MarkerFrame x/y). Used ONLY for the pale
+//     blue dot so the hexagon stays centred on the speck wherever it projects.
+//
+// Each marker is a real <a href>, so title/subtitle/href below drive its card and
+// navigation. No em dashes in any copy here (plain text only).
+export interface MarkerPlacement {
+  /** Stable per-marker id (also the lock-ownership token — must be unique). */
+  id: string;
+  /** Which settled lifecycle state shows this marker. */
+  state: HudTargetId;
+  /** Viewport-fraction X (0..1 of innerWidth). Ignored when `anchored`. */
+  vx: number;
+  /** Viewport-fraction Y (0..1 of innerHeight). Ignored when `anchored`. */
+  vy: number;
+  /** Ride the projected star origin instead of vx/vy (pale blue dot only). */
+  anchored?: boolean;
+  /** Path appended to BASE_URL for the link + card navigation. */
+  href: string;
+  /** Card title line (already in the casing it should render). */
+  title: string;
+  /** Card subtitle line. */
+  subtitle: string;
+}
+
+export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = [
+  // BEGINNING / pale blue dot — ONE marker, projection-anchored so it stays
+  // centred on the speck wherever the scene projects it (the createScene
+  // dot-centred offset feeds this).
+  {
+    id: 'beginning',
+    state: 'beginning',
+    vx: 0.5,
+    vy: 0.5,
+    anchored: true,
+    href: 'about',
+    title: 'ABOUT',
+    subtitle: 'Who I am',
+  },
+
+  // NEBULA / writing — THREE placeholder markers over the cloud (one per recent
+  // article), all linking to /writing for now. Spots approximate the user's red
+  // boxes: (a) upper-centre, (b) mid-left, (c) lower-centre-right of the cloud.
+  {
+    id: 'nebula-01',
+    state: 'nebula',
+    vx: 0.5,
+    vy: 0.28,
+    href: 'writing',
+    title: 'WRITING / 01',
+    subtitle: 'Notes & essays',
+  },
+  {
+    id: 'nebula-02',
+    state: 'nebula',
+    vx: 0.34,
+    vy: 0.52,
+    href: 'writing',
+    title: 'WRITING / 02',
+    subtitle: 'Notes & essays',
+  },
+  {
+    id: 'nebula-03',
+    state: 'nebula',
+    vx: 0.62,
+    vy: 0.66,
+    href: 'writing',
+    title: 'WRITING / 03',
+    subtitle: 'Notes & essays',
+  },
+
+  // YELLOW STAR / projects — ONE marker, moved to the UPPER-LEFT quadrant of the
+  // photosphere.
+  {
+    id: 'yellow',
+    state: 'yellow',
+    vx: 0.4,
+    vy: 0.38,
+    href: 'projects',
+    title: 'PROJECTS',
+    subtitle: 'Things I build',
+  },
+
+  // RED GIANT / graveyard — ONE marker, fixed spot over the red limb.
+  {
+    id: 'red',
+    state: 'red',
+    vx: 0.5,
+    vy: 0.46,
+    href: 'graveyard',
+    title: 'GRAVEYARD',
+    subtitle: 'Things I abandoned',
+  },
+
+  // END / black hole — ONE marker, fixed spot near the hero centre.
+  {
+    id: 'end',
+    state: 'end',
+    vx: 0.5,
+    vy: 0.5,
+    href: 'posts/thanks-for-scrolling-to-the-bottom',
+    title: 'INSPIRATION',
+    subtitle: 'Why this site exists',
+  },
+];
+
 // Items in ascending `stage` order — the source list happens to already be sorted,
 // but the scroll-spy mapping below depends on it, so make that contract explicit
 // rather than relying on authoring order.
@@ -84,6 +204,25 @@ export function hudIdForStage(stage: number): HudTargetId {
     else break;
   }
   return current.id;
+}
+
+// Settled-window stage thresholds. A "settled" state is one where the lifecycle is
+// dwelling on a recognisable object rather than mid-transition. Returns the settled
+// state's id for `stage`, or null if mid-transition. MUST stay byte-identical to the
+// settled gate in createScene.ts (onMarkerFrame) — both gate marker visibility on
+// the same stage ranges:
+//   dot     4.40 - 4.72  (p≈0.00-0.06, full dot hold)
+//   nebula  3.28 - 3.68  (p≈0.15-0.27, settled cloud dwell)
+//   yellow  2.82 - 3.05  (p≈0.30-0.42, ignition + contemplation hold)
+//   red     1.98 - 2.40  (p≈0.46-0.68, red-giant approach + full hold)
+//   black   0.00 - 0.35  (p≈0.82-1.00, post-supernova black hole)
+export function settledIdForStage(stage: number): HudTargetId | null {
+  if (stage >= 4.40 && stage <= 4.72) return 'beginning';
+  if (stage >= 3.28 && stage <= 3.68) return 'nebula';
+  if (stage >= 2.82 && stage <= 3.05) return 'yellow';
+  if (stage >= 1.98 && stage <= 2.40) return 'red';
+  if (stage >= 0.0 && stage <= 0.35) return 'end';
+  return null;
 }
 
 interface HudNavigationProps {

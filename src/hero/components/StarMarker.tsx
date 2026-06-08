@@ -1,6 +1,19 @@
-// StarMarker — anchors a single clickable HTML link over the on-screen star object.
-// One marker per settled lifecycle state. Position is updated every rAF from a ref
-// written by the scene's onMarkerFrame callback, avoiding per-frame React re-renders.
+// StarMarker — anchors ONE clickable HTML link over the on-screen star object.
+//
+// A state can own several markers (the nebula owns three; everything else owns
+// one). HeroIsland mounts one StarMarker per MARKER_PLACEMENTS entry; each
+// instance owns its own placement and gates its own visibility on its state
+// being the settled lifecycle state. This avoids mount/unmount thrash (N is
+// small, ~7 total) and keeps the lock/card/cursor handshake fully per-marker.
+//
+// POSITION — two modes (per the placement):
+//   • Fixed screen spot (default): the marker sits at `vx*innerWidth,
+//     vy*innerHeight` while its state is on screen, recomputed each rAF (so it
+//     tracks viewport resizes) but IGNORING the scene's projected x/y.
+//   • Projection-anchored (`placement.anchored`, the pale blue dot only): the
+//     marker rides the scene's projected star origin (frame.x/frame.y) so the
+//     hexagon stays centred on the speck wherever it projects.
+// Either way the stage/visible SIGNAL still comes from markerFrameRef.
 //
 // Interaction model — a HUD "target lock":
 //   1. RESTING  — a dotted-outline hexagon + centre dot, quiet/off-white.
@@ -13,15 +26,21 @@
 //
 // The position AND the lock state are both computed inside the rAF loop, comparing
 // the live pointer position (tracked via a ref, not state) to the marker's current
-// frame x/y. React only re-renders when the visible/active-item/locked state flips
-// — never per frame (mirrors how lastVisible/lastItemId are handled).
+// screen x/y. React only re-renders when the visible/locked/side state flips —
+// never per frame (mirrors how lastVisible/lastLocked are handled).
 import { useEffect, useRef, useState } from 'react';
-import { HUD_NAV_ITEMS, type HudNavItem, type HudTargetId } from '../HudNavigation';
+import {
+  settledIdForStage,
+  type MarkerPlacement,
+} from '../HudNavigation';
 import type { MarkerFrame } from '../scene/types';
 import { useSceneState } from './SceneStateContext';
 
 interface StarMarkerProps {
-  /** Ref written by the scene frame loop. StarMarker reads it on rAF. */
+  /** This marker's placement (which state it belongs to, where it sits, its copy). */
+  placement: MarkerPlacement;
+  /** Ref written by the scene frame loop. StarMarker reads it on rAF for the
+   *  stage/visible signal (and, when anchored, the projected x/y). */
   markerFrameRef: React.RefObject<MarkerFrame | null>;
 }
 
@@ -30,15 +49,18 @@ interface StarMarkerProps {
 // inner hexagon STATICALLY (the marker's own animated gold hex is hidden so there
 // is exactly one gold hex on screen). The cursor IIFE can't import React/three.js,
 // so — mirroring the window.__bhHitGiant hook — the marker publishes its lock here
-// and the cursor reads it each frame. `x`/`y` are the marker centre in CSS px
-// (the live frame x/y); `hexRadius` is the marker-box half-size in CSS px so the
-// cursor can size its gold inner hex relative to the white outer hex. `active:false`
-// (or null) means no marker is locked → the cursor returns to normal pointer tracking.
+// and the cursor reads it each frame. `x`/`y` are the marker centre in CSS px;
+// `hexRadius` is the marker-box half-size in CSS px so the cursor can size its gold
+// inner hex relative to the white outer hex. `active:false` (or null) means no
+// marker is locked → the cursor returns to normal pointer tracking. `owner` is the
+// id of the marker that set the lock, so an unlocking marker only clears the global
+// when it still owns it (one global, many markers — never stomp another's lock).
 interface MarkerLock {
   active: boolean;
   x: number;
   y: number;
   hexRadius: number;
+  owner: string;
 }
 // Local, typed access to the shared global (no `any`; matches the file's
 // `window as unknown as {...}` style used elsewhere for debug hooks).
@@ -61,46 +83,6 @@ const LOCK_RELEASE_MARGIN = 14; // px past the peak before the lock drops
 // Card-flip threshold: when the marker sits in the right ~30% of the viewport the
 // card + connector flip to the LEFT so the card stays on-screen.
 const CARD_FLIP_FRACTION = 0.7;
-
-// One short subtitle line per target. Title derives from the nav item itself (its
-// `destination`, uppercased); this small typed map only owns the subtitle copy.
-// No em dashes anywhere (plain text only).
-const MARKER_SUBTITLES: Record<HudTargetId, string> = {
-  beginning: 'Who I am',
-  nebula: 'Notes & essays',
-  yellow: 'Things I build',
-  red: 'Things I abandoned',
-  end: 'Why this site exists',
-};
-
-// Settled-window stage thresholds (MUST stay byte-identical to the settled
-// check in createScene.ts onMarkerFrame block — both files gate marker
-// visibility on the same stage ranges). Widened so each state dwells across
-// ≈2-3 consecutive 5% scroll samples.
-// Returns the HudNavItem whose stage window contains `stage`, or null if mid-transition.
-function settledItemForStage(stage: number): HudNavItem | null {
-  // dot: stage 4.40 - 4.72  (p≈0.00-0.06)
-  if (stage >= 4.40 && stage <= 4.72) {
-    return HUD_NAV_ITEMS.find((i) => i.id === 'beginning') ?? null;
-  }
-  // nebula: stage 3.28 - 3.68  (p≈0.15-0.27)
-  if (stage >= 3.28 && stage <= 3.68) {
-    return HUD_NAV_ITEMS.find((i) => i.id === 'nebula') ?? null;
-  }
-  // yellow star: stage 2.82 - 3.05  (p≈0.30-0.42)
-  if (stage >= 2.82 && stage <= 3.05) {
-    return HUD_NAV_ITEMS.find((i) => i.id === 'yellow') ?? null;
-  }
-  // red giant: stage 1.98 - 2.40  (p≈0.46-0.68)
-  if (stage >= 1.98 && stage <= 2.40) {
-    return HUD_NAV_ITEMS.find((i) => i.id === 'red') ?? null;
-  }
-  // black hole: stage 0.00 - 0.35  (p≈0.82-1.00, post-supernova only)
-  if (stage >= 0.0 && stage <= 0.35) {
-    return HUD_NAV_ITEMS.find((i) => i.id === 'end') ?? null;
-  }
-  return null;
-}
 
 function resolveHref(base: string, href: string): string {
   return `${base}/${href}`.replace(/\/+/g, '/');
@@ -130,7 +112,7 @@ const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number 
   { x1: 12.5, y1: 71.65, x2: 0.6, y2: 78.52 },
 ];
 
-export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
+export default function StarMarker({ placement, markerFrameRef }: StarMarkerProps) {
   const { reduced, base } = useSceneState();
 
   // The DOM element that receives inline left/top updates every rAF. Mutated
@@ -144,9 +126,6 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
   // non-mouse users get the card. Ref so the rAF loop reads it without a render.
   const focusedRef = useRef(false);
 
-  // Snapshot of the currently active nav item (React state, updated only when
-  // the settled state changes — typically 0-5 times per page view).
-  const [activeItem, setActiveItem] = useState<HudNavItem | null>(null);
   // Whether the marker is currently in the visible window (gates opacity CSS class).
   const [visible, setVisible] = useState(false);
   // Whether the marker is locked (pointer near / focused). Flips at most a handful
@@ -167,30 +146,40 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
   useEffect(() => {
     let rafId = 0;
     let lastVisible = false;
-    let lastItemId: string | null = null;
     let lastLocked = false;
     let lastSide: 'right' | 'left' = 'right';
+
+    // This marker's lock-ownership token (the placement id). Only the marker that
+    // currently owns the single global __bhMarkerLock may clear it — see below.
+    const owner = placement.id;
+    const anchored = placement.anchored === true;
 
     function tick() {
       rafId = requestAnimationFrame(tick);
       const frame = markerFrameRef.current;
       if (!frame) return;
 
+      // Is THIS marker's state the settled one on screen? The scene's `visible`
+      // already encodes (on-screen AND some state is settled); the stage decides
+      // which state, so we additionally require it to be ours.
+      const nextVisible = frame.visible && settledIdForStage(frame.stage) === placement.state;
+
+      // Screen position. Fixed-spot markers ignore the projected x/y and sit at a
+      // viewport fraction (recomputed each frame so a resize tracks). The anchored
+      // pale-blue-dot marker rides the projected star origin instead.
+      const x = anchored ? frame.x : placement.vx * window.innerWidth;
+      const y = anchored ? frame.y : placement.vy * window.innerHeight;
+
       // Update position directly on the DOM element (no setState, no re-render).
       const el = elRef.current;
       if (el) {
-        el.style.left = `${frame.x.toFixed(1)}px`;
-        el.style.top = `${frame.y.toFixed(1)}px`;
+        el.style.left = `${x.toFixed(1)}px`;
+        el.style.top = `${y.toFixed(1)}px`;
       }
 
-      // Determine the settled item from stage.
-      const item = frame.visible ? settledItemForStage(frame.stage) : null;
-      const nextVisible = frame.visible && item !== null;
-      const nextItemId = item?.id ?? null;
-
-      // Proximity / focus lock. Computed against the marker's CURRENT frame x/y,
-      // with hysteresis so it doesn't chatter at the boundary. Keyboard focus
-      // forces the lock so non-pointer users still get the card.
+      // Proximity / focus lock. Computed against this marker's CURRENT x/y, with
+      // hysteresis so it doesn't chatter at the boundary. Keyboard focus forces the
+      // lock so non-pointer users still get the card.
       let nextLocked = lastLocked;
       if (!nextVisible) {
         nextLocked = false;
@@ -199,8 +188,8 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
       } else {
         const p = pointerRef.current;
         if (p) {
-          const dx = p.x - frame.x;
-          const dy = p.y - frame.y;
+          const dx = p.x - x;
+          const dy = p.y - y;
           const distSq = dx * dx + dy * dy;
           // Engage radius = the hexagon's on-screen peak (circumradius), so the lock
           // circle touches each vertex. Derived from the marker's measured width.
@@ -221,32 +210,31 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
       // lock engages so the card never jitters sides while held.
       let nextSide = lastSide;
       if (nextLocked && !lastLocked) {
-        nextSide = frame.x > window.innerWidth * CARD_FLIP_FRACTION ? 'left' : 'right';
+        nextSide = x > window.innerWidth * CARD_FLIP_FRACTION ? 'left' : 'right';
       }
 
       // Publish the lock to the sitewide cursor every frame it's locked so the
-      // cursor docks to the CURRENT marker centre (and follows it if the marker
-      // drifts while held). Half the marker box (its on-screen width) is the
-      // hexRadius the cursor uses to size its gold inner hex inside the white one.
-      // Cleared to inactive the frame the lock releases (and on unmount below).
+      // cursor docks to THIS marker's centre. Half the marker box is the hexRadius
+      // the cursor uses to size its gold inner hex inside the white one. On release,
+      // clear the global ONLY if we still own it — never stomp another marker's lock
+      // (markers' peak-radius hitboxes never overlap, so a stale owner can only
+      // appear if a far marker's release frame runs after a near one engaged; the
+      // ownership compare keeps that correct anyway).
       const w = markerLockWindow();
       if (nextLocked) {
-        const hexRadius = el ? el.getBoundingClientRect().width / 2 : frame.x; // px
-        w.__bhMarkerLock = { active: true, x: frame.x, y: frame.y, hexRadius };
+        const hexRadius = el ? el.getBoundingClientRect().width / 2 : 0; // px
+        w.__bhMarkerLock = { active: true, x, y, hexRadius, owner };
       } else if (lastLocked) {
-        // Only clear when WE were the locked marker (avoid stomping another
-        // marker's lock — though only one is ever mounted, this stays correct).
-        w.__bhMarkerLock = { active: false, x: frame.x, y: frame.y, hexRadius: 0 };
+        const current = w.__bhMarkerLock;
+        if (!current || current.owner === owner) {
+          w.__bhMarkerLock = { active: false, x, y, hexRadius: 0, owner };
+        }
       }
 
       // Only trigger React re-renders when a render-relevant value actually flips.
       if (nextVisible !== lastVisible) {
         lastVisible = nextVisible;
         setVisible(nextVisible);
-      }
-      if (nextItemId !== lastItemId) {
-        lastItemId = nextItemId;
-        setActiveItem(item);
       }
       if (nextSide !== lastSide) {
         lastSide = nextSide;
@@ -261,22 +249,19 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
-      // Undock the cursor if this marker unmounts while locked.
-      markerLockWindow().__bhMarkerLock = null;
+      // Undock the cursor if this marker unmounts while it owns the lock.
+      const w = markerLockWindow();
+      const current = w.__bhMarkerLock;
+      if (current && current.owner === placement.id) w.__bhMarkerLock = null;
     };
-  }, [markerFrameRef]);
-
-  if (!activeItem) return null;
-
-  const title = activeItem.destination.toUpperCase();
-  const subtitle = MARKER_SUBTITLES[activeItem.id];
+  }, [markerFrameRef, placement]);
 
   return (
     <a
       ref={elRef}
       className="star-marker"
-      href={resolveHref(base, activeItem.href)}
-      aria-label={`${activeItem.label}. Go to ${activeItem.destination}.`}
+      href={resolveHref(base, placement.href)}
+      aria-label={`${placement.title}. ${placement.subtitle}.`}
       data-visible={visible}
       data-reduced={reduced}
       data-locked={locked}
@@ -348,8 +333,8 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
       <span className="star-marker-card" aria-hidden="true">
         <span className="star-marker-connector" />
         <span className="star-marker-card-body">
-          <span className="star-marker-card-title">{title}</span>
-          <span className="star-marker-card-subtitle">{subtitle}</span>
+          <span className="star-marker-card-title">{placement.title}</span>
+          <span className="star-marker-card-subtitle">{placement.subtitle}</span>
           <span className="star-marker-card-open">[ OPEN ]</span>
         </span>
       </span>

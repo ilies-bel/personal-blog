@@ -927,8 +927,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // Settled windows in stage space: a settled state is one where the lifecycle
       // is dwelling on a recognisable object rather than mid-transition.
       // Widened so each state has room to breathe (≈2-3 consecutive 5% scroll
-      // samples show the marker). Keep in sync with settledItemForStage() in
-      // StarMarker.tsx — identical thresholds required.
+      // samples show the marker). Keep in sync with settledIdForStage() in
+      // HudNavigation.tsx — identical thresholds required.
       //   dot     4.40 - 4.72  (p≈0.00-0.06, full dot hold)
       //   nebula  3.28 - 3.68  (p≈0.15-0.27, settled cloud dwell)
       //   yellow  2.82 - 3.05  (p≈0.30-0.42, ignition + contemplation hold)

@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
-import { hudIdForStage, type HudTargetId } from '../HudNavigation';
+import { hudIdForStage, MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -256,7 +256,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
         <HeroIdentity />
         <ManifestoOverlay />
-        <StarMarker markerFrameRef={markerFrameRef} />
+        {/* One marker per placement, all mounted at once. Each instance gates its
+            own visibility on its state being the settled one (the nebula owns three;
+            the others one each) — no mount/unmount thrash, lock ownership is
+            per-marker via the placement id. */}
+        {MARKER_PLACEMENTS.map((placement) => (
+          <StarMarker key={placement.id} placement={placement} markerFrameRef={markerFrameRef} />
+        ))}
         <ExplorationHud />
         <ScrollHint />
       </div>
