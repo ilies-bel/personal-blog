@@ -146,6 +146,26 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+// --- Target-lock signal (the same global the cursor reads) ------------------
+// When the cursor enters a marker's hexagon (or the link is keyboard-focused),
+// StarMarker LOCKS and publishes the lock to a sitewide global every frame. That
+// IIFE/cursor handshake can't import React, so the shape is a mirror of the one
+// StarMarker owns — same contract, just re-declared here so the compass can read
+// `active` each rAF and light its readout gold when locked in. `active:false`
+// (or null) means nothing is locked. Only `active` is used here, but the full
+// shape is typed so it's obviously the same global StarMarker writes.
+interface MarkerLock {
+  active: boolean;
+  x: number;
+  y: number;
+  hexRadius: number;
+  owner: string;
+}
+type MarkerLockWindow = Window & { __bhMarkerLock?: MarkerLock | null };
+function markerLockWindow(): MarkerLockWindow {
+  return window as unknown as MarkerLockWindow;
+}
+
 export default function HudNavigation({
   visible,
   reduced,
@@ -159,6 +179,10 @@ export default function HudNavigation({
   // The aiming result (nearest marker id + idle flag), recomputed each rAF off
   // the cursor + marker frame; committed only when it actually changes.
   const [aim, setAim] = useState<AimState>({ markerId: null, idle: true });
+  // Whether the cursor is hard-LOCKED onto a marker (StarMarker's target lock).
+  // Read from the sitewide __bhMarkerLock global each rAF; flips at most a handful
+  // of times as the cursor crosses a hexagon boundary — never per frame.
+  const [locked, setLocked] = useState(false);
 
   // Live cursor position tracked via a ref (NOT state) so the rAF loop can place
   // the ┼ waypoint every frame without re-rendering — mirrors StarMarker.pointerRef.
@@ -186,6 +210,7 @@ export default function HudNavigation({
     let rafId = 0;
     let lastMarkerId: string | null = null;
     let lastIdle = true;
+    let lastLocked = false;
 
     function tick(): void {
       rafId = requestAnimationFrame(tick);
@@ -251,6 +276,17 @@ export default function HudNavigation({
         lastMarkerId = nextMarkerId;
         lastIdle = nextIdle;
         setAim({ markerId: nextMarkerId, idle: nextIdle });
+      }
+
+      // Hard target lock: read the sitewide global StarMarker publishes (the same
+      // one the cursor docks to). `active` is the true "locked in" signal — when
+      // the cursor is inside a marker's hexagon (or the link is focused). Commit
+      // to state only when it flips, same cheap pattern as the named target above.
+      const lock = markerLockWindow().__bhMarkerLock;
+      const nextLocked = !!(lock && lock.active);
+      if (nextLocked !== lastLocked) {
+        lastLocked = nextLocked;
+        setLocked(nextLocked);
       }
     }
 
@@ -346,6 +382,7 @@ export default function HudNavigation({
         className="hud-compass"
         data-visible={visible}
         data-aiming={aiming}
+        data-locked={locked}
         data-idle={idle}
         data-reduced={reduced}
         aria-hidden="true"

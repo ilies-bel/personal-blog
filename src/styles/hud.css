@@ -352,6 +352,12 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
    BELOW the last (bigger) row so it never overlaps the bottom glyph.
    --------------------------------------------------------------------------- */
 .hud-compass {
+  /* The rail's gold accent. --hud-gold is defined on .hud-system, but the compass
+     is a SIBLING of .hud-system (so position:fixed escapes the rail's transform),
+     which means --hud-gold does NOT cascade here. Re-declare it locally with the
+     identical formula so every var(--hud-gold) below (the ┼ waypoint, the prompt /
+     arrow, the locked readout) resolves to the same rail gold. */
+  --hud-gold: color-mix(in oklch, var(--highlight) 86%, var(--fg));
   /* Pinned to the BOTTOM-CENTRE of the viewport (decoupled from the vertically-
      centred rail). Fixed + horizontally centred like the LOADING boot readout, so
      it reads as the page's bottom instrument strip rather than a rail appendage. */
@@ -489,11 +495,17 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   font-size: 0.78rem;
   letter-spacing: 0.12em;
   color: var(--fg);
+  /* Smoothly warm to gold when the lock engages (data-locked) rather than snap. */
+  transition: color 0.32s var(--ease-out-quint), text-shadow 0.32s var(--ease-out-quint);
 }
 .hud-compass-dest {
   font-size: 0.66rem;
   letter-spacing: 0.14em;
   color: var(--fg-dim);
+  transition: color 0.32s var(--ease-out-quint);
+}
+.hud-compass-label {
+  transition: color 0.32s var(--ease-out-quint), text-shadow 0.32s var(--ease-out-quint);
 }
 /* The leading prompt ('[·]' when actively aiming, ' › ' for a rail-hover name) +
    the destination arrow get the rail's gold so the readout shares its signal
@@ -502,10 +514,36 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
 .hud-compass-arrow {
   color: color-mix(in oklch, var(--hud-gold) 60%, var(--hud-line));
   white-space: pre;
+  transition: color 0.32s var(--ease-out-quint);
 }
 .hud-compass[data-aiming='true'] .hud-compass-prompt,
 .hud-compass[data-aiming='true'] .hud-compass-arrow {
   color: var(--hud-gold);
+}
+
+/* LOCKED — the cursor is hard-locked onto a marker (StarMarker's target lock,
+   published via __bhMarkerLock and read by the compass rAF loop → data-locked).
+   This is the STRONGER state: "you're locked in", distinct from merely aiming /
+   naming. The readout ACTIVATES to gold, the label brightest in the hierarchy,
+   with a soft gold glow so it reads as energized. Placed AFTER the data-aiming
+   rules so it wins (locked implies aiming — the cursor sits inside the marker). */
+.hud-compass[data-locked='true'] .hud-compass-label {
+  color: var(--hud-gold);
+  text-shadow:
+    0 0 14px rgba(0, 0, 0, 0.9),
+    0 0 10px color-mix(in oklch, var(--hud-gold) 45%, transparent);
+}
+.hud-compass[data-locked='true'] .hud-compass-read {
+  color: var(--hud-gold);
+}
+.hud-compass[data-locked='true'] .hud-compass-prompt,
+.hud-compass[data-locked='true'] .hud-compass-arrow {
+  color: var(--hud-gold);
+}
+/* The destination line warms slightly too, but stays below the label so the
+   hierarchy (label brightest) holds. */
+.hud-compass[data-locked='true'] .hud-compass-dest {
+  color: color-mix(in oklch, var(--hud-gold) 62%, var(--fg-dim));
 }
 /* Idle placeholder: NO SIGNAL — dim, faint, all the signal colour drained so the
    instrument reads as scanning/empty rather than naming a destination. */
@@ -822,6 +860,15 @@ body.hud-booting .hud-boot-scan {
   @keyframes hud-boot-fill-calm {
     0% { width: 0; opacity: 1; }
     100% { width: 100%; opacity: 0.6; }
+  }
+  /* The compass readout still lights gold on lock (colour is fine), but drop the
+     fade so the activation is instant rather than animated. */
+  .hud-compass-read,
+  .hud-compass-dest,
+  .hud-compass-label,
+  .hud-compass-prompt,
+  .hud-compass-arrow {
+    transition: none;
   }
 }
 
