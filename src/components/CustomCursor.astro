@@ -16,13 +16,20 @@
 // catches up and vanishes the instant the cursor settles. At rest there is only
 // the clean ball.
 //
+// FLUSH HEAD, SOFT TAIL: the comet's HEAD is locked to the RAW pointer (the exact
+// point the ball sits on), so the beam never detaches from the ball — even mid
+// fast-flick. Only the BODY/tail eases (POINT_EASE), so it softly follows through
+// behind the locked head. The ball itself is written SYNCHRONOUSLY in the
+// mousemove handler (not deferred to the next rAF), so there is zero one-frame lag.
+//
 // The tail is a canvas-2D *particle/point trail* (the standard cursor-trail
-// technique, e.g. nayutalienx/cursor-trail): a ring buffer of recent points, each
-// with a spawn time; on a fast move we INTERPOLATE extra points along the segment
-// (so the tail follows the curve instead of being a stiff straight bar), every
-// point fades by age, and the path is stroked as rounded, quadratic-smoothed
-// segments with a per-segment width + alpha taper and an additive glow. A single
-// straight rotated rectangle (the old approach) could not bend — this can.
+// technique, e.g. nayutalienx/cursor-trail): a ring buffer of recent eased points,
+// each with a spawn time; on a fast move we INTERPOLATE extra points along the
+// segment (so the tail follows the curve instead of being a stiff straight bar),
+// every point fades by age, and the path is stroked ONCE — raw-pointer head →
+// eased ring body → tail tip — as a rounded, quadratic-smoothed curve with a
+// single linear-gradient taper (bright head, fading to nothing) and an additive
+// glow. A single straight rotated rectangle (the old approach) could not bend.
 //
 // PERFORMANCE: the rAF loop IDLES when the cursor is still (mirrors the hero
 // scene's `raf = 0` sentinel + visibilitychange restart) — zero CPU at rest. No
@@ -207,9 +214,13 @@
   // navigation is a fresh document), guarded against double-init.
   //
   // Performance contract:
-  //  - The BALL is pinned to the raw pointer with ONE translate3d per frame.
+  //  - The BALL is pinned to the raw pointer with ONE translate3d, written
+  //    SYNCHRONOUSLY in the mousemove handler (zero one-frame rAF lag). The loop
+  //    re-writes the same idempotent transform for non-move wakes (reveal/resize).
   //  - The TAIL is drawn on a canvas from a preallocated ring buffer of recent
-  //    points (no per-frame allocations, no style-property thrash, no CSS blur).
+  //    eased points, with its HEAD locked to the raw pointer so it stays flush
+  //    against the ball (no per-frame allocations, no style-property thrash, no
+  //    CSS blur).
   //  - The rAF loop IDLES when the cursor settles (raf = 0; no frame scheduled)
   //    and restarts on the next move — zero CPU at rest. Mirrors the hero scene
   //    loop in src/hero/scene/createScene.ts (raf=0 sentinel + visibilitychange).
@@ -268,16 +279,18 @@
 
     // ---- tuning (a visible luminous comet on a dark cobalt bg — bright head,
     //      long soft fading tail, matching the reference image) ----
-    // The DOT is pinned to the exact pointer (zero lag — see loop). POINT_EASE is
-    // only the TAIL anchor's lag: higher = the tail keeps up closer to the head so
-    // it reads as one continuous comet rather than a detached lagging blob.
+    // The DOT is pinned to the exact pointer synchronously in onMove (zero lag) and
+    // the comet HEAD is locked to that same raw pointer in drawTrail. POINT_EASE is
+    // only the TAIL BODY's lag: higher = the tail keeps up closer to the head so it
+    // reads as one continuous comet rather than a detached lagging blob.
     const POINT_EASE = 0.35;       // tail anchor follows the (exact) dot snappily
-    const SPAWN_STEP = 4;          // px between interpolated points on a fast move
-    const TRAIL_LIFE_MS = 420;     // tail length in TIME — long, soft fade
+    const SPAWN_STEP = 2.5;        // px between stored points — SMALLER = denser points = smoother curve
+    const TRAIL_LIFE_MS = 260;     // tail length in TIME — SHORTER so the points pack densely (smoother)
     const TRAIL_WIDTH_MAX = 2.2;   // px — a THIN soft beam (matches the reference)
     const TRAIL_ALPHA_MAX = 0.5;   // head of the beam; additive over the dark bg
     const REST_EPS_SQ = 0.04;      // px²; eased anchor "caught the ball" threshold
-    const CAP = 160;               // ring capacity (long life × fast flicks needs more)
+    const CAP = 160;               // ring capacity (short life × dense spawn fits easily)
+    const SUBDIV = 10;             // Catmull-Rom interpolated points per segment (curve smoothness)
     const TRAIL_RGB = '241, 242, 245'; // ≈ --fg oklch(0.95 0.006 252) in sRGB
 
     // Raw pointer (the ball is pinned here). The tail anchor (easeX/Y) lags it.
@@ -292,9 +305,12 @@
     const pt = new Float32Array(CAP); // spawn timestamp (ms)
     let head = 0;   // index of the newest point
     let count = 0;  // number of live points (0..CAP)
-    // Reuse buffers: live points unrolled head→tail each frame (no per-frame alloc).
-    const lpx = new Float32Array(CAP);
-    const lpy = new Float32Array(CAP);
+    // Reuse buffers: the comet path unrolled head→tail each frame (no per-frame
+    // alloc). lp[0] is the RAW-pointer head (prepended each frame); lp[1..] are the
+    // eased ring points, so the head joins the smoothing as a normal point — that's
+    // CAP ring points + 1 head = CAP + 1 slots.
+    const lpx = new Float32Array(CAP + 1);
+    const lpy = new Float32Array(CAP + 1);
 
     let revealed = false; // becomes visible on the first real move
     let raf = 0;          // rAF id; 0 = the loop is NOT running (idle)
@@ -391,47 +407,95 @@
     // Draw the comet from the ring buffer. Returns true if anything was drawn
     // (i.e. the tail is still alive), false once it has fully decayed.
     //
-    // SMOOTHNESS: the tail is ONE continuous path stroked ONCE. The old
-    // per-segment strokes (each with its own alpha, additively blended) overlapped
-    // unevenly on fast moves — bright where caps overlapped, dim where they barely
-    // met — which read as a DASHED line. A single stroke has no internal seams.
-    // The head→tail fade comes from a GRADIENT strokeStyle along the path, not
-    // per-segment alpha, so it's a clean continuous comet.
-    const drawTrail = (now: number): boolean => {
+    // FLUSH HEAD, SOFT TAIL: the comet HEAD is the RAW pointer (headX, headY) —
+    // the exact same point the ball is pinned to — NOT the eased ring anchor. So
+    // the beam ALWAYS starts flush against the ball with zero gap, even mid-flick.
+    // Behind that locked head, the eased ring points (lpx/lpy, lagged by
+    // POINT_EASE) form the curving BODY/tail that follows through. We stitch the
+    // raw head to the ring with one continuous path so it's one comet, not a head
+    // detached from a lagging blob.
+    //
+    // SMOOTHNESS: the tail is ONE continuous path stroked ONCE. The points are
+    // INTERPOLATED with a Catmull-Rom spline (SUBDIV extra points per segment) so
+    // the curve is smooth even when the stored points are sparse — no facets, no
+    // angular kinks, including at the head. The old per-segment strokes (each with
+    // its own alpha, additively blended) overlapped unevenly on fast moves — bright
+    // where caps overlapped, dim where they barely met — which read as a DASHED
+    // line; a single stroke has no internal seams. The head→tail fade comes from a
+    // GRADIENT strokeStyle along the path, not per-segment alpha, so it's a clean
+    // continuous comet.
+    const drawTrail = (now: number, headX: number, headY: number): boolean => {
       if (!ctx) return false;
       ctx.clearRect(0, 0, viewW, viewH);
-      if (count < 2) return false;
+      // The raw pointer is always the head, so we only need ONE live ring point to
+      // draw a beam (head→ring). A single fast flick (count===1) still renders.
+      if (count < 1) return false;
 
-      // Collect the live points (head → tail) into the reuse buffer, stopping at
-      // the first dead one. We need the head + tail positions for the gradient.
-      let live = 0;
+      // Build the comet polyline into the reuse buffer with the RAW pointer as the
+      // FIRST point (lp[0]), then the live ring points (newest → oldest), stopping
+      // at the first dead one. Because the head is just point 0 of the sequence, it
+      // flows through the SAME smoothing as every other point — there is no
+      // special-cased straight head segment to kink (the old `moveTo(head)` then
+      // `quadraticCurveTo(ring0, …)` made a visible elbow at the ball).
+      lpx[0] = headX;
+      lpy[0] = headY;
+      let live = 1;
       for (let n = 0; n < count; n++) {
         const i = (head - n + CAP) % CAP;
-        if (n > 0 && 1 - (now - pt[i]) / TRAIL_LIFE_MS <= 0) break;
+        if (1 - (now - pt[i]) / TRAIL_LIFE_MS <= 0) break;
         lpx[live] = px[i];
         lpy[live] = py[i];
         live++;
       }
-      if (live < 2) return false;
+      if (live < 2) return false;                     // need head + ≥1 ring point
 
-      const hx = lpx[0], hy = lpy[0];                 // head (on the ball)
-      const tx = lpx[live - 1], ty = lpy[live - 1];   // tail tip
+      const hx = lpx[0], hy = lpy[0];                 // head: the RAW pointer (= ball)
+      const tx = lpx[live - 1], ty = lpy[live - 1];   // tail tip (oldest live ring point)
 
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.globalCompositeOperation = 'lighter';       // additive glow on the dark bg
       ctx.globalAlpha = 1;
 
-      // Build ONE smooth path through the points with quadratic-midpoint
-      // smoothing (curve, not faceted), then stroke it a SINGLE time.
+      // Build ONE smooth path through the whole polyline (head + ring), stroked a
+      // SINGLE time. We INTERPOLATE the curve with a centripetal-style Catmull-Rom
+      // spline: SUBDIV extra points per segment, so even sparse stored points (a
+      // slow drift only stamps one point per several frames) render as a continuous
+      // curve with no facets. Catmull-Rom passes THROUGH every control point, so the
+      // beam still starts exactly on the ball (lp[0] = raw head) and ends exactly at
+      // the tail tip. Endpoints are clamped (the boundary point is duplicated as the
+      // phantom neighbour) so the spline is well-defined at the head and tail.
       ctx.beginPath();
       ctx.moveTo(hx, hy);
-      for (let n = 1; n < live - 1; n++) {
-        const mx = (lpx[n] + lpx[n + 1]) / 2;
-        const my = (lpy[n] + lpy[n + 1]) / 2;
-        ctx.quadraticCurveTo(lpx[n], lpy[n], mx, my);
+      if (live === 2) {
+        // Just head + one ring point: a single straight span (nothing to smooth).
+        ctx.lineTo(tx, ty);
+      } else {
+        for (let n = 0; n < live - 1; n++) {
+          // Control points for the segment lp[n] → lp[n+1], with clamped phantoms.
+          const p0x = lpx[n === 0 ? 0 : n - 1], p0y = lpy[n === 0 ? 0 : n - 1];
+          const p1x = lpx[n],                   p1y = lpy[n];
+          const p2x = lpx[n + 1],               p2y = lpy[n + 1];
+          const i3 = n + 2 < live ? n + 2 : live - 1;
+          const p3x = lpx[i3],                  p3y = lpy[i3];
+          // Emit SUBDIV interpolated points across this segment (t in (0,1]).
+          for (let s = 1; s <= SUBDIV; s++) {
+            const t = s / SUBDIV;
+            const t2 = t * t;
+            const t3 = t2 * t;
+            // Catmull-Rom basis (uniform, 0.5 tension) → a point ON the curve.
+            const cx =
+              0.5 * (2 * p1x + (-p0x + p2x) * t +
+                (2 * p0x - 5 * p1x + 4 * p2x - p3x) * t2 +
+                (-p0x + 3 * p1x - 3 * p2x + p3x) * t3);
+            const cy =
+              0.5 * (2 * p1y + (-p0y + p2y) * t +
+                (2 * p0y - 5 * p1y + 4 * p2y - p3y) * t2 +
+                (-p0y + 3 * p1y - 3 * p2y + p3y) * t3);
+            ctx.lineTo(cx, cy);
+          }
+        }
       }
-      ctx.lineTo(tx, ty);
 
       // Gradient along the head→tail axis: bright at the head, fading to nothing
       // at the tail. This is the comet taper, done as one continuous fill so there
@@ -551,6 +615,11 @@
       }
 
       // The ball: pinned to the raw pointer (no easing) so the cursor is exact.
+      // onMove already wrote this transform synchronously on the mousemove event
+      // (zero rAF lag — the "flush head" half of the fix), so this re-write is
+      // idempotent: targetX/Y don't change between moves, so it paints the same
+      // pixel. It's kept so the FIRST reveal frame and any loop-only wake (resize /
+      // visibility / mouseleave clear) still position the ball without a mousemove.
       cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
 
       // Ease the tail anchor toward the ball; spawn points along the path it
@@ -577,7 +646,7 @@
         }
       }
 
-      const alive = drawTrail(now);
+      const alive = drawTrail(now, targetX, targetY);
 
       // Idle test: the eased anchor has caught the ball AND nothing is left to
       // draw → reset and STOP the loop (no frame scheduled). Re-armed on move.
@@ -654,11 +723,18 @@
       }
       cursor.classList.toggle('cursor--interactive', interactive);
 
-      // Reduced motion: write the ball directly (the loop never runs). Otherwise
-      // (re)start the loop so the tail animates and then idles when it settles.
-      if (reduceMotion) {
-        cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
-      } else {
+      // SNAPPY BALL: pin the dot to the raw pointer SYNCHRONOUSLY, on the mousemove
+      // event itself — not on the next rAF. This kills the ~16ms one-frame lag the
+      // ball used to have when its transform was only written inside loop(). We are
+      // safely PAST the dock early-return above (syncDock() returned false here), so
+      // this write is for the NORMAL / interactive path only and can never fight the
+      // loop's dock glide (which writes renderX/Y, not targetX/Y). It also covers
+      // reduced motion, where the loop never runs at all.
+      cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+
+      // Then (re)start the loop so the comet tail animates and idles when it
+      // settles — except under reduced motion, where there is no trail / loop.
+      if (!reduceMotion) {
         kick();
       }
     };
