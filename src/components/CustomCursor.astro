@@ -143,24 +143,37 @@
     transform: translate(-50%, -50%) scale(1);
   }
 
-  /* DOCKED: the cursor has snapped to a LOCKED star-marker and stands in for the
-     marker's gold inner hexagon. The hex turns GOLD, sizes to sit as a static
-     inner border just inside the marker's white outer hex (--dock-scale is set
-     per-dock by the script from the marker's hexRadius), and does NOT rotate or
+  /* DOCKED: the cursor has glided onto a LOCKED star-marker and stands in for the
+     marker's gold inner hexagon. The hex turns GOLD and sizes to sit as a static
+     inner border just inside the marker's white outer hex. It does NOT rotate or
      breathe — crisp and held still. The centre dot stays exactly as-is (still
      visible, still centred). The aged Voyager-gold below is the resolved value
      of the site's --highlight token (oklch(0.78 0.085 72)) — the same gold the
      marker's own inner hex used — hardcoded here because this overlay renders
-     outside the token cascade (mirrors how --cursor-fg is hardcoded above). */
+     outside the token cascade (mirrors how --cursor-fg is hardcoded above).
+
+     CAPTURE/RELEASE ANIMATION (driven entirely from JS each frame so it stays in
+     lockstep with the position glide — see syncDock + loop): the script writes
+       --dock-scale  the LIVE hex scale this frame (eases 0→target on capture, and
+                     target→normal-interactive scale on release),
+       --dock-gold   0..1 mix toward gold (1 = full gold, 0 = off-white),
+       --dock-op     the LIVE hex opacity this frame (eases up on capture, down to
+                     the normal interactive 0.5 on release).
+     `transition: none` here so the per-frame JS writes are not fought by a CSS
+     transition. color-mix blends off-white→gold by --dock-gold so the colour pop
+     is gone: on capture it eases in with the scale, on release it eases back out
+     together with the position+scale return (the simplest tasteful symmetry). */
   .cursor {
     --cursor-gold: oklch(0.78 0.085 72);
-    --dock-scale: 0.95; /* overwritten per-dock by the script */
+    --dock-scale: 0.95; /* live hex scale, written per-frame by the script */
+    --dock-gold: 1;     /* live off-white→gold mix, written per-frame (1 = gold) */
+    --dock-op: 0.9;     /* live hex opacity, written per-frame by the script */
   }
   .cursor.cursor--docked .cursor__hex {
-    color: var(--cursor-gold);
-    opacity: 0.9;
-    /* No transition while docking IN — it must snap crisp to the marker, not
-       ease the gold in (the swap reads as the cursor BECOMING the inner hex). */
+    color: color-mix(in oklch, var(--cursor-fg), var(--cursor-gold) calc(var(--dock-gold) * 100%));
+    opacity: var(--dock-op);
+    /* No CSS transition — the script eases scale/opacity/colour every frame so
+       the hex glides in on capture and back out on release without a snap. */
     transition: none;
     transform: translate(-50%, -50%) scale(var(--dock-scale));
   }
@@ -290,13 +303,27 @@
 
     // ---- star-marker DOCK state (handshake with StarMarker.tsx) ----------------
     // When a star-marker LOCKS it publishes window.__bhMarkerLock = { active, x, y,
-    // hexRadius }. While active the cursor DOCKS: it snaps to (x,y) and HOLDS still
-    // as the marker's gold inner hexagon (static, no trail) instead of tracking the
-    // pointer. We also flag <html data-cursor-docked> so CSS hides the marker's OWN
-    // gold hex (so there's exactly one gold hex — the cursor). Cleared on undock.
-    let docked = false;   // currently standing in for a locked marker's gold hex
-    let dockX = 0;        // marker centre to pin to (CSS px)
+    // hexRadius }. While active the cursor DOCKS: instead of tracking the pointer it
+    // GLIDES onto (x,y) and the gold hex SCALES IN, then HOLDS still as the marker's
+    // gold inner hexagon (static, no trail). On release it GLIDES symmetrically back
+    // toward the live pointer (gold + scale ease back out), then resumes normal
+    // tracking. We flag <html data-cursor-docked> for the whole capture+hold+release
+    // so CSS hides the marker's OWN gold hex (exactly one gold hex on screen — the
+    // cursor) until the release glide fully completes. Cleared on undock.
+    //
+    // The animation is an exponential lerp on the existing rAF loop (no time-based
+    // tweens, no per-frame allocations). renderX/Y is the position actually drawn
+    // this frame; it eases toward the marker centre while capturing and toward the
+    // live pointer while releasing. dockAnim is the 0..1 capture envelope (0 = fully
+    // released, 1 = fully docked) that drives the gold-mix, hex opacity and scale-in.
+    let docked = false;     // a marker lock is currently engaged (capture or hold)
+    let releasing = false;  // lock dropped, still gliding the cursor back to pointer
+    let dockX = 0;          // marker centre to glide onto (CSS px)
     let dockY = 0;
+    let renderX = targetX;  // position drawn this frame (eased; not the raw pointer)
+    let renderY = targetY;
+    let dockAnim = 0;       // 0..1 capture envelope: drives gold/opacity/scale
+    let dockTargetScale = 0.95; // docked hex scale for the active lock (dockScaleFor)
     let pointerInside = true; // false while the pointer is outside the window
     // The marker's white outer hex polygon ≈ hexRadius * 2 * (100/116) px wide
     // (viewBox -8..108). The gold inner hex should sit at ~0.6× of that (matching
@@ -306,6 +333,43 @@
     const INNER_HEX_FRACTION = 0.6;      // gold inner hex vs white outer hex
     const dockScaleFor = (hexRadius: number): number =>
       (hexRadius * 2 * HEX_VIEWBOX_RATIO * INNER_HEX_FRACTION) / 40;
+
+    // ---- dock capture/release animation tuning -------------------------------
+    // Per-frame exponential lerp factors (matches the file's POINT_EASE tail-anchor
+    // approach). At ~60fps a factor f closes a fraction f of the remaining gap each
+    // frame, settling to within ~2% in roughly -ln(0.02)/f frames ≈ (4/f)/60 s, so
+    // 0.30 ≈ 13 frames ≈ 0.22s of glide with most of the visible travel in the first
+    // ~150ms (a confident ease-out, mirroring cubic-bezier(0.22, 1, 0.36, 1)). POS
+    // eases the cursor position (the glide), ANIM eases the 0..1 gold/opacity/scale
+    // envelope (the scale-in). POS is kept a touch FASTER than ANIM so on release the
+    // cursor reaches the pointer slightly before the gold finishes fading — the hex
+    // is never left visibly drifting off-white (the gold IS the moving thing).
+    const DOCK_POS_EASE = 0.3;    // position glide toward marker centre / pointer
+    const DOCK_ANIM_EASE = 0.26;  // gold + opacity + scale-in envelope
+    // The gold hex starts the capture SMALL (scales up to dockTargetScale) — this
+    // is the visible "hex forming into place" beat.
+    const DOCK_SCALE_START = 0.5; // fraction of the docked scale the hex starts at
+    const DOCK_HEX_OP = 0.9;      // hex opacity at full dock (matches old behaviour)
+    const INTERACTIVE_HEX_OP = 0.5; // normal interactive hex opacity (release floor)
+    // Release is complete once the glide has EFFECTIVELY caught its target AND the
+    // envelope has eased back to ~off-white. The epsilon is ~1.4px (2 px²) — sub-
+    // pixel-tight epsilons make the exponential tail crawl for many frames near the
+    // target (the gap shrinks by only f each frame); ~1.4px is imperceptible and the
+    // handoff to raw-pointer pinning rounds it out with no visible jump.
+    const DOCK_POS_EPS_SQ = 2.0;  // px²; renderX/Y has effectively caught the pointer
+    const DOCK_ANIM_EPS = 0.02;   // envelope effectively back to off-white/normal
+
+    // Write the docked hex CSS vars for the current envelope (anim 0..1) + scale.
+    // anim drives: scale-in (DOCK_SCALE_START→1 of the docked scale), off-white→gold
+    // mix, and hex opacity (interactive floor→full dock). One CSS-var batch; called
+    // once per frame while docked or releasing. No allocations.
+    const writeDockVars = (anim: number, scale: number): void => {
+      const liveScale = scale * (DOCK_SCALE_START + (1 - DOCK_SCALE_START) * anim);
+      const liveOp = INTERACTIVE_HEX_OP + (DOCK_HEX_OP - INTERACTIVE_HEX_OP) * anim;
+      cursor.style.setProperty('--dock-scale', String(liveScale));
+      cursor.style.setProperty('--dock-gold', String(anim));
+      cursor.style.setProperty('--dock-op', String(liveOp));
+    };
 
     // Push a point into the ring (overwriting the oldest once full).
     const pushPoint = (x: number, y: number, now: number): void => {
@@ -397,46 +461,88 @@
       return true;
     };
 
-    // Read window.__bhMarkerLock and reconcile the dock state (class, html attr,
-    // dock coords, hex scale). Returns true while docked. Pure-ish: only touches
-    // DOM when the docked state or scale actually changes, so it's cheap to call
-    // every frame. Mirrors how onMove reads window.__bhHitGiant.
+    // Fully clear the dock (class, html attr, trail) and resume normal pointer
+    // tracking. Snaps the tail anchor + render position onto the live pointer and
+    // clears the ring so the trail re-grows cleanly FROM the pointer (no streak
+    // from the old dock position). Called the instant a reduced-motion undock fires
+    // AND at the end of an animated release glide.
+    const clearDock = (): void => {
+      docked = false;
+      releasing = false;
+      dockAnim = 0;
+      cursor.classList.remove('cursor--docked');
+      delete document.documentElement.dataset.cursorDocked;
+      renderX = targetX;
+      renderY = targetY;
+      easeX = targetX;
+      easeY = targetY;
+      head = 0;
+      count = 0;
+      if (ctx) ctx.clearRect(0, 0, viewW, viewH);
+    };
+
+    // Read window.__bhMarkerLock and reconcile the dock LIFECYCLE (the class, the
+    // html attr, dock coords, the docked scale, and the capture/release flags).
+    // Returns true while the loop should run its dock branch (capturing, holding,
+    // OR releasing) — the actual position glide + scale-in easing happens in loop.
+    // Only touches DOM on a state edge, so it's cheap to call every frame. Mirrors
+    // how onMove reads window.__bhHitGiant.
     type MarkerLock = { active: boolean; x: number; y: number; hexRadius: number };
-    let lastDockScale = -1;
     const syncDock = (): boolean => {
       const lock = (window as unknown as { __bhMarkerLock?: MarkerLock | null })
         .__bhMarkerLock;
       // Only dock while the pointer is actually inside the window (a hidden cursor
       // must not keep the marker's gold hex suppressed).
       const active = pointerInside && !!lock && lock.active === true;
+
       if (active && lock) {
+        // Capture (or hold): follow the live marker centre + remember its scale.
         dockX = lock.x;
         dockY = lock.y;
+        dockTargetScale = dockScaleFor(lock.hexRadius);
         if (!docked) {
+          const wasReleasing = releasing;
           docked = true;
+          releasing = false; // a re-lock mid-release cancels the release glide
+          // Turn gold + suppress the marker's own hex from the very first frame so
+          // the dock reads as the hex FORMING into place (gold present, scaling in).
           cursor.classList.add('cursor--docked');
-          // Flag the document so hud.css hides the marker's own gold inner hex.
           document.documentElement.dataset.cursorDocked = 'true';
+          if (reduceMotion) {
+            // Reduced motion: no glide / scale-in — snap straight to full dock.
+            dockAnim = 1;
+            renderX = dockX;
+            renderY = dockY;
+            writeDockVars(1, dockTargetScale);
+          } else if (!wasReleasing) {
+            // Fresh capture: seed the glide START at the live pointer (renderX/Y is
+            // otherwise stale from a previous dock) and the envelope at 0 so the gold
+            // hex scales IN from small. A re-lock mid-release keeps its in-flight
+            // renderX/Y + dockAnim so it smoothly reverses without a jump.
+            renderX = targetX;
+            renderY = targetY;
+            dockAnim = 0;
+          }
         }
-        const scale = dockScaleFor(lock.hexRadius);
-        if (scale !== lastDockScale) {
-          lastDockScale = scale;
-          cursor.style.setProperty('--dock-scale', String(scale));
-        }
-      } else if (docked) {
-        docked = false;
-        cursor.classList.remove('cursor--docked');
-        delete document.documentElement.dataset.cursorDocked;
-        // Snap the tail anchor onto the live pointer and clear the ring so the
-        // trail re-grows cleanly FROM the pointer (no streak from the old dock
-        // position) the instant we undock.
-        easeX = targetX;
-        easeY = targetY;
-        head = 0;
-        count = 0;
-        if (ctx) ctx.clearRect(0, 0, viewW, viewH);
+        return true;
       }
-      return docked;
+
+      // Not active. If we were holding a dock, BEGIN the release: keep the class +
+      // html attr (gold stays the one gold hex on screen) and let the loop glide the
+      // cursor back to the pointer while the envelope eases out. Reduced motion
+      // skips the glide and restores instantly.
+      if (docked) {
+        if (reduceMotion) {
+          clearDock();
+          return false;
+        }
+        docked = false;
+        releasing = true;
+        return true;
+      }
+      // Still mid-release: keep running the dock branch until the glide completes
+      // (the loop calls clearDock once caught up). Otherwise nothing to do.
+      return releasing;
     };
 
     const loop = (): void => {
@@ -444,15 +550,40 @@
       if (document.hidden) { raf = 0; return; }
       const now = performance.now();
 
-      // DOCKED: stand still as the marker's gold inner hex. Pin to the marker
-      // centre (NOT the pointer), draw NO trail, and keep the loop alive so we
-      // notice the undock (the marker may release the lock without a mousemove —
-      // e.g. on scroll or focus change). One transform write + one global read
-      // per frame; no canvas work, no allocations.
+      // DOCK branch: capturing, holding, OR releasing a star-marker lock. Instead
+      // of snapping, GLIDE: ease renderX/Y toward the marker centre while docked /
+      // toward the live pointer while releasing, and ease the 0..1 envelope (gold +
+      // opacity + scale-in) up on capture / down on release. Draw NO trail, and keep
+      // the loop alive (the marker may release without a mousemove — scroll / focus).
+      // One transform write + one CSS-var batch per frame; no canvas work, no allocs.
       if (syncDock()) {
-        cursor.style.transform = `translate3d(${dockX}px, ${dockY}px, 0)`;
-        raf = requestAnimationFrame(loop);
-        return;
+        // Position target: marker centre while docked, live pointer while releasing.
+        const tx = releasing ? targetX : dockX;
+        const ty = releasing ? targetY : dockY;
+        renderX += (tx - renderX) * DOCK_POS_EASE;
+        renderY += (ty - renderY) * DOCK_POS_EASE;
+        // Envelope: ease toward 1 while capturing/holding, toward 0 while releasing.
+        const animTarget = releasing ? 0 : 1;
+        dockAnim += (animTarget - dockAnim) * DOCK_ANIM_EASE;
+
+        // Release completion: once the glide has EFFECTIVELY caught the pointer AND
+        // the envelope has eased back to off-white/normal, fully exit dock mode and
+        // fall through to the normal raw-pointer pin THIS frame. renderX/Y already
+        // matches targetX/Y within epsilon, so the handoff shows no one-frame jump
+        // (and we skip the dock transform write so there's still ONE write/frame).
+        const caught =
+          releasing &&
+          (targetX - renderX) ** 2 + (targetY - renderY) ** 2 < DOCK_POS_EPS_SQ &&
+          dockAnim < DOCK_ANIM_EPS;
+        if (caught) {
+          clearDock();
+        } else {
+          // Still capturing / holding / releasing: glide this frame and keep alive.
+          cursor.style.transform = `translate3d(${renderX}px, ${renderY}px, 0)`;
+          writeDockVars(dockAnim, dockTargetScale);
+          raf = requestAnimationFrame(loop);
+          return;
+        }
       }
 
       // The ball: pinned to the raw pointer (no easing) so the cursor is exact.
@@ -522,10 +653,12 @@
         if (canvas) canvas.style.opacity = '1';
       }
 
-      // DOCKED to a locked star-marker: hold still at the marker centre (ignore
-      // the pointer), keep the gold hex, and skip the interactive hit-test +
-      // trail. Under reduced motion the loop never runs, so write the dock
-      // transform here too; otherwise the loop keeps it pinned + watches undock.
+      // DOCKED (or capturing / releasing) a locked star-marker: the loop owns the
+      // glide + scale-in, so skip the interactive hit-test + trail. Under reduced
+      // motion the loop never runs, so write the snapped dock transform here too;
+      // otherwise just (re)start the loop so it glides + watches undock. (While
+      // releasing, the loop reads targetX/Y above as the glide target, so the
+      // cursor eases back toward the live, still-moving pointer.)
       if (syncDock()) {
         if (reduceMotion) {
           cursor.style.transform = `translate3d(${dockX}px, ${dockY}px, 0)`;
