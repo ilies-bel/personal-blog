@@ -644,7 +644,7 @@ export function lifecycle(input: LifecycleInput): StarState {
   // (uYrGrow/uYrMix), then holds the red giant at a stable radius. Do not reuse
   // the old reverse "tiny newborn red star" reveal here; that made the held giant
   // shrink while its headline was readable and broke the physical lifecycle.
-  const GIANT_FULL = 9.0 / 4.2; // medium, dense held size (world radius 9.0) — matches
+  const GIANT_FULL = 10.5 / 4.2; // medium, dense held size (world radius 10.5) — matches
   //   buildDisk uGiantScale AND createScene's RED_GIANT_RADIUS; keep all three in sync.
   const giantScale = GIANT_FULL;
 

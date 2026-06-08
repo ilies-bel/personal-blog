@@ -88,7 +88,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold particle sphere is
   // size-matched to the mesh at the swap (no pop). Keep this uGiantScale in sync with
   // buildDisk + lifecycle's GIANT_FULL.
-  const RED_GIANT_RADIUS = 4.2 * (9.0 / 4.2); // = 9.0; uGiantR × uGiantScale (held giant)
+  const RED_GIANT_RADIUS = 4.2 * (10.5 / 4.2); // = 10.5; uGiantR × uGiantScale (held giant)
   const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.62
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
@@ -194,7 +194,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // (+X right, -Y down, +Z back) pushes the camera to a LOWER-LEFT offset, which
   // throws the grown giant into the UPPER-RIGHT of the frame with its limb curving
   // across — the dialed-in target composition.
-  const RED_GIANT_PARK = new THREE.Vector3(5, -3, 7);
+  const RED_GIANT_PARK = new THREE.Vector3(1.3, -4.5, 7);
+  // The park slides in/out smoothly (parkWeight) instead of snapping on at a hard
+  // progress gate — these are the [start, end] progress bands the weight ramps over.
+  // IN: 0 → full as the giant grows into the beat. OUT: full → 0 as it leaves (the
+  // camera glides back to centre for the collapse/yellow swap). Between them it HOLDS
+  // at full weight across the red-giant hold (~0.47–0.60).
+  const RED_GIANT_PARK_IN: readonly [number, number] = [0.40, 0.47];
+  const RED_GIANT_PARK_OUT: readonly [number, number] = [0.60, 0.66];
 
   let mouseX = 0;
   let mouseY = 0;
@@ -606,8 +613,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // balloons the nebula/dot/sun states or the gravity-sim seed (all share the base
     // uGiantR). lifecycle.giantScale ramps it from a SMALL newborn star (tiny vs the black
     // hole) up to the full bloated size as the camera comes in (the scale-contrast reveal).
-    diskMatPrimary.uniforms.uGiantScale.value = look.giantScale;
-    diskMatSecondary.uniforms.uGiantScale.value = look.giantScale;
+    // DEV: the red-giant framing panel can override the held size live (world radius →
+    // ×base scale). Only overrides while pinned at the held giant; ramping states unchanged.
+    const giantSizeOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantSize);
+    const giantScaleValue =
+      typeof giantSizeOverride === 'number'
+        ? giantSizeOverride / (diskMatPrimary.uniforms.uGiantR.value as number)
+        : look.giantScale;
+    diskMatPrimary.uniforms.uGiantScale.value = giantScaleValue;
+    diskMatSecondary.uniforms.uGiantScale.value = giantScaleValue;
     // The orb stays centred (uGiantCenter = origin); its off-centre FRAMING is the
     // baked camera park below (RED_GIANT_PARK), not a geometry move — the star is at origin.
     // Axial spin: roll the red-giant photosphere on its own tilted pole (≈23°) at a
@@ -862,9 +876,26 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       frameLookTarget.x += mouseX * cameraPose.parallax * 0.35;
       frameLookTarget.y += -mouseY * cameraPose.parallax * 0.18;
     }
-    if (RED_GIANT_PARK.lengthSq() > 0 && progress >= 0.46 && progress <= 0.62) {
-      camera.position.add(RED_GIANT_PARK);
-      frameLookTarget.add(RED_GIANT_PARK);
+    // DEV: the red-giant framing panel overrides the on-screen X/Y (park x/y) live.
+    const giantPosXOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantPosX);
+    const giantPosYOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantPosY);
+    const parkX = typeof giantPosXOverride === 'number' ? giantPosXOverride : RED_GIANT_PARK.x;
+    const parkY = typeof giantPosYOverride === 'number' ? giantPosYOverride : RED_GIANT_PARK.y;
+    const parkZ = RED_GIANT_PARK.z;
+    // The off-centre red-giant framing slides IN and OUT smoothly instead of snapping:
+    // parkWeight ramps 0→1 across the lead-in band as the giant grows into the beat,
+    // HOLDS at 1 across the red-giant hold, then ramps 1→0 on the way out so the camera
+    // glides back to the centred pose for the collapse/yellow swap (no jump-cut either way).
+    const parkRampIn = smoothstep01((progress - RED_GIANT_PARK_IN[0]) / (RED_GIANT_PARK_IN[1] - RED_GIANT_PARK_IN[0]));
+    const parkRampOut = smoothstep01((progress - RED_GIANT_PARK_OUT[0]) / (RED_GIANT_PARK_OUT[1] - RED_GIANT_PARK_OUT[0]));
+    const parkWeight = parkRampIn * (1 - parkRampOut);
+    if (parkWeight > 0 && (parkX !== 0 || parkY !== 0 || parkZ !== 0)) {
+      camera.position.x += parkX * parkWeight;
+      camera.position.y += parkY * parkWeight;
+      camera.position.z += parkZ * parkWeight;
+      frameLookTarget.x += parkX * parkWeight;
+      frameLookTarget.y += parkY * parkWeight;
+      frameLookTarget.z += parkZ * parkWeight;
     }
     camera.lookAt(frameLookTarget);
 

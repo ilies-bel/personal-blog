@@ -54,6 +54,14 @@ export const DEBUG_WINDOW_KEYS = {
    *  PARTICLE red giant so its jet + surface ripple can be inspected without clicking
    *  (pair with __bhMorph at a red-giant stage, e.g. ≈2.3). */
   giantErupt: '__bhGiantErupt',
+  /** Dev red-giant framing panel (RedGiantDebugPanel). Live overrides applied in the
+   *  frame loop while tuning the composition; all unset = no-op (committed defaults). */
+  /** Red-giant WORLD radius override (world units; replaces uGiantScale × uGiantR). */
+  giantSize: '__bhGiantSize',
+  /** Red-giant on-screen X position: overrides RED_GIANT_PARK.x (the camera-pan vector). */
+  giantPosX: '__bhGiantPosX',
+  /** Red-giant on-screen Y position: overrides RED_GIANT_PARK.y. */
+  giantPosY: '__bhGiantPosY',
 } as const;
 
 // --- cross-layer cursor bridge (window.__bh*) ------------------------------
