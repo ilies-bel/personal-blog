@@ -89,17 +89,17 @@ const HEX_POINTS = '25,6.7 75,6.7 100,50 75,93.3 25,93.3 0,50';
 // slanted sides — the cardinal-ish ticks read strongest (top/bottom/left-ish).
 const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }> = [
   // top edge midpoint (50, 6.7) -> straight up
-  { x1: 50, y1: 6.7, x2: 50, y2: -5 },
+  { x1: 50, y1: 6.7, x2: 50, y2: -7 },
   // bottom edge midpoint (50, 93.3) -> straight down
-  { x1: 50, y1: 93.3, x2: 50, y2: 105 },
-  // upper-right edge midpoint (87.5, 28.35) -> out along the normal
-  { x1: 87.5, y1: 28.35, x2: 97.6, y2: 22.5 },
-  // lower-right edge midpoint (87.5, 71.65) -> out along the normal
-  { x1: 87.5, y1: 71.65, x2: 97.6, y2: 77.5 },
-  // upper-left edge midpoint (12.5, 28.35) -> out along the normal
-  { x1: 12.5, y1: 28.35, x2: 2.4, y2: 22.5 },
-  // lower-left edge midpoint (12.5, 71.65) -> out along the normal
-  { x1: 12.5, y1: 71.65, x2: 2.4, y2: 77.5 },
+  { x1: 50, y1: 93.3, x2: 50, y2: 107 },
+  // upper-right edge midpoint (87.5, 28.35) -> out along the edge normal (60deg)
+  { x1: 87.5, y1: 28.35, x2: 99.4, y2: 21.48 },
+  // lower-right edge midpoint (87.5, 71.65) -> out along the edge normal
+  { x1: 87.5, y1: 71.65, x2: 99.4, y2: 78.52 },
+  // upper-left edge midpoint (12.5, 28.35) -> out along the edge normal
+  { x1: 12.5, y1: 28.35, x2: 0.6, y2: 21.48 },
+  // lower-left edge midpoint (12.5, 71.65) -> out along the edge normal
+  { x1: 12.5, y1: 71.65, x2: 0.6, y2: 78.52 },
 ];
 
 export default function StarMarker({ markerFrameRef }: StarMarkerProps) {

@@ -324,9 +324,11 @@
                 plus a tethered terminal-style info card.
    --------------------------------------------------------------------------- */
 .star-marker {
-  /* Faint off-white for the resting reticle (same derivation the old amber dot
-     used) and the site Voyager-gold for the locked inner hex + accents. */
-  --marker-line: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+  /* Off-white for the whole OUTER reticle — resting dotted hex, locked solid hex,
+     edge ticks AND the centre dot at rest (same --fg off-white family the custom
+     cursor's hexagon uses). The Voyager-gold (--highlight) is reserved STRICTLY
+     for the animated INNER hexagon + the locked accents (card, dot-on-lock). */
+  --marker-line: var(--fg);
   --marker-gold: var(--highlight);
   /* Reticle box — ~72px so the hexagon reads as a real target, not a speck. */
   --marker-size: 4.5rem;
@@ -366,9 +368,10 @@
   height: 100%;
   overflow: visible;
   filter:
-    drop-shadow(0 0 1px color-mix(in oklch, var(--bg) 92%, transparent))
-    drop-shadow(0 0 2px color-mix(in oklch, var(--bg) 80%, transparent))
-    drop-shadow(0 0 5px color-mix(in oklch, var(--bg) 60%, transparent));
+    drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
+    drop-shadow(0 0 1.2px color-mix(in oklch, var(--bg) 90%, transparent))
+    drop-shadow(0 0 2.5px color-mix(in oklch, var(--bg) 78%, transparent))
+    drop-shadow(0 0 6px color-mix(in oklch, var(--bg) 55%, transparent));
 }
 
 /* RESTING: dotted hexagon — quiet, but legible. Hidden once locked. */
@@ -387,12 +390,15 @@
   transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 .star-marker-hex-solid {
-  /* A touch brighter than the resting dotted line when present. */
-  color: color-mix(in oklch, var(--highlight) 78%, var(--fg));
+  /* Inherit the off-white --marker-line (currentColor) — the locked OUTER hex is
+     WHITE, never gold. Only the inner hex below uses the gold token. */
+  color: var(--marker-line);
 }
-.star-marker[data-locked='true'] .star-marker-hex-solid,
+.star-marker[data-locked='true'] .star-marker-hex-solid {
+  opacity: 0.95;
+}
 .star-marker[data-locked='true'] .star-marker-ticks {
-  opacity: 0.85;
+  opacity: 1;
 }
 
 /* LOCKED: the animated gold inner hexagon — rotates + breathes. Hidden at rest. */
