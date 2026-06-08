@@ -105,8 +105,7 @@ body.article-page .bh-backdrop::after {
   font-size: clamp(0.66rem, 1vw, 0.8rem);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  /* Undimmed a step (faint → dim): still secondary/dimmed, just brighter. */
-  color: var(--fg-dim);
+  color: var(--fg-faint);
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
 }
 .bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
@@ -283,12 +282,12 @@ body.bare.is-scrolled .overlay-blog {
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--fg-dim);
+  color: var(--fg-faint);
   pointer-events: auto;
   opacity: 0.86;
   /* Container does the one-time intro only (fade-in, then rests at 0.86). The
      perpetual breath lives on .bh-hint-label so only the TEXT pulses — the
-     vertical line keeps its own bh-hint-line sweep, untouched. */
+     vertical line is static (no sweep). */
   animation: bh-hint-in 0.9s var(--ease-out-quint) both;
 }
 .bh-hint-start {
@@ -331,7 +330,6 @@ body.bare.is-scrolled .overlay-blog {
   height: 2.2rem;
   background: linear-gradient(180deg, var(--fg-faint), transparent);
   transform-origin: 50% 0;
-  animation: bh-hint-line 2.2s ease-in-out infinite;
 }
 .bh-hint-skip {
   color: var(--fg-dim);
@@ -351,10 +349,6 @@ body.bare.is-scrolled .overlay-blog {
 @keyframes bh-hint-in {
   from { opacity: 0; transform: translate(-50%, 0.4rem); }
   to { opacity: 0.86; transform: translate(-50%, 0); }
-}
-@keyframes bh-hint-line {
-  0%, 100% { transform: scaleY(0.42); opacity: 0.45; }
-  45% { transform: scaleY(1); opacity: 0.95; }
 }
 /* Perpetual breath of light: a slow, calm opacity swell-and-fade so the hint
    keeps softly inviting the scroll. Symmetric loop (0%/100% match) so the
