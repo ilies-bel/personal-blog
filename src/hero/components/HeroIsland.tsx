@@ -15,7 +15,6 @@ import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress, progressForLegacyStage } from '../timeline';
 import { HUD_NAV_BY_ID, hudIdForStage, type HudTargetId } from '../HudNavigation';
-import { sampleHudLuminance } from '../lib/hudLuminance';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -71,36 +70,8 @@ function crossedProgressThreshold(previous: number, next: number, threshold: num
   return (previous < threshold && next >= threshold) || (previous >= threshold && next < threshold);
 }
 
-// --- adaptive HUD contrast sampler tuning ----------------------------------
-// The rail's color/opacity/scale adapt to a SYNTHETIC estimate of the scene
-// luminance behind the left rail (sampleHudLuminance, keyed off the lifecycle
-// stage). These constants + the applyVars() response curves below (plus the
-// HUD_LUMINANCE_TABLE in hudLuminance.ts) are the whole tuning surface.
-/** Sampler cadence: only recompute when this many ms have passed (~12fps). */
-const HUD_SAMPLE_INTERVAL_MS = 80;
-/** Exponential low-pass factor (per tick) on luma/noise. High enough to TRACK a
- *  scroll in ~1s (at 0.12 it took ~8s to cross the range and read as "no change"),
- *  low enough to stay flicker-free. ~3-tick (≈0.25s) time-constant. */
-const HUD_SMOOTHING_K = 0.35;
-/** Hysteresis: dark→bright only once smoothed luma climbs above this. */
-const HUD_LUME_BRIGHT_ENTER = 0.6;
-/** Hysteresis: bright→dark only once smoothed luma falls below this. */
-const HUD_LUME_BRIGHT_EXIT = 0.45;
-
-const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
-/** Clamp then round to 3 decimals so CSS writes stay short and only change on
- *  a meaningful delta (avoids per-frame string churn / layout thrash). */
-const round3 = (x: number): number => Math.round(x * 1000) / 1000;
-
 export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
-  // The .bh-root element. The adaptive HUD contrast sampler writes its CSS
-  // variables (and the discrete data-lume mode) here so they cascade down to the
-  // .hud-system rail.
-  const rootRef = useRef<HTMLDivElement>(null);
-  // Optional debug readout element (mounted only when __bhHudLume is set). The
-  // sampler writes live values into it via textContent to avoid React re-renders.
-  const hudLumeReadoutRef = useRef<HTMLDivElement>(null);
   // Exact scroll progress (0..1) drives the morph through a ref the render loop
   // reads. React receives a lower-frequency visual snapshot for DOM overlays.
   const progressRef = useRef(0);
@@ -280,105 +251,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     };
   }, [backdrop, backdropStage, motionPreferenceVersion]);
 
-  // --- adaptive HUD contrast sampler -----------------------------------------
-  // Drives the rail's color/opacity/scale from a SYNTHETIC estimate of the scene
-  // luminance behind the left rail (no GPU readback — the renderer has no
-  // preserveDrawingBuffer, so canvas pixels read back black; see hudLuminance.ts).
-  // A throttled (~12fps) rAF loop samples the lifecycle stage, low-pass-filters
-  // luma/noise, derives the --hud-* CSS variables, and writes them on .bh-root so
-  // they cascade to .hud-system. It never runs in backdrop mode (no HUD there).
-  useEffect(() => {
-    if (backdrop) return;
-    if (typeof window === 'undefined' || typeof performance === 'undefined') return;
-    const root = rootRef.current;
-    if (!root) return;
-
-    // Smoothed (low-passed) luma/noise — seeded to the CURRENT frame's value (not
-    // a hardcoded dark guess) so the rail starts correct and the filter only has
-    // to TRACK changes, never climb the whole range from black on every mount.
-    const seed = sampleHudLuminance(legacyStageForProgress(progressRef.current));
-    const sm = { luma: seed.luma, noise: seed.noise };
-    // Discrete brightness mode (hysteresis-gated), seeded from the current luma.
-    let lume: 'dark' | 'bright' = seed.luma >= HUD_LUME_BRIGHT_ENTER ? 'bright' : 'dark';
-    // Last-written rounded values, so setProperty only fires on a real change.
-    const written: Record<string, number> = {};
-    let last = 0;
-    let rafId = 0;
-
-    const setVar = (name: string, value: number): void => {
-      if (written[name] === value) return;
-      written[name] = value;
-      root.style.setProperty(name, String(value));
-    };
-
-    // Map smoothed luma (L) + noise (N) → the rail's CSS variables. This is the
-    // response-curve surface: tweak a formula here to retune how the HUD reacts.
-    const applyVars = (L: number, N: number): void => {
-      // Tonal inversion: ink lightness is the OPPOSITE of the background luminance.
-      // Full-range crossover (smoothstep around mid-grey) so the ink flips light↔dark
-      // continuously and never lingers as low-contrast mid-grey over a mid-grey field.
-      const invert = L * L * (3 - 2 * L); // smoothstep(0,1,L)
-      setVar('--hud-ink-dark-weight', round3(invert * 100));
-      // Warm glow: strong on dark frames, gone on bright ones.
-      setVar('--hud-glow-opacity', round3(clamp01(1 - L) * 0.55));
-      // Opposite-tone outline halo: rises with brightness AND noise, capped ~0.9.
-      setVar('--hud-outline-opacity', round3(Math.min(0.9, clamp01(L * 0.7 + N * 0.4))));
-      // Rail line: modest, lifts slightly with noise, kept in ~[0.30, 0.5].
-      setVar('--hud-line-opacity', round3(clamp01(Math.min(0.5, Math.max(0.3, 0.34 + N * 0.12)))));
-      // Soft scrim: low baseline, rises with L + N, capped LOW (a lane, not a card).
-      setVar('--hud-backdrop-opacity', round3(Math.min(0.32, Math.max(0.1, 0.1 + L * 0.14 + N * 0.1))));
-      // Active node stays clearest on messy frames.
-      setVar('--hud-active-scale', round3(Math.min(1.06, 1 + N * 0.05)));
-      setVar('--hud-active-opacity', round3(Math.min(1, Math.max(0.94, 0.94 + L * 0.06))));
-      // Inactive nodes drop back as the field gets noisier.
-      setVar('--hud-inactive-opacity', round3(Math.min(0.7, Math.max(0.5, 0.7 - N * 0.2))));
-    };
-
-    const tick = (): void => {
-      rafId = window.requestAnimationFrame(tick);
-      const now = performance.now();
-      if (now - last < HUD_SAMPLE_INTERVAL_MS) return;
-      last = now;
-
-      const stage = legacyStageForProgress(progressRef.current);
-      const { luma, noise } = sampleHudLuminance(stage);
-
-      // Exponential smoothing (low-pass) — kills flicker; NOT an oscillation.
-      sm.luma += (luma - sm.luma) * HUD_SMOOTHING_K;
-      sm.noise += (noise - sm.noise) * HUD_SMOOTHING_K;
-
-      // Hysteresis on the discrete brightness mode so it doesn't chatter at the
-      // boundary. Only flip on the entry/exit thresholds, write only on change.
-      const wasBright = lume === 'bright';
-      if (!wasBright && sm.luma > HUD_LUME_BRIGHT_ENTER) lume = 'bright';
-      else if (wasBright && sm.luma < HUD_LUME_BRIGHT_EXIT) lume = 'dark';
-      if (root.dataset.lume !== lume) root.dataset.lume = lume;
-
-      applyVars(sm.luma, sm.noise);
-
-      // Debug readout (only mounted when __bhHudLume is set). Re-read the key per
-      // tick so toggling it live still updates / pauses the text cheaply.
-      const readout = hudLumeReadoutRef.current;
-      if (readout && readDebugNumber(DEBUG_WINDOW_KEYS.hudLume)) {
-        readout.textContent =
-          `stage ${stage.toFixed(2)}  ` +
-          `L ${luma.toFixed(2)}/${sm.luma.toFixed(2)}  ` +
-          `N ${noise.toFixed(2)}/${sm.noise.toFixed(2)}  ` +
-          `lume ${lume}`;
-      }
-    };
-
-    rafId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(rafId);
-    // Intentionally NOT keyed on explorationMode: the loop runs from mount so the
-    // smoothing state persists across the whole session (no re-seed / re-darken
-    // when the HUD reveals). It's cheap (~12fps, writes only on a rounded delta).
-  }, [backdrop]);
-
   const base = import.meta.env.BASE_URL ?? '/';
-  // Debug: mount the adaptive-contrast readout panel only when __bhHudLume is set
-  // (read once at render; the sampler then re-reads per tick to drive the text).
-  const hudLumeDebug = !backdrop && Boolean(readDebugNumber(DEBUG_WINDOW_KEYS.hudLume));
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
   // same forward-progress → shader-stage expression the scene uses.
   const scrollHudId = explorationMode ? hudIdForStage(legacyStageForProgress(progress)) : null;
@@ -436,32 +309,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         onHudClearSelection: handleHudClearSelection,
       }}
     >
-      <div className="bh-root" data-exploring={explorationMode} ref={rootRef}>
+      <div className="bh-root" data-exploring={explorationMode}>
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
         <HeroIdentity />
         <ManifestoOverlay />
         <ExplorationHud />
         <ScrollHint />
-        {hudLumeDebug && (
-          <div
-            ref={hudLumeReadoutRef}
-            aria-hidden="true"
-            style={{
-              position: 'fixed',
-              left: '0.75rem',
-              bottom: '0.75rem',
-              zIndex: 9999,
-              padding: '0.3rem 0.45rem',
-              font: '11px/1.3 ui-monospace, "SF Mono", Menlo, monospace',
-              color: '#9fe',
-              background: 'rgba(0, 0, 0, 0.72)',
-              border: '1px solid rgba(159, 238, 255, 0.4)',
-              borderRadius: '4px',
-              whiteSpace: 'pre',
-              pointerEvents: 'none',
-            }}
-          />
-        )}
       </div>
     </SceneStateProvider>
   );
