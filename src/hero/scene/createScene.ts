@@ -489,9 +489,35 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const focusTarget = exploring ? hooks.getFocusTarget?.() ?? null : null;
     const follow = reduced ? 1 : 0.28;
     const progressTarget = Math.max(0, Math.min(1, hooks.getProgress?.() ?? progress));
-    progress += (progressTarget - progress) * follow;
     const stageTarget = hooks.getStage();
-    stage += (stageTarget - stage) * follow;
+    // SETTLE SNAP — land on the restored scroll state, don't animate into it.
+    // The scene mounts and reads its initial stage/progress while window.scrollY is
+    // still 0 (the pale-blue-dot opening), because the browser applies scroll
+    // RESTORATION (on reload / back-navigation to a scrolled position) a frame or
+    // two AFTER mount. Without this, the late restored target would arrive and the
+    // 0.28 easing would GLIDE the whole lifecycle up from the dot to the visitor's
+    // real position — the "fast-forward the animation" bug. So for a short window
+    // after scene start we snap stage/progress DIRECTLY to target (no lerp): the
+    // first frame lands wherever scroll currently is, and any restoration that lands
+    // a few frames later is absorbed instantly too. The window is ~a quarter second
+    // (a handful of frames) — long enough to cover scroll restoration, short enough
+    // that a visitor cannot have meaningfully wheel-scrolled within it, so normal
+    // smooth easing resumes immediately afterward. (Reduced motion already uses
+    // follow=1, so this is a no-op there.)
+    const SETTLE_SNAP_S = 0.25;
+    if (t < SETTLE_SNAP_S) {
+      progress = progressTarget;
+      stage = stageTarget;
+      // Keep the stage-delta trackers in sync so a snap doesn't read as motion:
+      // otherwise the jump from the stale 0 to the restored stage would register a
+      // huge dStreakStage and flip the hyperspace-streak flow (and would be a phantom
+      // nebula-flash crossing). Syncing them here makes the snapped frame look static.
+      prevStreakStage = stage;
+      prevNebulaStage = stage;
+    } else {
+      progress += (progressTarget - progress) * follow;
+      stage += (stageTarget - stage) * follow;
+    }
     // DEBUG: window.__bhMorph forces the stage to an exact value (no smoothing)
     // so the explosion can be inspected frame-by-frame from a capture script.
     const morphOverride = readDebugNumber(DEBUG_WINDOW_KEYS.morph);
