@@ -140,6 +140,7 @@ export default function HudNavigation({
   const compassPointed = pointedId !== null || markerId !== null;
 
   return (
+    <>
     <div className="hud-system" data-visible={visible}>
       <nav
         className="hud-nav"
@@ -186,6 +187,7 @@ export default function HudNavigation({
           })}
         </ol>
       </nav>
+      </div>
 
       {/* ASCII compass readout, anchored below the rail. Names whatever is being
           POINTED at (a hovered/focused rail glyph, a locked on-canvas marker) and
@@ -194,9 +196,15 @@ export default function HudNavigation({
           the rail buttons already announce their own labels (the old mobile readout
           had the same rationale — this replaces it, now visible on desktop too).
           The compass markup is rendered even when no scene resolves so its frame
-          never pops in/out. */}
+          never pops in/out.
+
+          IMPORTANT: rendered as a SIBLING of .hud-system, not a child. .hud-system
+          carries a transform (translate(...,-50%) for vertical centring), and a CSS
+          transform on an ancestor makes position:fixed resolve against that ancestor
+          instead of the viewport — which trapped the compass mid-rail. As a sibling
+          its position:fixed bottom-centre resolves against the viewport correctly. */}
       {compassItem && (
-        <div className="hud-compass" data-pointed={compassPointed} aria-hidden="true">
+        <div className="hud-compass" data-visible={visible} data-pointed={compassPointed} aria-hidden="true">
           <pre className="hud-compass-rose">{'     +\n  ───┼───\n     |'}</pre>
           <p className="hud-compass-read">
             <span className="hud-compass-prompt">{compassPointed ? '[·]' : ' › '}</span>
@@ -208,6 +216,6 @@ export default function HudNavigation({
           </p>
         </div>
       )}
-    </div>
+    </>
   );
 }

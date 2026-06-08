@@ -354,7 +354,7 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   opacity: 0;
   transition: opacity 0.5s var(--ease-out-quint) 0.34s;
 }
-.hud-system[data-visible='true'] .hud-compass { opacity: 1; }
+.hud-compass[data-visible='true'] { opacity: 1; }
 /* The crosshair rose — literal +, ─, ┼, | chars rendered as a tiny diagram. Dim
    so it reads as a frame, not copy. */
 .hud-compass-rose {
