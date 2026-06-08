@@ -120,14 +120,16 @@ export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = [
     subtitle: 'Who I am',
   },
 
-  // NEBULA / writing — THREE placeholder markers over the cloud (one per recent
-  // article), all linking to /writing for now. Spots approximate the user's red
-  // boxes: (a) upper-centre, (b) mid-left, (c) lower-centre-right of the cloud.
+  // NEBULA / writing — THREE placeholder markers (one per recent article), all
+  // linking to /writing for now. Pulled OUT of the dense gas into the sparse / near-
+  // empty regions so each hexagon reads against dark background instead of a bright
+  // clump: (a) top-right OUTSIDE the cloud, (b) mid-left thin edge, (c) bottom-centre
+  // sparse edge. Approximate the user's red boxes — meant to be nudged.
   {
     id: 'nebula-01',
     state: 'nebula',
-    vx: 0.5,
-    vy: 0.28,
+    vx: 0.82,
+    vy: 0.22,
     href: 'writing',
     title: 'WRITING / 01',
     subtitle: 'Notes & essays',
@@ -135,8 +137,8 @@ export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = [
   {
     id: 'nebula-02',
     state: 'nebula',
-    vx: 0.34,
-    vy: 0.52,
+    vx: 0.19,
+    vy: 0.4,
     href: 'writing',
     title: 'WRITING / 02',
     subtitle: 'Notes & essays',
@@ -144,8 +146,8 @@ export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = [
   {
     id: 'nebula-03',
     state: 'nebula',
-    vx: 0.62,
-    vy: 0.66,
+    vx: 0.58,
+    vy: 0.8,
     href: 'writing',
     title: 'WRITING / 03',
     subtitle: 'Notes & essays',
@@ -206,22 +208,22 @@ export function hudIdForStage(stage: number): HudTargetId {
   return current.id;
 }
 
-// Settled-window stage thresholds. A "settled" state is one where the lifecycle is
-// dwelling on a recognisable object rather than mid-transition. Returns the settled
-// state's id for `stage`, or null if mid-transition. MUST stay byte-identical to the
-// settled gate in createScene.ts (onMarkerFrame) — both gate marker visibility on
-// the same stage ranges:
-//   dot     4.40 - 4.72  (p≈0.00-0.06, full dot hold)
-//   nebula  3.28 - 3.68  (p≈0.15-0.27, settled cloud dwell)
-//   yellow  2.82 - 3.05  (p≈0.30-0.42, ignition + contemplation hold)
-//   red     1.98 - 2.40  (p≈0.46-0.68, red-giant approach + full hold)
-//   black   0.00 - 0.35  (p≈0.82-1.00, post-supernova black hole)
+// IDLE-hold-only stage thresholds. A marker appears ONLY while the lifecycle is
+// holding still on its recognisable beat, NOT during the transitions in or out of
+// that hold. Returns the held state's id for `stage`, or null if mid-transition.
+// MUST stay byte-identical to the settled gate in createScene.ts (onMarkerFrame) —
+// both gate marker visibility on the same stage ranges:
+//   dot     4.50 - 4.72  (the dot hold, before it blooms)
+//   nebula  3.38 - 3.50  (the grown cloud sitting still, before collapse)
+//   yellow  2.84 - 2.92  (the flat yellow-star contemplation hold)
+//   red     2.00 - 2.12  (the flat red-giant hold)
+//   black   0.00 - 0.12  (the settled black hole at the bottom of the arc)
 export function settledIdForStage(stage: number): HudTargetId | null {
-  if (stage >= 4.40 && stage <= 4.72) return 'beginning';
-  if (stage >= 3.28 && stage <= 3.68) return 'nebula';
-  if (stage >= 2.82 && stage <= 3.05) return 'yellow';
-  if (stage >= 1.98 && stage <= 2.40) return 'red';
-  if (stage >= 0.0 && stage <= 0.35) return 'end';
+  if (stage >= 4.50 && stage <= 4.72) return 'beginning';
+  if (stage >= 3.38 && stage <= 3.50) return 'nebula';
+  if (stage >= 2.84 && stage <= 2.92) return 'yellow';
+  if (stage >= 2.00 && stage <= 2.12) return 'red';
+  if (stage >= 0.00 && stage <= 0.12) return 'end';
   return null;
 }
 

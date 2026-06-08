@@ -918,28 +918,28 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     if (hooks.onMarkerFrame) {
       const ndcX = flashOrigin.x;
       const ndcY = flashOrigin.y;
-      const isDot = stage >= 4.4;
+      const isDot = stage >= 4.5;
       const offX = isDot ? 0 : 28;
       const offY = isDot ? 0 : -36;
       const cssX = (ndcX * 0.5 + 0.5) * window.innerWidth + offX;
       const cssY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight + offY;
       const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
-      // Settled windows in stage space: a settled state is one where the lifecycle
-      // is dwelling on a recognisable object rather than mid-transition.
-      // Widened so each state has room to breathe (≈2-3 consecutive 5% scroll
-      // samples show the marker). Keep in sync with settledIdForStage() in
+      // IDLE-hold-only windows in stage space: markers appear ONLY while the object
+      // is holding still on its recognisable beat, NOT during the transitions in or
+      // out of that hold. These are narrowed to the flat-hold idle of each state, so
+      // a marker never shows mid-lerp. Keep in sync with settledIdForStage() in
       // HudNavigation.tsx — identical thresholds required.
-      //   dot     4.40 - 4.72  (p≈0.00-0.06, full dot hold)
-      //   nebula  3.28 - 3.68  (p≈0.15-0.27, settled cloud dwell)
-      //   yellow  2.82 - 3.05  (p≈0.30-0.42, ignition + contemplation hold)
-      //   red     1.98 - 2.40  (p≈0.46-0.68, red-giant approach + full hold)
-      //   black   0.00 - 0.35  (p≈0.82-1.00, post-supernova black hole)
+      //   dot     4.50 - 4.72  (the dot hold, before it blooms)
+      //   nebula  3.38 - 3.50  (the grown cloud sitting still, before collapse)
+      //   yellow  2.84 - 2.92  (the flat yellow-star contemplation hold)
+      //   red     2.00 - 2.12  (the flat red-giant hold)
+      //   black   0.00 - 0.12  (the settled black hole at the bottom of the arc)
       const settled =
-        (stage >= 4.40 && stage <= 4.72) ||
-        (stage >= 3.28 && stage <= 3.68) ||
-        (stage >= 2.82 && stage <= 3.05) ||
-        (stage >= 1.98 && stage <= 2.40) ||
-        (stage >= 0.00 && stage <= 0.35);
+        (stage >= 4.50 && stage <= 4.72) ||
+        (stage >= 3.38 && stage <= 3.50) ||
+        (stage >= 2.84 && stage <= 2.92) ||
+        (stage >= 2.00 && stage <= 2.12) ||
+        (stage >= 0.00 && stage <= 0.12);
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });
     }
 
