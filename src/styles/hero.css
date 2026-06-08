@@ -131,28 +131,35 @@ body.article-page .bh-backdrop::after {
 .site-header .bh-identity-lockup .bh-identity-name,
 .site-header .bh-identity-lockup .bh-identity-role { text-shadow: none; }
 
-/* Cinematic chrome: the name (.bh-identity) and the top-right menu (.overlay-blog,
-   scene.css) belong to the opening frame only. Once scroll leaves the top the
-   island adds body.is-scrolled and both fade up-and-out so the scene plays without
-   chrome; they glide back at the top. pointer-events drop while hidden. */
+/* The name (.bh-identity) and the top-right section menu (.overlay-blog, scene.css)
+   now stay VISIBLE throughout the whole scroll — they are quiet at the top and only
+   change their APPEARANCE (grow / open to labels / brighten) once the visitor reaches
+   the black hole (body.hud-active), set by HeroIsland (or forced by the corner power
+   button). They are never hidden mid-scroll, so the .overlay-blog/.bh-identity are
+   deliberately NOT part of any is-scrolled hide rule. The transition base below makes
+   the appearance change glide; visibility is no longer touched here. */
 body.bare .bh-identity,
 body.bare .overlay-blog {
   transition:
     opacity 0.5s var(--ease-out-quint),
-    transform 0.5s var(--ease-out-quint),
-    visibility 0s linear 0s;
+    transform 0.5s var(--ease-out-quint);
 }
-body.bare.is-scrolled .bh-identity,
-body.bare.is-scrolled .overlay-blog {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-0.6rem);
-  pointer-events: none;
+
+/* HUD-activation chrome: the name is a quiet whisper at base (scaled down, dimmed)
+   and GROWS to full presence once real scroll reaches the black hole — body.hud-active.
+   Only transform/opacity/colour live here; the positioning above (fixed top-left) is
+   untouched. Placed after the .bh-identity rules so it wins on equal specificity. */
+body.bare .bh-identity {
+  transform-origin: top left;
+  transform: scale(0.82);
+  opacity: 0.62;
   transition:
-    opacity 0.5s var(--ease-out-quint),
-    transform 0.5s var(--ease-out-quint),
-    visibility 0s linear 0.5s;
+    transform 0.6s var(--ease-out-quint),
+    opacity 0.5s var(--ease-out-quint);
 }
+body.bare.hud-active .bh-identity { transform: scale(1.18); opacity: 1; }
+body.bare.hud-active .bh-identity-name { color: var(--fg); }
+body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
 
 /* --- Manifesto beats (pinned, cross-faded by scroll) ----------------------- */
 /* The island positions these absolutely over the canvas and drives their opacity
@@ -349,14 +356,17 @@ body.bare.is-scrolled .overlay-blog {
    stay reachable, so the island renders every beat fully and shows BOTH big lines
    stacked (no crossfade); lay them out in normal flow instead of pinning them. */
 @media (prefers-reduced-motion: reduce) {
+  /* Keep the chrome present and legible; drop the grow/scale animation. The name
+     stays at full size (no whisper shrink) so nothing moves on scroll, and the menu
+     simply reveals its labels under hud-active without sliding. */
   body.bare .bh-identity,
   body.bare .overlay-blog {
-    transition: opacity 0.2s linear, visibility 0s linear 0s;
-    transform: none !important;
+    transition: opacity 0.2s linear;
   }
-  body.bare.is-scrolled .bh-identity,
-  body.bare.is-scrolled .overlay-blog {
-    transition: opacity 0.2s linear, visibility 0s linear 0.2s;
+  body.bare .bh-identity,
+  body.bare.hud-active .bh-identity {
+    transform: none !important;
+    opacity: 1 !important;
   }
 
   .bh-overlay {

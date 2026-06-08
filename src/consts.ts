@@ -17,7 +17,7 @@ export const BRAND_ROLE = 'Software Engineer';
 // Social links (shown in footer / about). Leave blank to hide.
 export const SOCIALS = {
   github: 'https://github.com/ilies-bel',
-  twitter: '',
+  twitter: 'https://x.com/ilies_without_y',
   email: 'beldjilali.ilies@gmail.com',
 };
 

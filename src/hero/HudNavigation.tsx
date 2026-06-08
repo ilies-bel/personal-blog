@@ -7,6 +7,7 @@ import {
   type HudTargetId,
   type MarkerPlacement,
 } from './sceneTable';
+import { progressForLegacyStage } from './timeline';
 
 // The HUD nav rows, on-screen markers, the settled-window gate and their shared
 // types now live in sceneTable.ts (the pure data layer). They are re-exported
@@ -43,14 +44,12 @@ export function hudIdForStage(stage: number): HudTargetId {
 
 interface HudNavigationProps {
   visible: boolean;
+  /** prefers-reduced-motion: travel jumps instead of smooth-scrolling. */
+  reduced: boolean;
   /** The target the current scroll position maps to (scroll-spy "you are here").
    *  Drives a quiet ambient marker so the rail reflects scroll position. */
   currentId: HudTargetId | null;
   base: string;
-}
-
-function resolveHref(base: string, href: string): string {
-  return `${base}/${href}`.replace(/\/+/g, '/');
 }
 
 // Resolve a `public/` glyph asset against the deploy base (same base prop the
@@ -59,8 +58,21 @@ function resolveAsset(base: string, src: string): string {
   return `${base}/${src}`.replace(/\/+/g, '/');
 }
 
+/**
+ * Travel to a lifecycle stage: map the stage to its scroll progress and scroll the
+ * page there. Honours reduced-motion (jumps instead of smooth-scrolling). Used by
+ * the HUD rail so clicking a glyph flies the visitor to that star rather than
+ * navigating away to a page.
+ */
+function scrollToStage(stage: number, reduced: boolean): void {
+  const progress = progressForLegacyStage(stage);
+  const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  window.scrollTo({ top: progress * max, behavior: reduced ? 'auto' : 'smooth' });
+}
+
 export default function HudNavigation({
   visible,
+  reduced,
   currentId,
   base,
 }: HudNavigationProps) {
@@ -80,14 +92,19 @@ export default function HudNavigation({
 
             return (
               <li className="hud-nav-row" key={item.id}>
-                <a
+                {/* A HUD glyph TRAVELS to its lifecycle stage rather than navigating
+                    away — clicking it smooth-scrolls the page to that star. So it is a
+                    real <button>, not a link (keyboard-accessible, no page load). The
+                    on-screen StarMarker still owns the page navigation via item.href. */}
+                <button
+                  type="button"
                   className="hud-nav-button"
-                  href={resolveHref(base, item.href)}
                   data-motion={item.motion}
                   data-current={isCurrent}
-                  aria-label={`${item.label}. ${item.destination}.`}
+                  aria-label={`Travel to ${item.label}`}
                   tabIndex={visible ? 0 : -1}
                   aria-current={isCurrent ? 'location' : undefined}
+                  onClick={() => scrollToStage(item.stage, reduced)}
                 >
                   <span
                     className="hud-nav-glyph"
@@ -98,7 +115,7 @@ export default function HudNavigation({
                     <span className="hud-nav-title">{item.label}</span>
                     <span className="hud-nav-destination">{item.destination}</span>
                   </span>
-                </a>
+                </button>
               </li>
             );
           })}

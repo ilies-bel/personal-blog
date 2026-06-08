@@ -5,10 +5,11 @@ import HudNavigation from '../HudNavigation';
 import { useSceneState } from './SceneStateContext';
 
 export default function ExplorationHud() {
-  const { explorationMode, scrollHudId, base } = useSceneState();
+  const { explorationMode, reduced, scrollHudId, base } = useSceneState();
   return (
     <HudNavigation
       visible={explorationMode}
+      reduced={reduced}
       currentId={scrollHudId}
       base={base}
     />

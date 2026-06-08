@@ -18,6 +18,8 @@ import { hudIdForStage, MARKER_PLACEMENTS, type HudTargetId } from '../HudNaviga
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
+  HUD_ACTIVE_BODY_CLASS,
+  HUD_FORCED_BODY_CLASS,
   SCROLL_DOWN,
   SCROLL_UP,
   type ScrollDirection,
@@ -93,6 +95,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Whether the opening chrome (name + menu) is currently shown. Tracked in a ref
   // so the scroll callback only touches the DOM on an actual transition.
   const chromeVisibleRef = useRef(true);
+  // Whether real scroll progress has reached the black hole (bottom hero). Mirrors
+  // a body.hud-active class so the chrome can morph there (name grows, top-right
+  // icons open to labels, HUD rail lifts to white). Ref-tracked like the others so
+  // each toggle only touches the DOM on the actual transition. The corner power
+  // button can also force hud-active (body.hud-forced); while that override is
+  // engaged the scroll-driven toggle below stands down so the manual choice wins.
+  const hudActiveRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -129,6 +138,24 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // menu pinned alongside it (no separate scroll threshold to drift). Tracked
     // through chromeVisibleRef so the DOM is only touched on an actual transition.
     const syncChrome = (): void => {
+      // HUD activation: once the REAL scroll position reaches the bottom hero (the
+      // black hole / 'end' stage), publish body.hud-active so the chrome morphs into
+      // an explicit menu (name grows, section icons open to icon+label, the HUD rail
+      // lifts to white). Keyed off the same scroll-spy stage map the HUD uses, so the
+      // morph tracks scroll directly. STICKY OVERRIDE: when the corner power button has
+      // engaged a manual override (body.hud-forced), the scroll-driven toggle stands
+      // down entirely so it can't clobber the forced state. We reconcile against the
+      // ACTUAL DOM class (not just hudActiveRef) because the power button may have
+      // mutated hud-active outside this island — so when the override is released the
+      // class is always corrected to match the live scroll position with no desync.
+      if (!document.body.classList.contains(HUD_FORCED_BODY_CLASS)) {
+        const atEnd = hudIdForStage(legacyStageForProgress(progressRef.current)) === 'end';
+        hudActiveRef.current = atEnd;
+        if (document.body.classList.contains(HUD_ACTIVE_BODY_CLASS) !== atEnd) {
+          document.body.classList.toggle(HUD_ACTIVE_BODY_CLASS, atEnd);
+        }
+      }
+
       const visible = progressRef.current < CHROME_HIDE_AT || explorationModeRef.current;
       if (visible === chromeVisibleRef.current) return;
       chromeVisibleRef.current = visible;
@@ -199,8 +226,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       tracker.stop();
       delete window[CURSOR_WINDOW_KEYS.hitGiant];
       dispose();
-      // Leave the body in a clean state if the island unmounts mid-scroll.
-      document.body.classList.remove(SCROLLED_BODY_CLASS);
+      // Leave the body in a clean state if the island unmounts mid-scroll. The
+      // hud-active class is owned here (scroll-driven); hud-forced is owned by the
+      // power-button script, but clear it too so a re-mount starts from scroll
+      // control rather than a stale override.
+      document.body.classList.remove(SCROLLED_BODY_CLASS, HUD_ACTIVE_BODY_CLASS, HUD_FORCED_BODY_CLASS);
     };
   }, [backdrop, backdropStage, motionPreferenceVersion]);
 

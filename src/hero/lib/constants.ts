@@ -5,6 +5,16 @@
 // --- DOM / storage keys ----------------------------------------------------
 /** Toggled on <body> once scroll leaves the top, fading the opening chrome. */
 export const SCROLLED_BODY_CLASS = 'is-scrolled';
+/** Toggled on <body> once real scroll progress reaches the black hole (bottom
+ *  hero). Drives the HUD-activation chrome: the name grows, the top-right section
+ *  icons open from icon → icon+label, and the HUD rail lifts to white +
+ *  auto-reveals its labels. The power button in the corner can also force this
+ *  on/off (see HUD_FORCED_BODY_CLASS). */
+export const HUD_ACTIVE_BODY_CLASS = 'hud-active';
+/** Toggled on <body> by the corner power button when the visitor manually forces
+ *  the HUD-activation chrome. While present, the scroll-driven hud-active toggle
+ *  in HeroIsland is suppressed so the manual override wins (sticky). */
+export const HUD_FORCED_BODY_CLASS = 'hud-forced';
 /** localStorage key persisting the chosen exploration-HUD target. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
 

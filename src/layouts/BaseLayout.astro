@@ -70,28 +70,132 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
             <span class="bh-identity-role">{BRAND_ROLE}</span>
           </a>
 
-          {/* The blog micro-graphic, top-right: a tiny constellation mark that
-              opens the About / Writing routes. Small, quiet, always reachable. */}
+          {/* The blog micro-nav, top-right: the four section routes rendered as quiet
+              glyph icons that share the left HUD rail's visual language — a pale-blue
+              dot for About, the nebula speck for Writing, the four-point star for
+              Projects, the red-giant teardrop for Graveyard. The text labels stay
+              folded away and only unfurl (icon → icon+label) once real scroll reaches
+              the black hole, or the power button is engaged (body.hud-active). A "two
+              planets" <details> dropdown holds the social links (zero-JS, native), and
+              a power button toggles the hud-active morph in place without scrolling. */}
           <nav class="overlay-blog" aria-label="Sections">
-            <a class="overlay-blog-mark" href={href('writing')} aria-label="Writing">
-              <svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true">
-                <circle cx="6" cy="8" r="1.6" />
-                <circle cx="20" cy="6" r="1.2" />
-                <circle cx="22" cy="18" r="1.6" />
-                <circle cx="10" cy="20" r="1.2" />
-                <circle cx="14" cy="13" r="2.2" class="overlay-blog-core" />
-                <path d="M6 8 L14 13 L20 6 M14 13 L22 18 M14 13 L10 20" />
-              </svg>
-            </a>
             <div class="overlay-blog-links">
-              <a href={href('about')}>About</a>
-              <a href={href('writing')}>Writing</a>
-              <a href={href('projects')}>Projects</a>
-              <a href={href('graveyard')}>Graveyard</a>
-              {SOCIALS.github && <a href={SOCIALS.github} class="overlay-social">GitHub</a>}
-              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`} class="overlay-social">Email</a>}
+              <a class="overlay-blog-link" href={href('about')} aria-label="About">
+                {/* THE BEGINNING / pale blue dot — faint orbit ring + solid speck. */}
+                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+                  <circle cx="16" cy="16" r="9.5" fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.4" />
+                  <circle cx="16" cy="16" r="2.4" fill="currentColor" />
+                </svg>
+                <span class="overlay-blog-label">About</span>
+              </a>
+              <a class="overlay-blog-link" href={href('writing')} aria-label="Writing">
+                {/* NEBULA — a soft seed of gas (the rail's nebula glyph is a single
+                    filled circle); a faint halo distinguishes it from the dot. */}
+                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+                  <circle cx="16" cy="16" r="9.5" fill="currentColor" opacity="0.16" />
+                  <circle cx="16" cy="16" r="4.5" fill="currentColor" />
+                </svg>
+                <span class="overlay-blog-label">Writing</span>
+              </a>
+              <a class="overlay-blog-link" href={href('projects')} aria-label="Projects">
+                {/* YELLOW STAR — the four-point star, echoing the rail glyph. */}
+                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+                  <path
+                    d="M16 2 Q17.7 14.3 30 16 Q17.7 17.7 16 30 Q14.3 17.7 2 16 Q14.3 14.3 16 2 Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="overlay-blog-label">Projects</span>
+              </a>
+              <a class="overlay-blog-link" href={href('graveyard')} aria-label="Graveyard">
+                {/* RED GIANT — the swollen teardrop limb (the rail's red-giant glyph). */}
+                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+                  <path
+                    d="M16 3 Q18 18 28 21 Q18 24 16 30 Q14 24 4 21 Q14 18 16 3 Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span class="overlay-blog-label">Graveyard</span>
+              </a>
             </div>
+
+            <details class="overlay-blog-socials">
+              <summary class="overlay-blog-socials-toggle" aria-label="Links">
+                {/* Two planets — one orbiting the other. */}
+                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+                  <circle cx="13" cy="16" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <circle cx="24" cy="16" r="3.5" fill="currentColor" />
+                </svg>
+              </summary>
+              <div class="overlay-blog-socials-menu">
+                {SOCIALS.github && <a href={SOCIALS.github} class="overlay-social">GitHub</a>}
+                {SOCIALS.twitter && <a href={SOCIALS.twitter} class="overlay-social">X</a>}
+                {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`} class="overlay-social">Email</a>}
+              </div>
+            </details>
+
+            {/* Power button: a manual override that TOGGLES the hud-active morph in
+                place (no scrolling). Sticky — once engaged it adds body.hud-forced so
+                the scroll-driven toggle in HeroIsland stands down until toggled off. */}
+            <button
+              type="button"
+              class="overlay-blog-power"
+              aria-pressed="false"
+              aria-label="Toggle navigation"
+            >
+              {/* IEC power glyph: an open ring broken at the top by a vertical line. */}
+              <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+                <path
+                  d="M16 4 L16 14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M10.3 9.2 A 8.2 8.2 0 1 0 21.7 9.2"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
           </nav>
+
+          {/* Self-contained power-button toggle (mirrors the project's zero-import
+              inline-script convention, e.g. CustomCursor). It owns body.hud-forced +
+              body.hud-active when the visitor forces the morph; HeroIsland's scroll
+              callback yields whenever hud-forced is present, so the override is sticky
+              until the button is pressed again. No-JS safe (the menu still grows on
+              scroll); keyboard-accessible (it's a real <button>). */}
+          <script is:inline>
+            (() => {
+              const btn = document.querySelector('.overlay-blog-power');
+              if (!btn) return;
+              let forced = false;
+              btn.addEventListener('click', () => {
+                forced = !forced;
+                if (forced) {
+                  // Engage the sticky override: force the morph ON and lock out the
+                  // scroll-driven toggle (HeroIsland yields while hud-forced is set).
+                  document.body.classList.add('hud-forced');
+                  document.body.classList.add('hud-active');
+                } else {
+                  // Release the override: drop the lock, then hand control back to the
+                  // scroll signal. Dispatch a scroll event so HeroIsland re-measures
+                  // immediately and resets hud-active to match the live scroll position
+                  // (rather than us guessing here, which could leave it stale).
+                  document.body.classList.remove('hud-forced');
+                  window.dispatchEvent(new Event('scroll'));
+                }
+                btn.setAttribute('aria-pressed', forced ? 'true' : 'false');
+              });
+            })();
+          </script>
 
           <main id="main-content" class="bare-main">
             <slot />

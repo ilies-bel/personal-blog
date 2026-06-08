@@ -93,6 +93,16 @@
   padding: 0;
 }
 .hud-nav-button {
+  /* Button reset: the rail items are now <button>s (each click TRAVELS to a star),
+     so strip the UA chrome and let the rail styles below own the look. */
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   position: relative;
   display: grid;
   grid-template-columns: 2.35rem minmax(0, 1fr);
@@ -146,6 +156,19 @@
   outline: 1px solid var(--hud-gold);
   outline-offset: 0.25rem;
 }
+
+/* HUD activation at the black hole (body.hud-active, set by HeroIsland or forced by
+   the corner power button): the quiet icon rail becomes an explicit menu — every
+   button expands, labels reveal WITHOUT hover, the text lifts to full white and the
+   connector tick brightens to the rail's gold accent. The existing width/colour/
+   max-width transitions animate this for free. (--hud-gold is the rail's accent
+   token in .hud-system above — there is no --hud-amber here.) */
+body.hud-active .hud-nav-button { width: 11.7rem; color: var(--fg); }
+body.hud-active .hud-nav-button::before { width: 1.1rem; background: var(--hud-gold); }
+body.hud-active .hud-nav-copy { max-width: 8.6rem; opacity: 1; transform: none; }
+body.hud-active .hud-nav-title,
+body.hud-active .hud-nav-destination { color: var(--fg); }
+
 /* The glyph is an SVG (in public/glyphs/) applied as a mask and painted with the
    link's currentColor, so the rail's faint to gold to current color transitions
    flow through the icon for free. --glyph-mask is set per-row inline in the JSX.
@@ -261,6 +284,11 @@
   .hud-nav-button:focus-visible {
     width: clamp(8.2rem, 39vw, 10.8rem);
   }
+  /* On the horizontal mobile rail, hud-active must NOT force the desktop width or
+     reveal every label — the buttons stay collapsed icons and the mobile readout
+     carries the text. Only an explicit hover/focus expands a single item. */
+  body.hud-active .hud-nav-button { width: 2.45rem; }
+  body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; }
   .hud-nav-button::before {
     left: 1.15rem;
   }
