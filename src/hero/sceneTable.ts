@@ -303,6 +303,38 @@ export function settledIdForStage(stage: number): HudTargetId | null {
 }
 
 // ===========================================================================
+// LIFECYCLE STAGE THRESHOLDS
+//
+// lifecycle.ts is a PURE stage->look function keyed on the shader "stage"
+// coordinate (a separate axis from progress). These are the per-state activation
+// + transition thresholds it reads, colocated here as named exports so the
+// timing/state knobs all live in one table. lifecycle.ts imports them; the values
+// and the way it applies them are unchanged (a colocation/naming win only — NOT a
+// behavior change, the choreography stays in lifecycle.ts).
+// ===========================================================================
+
+/** Pale-blue-dot slot active at/above this stage (lifecycle.ts `dot`). */
+export const DOT_ACTIVE_STAGE = 4.5;
+/** Nebula slot active at/above this stage (lifecycle.ts `nebula`). */
+export const NEBULA_ACTIVE_STAGE = 3.5;
+/** Yellow-star slot active at/above this stage (lifecycle.ts `yellow`). */
+export const YELLOW_ACTIVE_STAGE = 2.5;
+
+/** nebula -> yellow gravitational-collapse window (scrolling UP): dispersed
+ *  nebula at the HI edge, fully-fed star at the LO edge. */
+export const NEB_COLLAPSE_HI = 3.5;
+export const NEB_COLLAPSE_LO = 3.0;
+
+/** yellow <-> red mesh/cloud crossover stage (the flash-swap point). */
+export const SWAP_STAGE = 2.88;
+/** red giant -> yellow size contraction window (the cloud shrinks to gold size). */
+export const RED_EXIT_START = 2.5;
+/** red giant -> yellow colour cool window (just behind the size contraction). */
+export const RED_COLOR_EXIT_START = 2.52;
+/** red giant fully shrunk to yellow size before the SWAP_STAGE handoff. */
+export const RED_SHRINK_END = 2.85;
+
+// ===========================================================================
 // COLOCATED PER-SCENE DATA
 //
 // The scattered HUD nav rows (HUD_NAV_ITEMS), on-screen markers (MARKER_PLACEMENTS)
@@ -584,3 +616,215 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = SCENES.map((s) => s.hud);
 export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = SCENES.flatMap((s) => s.markers);
 
 export const BEATS: ManifestoBeat[] = SCENES.flatMap((s) => (s.beat ? [s.beat] : []));
+
+// ===========================================================================
+// CAMERA TABLE
+//
+// The per-scene camera framing. cameraPoseForProgress (timeline.ts) used to be a
+// second 10-band if-ladder keyed to the SAME breakpoints/easings as the stage
+// curve; it is regenerated here from this table. Each band stores its selection
+// boundary (endProgress), the interp window the original passed to segment(), the
+// easing, the start/end pose (position + target), and the band's parallax.
+//
+// NOTE the camera bands are NOT 1:1 with SEGMENTS: the stage curve splits the
+// dot-hold (band 1) and the dot->nebula grow (band 2), but the CAMERA holds
+// DOT_VIEW across the dot-hold and only moves across the grow. The original
+// expressed this as a single `p < NEBULA_GROW_END` band whose interp window was
+// [DOT_HOLD_END, NEBULA_GROW_END] (so segment() returns 0 — DOT_VIEW — for the
+// dot-hold). The table preserves that exactly: band 1 selects `p < 0.195` but
+// interps over [0.055, 0.195]. Flat-hold bands set posStart === posEnd (and
+// targetStart === targetEnd), so the easing/interp is a no-op there.
+//
+// The red-hold micro-drift and the nova shake are NOT in this table — they stay
+// post-steps applied after the generated base pose in cameraPoseForProgress.
+// ===========================================================================
+export type Vec3Tuple = readonly [number, number, number];
+
+const DOT_VIEW_POS: Vec3Tuple = [0.0, 0.0, 78.0];
+const DOT_VIEW_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
+const NEBULA_START_POS: Vec3Tuple = [-0.7, 0.14, 39.0];
+const NEBULA_START_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
+const NEBULA_GATHERED_POS: Vec3Tuple = [0.18, 0.035, 34.0];
+const NEBULA_GATHERED_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
+const YELLOW_HOLD_POS: Vec3Tuple = [0.62, -0.08, 17.4];
+const YELLOW_HOLD_TGT: Vec3Tuple = [0.0, -0.02, 0.0];
+const RED_COMPOSITION_POS: Vec3Tuple = [-5.5, -5.55, 38.2];
+const RED_COMPOSITION_TGT: Vec3Tuple = [-7.9, -4.7, 7.0];
+const COLLAPSE_PULL_POS: Vec3Tuple = [-4.4, -3.6, 33.0];
+const COLLAPSE_PULL_TGT: Vec3Tuple = [-5.6, -3.0, 4.6];
+const SUPERNOVA_RECOIL_POS: Vec3Tuple = [-2.6, -1.7, 28.0];
+const SUPERNOVA_RECOIL_TGT: Vec3Tuple = [-2.6, -1.4, 2.2];
+const BLACK_HOLE_SETL_POS: Vec3Tuple = [0.0, 0.05, 23.2];
+const BLACK_HOLE_SETL_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
+const EVENT_HORIZON_POS: Vec3Tuple = [0.02, 0.08, 21.8];
+const EVENT_HORIZON_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
+
+/** One camera band: selected while progress is below `endProgress`, interpolated
+ *  over `interp` (the segment() window) through `easing`, mixing pose start->end. */
+interface CameraBand {
+  /** Selection boundary — this band owns p < endProgress (forward scan). The last
+   *  band is the fallthrough (endProgress is Infinity). */
+  endProgress: number;
+  /** [a, b] window passed to segment() for the local interpolation parameter. */
+  interp: readonly [number, number];
+  easing: Easing;
+  posStart: Vec3Tuple;
+  posEnd: Vec3Tuple;
+  targetStart: Vec3Tuple;
+  targetEnd: Vec3Tuple;
+  parallax: number;
+}
+
+// Breakpoints reused by the camera bands (the same numbers as the stage table; the
+// camera shares them so the pose moves in lockstep with the morph).
+const NEBULA_GROW_END = 0.195;
+const STAR_IGNITION_START = 0.33;
+const YELLOW_SETTLE_END = 0.395;
+const YELLOW_HOLD_END = 0.47;
+const RED_HOLD_START = 0.524;
+const RED_HOLD_END = 0.678;
+const DOT_HOLD_END = 0.055;
+
+const CAMERA_BANDS: readonly CameraBand[] = [
+  // 1 — DOT -> NEBULA grow. Holds DOT_VIEW across the dot-hold (interp starts at
+  // DOT_HOLD_END), then lerps to NEBULA_START. Linear on purpose.
+  {
+    endProgress: NEBULA_GROW_END,
+    interp: [DOT_HOLD_END, NEBULA_GROW_END],
+    easing: 'linear',
+    posStart: DOT_VIEW_POS,
+    posEnd: NEBULA_START_POS,
+    targetStart: DOT_VIEW_TGT,
+    targetEnd: NEBULA_START_TGT,
+    parallax: 0.04,
+  },
+  // 2 — NEBULA hold + collapse: shallow push toward the gathering core.
+  {
+    endProgress: STAR_IGNITION_START,
+    interp: [NEBULA_GROW_END, STAR_IGNITION_START],
+    easing: 'easeInOutCubic',
+    posStart: NEBULA_START_POS,
+    posEnd: NEBULA_GATHERED_POS,
+    targetStart: NEBULA_START_TGT,
+    targetEnd: NEBULA_GATHERED_TGT,
+    parallax: 0.05,
+  },
+  // 3 — IGNITION: ease out to the yellow-star hold.
+  {
+    endProgress: YELLOW_SETTLE_END,
+    interp: [STAR_IGNITION_START, YELLOW_SETTLE_END],
+    easing: 'easeOutCubic',
+    posStart: NEBULA_GATHERED_POS,
+    posEnd: YELLOW_HOLD_POS,
+    targetStart: NEBULA_GATHERED_TGT,
+    targetEnd: YELLOW_HOLD_TGT,
+    parallax: 0.05,
+  },
+  // 4 — YELLOW hold: the close, centred yellow-star beat (flat).
+  {
+    endProgress: YELLOW_HOLD_END,
+    interp: [YELLOW_SETTLE_END, YELLOW_HOLD_END],
+    easing: 'linear',
+    posStart: YELLOW_HOLD_POS,
+    posEnd: YELLOW_HOLD_POS,
+    targetStart: YELLOW_HOLD_TGT,
+    targetEnd: YELLOW_HOLD_TGT,
+    parallax: 0.04,
+  },
+  // 5 — YELLOW -> RED: one continuous travel out to the corner.
+  {
+    endProgress: RED_HOLD_START,
+    interp: [YELLOW_HOLD_END, RED_HOLD_START],
+    easing: 'easeOutCubic',
+    posStart: YELLOW_HOLD_POS,
+    posEnd: RED_COMPOSITION_POS,
+    targetStart: YELLOW_HOLD_TGT,
+    targetEnd: RED_COMPOSITION_TGT,
+    parallax: 0.04,
+  },
+  // 6 — RED hold: the off-centre limb composition (flat).
+  {
+    endProgress: RED_HOLD_END,
+    interp: [RED_HOLD_START, RED_HOLD_END],
+    easing: 'linear',
+    posStart: RED_COMPOSITION_POS,
+    posEnd: RED_COMPOSITION_POS,
+    targetStart: RED_COMPOSITION_TGT,
+    targetEnd: RED_COMPOSITION_TGT,
+    parallax: 0.015,
+  },
+  // 7 — COLLAPSE reveal: pull back toward the collapse framing.
+  {
+    endProgress: 0.748,
+    interp: [RED_HOLD_END, 0.748],
+    easing: 'easeOutCubic',
+    posStart: RED_COMPOSITION_POS,
+    posEnd: COLLAPSE_PULL_POS,
+    targetStart: RED_COMPOSITION_TGT,
+    targetEnd: COLLAPSE_PULL_TGT,
+    parallax: 0.0,
+  },
+  // 8 — SUPERNOVA waypoint on the continuous recentre.
+  {
+    endProgress: 0.82,
+    interp: [0.748, 0.82],
+    easing: 'easeOutCubic',
+    posStart: COLLAPSE_PULL_POS,
+    posEnd: SUPERNOVA_RECOIL_POS,
+    targetStart: COLLAPSE_PULL_TGT,
+    targetEnd: SUPERNOVA_RECOIL_TGT,
+    parallax: 0.0,
+  },
+  // 9 — BLACK HOLE settle: finish the recentre, now centred.
+  {
+    endProgress: 0.946,
+    interp: [0.82, 0.946],
+    easing: 'easeOutExpo',
+    posStart: SUPERNOVA_RECOIL_POS,
+    posEnd: BLACK_HOLE_SETL_POS,
+    targetStart: SUPERNOVA_RECOIL_TGT,
+    targetEnd: BLACK_HOLE_SETL_TGT,
+    parallax: 0.025,
+  },
+  // 10 — EVENT HORIZON: the terminal black-hole hero (fallthrough band).
+  {
+    endProgress: Number.POSITIVE_INFINITY,
+    interp: [0.946, 1.0],
+    easing: 'smoothstep',
+    posStart: BLACK_HOLE_SETL_POS,
+    posEnd: EVENT_HORIZON_POS,
+    targetStart: BLACK_HOLE_SETL_TGT,
+    targetEnd: EVENT_HORIZON_TGT,
+    parallax: 0.018,
+  },
+];
+
+const mixVec = (a: Vec3Tuple, b: Vec3Tuple, t: number): Vec3Tuple => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
+
+/** The base camera pose (position, target, parallax) for a lifecycle-space value
+ *  `p` (already routed through lifecycleProgress by the caller). Walks CAMERA_BANDS
+ *  exactly as the former if-ladder did. The red-hold micro-drift and nova shake
+ *  are applied by the caller as post-steps; they are intentionally NOT here. */
+export function cameraBaseForLifecycleP(p: number): {
+  position: Vec3Tuple;
+  target: Vec3Tuple;
+  parallax: number;
+} {
+  let band = CAMERA_BANDS[CAMERA_BANDS.length - 1];
+  for (const b of CAMERA_BANDS) {
+    if (p < b.endProgress) {
+      band = b;
+      break;
+    }
+  }
+  const t = EASE[band.easing](segment(p, band.interp[0], band.interp[1]));
+  return {
+    position: mixVec(band.posStart, band.posEnd, t),
+    target: mixVec(band.targetStart, band.targetEnd, t),
+    parallax: band.parallax,
+  };
+}

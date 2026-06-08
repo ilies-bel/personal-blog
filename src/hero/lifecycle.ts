@@ -33,6 +33,17 @@
 // inline math: every value is computed by the same expression, in the same order,
 // from the same inputs, so the rendered hero is bit-for-bit identical.
 // ===========================================================================
+import {
+  DOT_ACTIVE_STAGE,
+  NEBULA_ACTIVE_STAGE,
+  NEB_COLLAPSE_HI,
+  NEB_COLLAPSE_LO,
+  RED_COLOR_EXIT_START,
+  RED_EXIT_START,
+  RED_SHRINK_END,
+  SWAP_STAGE,
+  YELLOW_ACTIVE_STAGE,
+} from './sceneTable';
 
 // --- easing helpers (the single source of truth; frame() imports these too) ---
 // easeOutCubic — fast pull-back that settles softly into the resting pose.
@@ -295,10 +306,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   //   yellow star  : active across stage 2→3  (snap at 2.5)
   //   nebula       : active across stage 3→4  (snap at 3.5)
   //   pale blue dot: active across stage 4→5  (snap at 4.5)
-  const yellow = stage >= 2.5;
-  const nebula = stage >= 3.5;
-  const dot = stage >= 4.5;
-  const nebulaGrow = Math.min(Math.max((4.5 - stage) / (4.5 - 3.42), 0), 1);
+  const yellow = stage >= YELLOW_ACTIVE_STAGE;
+  const nebula = stage >= NEBULA_ACTIVE_STAGE;
+  const dot = stage >= DOT_ACTIVE_STAGE;
+  const nebulaGrow = Math.min(Math.max((DOT_ACTIVE_STAGE - stage) / (DOT_ACTIVE_STAGE - 3.42), 0), 1);
   // Once a later state is active the sphere is held (uGiant pinned to 1) so the
   // placeholder branch has a sphere to reshape; only the latest-reached state shows.
   const laterActive = yellow || nebula || dot;
@@ -316,8 +327,8 @@ export function lifecycle(input: LifecycleInput): StarState {
   // hard-GATED to the window [NEB_COLLAPSE_LO, NEB_COLLAPSE_HI]: `inWindow` is 1
   // only inside it, and every scalar is multiplied by it → EXACTLY 0/1 (no-op)
   // outside. Below the window the normal yellow-mesh slot owns the geometry.
-  const NEB_COLLAPSE_HI = 3.5; // dispersed nebula
-  const NEB_COLLAPSE_LO = 3.0; // window floor (the yellow-mesh slot already owns 2.7–3.5)
+  // NEB_COLLAPSE_HI (3.5, dispersed nebula) / NEB_COLLAPSE_LO (3.0, window floor —
+  // the yellow-mesh slot already owns 2.7–3.5) now live in sceneTable.ts.
   const inWindow = stage > NEB_COLLAPSE_LO && stage < NEB_COLLAPSE_HI ? 1 : 0;
   // ONE smooth window progress drives everything so density and star size move on
   // a single INVERTED scale (no field racing ahead of another): prog = 0 at the
@@ -364,7 +375,8 @@ export function lifecycle(input: LifecycleInput): StarState {
   // different textures, so they DON'T crossfade co-located. Instead a subtle
   // light flash fires at SWAP_STAGE and the mesh hands off to a gold particle
   // sphere that grows + cools to the red giant.
-  const SWAP_STAGE = 2.88; // mesh↔cloud crossover — AFTER the cloud has fully shrunk (≤2.85)
+  // SWAP_STAGE (2.88, mesh<->cloud crossover, AFTER the cloud has fully shrunk
+  // to <=2.85) now lives in sceneTable.ts.
   const inYRWindow = stage >= 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot (inclusive lower bound so the held red-giant beat at exactly stage 2.05 is interactive)
   const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.88 .. 3.5 → yellow mesh
   const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.88 → particle body (owns the shrink)
@@ -381,9 +393,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   // reddens→gold across the same window so it cools to a smooth gold ball exactly as it
   // reaches the small size — primed for a seamless mesh handoff. Decoupled from SWAP_STAGE
   // (explicit RED_SHRINK_END) so the cloud finishes shrinking BEFORE the mesh swaps in.
-  const RED_EXIT_START = 2.5; // shrink begins right after the recompose lands
-  const RED_COLOR_EXIT_START = 2.52; // colour cools just behind the size
-  const RED_SHRINK_END = 2.85; // fully shrunk to yellow size before the 2.88 swap
+  // RED_EXIT_START (2.5, shrink begins right after the recompose lands),
+  // RED_COLOR_EXIT_START (2.52, colour cools just behind the size) and
+  // RED_SHRINK_END (2.85, fully shrunk to yellow size before the 2.88 swap) now
+  // live in sceneTable.ts.
   const yrGrow = 1 - smoothstep01((stage - RED_EXIT_START) / (RED_SHRINK_END - RED_EXIT_START));
   const yrColor = 1 - smoothstep01((stage - RED_COLOR_EXIT_START) / (RED_SHRINK_END - RED_COLOR_EXIT_START));
 
