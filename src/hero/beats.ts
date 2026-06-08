@@ -39,9 +39,9 @@ export const BEATS: ManifestoBeat[] = [
     at: 0.02,
     text: { inStart: 0.0, inEnd: 0.0, outStart: 0.05, outEnd: 0.075 },
     state: 'pale blue dot',
-    down: 'it starts with one decision worth keeping.',
-    up: 'start with one decision worth keeping.',
-    whisper: 'one good boundary can outlive a thousand generated lines.',
+    down: 'I build software that stays understandable.',
+    up: 'I build software that stays understandable.',
+    whisper: 'understandable is a choice you make on purpose.',
   },
   {
     // NEBULA — after the longer lightspeed approach, the cloud grows into the held
@@ -49,8 +49,8 @@ export const BEATS: ManifestoBeat[] = [
     at: 0.19,
     text: { inStart: 0.165, inEnd: 0.185, outStart: 0.245, outEnd: 0.275 },
     state: 'nebula',
-    down: 'then the dust becomes a system.',
-    up: 'shape the dust first.',
+    down: 'One boundary can outlive a thousand generated lines.',
+    up: 'One boundary can outlive a thousand generated lines.',
     whisper: 'prompts, diffs, failing tests, half-ideas. raw material, not magic.',
   },
   {
@@ -60,8 +60,8 @@ export const BEATS: ManifestoBeat[] = [
     at: 0.33,
     text: { inStart: 0.29, inEnd: 0.315, outStart: 0.355, outEnd: 0.375 },
     state: 'yellow star',
-    down: 'for a while, it burns clean.',
-    up: 'make it boring enough to burn.',
+    down: 'Systems grow. Interfaces drift. Complexity compounds.',
+    up: 'Systems grow. Interfaces drift. Complexity compounds.',
     whisper: "tests, review, small units, boring choices. that's the craft.",
   },
   {
@@ -69,8 +69,8 @@ export const BEATS: ManifestoBeat[] = [
     at: 0.586,
     text: { inStart: 0.514, inEnd: 0.55, outStart: 0.62, outEnd: 0.66 },
     state: 'red giant',
-    down: 'then the codebase starts expanding.',
-    up: "bigger isn't the same as lasting.",
+    down: 'My work is to keep the center readable.',
+    up: 'My work is to keep the center readable.',
     whisper: "the ai keeps adding. nobody's left who understands it.",
   },
   {
@@ -81,8 +81,8 @@ export const BEATS: ManifestoBeat[] = [
     at: 0.968,
     text: { inStart: 0.955, inEnd: 0.965, outStart: 1.02, outEnd: 1.02 },
     state: 'black hole',
-    down: 'every project ends. eventually.',
-    up: 'every project ends. eventually.',
+    down: 'Explore the projects.',
+    up: 'Explore the projects.',
     whisper: 'even the repo you were proud of.',
   },
 ];
