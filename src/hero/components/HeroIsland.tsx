@@ -24,8 +24,6 @@ import {
   DIRECTION_DEADZONE,
   CHROME_HIDE_AT,
   SCROLL_HINT_DISMISS_AT,
-  EXPLORATION_TRIGGER_AT,
-  EXPLORATION_REVEAL_DELAY_MS,
   DEBUG_WINDOW_KEYS,
   CURSOR_WINDOW_KEYS,
   readDebugNumber,
@@ -88,9 +86,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
   const [reduced, setReduced] = useState(false);
   const [motionPreferenceVersion, setMotionPreferenceVersion] = useState(0);
-  const [explorationMode, setExplorationMode] = useState(false);
-  const explorationModeRef = useRef(false);
-  const explorationTimerRef = useRef<number | null>(null);
+  // The star-navigation rail is always visible (no scroll gate). Initialised on
+  // so the HUD shows from the top of the page through to the bottom.
+  const [explorationMode] = useState(true);
+  const explorationModeRef = useRef(true);
   // Whether the opening chrome (name + menu) is currently shown. Tracked in a ref
   // so the scroll callback only touches the DOM on an actual transition.
   const chromeVisibleRef = useRef(true);
@@ -124,11 +123,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       return () => dispose();
     }
 
-    const clearExplorationTimer = (): void => {
-      if (explorationTimerRef.current == null) return;
-      window.clearTimeout(explorationTimerRef.current);
-      explorationTimerRef.current = null;
-    };
     // Drive the opening chrome (name + top-right menu) from a single source of
     // truth: it is shown at the very top OR whenever the HUD is present. The HUD
     // appears at the bottom and stays, so reusing its status keeps the name and
@@ -160,14 +154,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       publishedProgressRef.current = nextProgress;
       setProgress(nextProgress);
     };
-    const openExploration = (): void => {
-      explorationModeRef.current = true;
-      setExplorationMode(true);
-      publishProgress(progressRef.current, true);
-      // The HUD just appeared — bring the name + menu back immediately rather
-      // than waiting for the next scroll event.
-      syncChrome();
-    };
 
     const tracker = new ScrollTracker(SCROLL_SECTION_COUNT);
     const unsub = tracker.subscribe((scrollState) => {
@@ -185,17 +171,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // the bottom (syncChrome reuses the exploration status). A class on <body>
       // drives both (the menu lives outside this island).
       syncChrome();
-
-      if (scrollState.progress >= EXPLORATION_TRIGGER_AT) {
-        if (!explorationModeRef.current && explorationTimerRef.current == null) {
-          explorationTimerRef.current = window.setTimeout(() => {
-            explorationTimerRef.current = null;
-            openExploration();
-          }, isReduced ? 0 : EXPLORATION_REVEAL_DELAY_MS);
-        }
-      } else if (!explorationModeRef.current) {
-        clearExplorationTimer();
-      }
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
@@ -220,7 +195,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // convention; deleted on unmount so other pages never see a stale closure.
     window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
     return () => {
-      clearExplorationTimer();
       unsub();
       tracker.stop();
       delete window[CURSOR_WINDOW_KEYS.hitGiant];

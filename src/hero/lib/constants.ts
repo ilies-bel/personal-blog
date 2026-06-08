@@ -25,8 +25,10 @@ export const DIRECTION_DEADZONE = 0.0008;
 export const CHROME_HIDE_AT = 0.015;
 /** Once the visitor has moved this far, the first-visit cue has done its job. */
 export const SCROLL_HINT_DISMISS_AT = 0.035;
-/** Scroll fraction at which the final selected-work HUD arms. */
-export const EXPLORATION_TRIGGER_AT = 0.992;
+/** Scroll fraction at which the final selected-work HUD would arm. NOTE: the HUD
+ *  is now ALWAYS visible (see HeroIsland — explorationMode starts true), so nothing
+ *  reads this anymore; kept for reference / a possible future re-gate. */
+export const EXPLORATION_TRIGGER_AT = 0.82;
 /** Delay before the HUD reveals after the trigger; kept scroll-immediate. */
 export const EXPLORATION_REVEAL_DELAY_MS = 0;
 
