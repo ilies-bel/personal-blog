@@ -4,6 +4,15 @@
 
 html { scroll-behavior: smooth; }
 
+/* Hide the scrollbar chrome site-wide while keeping the page (and any inner
+   scroll containers, e.g. prose.css's overflow-x code blocks) fully scrollable.
+   Firefox + legacy IE/Edge use standard properties; WebKit/Blink (Chrome,
+   Safari, Edge) need the pseudo-element on every element, hence the universal
+   selector. NEVER use overflow:hidden here — that would kill scrolling, not the
+   bar. */
+html { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; }
+
 body {
   margin: 0;
   background: var(--bg);
