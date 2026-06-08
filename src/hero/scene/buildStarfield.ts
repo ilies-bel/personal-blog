@@ -32,6 +32,8 @@ export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelR
   geo.setAttribute('aSeed', new THREE.BufferAttribute(starSeed, 1));
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
+  // ~one revolution every 1200s (~20 min) — very slow, subtle drift to reveal the lensing warp.
+  const STAR_ORBIT_SPEED = (Math.PI * 2) / 1200; // (2π)/1200 ≈ 0.00524 rad/s
   const uniforms: Uniforms = {
     uTime: { value: 0 },
     uPixelRatio: { value: pixelRatio },
@@ -41,6 +43,7 @@ export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelR
     uImageSign: { value: 1.0 },
     uStarBright: { value: CFG.starBright },
     uHole: { value: 0.12 },
+    uRotSpeed: { value: STAR_ORBIT_SPEED },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
