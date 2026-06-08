@@ -336,8 +336,14 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
    BELOW the last (bigger) row so it never overlaps the bottom glyph.
    --------------------------------------------------------------------------- */
 .hud-compass {
-  margin-top: 1.6rem;          /* clear space below the last row's glyph */
-  margin-left: 0.2rem;
+  /* Pinned to the BOTTOM of the viewport (decoupled from the vertically-centred
+     rail), aligned under the rail's left column. Fixed so the taller rail can
+     never push it into the manifesto copy — it always reads as a bottom-left
+     instrument readout. */
+  position: fixed;
+  left: clamp(1.25rem, 5vw, 5rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 2rem);
+  z-index: 18;
   display: grid;
   gap: 0.18rem;
   font-family: var(--font-mono);
