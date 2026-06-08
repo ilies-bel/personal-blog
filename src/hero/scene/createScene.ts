@@ -911,12 +911,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // coords and call hooks.onMarkerFrame so StarMarker can anchor HTML over the object
     // without triggering React re-renders. flashOrigin already holds the projected NDC
     // (recomputed above for the nova pass on the same frame, same camera orientation).
-    // Offset slightly up-and-right of centre so the marker floats off the exact core.
+    // Offset slightly up-and-right of centre so the marker floats off the exact core
+    // on the big objects. EXCEPT the pale blue dot: it's a tiny speck, so the 28/36px
+    // float visibly detaches the hexagon from it — centre the marker ON the dot there
+    // (offset 0,0 for stage >= 4.40, the dot-hold window).
     if (hooks.onMarkerFrame) {
       const ndcX = flashOrigin.x;
       const ndcY = flashOrigin.y;
-      const cssX = (ndcX * 0.5 + 0.5) * window.innerWidth + 28;
-      const cssY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight - 36;
+      const isDot = stage >= 4.4;
+      const offX = isDot ? 0 : 28;
+      const offY = isDot ? 0 : -36;
+      const cssX = (ndcX * 0.5 + 0.5) * window.innerWidth + offX;
+      const cssY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight + offY;
       const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
       // Settled windows in stage space: a settled state is one where the lifecycle
       // is dwelling on a recognisable object rather than mid-transition.
