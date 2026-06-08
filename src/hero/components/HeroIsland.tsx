@@ -78,12 +78,14 @@ function crossedProgressThreshold(previous: number, next: number, threshold: num
 // HUD_LUMINANCE_TABLE in hudLuminance.ts) are the whole tuning surface.
 /** Sampler cadence: only recompute when this many ms have passed (~12fps). */
 const HUD_SAMPLE_INTERVAL_MS = 80;
-/** Exponential low-pass factor (per tick) on luma/noise — kills flicker. */
-const HUD_SMOOTHING_K = 0.12;
+/** Exponential low-pass factor (per tick) on luma/noise. High enough to TRACK a
+ *  scroll in ~1s (at 0.12 it took ~8s to cross the range and read as "no change"),
+ *  low enough to stay flicker-free. ~3-tick (≈0.25s) time-constant. */
+const HUD_SMOOTHING_K = 0.35;
 /** Hysteresis: dark→bright only once smoothed luma climbs above this. */
-const HUD_LUME_BRIGHT_ENTER = 0.62;
+const HUD_LUME_BRIGHT_ENTER = 0.6;
 /** Hysteresis: bright→dark only once smoothed luma falls below this. */
-const HUD_LUME_BRIGHT_EXIT = 0.48;
+const HUD_LUME_BRIGHT_EXIT = 0.45;
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 /** Clamp then round to 3 decimals so CSS writes stay short and only change on
@@ -291,11 +293,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     const root = rootRef.current;
     if (!root) return;
 
-    // Smoothed (low-passed) luma/noise — seeded to the dark opening frame so the
-    // first applied frame matches the SSR/token defaults (no bright flash-in).
-    const sm = { luma: 0.06, noise: 0.05 };
-    // Discrete brightness mode (hysteresis-gated). Starts dark (opening = dot).
-    let lume: 'dark' | 'bright' = 'dark';
+    // Smoothed (low-passed) luma/noise — seeded to the CURRENT frame's value (not
+    // a hardcoded dark guess) so the rail starts correct and the filter only has
+    // to TRACK changes, never climb the whole range from black on every mount.
+    const seed = sampleHudLuminance(legacyStageForProgress(progressRef.current));
+    const sm = { luma: seed.luma, noise: seed.noise };
+    // Discrete brightness mode (hysteresis-gated), seeded from the current luma.
+    let lume: 'dark' | 'bright' = seed.luma >= HUD_LUME_BRIGHT_ENTER ? 'bright' : 'dark';
     // Last-written rounded values, so setProperty only fires on a real change.
     const written: Record<string, number> = {};
     let last = 0;
