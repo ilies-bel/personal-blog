@@ -1002,6 +1002,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const diskTime = reduced ? 0 : look.nebulaShader ? 0 : t;
     diskMatPrimary.uniforms.uTime.value = diskTime;
     diskMatSecondary.uniforms.uTime.value = diskTime;
+    // uDotTime is a DEDICATED always-live clock for the opening pale-blue-dot's
+    // brightness breath. The disk's uTime is frozen to 0 across the nebula window
+    // (which INCLUDES the opening dot — `nebula` is true there), so it can't drive
+    // the pulse. This one runs on wall-clock `ut` (0 under reduced motion → the dot
+    // holds steady, no pulse). Only the dot's fragment branch reads it, so it never
+    // disturbs the scroll-locked nebula/collapse geometry.
+    diskMatPrimary.uniforms.uDotTime.value = ut;
+    diskMatSecondary.uniforms.uDotTime.value = ut;
     starMat.uniforms.uTime.value = ut;
     starMatSec.uniforms.uTime.value = ut;
     distantStarUniforms.uTime.value = ut;

@@ -1496,6 +1496,7 @@ export const diskVertexShader = /* glsl */ `
 
 export const diskFragmentShader = /* glsl */ `
   precision highp float;
+  uniform float uDotTime;   // dedicated always-live clock for the opening dot's breath (uTime is frozen across the nebula window, which includes the dot); 0 under reduced-motion → steady dot
   uniform float uSat;
   uniform float uYrFlash;   // yellow→red swap flash: whitens the gold cloud sphere
   varying float vBright;
@@ -1724,6 +1725,19 @@ export const diskFragmentShader = /* glsl */ `
     }
 
     float inten = vBright * a;
+    // OPENING PALE-BLUE-DOT BREATHES WITH LIGHT (brightness only — no size change).
+    // The lone speck at the top of the page (vPlaceholder == 3.0) doesn't enter any of
+    // the state branches below, so its brightness is just this baseline. Modulate it
+    // with a slow sine — a quiet swell-and-fade of light, not a flicker. The factor
+    // averages ~1.0 (so normal brightness is preserved) and stays in 0.44..1.12 so the
+    // dot never fully vanishes nor blows out. We drive it from uDotTime, NOT uTime: the
+    // disk's uTime is frozen to 0 across the nebula window (which the opening dot is part
+    // of), so it can't animate; uDotTime is the dedicated always-live clock. Under
+    // reduced motion uDotTime is 0 → the dot holds steady at 0.78 (no pulse), as desired.
+    if(vPlaceholder > 2.5 && vPlaceholder < 3.5){
+      float dotPulse = 0.78 + 0.34 * sin(uDotTime * 0.8);   // ~0.44..1.12, ~7.85s period
+      inten *= dotPulse;
+    }
     if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
       inten *= clamp(vNebGrow, 0.0, 1.0);
     }

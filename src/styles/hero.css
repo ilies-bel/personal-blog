@@ -250,14 +250,14 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   }
 }
 
-/* Whisper: small, dim, elaborating the big line. Shared; never swaps. */
+/* Whisper: small, elaborating the big line. Shared; never swaps. */
 .bh-beat-whisper {
   margin: 0;
   max-width: min(34rem, 80vw);
   font-family: var(--font-mono);
   font-size: clamp(0.8rem, 1.3vw, 0.98rem);
   line-height: 1.55;
-  color: var(--fg-dim);
+  color: var(--fg);
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
@@ -269,9 +269,13 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   .bh-overlay[data-exploring='true'] { opacity: 0.28 !important; }
 }
 
-/* A faint affordance, shown only at the very top, fades on first scroll. It
-   eases in once on first paint to catch the eye, then rests — no perpetual
-   pulse (motion is spent introducing the hint, not looping forever). */
+/* A faint affordance, shown only at the very top (unmounted by ScrollHint on
+   first scroll). It eases in once on first paint to catch the eye, then settles
+   into a slow, perpetual breath of light — a quiet opacity pulse so the hint
+   keeps gently inviting the scroll. The pulse is sequenced AFTER the intro (it
+   starts at the intro's resting 0.86 and only begins once the ease-in has run),
+   and is disabled under prefers-reduced-motion (see the reduced-motion block,
+   which also `display: none`s the hint). */
 .bh-hint {
   position: fixed;
   left: 50%;
@@ -288,6 +292,9 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   color: var(--fg-faint);
   pointer-events: auto;
   opacity: 0.86;
+  /* Container does the one-time intro only (fade-in, then rests at 0.86). The
+     perpetual breath lives on .bh-hint-label so only the TEXT pulses — the
+     vertical line is static (no sweep). */
   animation: bh-hint-in 0.9s var(--ease-out-quint) both;
 }
 .bh-hint-start {
@@ -309,6 +316,10 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   display: block;
   line-height: 1;
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+  /* Perpetual breath lives on the TEXT only (line left alone). Starts after the
+     container's 0.9s intro (delay) so it picks up where the fade-in rests; its
+     opacity multiplies with the container's 0.86. */
+  animation: bh-hint-pulse 3.6s ease-in-out 0.9s infinite;
 }
 .bh-hint-start:hover,
 .bh-hint-start:focus-visible {
@@ -326,7 +337,6 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   height: 2.2rem;
   background: linear-gradient(180deg, var(--fg-faint), transparent);
   transform-origin: 50% 0;
-  animation: bh-hint-line 2.2s ease-in-out infinite;
 }
 .bh-hint-skip {
   color: var(--fg-dim);
@@ -347,9 +357,13 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   from { opacity: 0; transform: translate(-50%, 0.4rem); }
   to { opacity: 0.86; transform: translate(-50%, 0); }
 }
-@keyframes bh-hint-line {
-  0%, 100% { transform: scaleY(0.42); opacity: 0.45; }
-  45% { transform: scaleY(1); opacity: 0.95; }
+/* Perpetual breath of light: a slow, calm opacity swell-and-fade so the hint
+   keeps softly inviting the scroll. Symmetric loop (0%/100% match) so the
+   infinite repeat never jumps; rests near the intro's 0.86 and breathes between
+   ~0.55 (exhale) and ~1.0 (inhale). */
+@keyframes bh-hint-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 /* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
@@ -394,7 +408,11 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
     margin-bottom: 0.4rem;
   }
   .bh-beat-line--up { display: none !important; }
-  .bh-hint { display: none !important; }
+  /* Hint is unmounted by ScrollHint under reduced motion and hidden here too;
+     belt-and-suspenders, also kill the perpetual breath so no opacity loops.
+     The breath now lives on .bh-hint-label, so explicitly silence it too. */
+  .bh-hint { display: none !important; animation: none !important; }
+  .bh-hint-label { animation: none !important; }
 
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] {

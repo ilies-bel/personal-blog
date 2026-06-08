@@ -189,7 +189,7 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // mottling/sunspots all read with detail like the reference, instead of the crests
     // blowing out to a featureless white ball under exposure + bloom — while staying a
     // bright, saturated gold sun (1.06 read too dusky/brown).
-    col *= mix(1.70, 0.5, uRed);
+    col *= mix(1.85, 0.5, uRed);
 
     // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
     // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
