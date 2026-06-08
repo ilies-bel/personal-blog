@@ -4,7 +4,7 @@ import BaseHead from '../components/BaseHead.astro';
 // over interactive elements. Mounted once here so it covers every page (both the
 // `bare` home and the standard reading pages). Self-contained — see the file.
 import CustomCursor from '../components/CustomCursor.astro';
-import { SITE_TITLE, SITE_LANG, SOCIALS } from '../consts';
+import { SITE_TITLE, SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
 // The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
 // (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
@@ -61,9 +61,9 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
         <Fragment>
           {/* Fixed corner overlay: identity top-left, the blog micro-nav
               top-right. Everything else is the scene canvas behind it. */}
-          <a class="overlay-brand" href={href('')}>
-            {SITE_TITLE}
-            <span class="dot">.</span>
+          <a class="overlay-brand bh-identity-lockup" href={href('')}>
+            <span class="bh-identity-name">{BRAND_NAME}</span>
+            <span class="bh-identity-role">{BRAND_ROLE}</span>
           </a>
 
           {/* The blog micro-graphic, top-right: a tiny constellation mark that
@@ -92,9 +92,9 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
       ) : (
         <div class="wrap">
           <header class="site-header">
-            <a class="brand" href={href('')}>
-              {SITE_TITLE}
-              <span class="dot">.</span>
+            <a class="brand bh-identity-lockup" href={href('')}>
+              <span class="bh-identity-name">{BRAND_NAME}</span>
+              <span class="bh-identity-role">{BRAND_ROLE}</span>
             </a>
             <nav class="nav-pill">
               <a

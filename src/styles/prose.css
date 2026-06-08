@@ -8,46 +8,85 @@
   font-size: 1.12rem;
   line-height: 1.78;
 }
+/* The article header is a page-hero in the same language as the writing index
+   and About: a mono kicker (one rare gold signal), a display title at the
+   section-opener scale (a notch quieter than the index so the article stays a
+   reading destination), a muted lead, then the instrument-readout meta. Subtle
+   text-shadows keep it crisp over the faint black-hole backdrop. */
 .article-header {
   margin-bottom: clamp(2.5rem, 7vw, 4.5rem);
   padding-bottom: 2rem;
   border-bottom: 1px solid var(--line);
 }
+
+/* Back to writing — the bracket affordance from About's Close: a mono gold
+   label led by an L-bracket that tightens inward on hover (a viewfinder gesture),
+   so it reads as the same chrome family as the rest of the site. */
 .article-back {
   display: inline-flex;
-  margin-bottom: 1.75rem;
-  color: var(--fg-dim);
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 1.85rem;
+  color: var(--accent-strong);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-decoration: none;
+  transition: color 0.18s ease;
 }
-.article-back:hover { color: var(--accent-strong); }
-.article-header .date {
-  display: block;
+.article-back-bracket {
+  width: 0.62rem;
+  height: 0.62rem;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, transparent);
+  border-right: none;
+  border-bottom: none;
+  transition: border-color 0.18s ease, transform 0.24s var(--ease-out-quint);
+}
+.article-back:hover { color: var(--fg); }
+.article-back:hover .article-back-bracket {
+  border-color: var(--accent);
+  transform: translateX(-2px);
+}
+.article-back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+/* The one warm signal: a gold mono kicker, matching .writing-kicker. */
+.article-header .article-kicker {
+  margin: 0 0 0.85rem;
+  width: max-content;
+  max-width: 100%;
   font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--fg-faint);
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--highlight);
 }
 .article-header h1 {
-  font-size: clamp(2.25rem, 6.2vw, 4rem);
-  line-height: 1.02;
-  letter-spacing: -0.045em;
-  margin: 0.65rem 0 0;
+  font-size: clamp(2.35rem, 6.6vw, 4.5rem);
+  line-height: 1.0;
+  letter-spacing: -0.05em;
+  margin: 0;
+  color: var(--fg);
   text-wrap: balance;
+  text-shadow: 0 0 24px rgba(0, 0, 0, 0.45);
 }
 .prose .article-description {
+  max-width: 42rem;
   margin: 1.25rem 0 0;
   color: var(--fg-dim);
-  font-size: clamp(1.08rem, 2vw, 1.28rem);
-  line-height: 1.6;
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.58;
   text-wrap: pretty;
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
 }
 .prose .article-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  margin: 1.25rem 0 0;
+  margin: 1.5rem 0 0;
 }
 .article-tags span {
   display: inline-flex;
@@ -60,6 +99,15 @@
   font-family: var(--font-mono);
   font-size: 0.68rem;
   line-height: 1;
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+}
+/* Instrument-readout meta line (e.g. the updated date) — quiet mono, faint. */
+.article-header .article-meta {
+  margin: 1.25rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint);
 }
 .prose p { margin: 1.3rem 0; }
 .prose h2 { font-size: 1.65rem; margin: 2.75rem 0 1rem; }
@@ -109,4 +157,15 @@
   padding: 0;
   overflow-wrap: normal;
   white-space: pre;
+}
+
+/* Over the faint black-hole backdrop, give plain body copy and headings a whisper
+   of dark text-shadow so they stay crisp even where the warm smudge brightens.
+   (Code, pre and blockquote already sit on a solid --bg-soft panel, so they're
+   exempt.) Kept very subtle — legibility insurance, not a glow effect. */
+body.article-page .prose p,
+body.article-page .prose h2,
+body.article-page .prose h3,
+body.article-page .prose li {
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.55);
 }

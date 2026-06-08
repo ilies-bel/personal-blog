@@ -2,13 +2,14 @@
 // on the bare home (the small wordmark is hidden there). Fades with the opening
 // chrome once scroll leaves the top (driven by body.is-scrolled in CSS).
 import { useSceneState } from './SceneStateContext';
+import { BRAND_NAME, BRAND_ROLE } from '../../consts';
 
 export default function HeroIdentity() {
   const { base } = useSceneState();
   return (
     <a className="bh-identity" href={base.replace(/\/+$/, '') || '/'}>
-      <span className="bh-identity-name">ILIÈS BELDJILALI</span>
-      <span className="bh-identity-role">Software Engineer</span>
+      <span className="bh-identity-name">{BRAND_NAME}</span>
+      <span className="bh-identity-role">{BRAND_ROLE}</span>
     </a>
   );
 }

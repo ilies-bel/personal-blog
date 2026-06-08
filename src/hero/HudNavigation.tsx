@@ -1,8 +1,11 @@
+import type { CSSProperties } from 'react';
+
 export type HudTargetId = 'end' | 'collapse' | 'expansion' | 'rebirth' | 'beginning';
 
 export interface HudNavItem {
   id: HudTargetId;
-  glyph: string;
+  /** Public path to the row's mask glyph SVG (painted with the button's currentColor). */
+  glyphSrc: string;
   motion: 'pulse' | 'breathe' | 'drift' | 'flicker' | 'still';
   label: string;
   destination: string;
@@ -16,7 +19,7 @@ export interface HudNavItem {
 export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
   {
     id: 'end',
-    glyph: '◉',
+    glyphSrc: 'glyphs/glyph-black-hole.svg',
     motion: 'pulse',
     label: 'BLACK HOLE',
     destination: 'Inspirations',
@@ -27,7 +30,7 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
   },
   {
     id: 'collapse',
-    glyph: '◌',
+    glyphSrc: 'glyphs/glyph-collapse.svg',
     motion: 'breathe',
     label: 'COLLAPSE',
     destination: 'Projects',
@@ -38,7 +41,7 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
   },
   {
     id: 'expansion',
-    glyph: '✧',
+    glyphSrc: 'glyphs/glyph-red-giant.svg',
     motion: 'drift',
     label: 'RED GIANT',
     destination: 'Writing',
@@ -50,7 +53,7 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
   },
   {
     id: 'rebirth',
-    glyph: '✦',
+    glyphSrc: 'glyphs/glyph-yellow-star.svg',
     motion: 'flicker',
     label: 'YELLOW STAR',
     destination: 'Experiments',
@@ -61,7 +64,7 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = [
   },
   {
     id: 'beginning',
-    glyph: '•',
+    glyphSrc: 'glyphs/glyph-nebula.svg',
     motion: 'still',
     label: 'NEBULA',
     destination: 'About me',
@@ -118,6 +121,12 @@ interface HudNavigationProps {
 
 function resolveHref(base: string, href: string): string {
   return `${base}/${href}`.replace(/\/+/g, '/');
+}
+
+// Resolve a `public/` glyph asset against the deploy base (same base prop the
+// links use), so the mask URL is correct whether base is `/` or `/personal-blog/`.
+function resolveAsset(base: string, src: string): string {
+  return `${base}/${src}`.replace(/\/+/g, '/');
 }
 
 export default function HudNavigation({
@@ -182,7 +191,11 @@ export default function HudNavigation({
                   onMouseEnter={() => onPreview(item.id)}
                   onClick={() => onActivate(item.id)}
                 >
-                  <span className="hud-nav-glyph" aria-hidden="true">{item.glyph}</span>
+                  <span
+                    className="hud-nav-glyph"
+                    aria-hidden="true"
+                    style={{ '--glyph-mask': `url(${resolveAsset(base, item.glyphSrc)})` } as CSSProperties}
+                  />
                   <span className="hud-nav-copy">
                     <span className="hud-nav-title">{item.label}</span>
                     <span className="hud-nav-destination">{item.destination}</span>

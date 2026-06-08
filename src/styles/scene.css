@@ -19,20 +19,17 @@ body.bare {
 .scene-stage { height: 160svh; }
 
 /* --- Fixed corner overlay (brand top-left, blog micro-nav top-right) --------- */
+/* About's brand mark — the shared identity lockup (.bh-identity-lockup, hero.css)
+   fixed top-left over the dimmed scene. This rule owns only the placement; the
+   lockup (name + role stack, with its own canvas-legibility text-shadow) owns the
+   look, so about shows the SAME mark as the hero and reading pages. */
 .overlay-brand {
   position: fixed;
   top: clamp(1rem, 3vw, 2rem);
   left: clamp(1rem, 4vw, 3rem);
   z-index: 20;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(1.05rem, 1.4vw, 1.35rem);
-  letter-spacing: -0.03em;
   color: var(--fg);
-  text-decoration: none;
-  text-shadow: 0 0 16px rgba(0, 0, 0, 0.8), 0 0 5px rgba(0, 0, 0, 0.7);
 }
-.overlay-brand .dot { color: var(--accent); }
 
 .overlay-blog {
   position: fixed;

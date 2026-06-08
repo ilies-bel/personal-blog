@@ -24,6 +24,7 @@ import {
   type ScrollDirection,
   DIRECTION_DEADZONE,
   CHROME_HIDE_AT,
+  SCROLL_HINT_DISMISS_AT,
   EXPLORATION_TRIGGER_AT,
   EXPLORATION_REVEAL_DELAY_MS,
   DEBUG_WINDOW_KEYS,
@@ -60,11 +61,21 @@ interface HeroIslandProps {
   backdropStage?: number;
 }
 
+// React only needs a perceptual scroll snapshot for DOM copy/chrome. The scene
+// render loop reads exact progress from progressRef, so this gate cuts context
+// churn while still giving the shortest manifesto fade band ~20 samples.
+const REACT_PROGRESS_MIN_DELTA = 1 / 2000;
+
+function crossedProgressThreshold(previous: number, next: number, threshold: number): boolean {
+  return (previous < threshold && next >= threshold) || (previous >= threshold && next < threshold);
+}
+
 export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
-  // Live scroll progress (0..1) drives both the morph (via a ref the render loop
-  // reads) and the manifesto opacities (via React state, updated on scroll).
+  // Exact scroll progress (0..1) drives the morph through a ref the render loop
+  // reads. React receives a lower-frequency visual snapshot for DOM overlays.
   const progressRef = useRef(0);
+  const publishedProgressRef = useRef(0);
   const [progress, setProgress] = useState(0);
   // Scroll direction is still published for components that support direction-
   // specific copy; the current forward lifecycle uses matching lines both ways.
@@ -124,15 +135,50 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       window.clearTimeout(explorationTimerRef.current);
       explorationTimerRef.current = null;
     };
+    // Drive the opening chrome (name + top-right menu) from a single source of
+    // truth: it is shown at the very top OR whenever the HUD is present. The HUD
+    // appears at the bottom and stays, so reusing its status keeps the name and
+    // menu pinned alongside it (no separate scroll threshold to drift). Tracked
+    // through chromeVisibleRef so the DOM is only touched on an actual transition.
+    const syncChrome = (): void => {
+      const visible = progressRef.current < CHROME_HIDE_AT || explorationModeRef.current;
+      if (visible === chromeVisibleRef.current) return;
+      chromeVisibleRef.current = visible;
+      document.body.classList.toggle(SCROLLED_BODY_CLASS, !visible);
+    };
+    const publishProgress = (nextProgress: number, force = false): void => {
+      const previous = publishedProgressRef.current;
+      const crossedHint = crossedProgressThreshold(previous, nextProgress, SCROLL_HINT_DISMISS_AT);
+      const hudStageChanged = explorationModeRef.current
+        && hudIdForStage(legacyStageForProgress(previous)) !== hudIdForStage(legacyStageForProgress(nextProgress));
+
+      if (
+        !force
+        && Math.abs(nextProgress - previous) < REACT_PROGRESS_MIN_DELTA
+        && !crossedHint
+        && !hudStageChanged
+        && nextProgress !== 0
+        && nextProgress !== 1
+      ) {
+        return;
+      }
+
+      publishedProgressRef.current = nextProgress;
+      setProgress(nextProgress);
+    };
     const openExploration = (): void => {
       explorationModeRef.current = true;
       setExplorationMode(true);
+      publishProgress(progressRef.current, true);
+      // The HUD just appeared — bring the name + menu back immediately rather
+      // than waiting for the next scroll event.
+      syncChrome();
     };
 
     const tracker = new ScrollTracker(SCROLL_SECTION_COUNT);
     const unsub = tracker.subscribe((scrollState) => {
       progressRef.current = scrollState.progress;
-      setProgress(scrollState.progress);
+      publishProgress(scrollState.progress);
       // Direction from the delta, with a deadzone so tiny jitter doesn't flip it.
       const delta = scrollState.progress - lastProgressRef.current;
       if (delta > DIRECTION_DEADZONE) setDirection(SCROLL_DOWN);
@@ -147,14 +193,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // Cinematic chrome: the name (.bh-identity) and the top-right menu
       // (.overlay-blog, owned by the layout) belong to the opening frame only. Once
       // scroll leaves the top they fade away so the lifecycle scene plays
-      // uninterrupted; they return at the top. A class on <body> drives both (the
-      // menu lives outside this island), with a threshold + hysteresis so a hair of
-      // jitter never flickers it.
-      const top = scrollState.progress < CHROME_HIDE_AT;
-      if (top !== chromeVisibleRef.current) {
-        chromeVisibleRef.current = top;
-        document.body.classList.toggle(SCROLLED_BODY_CLASS, !top);
-      }
+      // uninterrupted; they return at the top — and again once the HUD is present at
+      // the bottom (syncChrome reuses the exploration status). A class on <body>
+      // drives both (the menu lives outside this island).
+      syncChrome();
 
       if (scrollState.progress >= EXPLORATION_TRIGGER_AT) {
         if (!explorationModeRef.current && explorationTimerRef.current == null) {
@@ -169,6 +211,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
+    publishedProgressRef.current = initial.progress;
     lastProgressRef.current = initial.progress;
     setProgress(initial.progress);
 
