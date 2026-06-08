@@ -5,6 +5,7 @@ import { DEBUG_WINDOW_KEYS, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
+import { settledIdForStage } from '../sceneTable';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
 import { buildStarfield, buildDistantStar } from './buildStarfield';
@@ -924,22 +925,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       const cssX = (ndcX * 0.5 + 0.5) * window.innerWidth + offX;
       const cssY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight + offY;
       const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
-      // IDLE-hold-only windows in stage space: markers appear ONLY while the object
-      // is holding still on its recognisable beat, NOT during the transitions in or
-      // out of that hold. These are narrowed to the flat-hold idle of each state, so
-      // a marker never shows mid-lerp. Keep in sync with settledIdForStage() in
-      // HudNavigation.tsx — identical thresholds required.
-      //   dot     4.50 - 4.72  (the dot hold, before it blooms)
-      //   nebula  3.38 - 3.50  (the grown cloud sitting still, before collapse)
-      //   yellow  2.86 - 2.90  (tight around the flat 2.88 hold so the marker drops sooner)
-      //   red     2.00 - 2.12  (the flat red-giant hold)
-      //   black   0.00 - 0.12  (the settled black hole at the bottom of the arc)
-      const settled =
-        (stage >= 4.50 && stage <= 4.72) ||
-        (stage >= 3.38 && stage <= 3.50) ||
-        (stage >= 2.86 && stage <= 2.90) ||
-        (stage >= 2.00 && stage <= 2.12) ||
-        (stage >= 0.00 && stage <= 0.12);
+      // IDLE-hold-only gate: a marker appears ONLY while the object is holding
+      // still on its recognisable beat, NOT during the transitions in or out of
+      // that hold. The per-scene STAGE tolerances are the settledWindow values on
+      // the idle SEGMENTS in sceneTable.ts; settledIdForStage scans them, so this
+      // gate and HudNavigation's both read the ONE table (no more byte-identical
+      // duplication to keep in sync by hand).
+      const settled = settledIdForStage(stage) !== null;
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });
     }
 

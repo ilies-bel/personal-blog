@@ -301,3 +301,286 @@ export function settledIdForStage(stage: number): HudTargetId | null {
   }
   return null;
 }
+
+// ===========================================================================
+// COLOCATED PER-SCENE DATA
+//
+// The scattered HUD nav rows (HUD_NAV_ITEMS), on-screen markers (MARKER_PLACEMENTS)
+// and manifesto copy (BEATS) are colocated here per scene, then projected back out
+// (see the bottom of this file) under their original names + shapes + order so the
+// importers compile unchanged. These types live here (the pure data layer) and are
+// re-exported from HudNavigation.tsx / beats.ts; the React components must not own
+// the data or sceneTable.ts would import a component (a cycle).
+// ===========================================================================
+
+export interface HudNavItem {
+  id: HudTargetId;
+  /** Public path to the row's mask glyph SVG (painted with the link's currentColor). */
+  glyphSrc: string;
+  motion: 'pulse' | 'breathe' | 'drift' | 'flicker' | 'still';
+  label: string;
+  destination: string;
+  stage: number;
+  href: string;
+}
+
+export interface MarkerPlacement {
+  /** Stable per-marker id (also the lock-ownership token — must be unique). */
+  id: string;
+  /** Which settled lifecycle state shows this marker. */
+  state: HudTargetId;
+  /** Viewport-fraction X (0..1 of innerWidth). Ignored when `anchored`. */
+  vx: number;
+  /** Viewport-fraction Y (0..1 of innerHeight). Ignored when `anchored`. */
+  vy: number;
+  /** Ride the projected star origin instead of vx/vy (pale blue dot only). */
+  anchored?: boolean;
+  /** Path appended to BASE_URL for the link + card navigation. */
+  href: string;
+  /** Card title line (already in the casing it should render). */
+  title: string;
+  /** Card subtitle line. */
+  subtitle: string;
+}
+
+export interface ManifestoBeat {
+  /** Scroll-progress centre of the beat (it owns a ~1/6 slot around this). */
+  at: number;
+  /** Explicit scroll band for the live overlay copy. */
+  text: {
+    inStart: number;
+    inEnd: number;
+    outStart: number;
+    outEnd: number;
+  };
+  /** The lifecycle state this beat narrates (for the label / a11y). */
+  state: string;
+  /** Primary line. `up` is kept for the existing crossfade component API. */
+  down: string;
+  up: string;
+  /** Small dim elaboration. Shared across both directions; never swaps. */
+  whisper: string;
+}
+
+/** One lifecycle scene: its HUD nav row, on-screen markers, and manifesto beat,
+ *  colocated so re-timing or re-copying a scene happens in ONE place. */
+export interface LifecycleScene {
+  id: HudTargetId;
+  hud: HudNavItem;
+  markers: readonly MarkerPlacement[];
+  beat?: ManifestoBeat;
+}
+
+// The five scenes, authored top-of-page -> bottom-of-page. The projections below
+// preserve the former HUD_NAV_ITEMS / MARKER_PLACEMENTS / BEATS order exactly:
+// nav rows are one-per-scene in this order; markers are flattened in this order
+// (nebula owns three); beats are one-per-scene in this order.
+export const SCENES: readonly LifecycleScene[] = [
+  {
+    id: 'beginning',
+    hud: {
+      id: 'beginning',
+      glyphSrc: 'glyphs/glyph-dot.svg',
+      motion: 'still',
+      label: 'THE BEGINNING',
+      destination: 'About',
+      stage: 4.7,
+      href: 'about',
+    },
+    markers: [
+      // BEGINNING / pale blue dot — ONE marker, projection-anchored so it stays
+      // centred on the speck wherever the scene projects it.
+      {
+        id: 'beginning',
+        state: 'beginning',
+        vx: 0.5,
+        vy: 0.5,
+        anchored: true,
+        href: 'about',
+        title: 'ABOUT',
+        subtitle: 'Who I am',
+      },
+    ],
+    beat: {
+      // PALE BLUE DOT — the opening speck (stage ~4.7 at the very top). Copy is
+      // fully visible immediately, then fades out before the dot blooms into the
+      // nebula. Dot hold is now 0.00 -> 0.055, so the fade-out starts at 0.06.
+      at: 0.025,
+      text: { inStart: 0.0, inEnd: 0.0, outStart: 0.06, outEnd: 0.09 },
+      state: 'pale blue dot',
+      down: 'I build software that stays understandable.',
+      up: 'I build software that stays understandable.',
+      whisper: 'understandable is a choice you make on purpose.',
+    },
+  },
+  {
+    id: 'nebula',
+    hud: {
+      id: 'nebula',
+      glyphSrc: 'glyphs/glyph-nebula.svg',
+      motion: 'breathe',
+      label: 'NEBULA',
+      destination: 'Writing',
+      stage: 3.5,
+      href: 'writing',
+    },
+    markers: [
+      // NEBULA / writing — THREE placeholder markers (one per recent article), all
+      // linking to /writing for now. Pulled OUT of the dense gas into the sparse /
+      // near-empty regions so each hexagon reads against dark background.
+      {
+        id: 'nebula-01',
+        state: 'nebula',
+        vx: 0.82,
+        vy: 0.22,
+        href: 'writing',
+        title: 'WRITING / 01',
+        subtitle: 'Notes & essays',
+      },
+      {
+        id: 'nebula-02',
+        state: 'nebula',
+        vx: 0.19,
+        vy: 0.4,
+        href: 'writing',
+        title: 'WRITING / 02',
+        subtitle: 'Notes & essays',
+      },
+      {
+        id: 'nebula-03',
+        state: 'nebula',
+        vx: 0.58,
+        vy: 0.8,
+        href: 'writing',
+        title: 'WRITING / 03',
+        subtitle: 'Notes & essays',
+      },
+    ],
+    beat: {
+      // NEBULA — after the longer lightspeed approach, the cloud grows into the held
+      // frame. NEBULA_GROW_END is now 0.195; collapse starts at 0.33. The text fades
+      // in as the cloud settles (~0.195) and out well before collapse (~0.28).
+      at: 0.21,
+      text: { inStart: 0.185, inEnd: 0.205, outStart: 0.265, outEnd: 0.295 },
+      state: 'nebula',
+      down: 'One boundary can outlive a thousand generated lines.',
+      up: 'One boundary can outlive a thousand generated lines.',
+      whisper: 'prompts, diffs, failing tests, half-ideas. raw material, not magic.',
+    },
+  },
+  {
+    id: 'yellow',
+    hud: {
+      id: 'yellow',
+      glyphSrc: 'glyphs/glyph-yellow-star.svg',
+      motion: 'flicker',
+      label: 'YELLOW STAR',
+      destination: 'Projects',
+      stage: 2.9,
+      href: 'projects',
+    },
+    markers: [
+      // YELLOW STAR / projects — ONE marker, upper-left quadrant of the photosphere.
+      {
+        id: 'yellow',
+        state: 'yellow',
+        vx: 0.4,
+        vy: 0.38,
+        href: 'projects',
+        title: 'PROJECTS',
+        subtitle: 'Things I build',
+      },
+    ],
+    beat: {
+      // YELLOW STAR — ignites by ~0.33 (STAR_IGNITION_START) and dwells through
+      // ~0.395 (YELLOW_SETTLE_END). The headline sits in the stable window.
+      at: 0.355,
+      text: { inStart: 0.31, inEnd: 0.335, outStart: 0.375, outEnd: 0.395 },
+      state: 'yellow star',
+      down: 'Systems grow. Interfaces drift. Complexity compounds.',
+      up: 'Systems grow. Interfaces drift. Complexity compounds.',
+      whisper: "tests, review, small units, boring choices. that's the craft.",
+    },
+  },
+  {
+    id: 'red',
+    hud: {
+      id: 'red',
+      glyphSrc: 'glyphs/glyph-red-giant.svg',
+      motion: 'drift',
+      label: 'GRAVEYARD',
+      destination: 'Graveyard',
+      stage: 2.05,
+      href: 'graveyard',
+    },
+    markers: [
+      // RED GIANT / graveyard — ONE marker, fixed spot over the red limb.
+      {
+        id: 'red',
+        state: 'red',
+        vx: 0.5,
+        vy: 0.46,
+        href: 'graveyard',
+        title: 'GRAVEYARD',
+        subtitle: 'Things I abandoned',
+      },
+    ],
+    beat: {
+      // RED GIANT — the hold band (stage 2.05, progress ~0.524 -> 0.678).
+      at: 0.601,
+      text: { inStart: 0.524, inEnd: 0.562, outStart: 0.638, outEnd: 0.676 },
+      state: 'red giant',
+      down: 'My work is to keep the center readable.',
+      up: 'My work is to keep the center readable.',
+      whisper: "the ai keeps adding. nobody's left who understands it.",
+    },
+  },
+  {
+    id: 'end',
+    hud: {
+      id: 'end',
+      glyphSrc: 'glyphs/glyph-black-hole.svg',
+      motion: 'pulse',
+      label: 'BLACK HOLE',
+      destination: 'Inspiration',
+      stage: 0,
+      href: 'posts/thanks-for-scrolling-to-the-bottom',
+    },
+    markers: [
+      // END / black hole — ONE marker, fixed spot near the hero centre.
+      {
+        id: 'end',
+        state: 'end',
+        vx: 0.5,
+        vy: 0.5,
+        href: 'posts/thanks-for-scrolling-to-the-bottom',
+        title: 'INSPIRATION',
+        subtitle: 'Why this site exists',
+      },
+    ],
+    beat: {
+      // BLACK HOLE — enters after the easeOutExpo settle has visually completed
+      // (~0.82 -> 0.946). This is the terminal state, so the line holds through
+      // progress=1 instead of fading away at the absolute bottom.
+      at: 0.968,
+      text: { inStart: 0.955, inEnd: 0.965, outStart: 1.02, outEnd: 1.02 },
+      state: 'black hole',
+      down: 'Explore the projects.',
+      up: 'Explore the projects.',
+      whisper: 'even the repo you were proud of.',
+    },
+  },
+];
+
+// --------------------------------------------------------------------------
+// Projections — the scattered exports, regenerated from SCENES. Same names,
+// shapes and ORDER as the former hand-written literals, so every importer
+// (HudNavigation, ManifestoOverlay, index.astro, ExplorationHud, StarMarker,
+// HeroIsland) resolves unchanged. The SSR <noscript> mirrors BEATS, so it can
+// no longer drift from the live copy.
+// --------------------------------------------------------------------------
+export const HUD_NAV_ITEMS: readonly HudNavItem[] = SCENES.map((s) => s.hud);
+
+export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = SCENES.flatMap((s) => s.markers);
+
+export const BEATS: ManifestoBeat[] = SCENES.flatMap((s) => (s.beat ? [s.beat] : []));
