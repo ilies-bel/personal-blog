@@ -76,19 +76,26 @@ function scrollToStage(stage: number, reduced: boolean): void {
 }
 
 // --- Aiming-compass data source --------------------------------------------
-// The bottom-of-page readout behaves like a real aiming compass: its needle
-// ROTATES to point at the on-screen StarMarker NEAREST THE CURSOR, names that
-// marker, and shows an IDLE placeholder when no interactive markers are on
-// screen. Priority for the NAME:
+// The bottom-centre readout is "a compass embarked in the cursor". Two glyphs:
+//   • ▲  — the CURSOR. The FIXED anchor at the gauge's centre. It never moves.
+//   • ┼  — the nearest on-screen MARKER (the destination). It is TRANSLATED to a
+//     polar position AROUND the ▲ along the BEARING from the live cursor to the
+//     marker, so the line ▲→┼ shows the direction the user must move the cursor
+//     to reach the marker. NO rotation — both glyphs stay upright; direction is
+//     conveyed purely by where the ┼ sits relative to the ▲.
+//   • The OFFSET DISTANCE scales with PROXIMITY: the ┼ sits FAR from the ▲ when
+//     the cursor is far from the marker and CONVERGES toward the ▲ (offset → 0)
+//     as the cursor nears it. Clamped to a sensible min/max pixel offset.
+// Priority for the NAME:
 //   1. A rail button under hover / keyboard focus (`pointedId`) — a deliberate
-//      pointing gesture overrides naming (the needle still tracks the cursor).
+//      pointing gesture overrides naming (the ┼ still tracks the nearest marker).
 //   2. The on-screen marker nearest the cursor (the dominant behaviour). Each
 //      marker carries its own copy (title/subtitle), more specific than the
 //      scene HUD label — used so the nebula's three markers stay distinct.
 //   3. Idle fallback: no interactive markers AND no rail hover -> NO SIGNAL.
-// The needle angle + the nearest target are recomputed every rAF off the cursor
-// and the scene's marker frame (a frame-cadence value that must NOT live in
-// React state); the needle DOM is mutated directly each frame, and React state
+// The ┼ offset + the nearest target are recomputed every rAF off the cursor and
+// the scene's marker frame (a frame-cadence value that must NOT live in React
+// state); the ┼ DOM transform is mutated directly each frame, and React state
 // flips ONLY when the named target / idle flag changes — exactly the cheap
 // pattern StarMarker uses (lastVisible/lastLocked).
 
@@ -122,12 +129,22 @@ interface AimState {
   idle: boolean;
 }
 
-// 0deg of the needle's CSS rotation points UP (north). atan2(dy, dx) measures
-// from the +x axis (east) increasing toward +y (screen-down). So a marker due
-// EAST is atan2 = 0 and we want the needle at +90deg; a marker due SOUTH is
-// atan2 = +90 and we want +180deg; hence rotate = atan2Deg + 90. The needle
-// glyph (▲) is authored pointing UP, matching the 0deg = north convention.
-const NEEDLE_NORTH_OFFSET_DEG = 90;
+// The ┼ waypoint's polar offset around the ▲ (in CSS px). The bearing is the
+// raw screen-space angle from the cursor to the marker (atan2(dy, dx), with dy
+// measured screen-DOWN), so cos/sin map straight back to screen translate units:
+// a marker to the RIGHT of the cursor → +X offset, ABOVE → −Y offset. The radius
+// scales with the cursor→marker distance and is clamped so the ┼ never overlaps
+// the ▲ (MIN) nor leaves the gauge box (MAX): r = clamp(MIN, dist*SCALE, MAX).
+// SCALE is tuned so the radius spans MIN→MAX across roughly a viewport-half of
+// cursor distance; it SHRINKS toward MIN as the cursor closes on the marker
+// (proximity convergence).
+const WAYPOINT_MIN_OFFSET = 3; // px — closest the ┼ gets to the ▲ (essentially on it)
+const WAYPOINT_MAX_OFFSET = 16; // px — farthest the ┼ rides out from the ▲
+const WAYPOINT_OFFSET_SCALE = 0.04; // px of offset per px of cursor→marker distance
+
+function clamp(value: number, min: number, max: number): number {
+  return value < min ? min : value > max ? max : value;
+}
 
 export default function HudNavigation({
   visible,
@@ -143,14 +160,12 @@ export default function HudNavigation({
   // the cursor + marker frame; committed only when it actually changes.
   const [aim, setAim] = useState<AimState>({ markerId: null, idle: true });
 
-  // Live cursor position tracked via a ref (NOT state) so the rAF loop can aim
-  // the needle every frame without re-rendering — mirrors StarMarker.pointerRef.
+  // Live cursor position tracked via a ref (NOT state) so the rAF loop can place
+  // the ┼ waypoint every frame without re-rendering — mirrors StarMarker.pointerRef.
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
-  // The needle element, mutated directly each frame (rotation via inline style).
-  const needleRef = useRef<HTMLSpanElement>(null);
-  // The compass element, used to measure the needle's pivot (its centre) so the
-  // angle is computed from the compass, not the viewport origin.
-  const compassRef = useRef<HTMLDivElement>(null);
+  // The ┼ marker waypoint, mutated directly each frame (translate via inline
+  // style) — the only thing that moves. The ▲ cursor anchor is fixed in CSS.
+  const targetRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const onMove = (event: MouseEvent): void => {
@@ -164,7 +179,8 @@ export default function HudNavigation({
   // screen (frame.visible AND this scene is the settled one), compute each one's
   // screen px (anchored markers ride the projected origin; the rest sit at a
   // viewport fraction — same math as StarMarker), find the one nearest the
-  // cursor, rotate the needle toward it, and commit the named target / idle flag
+  // cursor, OFFSET the ┼ waypoint around the fixed ▲ along the cursor→marker
+  // bearing (radius scaled by distance), and commit the named target / idle flag
   // to state ONLY when it flips. Cleans up on unmount.
   useEffect(() => {
     let rafId = 0;
@@ -200,17 +216,29 @@ export default function HudNavigation({
         }
       }
 
-      // Aim the needle at the nearest marker (direction from the needle's pivot,
-      // i.e. the compass centre, to the marker's screen position). Mutate the DOM
-      // directly — no setState — so rotation is smooth and render-free.
-      const needle = needleRef.current;
-      const compass = compassRef.current;
-      if (needle && compass && nearest) {
-        const rect = compass.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const atan2Deg = Math.atan2(nearestY - cy, nearestX - cx) * (180 / Math.PI);
-        needle.style.transform = `rotate(${(atan2Deg + NEEDLE_NORTH_OFFSET_DEG).toFixed(1)}deg)`;
+      // Offset the ┼ waypoint around the fixed ▲ along the cursor→marker bearing.
+      // The vector is computed from the LIVE CURSOR (not the gauge): dx/dy is the
+      // direction the user must move the cursor to reach the marker. We translate
+      // the ┼ by (cos·r, sin·r) — screen y is down, atan2(dy,dx) is already in
+      // screen space, so no sign flip is needed. The radius scales with distance
+      // (clamped MIN..MAX) so the ┼ rides out far when the cursor is far and
+      // converges onto the ▲ as the cursor closes in. Mutate the DOM directly —
+      // no setState — so the waypoint glides render-free.
+      const target = targetRef.current;
+      if (target) {
+        if (nearest && cursor) {
+          const dx = nearestX - cursor.x;
+          const dy = nearestY - cursor.y;
+          const dist = Math.hypot(dx, dy);
+          const r = clamp(dist * WAYPOINT_OFFSET_SCALE, WAYPOINT_MIN_OFFSET, WAYPOINT_MAX_OFFSET);
+          const bearing = Math.atan2(dy, dx);
+          const ox = Math.cos(bearing) * r;
+          const oy = Math.sin(bearing) * r;
+          target.style.transform = `translate(${ox.toFixed(1)}px, ${oy.toFixed(1)}px)`;
+        } else {
+          // No marker to aim at — park the ┼ on the ▲ (the data-idle CSS fades it).
+          target.style.transform = 'translate(0px, 0px)';
+        }
       }
 
       // Commit the named target / idle flag only when it flips. Idle = nothing to
@@ -244,7 +272,7 @@ export default function HudNavigation({
   // Idle = nothing to aim at AND no rail hover. The compass then shows NO SIGNAL
   // and the needle is hidden/centred (CSS off the data-idle attribute).
   const idle = copy === null;
-  // Whether the needle is actively aiming at a real marker (gold) vs. idle (dim).
+  // Whether the ┼ is actively aiming at a real marker (gold) vs. idle (dim).
   const aiming = nearestPlacement !== null;
 
   return (
@@ -297,14 +325,17 @@ export default function HudNavigation({
       </nav>
       </div>
 
-      {/* Aiming compass, anchored bottom-centre. Its needle ROTATES (set every rAF
-          above) toward the on-screen marker NEAREST THE CURSOR and names that
-          marker; when no marker is on screen / in range and the rail is not
-          hovered it falls IDLE (a dim NO SIGNAL placeholder, needle hidden).
+      {/* Aiming compass "embarked in the cursor", anchored bottom-centre. The ▲ is
+          the CURSOR — the fixed anchor at the gauge's centre, never moved. The ┼ is
+          the nearest on-screen MARKER, TRANSLATED (set every rAF above) to a polar
+          position around the ▲ along the cursor→marker bearing, so the line ▲→┼
+          shows which way to move the cursor; its offset shrinks as the cursor nears
+          the marker. When no marker is on screen / in range and the rail is not
+          hovered it falls IDLE (a dim NO SIGNAL placeholder, the ┼ parked & faded).
           aria-hidden because the rail buttons + markers already announce their own
           labels (the old mobile readout had the same rationale — this replaces it,
           now visible on desktop too). The markup is always rendered (its frame
-          never pops in/out); data-idle swaps the copy + hides the needle.
+          never pops in/out); data-idle swaps the copy + fades the ┼.
 
           IMPORTANT: rendered as a SIBLING of .hud-system, not a child. .hud-system
           carries a transform (translate(...,-50%) for vertical centring), and a CSS
@@ -312,7 +343,6 @@ export default function HudNavigation({
           instead of the viewport — which trapped the compass mid-rail. As a sibling
           its position:fixed bottom-centre resolves against the viewport correctly. */}
       <div
-        ref={compassRef}
         className="hud-compass"
         data-visible={visible}
         data-aiming={aiming}
@@ -320,13 +350,15 @@ export default function HudNavigation({
         data-reduced={reduced}
         aria-hidden="true"
       >
-        {/* The crosshair rose with a rotating needle pivoted on its centre. The
-            ── ┼ ── cross is the static frame; the needle (▲, authored pointing
-            UP) rotates over it. */}
+        {/* The gauge rose. A faint static crosshair sits behind for the instrument
+            look; over it the ▲ cursor anchor is pinned dead-centre (upright, never
+            moved) and the ┼ marker waypoint is centred then TRANSLATED each rAF to
+            its polar offset (upright — no rotation anywhere). */}
         <span className="hud-compass-rose">
-          <pre className="hud-compass-cross">{'     +\n  ───┼───\n     |'}</pre>
-          <span ref={needleRef} className="hud-compass-needle" aria-hidden="true">
-            ▲
+          <span className="hud-compass-frame" aria-hidden="true" />
+          <span className="hud-compass-ship" aria-hidden="true">▲</span>
+          <span ref={targetRef} className="hud-compass-target" aria-hidden="true">
+            +
           </span>
         </span>
         {idle ? (
