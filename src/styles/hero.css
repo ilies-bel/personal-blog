@@ -105,7 +105,8 @@ body.article-page .bh-backdrop::after {
   font-size: clamp(0.66rem, 1vw, 0.8rem);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--fg-faint);
+  /* Undimmed a step (faint → dim): still secondary/dimmed, just brighter. */
+  color: var(--fg-dim);
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
 }
 .bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
@@ -282,14 +283,13 @@ body.bare.is-scrolled .overlay-blog {
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   pointer-events: auto;
   opacity: 0.86;
-  /* intro ease-in (once), then the perpetual breath kicks in after the 0.9s
-     intro completes (delay) and loops forever. */
-  animation:
-    bh-hint-in 0.9s var(--ease-out-quint) both,
-    bh-hint-pulse 3.6s ease-in-out 0.9s infinite;
+  /* Container does the one-time intro only (fade-in, then rests at 0.86). The
+     perpetual breath lives on .bh-hint-label so only the TEXT pulses — the
+     vertical line keeps its own bh-hint-line sweep, untouched. */
+  animation: bh-hint-in 0.9s var(--ease-out-quint) both;
 }
 .bh-hint-start {
   appearance: none;
@@ -310,6 +310,10 @@ body.bare.is-scrolled .overlay-blog {
   display: block;
   line-height: 1;
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+  /* Perpetual breath lives on the TEXT only (line left alone). Starts after the
+     container's 0.9s intro (delay) so it picks up where the fade-in rests; its
+     opacity multiplies with the container's 0.86. */
+  animation: bh-hint-pulse 3.6s ease-in-out 0.9s infinite;
 }
 .bh-hint-start:hover,
 .bh-hint-start:focus-visible {
@@ -401,8 +405,10 @@ body.bare.is-scrolled .overlay-blog {
   }
   .bh-beat-line--up { display: none !important; }
   /* Hint is unmounted by ScrollHint under reduced motion and hidden here too;
-     belt-and-suspenders, also kill the perpetual breath so no opacity loops. */
+     belt-and-suspenders, also kill the perpetual breath so no opacity loops.
+     The breath now lives on .bh-hint-label, so explicitly silence it too. */
   .bh-hint { display: none !important; animation: none !important; }
+  .bh-hint-label { animation: none !important; }
 
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] {
