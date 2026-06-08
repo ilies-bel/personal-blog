@@ -5,7 +5,7 @@ import { LENS_GLSL } from './lens.glsl';
 
 export const starVertexShader = /* glsl */ `
   attribute float aSeed;
-  uniform float uTime, uPixelRatio, uShadowR, uThetaE, uAspect, uImageSign, uStarBright, uHole;
+  uniform float uTime, uPixelRatio, uShadowR, uThetaE, uAspect, uImageSign, uStarBright, uHole, uRotSpeed;
   varying float vB;
   varying vec3 vTint;   // per-star colour family (warm-graphite / near-white / cool accent)
 
@@ -30,7 +30,22 @@ export const starVertexShader = /* glsl */ `
     tint = mix(tint, coolAccent, step(0.92, roll));       // ~8% cool accent (rare depth)
     vTint = tint;
 
-    vec4 clip = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+    // --- SLOW ORBIT AROUND THE HOLE -------------------------------------------
+    // Spin the star's world position around the same ~23°-tilted pole the
+    // photosphere uses BEFORE projection, so the existing per-vertex screen-space
+    // lensing math below bends a MOVING field for free (the warp visibly acts on
+    // orbiting stars, not a static backdrop). The hole sits at the world origin,
+    // which is invariant under this rotation, so bhC stays put.
+    float orbAng = uTime * uRotSpeed;
+    vec3  orbAxis = normalize(vec3(sin(0.401), cos(0.401), 0.0)); // 0.401 rad ≈ 23° off world-Y
+    float orbC = cos(orbAng);
+    float orbS = sin(orbAng);
+    // Rodrigues' rotation of position about orbAxis.
+    vec3 orbPos = position * orbC
+                + cross(orbAxis, position) * orbS
+                + orbAxis * dot(orbAxis, position) * (1.0 - orbC);
+
+    vec4 clip = projectionMatrix * modelViewMatrix * vec4(orbPos,1.0);
     vec4 bhC  = projectionMatrix * modelViewMatrix * vec4(0.0,0.0,0.0,1.0);
     bool drop = (clip.w <= 0.0);
     vec2 ndc   = clip.xy / max(clip.w, 1e-4);
