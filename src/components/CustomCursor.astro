@@ -397,7 +397,7 @@
     // met — which read as a DASHED line. A single stroke has no internal seams.
     // The head→tail fade comes from a GRADIENT strokeStyle along the path, not
     // per-segment alpha, so it's a clean continuous comet.
-    const drawTrail = (now: number, headX: number, headY: number): boolean => {
+    const drawTrail = (now: number): boolean => {
       if (!ctx) return false;
       ctx.clearRect(0, 0, viewW, viewH);
       if (count < 2) return false;
@@ -414,7 +414,7 @@
       }
       if (live < 2) return false;
 
-      const hx = headX, hy = headY;                   // raw pointer — always flush with the dot
+      const hx = lpx[0], hy = lpy[0];                 // head (on the ball)
       const tx = lpx[live - 1], ty = lpy[live - 1];   // tail tip
 
       ctx.lineCap = 'round';
@@ -577,7 +577,7 @@
         }
       }
 
-      const alive = drawTrail(now, targetX, targetY);
+      const alive = drawTrail(now);
 
       // Idle test: the eased anchor has caught the ball AND nothing is left to
       // draw → reset and STOP the loop (no frame scheduled). Re-armed on move.
@@ -654,11 +654,11 @@
       }
       cursor.classList.toggle('cursor--interactive', interactive);
 
-      // Always write the ball synchronously in the event handler — zero lag,
-      // no rAF deferral. The loop also writes it during the dock glide branch,
-      // but writing it here ensures zero-lag on every normal pointer move.
-      cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
-      if (!reduceMotion) {
+      // Reduced motion: write the ball directly (the loop never runs). Otherwise
+      // (re)start the loop so the tail animates and then idles when it settles.
+      if (reduceMotion) {
+        cursor.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+      } else {
         kick();
       }
     };
