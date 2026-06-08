@@ -106,6 +106,11 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
   display: block;
   flex: 0 0 auto;
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.7));
+  /* The icon nudges right on hover (#6) — a small, eased translate so the link
+     leans toward its label as it brightens. Reduced-motion safe (dropped below). */
+  transition:
+    transform 0.32s var(--ease-out-quint),
+    filter 0.2s ease;
 }
 .overlay-blog-label {
   display: inline-block;
@@ -117,15 +122,53 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
+  /* A gold underline that SWEEPS in on hover. Drawn as a bottom-anchored background
+     gradient sized 0%→100% width — kept INSIDE the label box so the label's own
+     overflow:hidden never clips it (a bottom-offset ::after would be clipped). The
+     fold reveal (max-width/opacity, set on hud-active) is unchanged; the hover
+     micro-interaction composes on top. */
+  background-image: linear-gradient(
+    to right,
+    var(--accent-strong),
+    color-mix(in oklch, var(--highlight) 80%, var(--accent-strong))
+  );
+  background-repeat: no-repeat;
+  background-position: left calc(100% - 0.02rem);
+  background-size: 0% 1px;
   transition:
     max-width 0.4s var(--ease-out-quint),
     opacity 0.25s ease,
-    margin-left 0.4s var(--ease-out-quint);
+    margin-left 0.4s var(--ease-out-quint),
+    transform 0.32s var(--ease-out-quint),
+    background-size 0.32s var(--ease-out-quint);
 }
 body.bare.hud-active .overlay-blog-label {
   max-width: 7rem;
   opacity: 1;
   margin-left: 0.4rem;
+}
+/* HOVER / FOCUS micro-interaction (#6, #7): the icon nudges right, the label slides
+   a hair to follow, and the gold underline sweeps left→right. Applies to the
+   section links AND the socials summary (both carry .overlay-blog-link). Only
+   meaningful once the labels are open (hud-active), but harmless when folded — the
+   underline simply sweeps under a zero-width label. */
+.overlay-blog-link:hover .overlay-blog-icon,
+.overlay-blog-link:focus-visible .overlay-blog-icon {
+  transform: translateX(0.12rem);
+}
+.overlay-blog-link:hover .overlay-blog-label,
+.overlay-blog-link:focus-visible .overlay-blog-label {
+  transform: translateX(0.1rem);
+  background-size: 100% 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-blog-icon,
+  .overlay-blog-label { transition: none; }
+  /* Drop the motion but keep the brightening; the underline simply appears. */
+  .overlay-blog-link:hover .overlay-blog-icon,
+  .overlay-blog-link:focus-visible .overlay-blog-icon,
+  .overlay-blog-link:hover .overlay-blog-label,
+  .overlay-blog-link:focus-visible .overlay-blog-label { transform: none; }
 }
 
 /* Socials live behind a native <details> dropdown — the "two planets" glyph toggles
@@ -214,16 +257,68 @@ body.bare.hud-active .overlay-blog-label {
   outline-offset: 3px;
   border-radius: 999px;
 }
-/* ACTIVE / engaged: gold frame + glyph, a soft outer glow, and a faint gold fill
-   tint so the button obviously reads as ON. */
-.overlay-blog-power[aria-pressed='true'] {
+/* LIT / ON look. The HUD can now power on from SCROLL too (not just the button), so
+   the button reads as ON whenever the HUD is active OR booting — keyed off the body
+   classes — and ALSO when forced (aria-pressed='true'). aria-pressed tracks the
+   FORCED override specifically; the lit appearance tracks the HUD being up however
+   it got there. Gold frame + glyph, soft outer glow, faint gold fill tint. */
+.overlay-blog-power[aria-pressed='true'],
+body.hud-active .overlay-blog-power,
+body.hud-booting .overlay-blog-power {
   color: var(--accent-strong);
   border-color: var(--accent-strong);
   background: color-mix(in oklch, var(--highlight) 12%, color-mix(in oklch, var(--bg) 55%, transparent));
   box-shadow: 0 0 12px color-mix(in oklch, var(--highlight) 45%, transparent);
 }
+
+/* CHARGING look while the HUD is powering up (#4). The button needs a positioning
+   context for the sweep ring, and its glyph brightens in steps. The whole button
+   pulses softly so it reads as drawing power. */
+.overlay-blog-power {
+  position: relative;
+}
+body.hud-booting .overlay-blog-power {
+  animation: overlay-power-charge 0.9s ease-in-out infinite;
+}
+/* A conic sweep ring that rotates around the button frame — like a charge meter
+   filling. Sits just outside the glyph, masked to a thin annulus so only the ring
+   edge shows. pointer-events:none; clipped to the round button. */
+.overlay-blog-power::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 250deg,
+    color-mix(in oklch, var(--highlight) 70%, transparent) 320deg,
+    var(--accent-strong) 360deg
+  );
+  /* Mask to a thin ring so the conic shows only at the frame edge, not a filled
+     disc over the glyph. */
+  -webkit-mask: radial-gradient(closest-side, transparent 72%, #000 74%);
+  mask: radial-gradient(closest-side, transparent 72%, #000 74%);
+}
+body.hud-booting .overlay-blog-power::before {
+  opacity: 1;
+  animation: overlay-power-sweep 1.2s linear infinite;
+}
+@keyframes overlay-power-sweep {
+  to { transform: rotate(360deg); }
+}
+@keyframes overlay-power-charge {
+  0%, 100% { box-shadow: 0 0 8px color-mix(in oklch, var(--highlight) 30%, transparent); }
+  50%      { box-shadow: 0 0 16px color-mix(in oklch, var(--highlight) 60%, transparent); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-power { transition: none; }
+  /* Drop the charge animations; the static lit/charging tint above still reads. */
+  body.hud-booting .overlay-blog-power { animation: none; }
+  body.hud-booting .overlay-blog-power::before { animation: none; opacity: 0.6; transform: none; }
 }
 
 /* On the smallest screens, fold the four section icons away and keep only the

@@ -15,8 +15,46 @@ export const HUD_ACTIVE_BODY_CLASS = 'hud-active';
  *  the HUD-activation chrome. While present, the scroll-driven hud-active toggle
  *  in HeroIsland is suppressed so the manual override wins (sticky). */
 export const HUD_FORCED_BODY_CLASS = 'hud-forced';
+/** Toggled on <body> while the HUD power-on sequence is playing — the loader /
+ *  flicker / scan-sweep beat that sits BETWEEN idle and a fully-lit HUD. Owned by
+ *  the boot FSM (BaseLayout's inline script). The rail / compass / menu stay DARK
+ *  while it is present and only ignite once it is removed and HUD_ACTIVE_BODY_CLASS
+ *  goes on. Centralized here so the class string is never spelled inline — it is
+ *  referenced from the inline FSM AND from hud.css / scene.css. */
+export const HUD_BOOTING_BODY_CLASS = 'hud-booting';
 /** localStorage key persisting the chosen exploration-HUD target. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
+/** localStorage key persisting the HUD power state across reloads. The boot FSM
+ *  writes a small JSON blob `{ powered: boolean, forced: boolean }` here on every
+ *  transition and restores it on init, so a returning visitor finds the HUD lit
+ *  (or dark) exactly as they left it — without being marched back through the
+ *  ~3.6s boot. All access is wrapped in try/catch (private mode / disabled
+ *  storage must never throw). */
+export const HUD_STATE_STORAGE_KEY = 'hud-state';
+
+// --- cross-layer events ----------------------------------------------------
+/** The window CustomEvent HeroIsland dispatches to REQUEST a HUD power change. The
+ *  island no longer owns body.hud-active directly — the boot FSM does — so it only
+ *  signals intent. The detail is `{ on: boolean; source: 'scroll' }`: `on` is true
+ *  once real scroll reaches the black hole, false when it leaves. The FSM is the
+ *  single owner of the body classes and decides what to do with the request
+ *  (honouring the forced override + the once-booted-stays-powered rule). The name
+ *  lives here so the dispatcher (HeroIsland) and the listener (the inline FSM)
+ *  never disagree on the string. */
+export const HUD_POWER_EVENT = 'hud:power';
+/** Detail payload carried by HUD_POWER_EVENT. */
+export interface HudPowerEventDetail {
+  /** Requested power state: true = power on, false = power off. */
+  on: boolean;
+  /** Where the request came from (only 'scroll' today; kept for future sources). */
+  source: 'scroll';
+}
+/** The HUD boot duration, in milliseconds. The single source of truth for "how
+ *  long does powering-up take" — referenced by the inline FSM's boot timer AND by
+ *  hud.css's --hud-boot-dur (which MUST be kept in sync: the inline script also
+ *  pushes this value into the CSS var on init so the two can never drift). ~3.6s:
+ *  long enough to read like a machine running its start-up self-check. */
+export const HUD_BOOT_DURATION_MS = 3600;
 
 // --- scroll direction ------------------------------------------------------
 export type ScrollDirection = 'down' | 'up';

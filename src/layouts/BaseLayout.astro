@@ -142,13 +142,20 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
             </div>
 
             <details class="overlay-blog-socials">
-              <summary class="overlay-blog-socials-toggle" aria-label="Links">
+              {/* The summary carries a visible "Links" label now (folded at rest,
+                  unfurled with the section labels on body.bare.hud-active, same hover
+                  micro-interaction). The visible text is the accessible name, so the
+                  redundant aria-label is dropped — the icon stays aria-hidden, and the
+                  label inside the summary names the toggle (no double-announce). The
+                  <details>/<summary> still drives the dropdown with zero JS. */}
+              <summary class="overlay-blog-socials-toggle overlay-blog-link">
                 {/* Two planets — one orbiting the other. Matched to the section-icon
                     weight (1.5 stroke, ~20px optical footprint). */}
                 <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
                   <circle cx="13" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
                   <circle cx="24" cy="16" r="3" fill="currentColor" stroke="none" />
                 </svg>
+                <span class="overlay-blog-label">Links</span>
               </summary>
               <div class="overlay-blog-socials-menu">
                 {SOCIALS.github && <a href={SOCIALS.github} class="overlay-social">GitHub</a>}
@@ -189,80 +196,243 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
           </nav>
 
           {/* Boot transition layers — driven entirely by body.hud-booting (added for
-              ~1.2s on the hud-active ON transition by the script below). The flicker
-              is a fixed full-viewport light layer; the LOADING readout sits bottom-
-              centre with a thin progress line. Both are CSS-only off the body class
-              (see hud.css → "HUD boot sequence"); aria-hidden so it never announces. */}
+              the ~3.6s power-on window by the FSM script below). Three fixed, full-
+              viewport, pointer-events:none layers + a bottom-centre readout, all CSS-
+              off the body class (see hud.css → "HUD boot sequence"); aria-hidden so
+              none of it ever announces:
+                • .hud-boot-flicker — a light layer that surges/settles (power surge).
+                • .hud-boot-scan    — a thin line that sweeps across the viewport.
+                • .hud-boot         — the status readout + a stuttering progress bar.
+              The .hud-boot-label TEXT is swapped by the FSM through the boot window
+              (LOADING → CALIBRATING → ALIGNING → SYSTEMS NOMINAL) so the readout
+              reads like a machine running its start-up self-check. */}
           <div class="hud-boot-flicker" aria-hidden="true"></div>
+          <div class="hud-boot-scan" aria-hidden="true"></div>
           <div class="hud-boot" aria-hidden="true">
             <span class="hud-boot-label">LOADING</span>
             <span class="hud-boot-bar"></span>
           </div>
 
-          {/* Self-contained power-button toggle (mirrors the project's zero-import
-              inline-script convention, e.g. CustomCursor). It owns body.hud-forced +
-              body.hud-active when the visitor forces the morph; HeroIsland's scroll
-              callback yields whenever hud-forced is present, so the override is sticky
-              until the button is pressed again. No-JS safe (the menu still grows on
-              scroll); keyboard-accessible (it's a real <button>).
+          {/* HUD POWER STATE MACHINE — the single, explicit owner of the HUD's body
+              classes and its loader sequence. A self-contained, zero-import
+              <script is:inline> (mirrors the project's CustomCursor convention) so it
+              runs the moment the body parses, with no framework on the critical path.
 
-              It ALSO owns the boot sequence (#7): a MutationObserver watches body's
-              class list and, whenever hud-active newly turns ON (whether from the
-              power button OR from HeroIsland's scroll signal), adds body.hud-booting
-              for BOOT_MS then removes it — playing the LOADING + flicker once. It only
-              fires on the OFF→ON edge (tracked via wasActive), never on turning off,
-              and skips the timed window under reduced-motion (CSS still shows/hides
-              LOADING briefly, just no flicker). */}
+              The machine has three states:
+                • idle    — HUD off (scrolling the lifecycle, not at the black hole).
+                • booting — the power-on / loader sequence is playing (body.hud-booting).
+                • ready   — HUD fully lit (body.hud-active → rail + compass + menu up).
+              The `forced` flag (corner power button engaged) is ORTHOGONAL — it is a
+              sticky request to be powered on regardless of scroll, mirrored to
+              body.hud-forced.
+
+              transition(next) is the ONLY place body classes are mutated. Everything
+              else just calls it. Inputs that drive it:
+                • the HUD_POWER_EVENT ('hud:power') HeroIsland dispatches when real
+                  scroll reaches / leaves the black hole (detail.on);
+                • the power button (forced on/off).
+              Behaviour: once booted we STAY powered (scroll-up does not tear the HUD
+              down) — the only thing that returns us to idle is the power button
+              explicitly powering OFF (or a fresh load whose persisted state was off).
+              The state is mirrored to localStorage on every transition and restored
+              on init, so a returning visitor lands straight in `ready` (no replayed
+              3.6s boot) or `idle` exactly as they left it.
+
+              The class-string + storage-key + event-name literals below are the same
+              ones centralized in src/hero/lib/constants.ts — this inline island can't
+              import that module (no bundler on an is:inline script), so the literals
+              are spelled here and MUST be kept in sync with that file. Likewise
+              BOOT_MS mirrors HUD_BOOT_DURATION_MS and is pushed into --hud-boot-dur so
+              the CSS animation length can never drift from the JS timer. */}
           <script is:inline>
             (() => {
-              // Keep in sync with --hud-boot-dur in hud.css. The reduced-motion
-              // handling is purely CSS (the flicker + bar animations are dropped),
-              // so the timed window stays the same here.
-              const BOOT_MS = 1200;
+              // --- Centralized literals (mirror src/hero/lib/constants.ts) ---------
+              const ACTIVE_CLASS = 'hud-active'; // HUD_ACTIVE_BODY_CLASS  (ready)
+              const BOOTING_CLASS = 'hud-booting'; // HUD_BOOTING_BODY_CLASS (booting)
+              const FORCED_CLASS = 'hud-forced'; // HUD_FORCED_BODY_CLASS  (forced override)
+              const STATE_KEY = 'hud-state'; // HUD_STATE_STORAGE_KEY
+              const POWER_EVENT = 'hud:power'; // HUD_POWER_EVENT (from HeroIsland)
+              const BOOT_MS = 3600; // HUD_BOOT_DURATION_MS — keep in sync with --hud-boot-dur
+
               const body = document.body;
-
-              // --- Boot sequence: play once on every hud-active OFF→ON edge. ---
-              let wasActive = body.classList.contains('hud-active');
-              let bootTimer = 0;
-              const playBoot = () => {
-                window.clearTimeout(bootTimer);
-                body.classList.add('hud-booting');
-                bootTimer = window.setTimeout(() => {
-                  body.classList.remove('hud-booting');
-                }, BOOT_MS);
-              };
-              const observer = new MutationObserver(() => {
-                const isActive = body.classList.contains('hud-active');
-                if (isActive && !wasActive) playBoot();
-                wasActive = isActive;
-              });
-              observer.observe(body, { attributes: true, attributeFilter: ['class'] });
-              // If the page already loaded at the black hole (hud-active set before
-              // this runs), play the boot once on arrival.
-              if (wasActive) playBoot();
-
-              // --- Power button: sticky manual override of the hud-active morph. ---
+              const root = document.documentElement;
               const btn = document.querySelector('.overlay-blog-power');
-              if (!btn) return;
-              let forced = false;
-              btn.addEventListener('click', () => {
-                forced = !forced;
-                if (forced) {
-                  // Engage the sticky override: force the morph ON and lock out the
-                  // scroll-driven toggle (HeroIsland yields while hud-forced is set).
-                  // Adding hud-active here trips the observer above → the boot plays.
-                  document.body.classList.add('hud-forced');
-                  document.body.classList.add('hud-active');
-                } else {
-                  // Release the override: drop the lock, then hand control back to the
-                  // scroll signal. Dispatch a scroll event so HeroIsland re-measures
-                  // immediately and resets hud-active to match the live scroll position
-                  // (rather than us guessing here, which could leave it stale).
-                  document.body.classList.remove('hud-forced');
-                  window.dispatchEvent(new Event('scroll'));
+              const bootLabel = document.querySelector('.hud-boot-label');
+
+              // Honour the OS reduced-motion preference: under it the boot is a calm,
+              // brief readout (no flicker/scan/stutter — those are dropped in CSS) and
+              // we shorten the JS window so the readout doesn't linger.
+              const reduceMotion =
+                window.matchMedia &&
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+              const bootMs = reduceMotion ? 700 : BOOT_MS;
+
+              // Push the boot duration into the CSS var so the bar/flicker/scan
+              // animation lengths track the JS timer from a single source.
+              root.style.setProperty('--hud-boot-dur', BOOT_MS + 'ms');
+
+              // The machine-startup status lines, cycled through the boot window so
+              // the readout reads like a system check, not a flat bar. Tasteful, on-
+              // theme (Golden Record / black-hole instrument; mono uppercase via CSS).
+              const BOOT_LINES = ['LOADING', 'CALIBRATING', 'ALIGNING ARRAY', 'SYSTEMS NOMINAL'];
+
+              // --- Persistence (try/catch — private mode must never throw) ---------
+              const readState = () => {
+                try {
+                  const raw = window.localStorage.getItem(STATE_KEY);
+                  if (!raw) return { powered: false, forced: false };
+                  const parsed = JSON.parse(raw);
+                  return {
+                    powered: parsed.powered === true,
+                    forced: parsed.forced === true,
+                  };
+                } catch (_) {
+                  return { powered: false, forced: false };
                 }
-                btn.setAttribute('aria-pressed', forced ? 'true' : 'false');
+              };
+              const writeState = (powered, forcedFlag) => {
+                try {
+                  window.localStorage.setItem(
+                    STATE_KEY,
+                    JSON.stringify({ powered: powered, forced: forcedFlag }),
+                  );
+                } catch (_) {
+                  /* storage disabled — run without persistence */
+                }
+              };
+
+              // --- Machine state ---------------------------------------------------
+              let state = 'idle'; // 'idle' | 'booting' | 'ready'
+              let forced = false; // power-button override (orthogonal to state)
+              let bootEndTimer = 0;
+              const lineTimers = [];
+
+              const clearLineTimers = () => {
+                while (lineTimers.length) window.clearTimeout(lineTimers.pop());
+              };
+              const setBootLine = (text) => {
+                if (bootLabel) bootLabel.textContent = text;
+              };
+
+              // Reflect `forced` onto the body + the power button's ARIA. The button
+              // is a toggle for the FORCED override specifically; its LIT (gold) look
+              // is keyed off body.hud-active in CSS so it reads ON whenever the HUD is
+              // up, however it got there.
+              const applyForced = () => {
+                body.classList.toggle(FORCED_CLASS, forced);
+                if (btn) btn.setAttribute('aria-pressed', forced ? 'true' : 'false');
+              };
+
+              // transition(next) — the ONLY place the state classes change. Each call
+              // sets the body classes for `next`, schedules any timers that state
+              // owns, and persists the resulting power state.
+              const transition = (next) => {
+                if (next === state) return;
+                // Leaving booting: always clear its timers so a fast power-off press
+                // can cancel the loader cleanly.
+                if (state === 'booting') {
+                  window.clearTimeout(bootEndTimer);
+                  clearLineTimers();
+                }
+                state = next;
+
+                if (next === 'idle') {
+                  body.classList.remove(BOOTING_CLASS);
+                  body.classList.remove(ACTIVE_CLASS);
+                  writeState(false, forced);
+                  return;
+                }
+
+                if (next === 'booting') {
+                  // HUD stays DARK while the loader plays: add booting, ensure active
+                  // is OFF so the rail/compass/menu only ignite once booting → ready.
+                  body.classList.remove(ACTIVE_CLASS);
+                  body.classList.add(BOOTING_CLASS);
+                  // Cycle the status lines across the boot window so the readout reads
+                  // like a startup self-check. Spread evenly; the last line (SYSTEMS
+                  // NOMINAL) lands just before ignition.
+                  setBootLine(BOOT_LINES[0]);
+                  if (!reduceMotion) {
+                    for (let i = 1; i < BOOT_LINES.length; i++) {
+                      const at = (bootMs * i) / BOOT_LINES.length;
+                      lineTimers.push(window.setTimeout(() => setBootLine(BOOT_LINES[i]), at));
+                    }
+                  }
+                  // Boot completes → ignite. Non-interruptible by scroll; a power-off
+                  // press calls transition('idle') which clears this timer.
+                  bootEndTimer = window.setTimeout(() => transition('ready'), bootMs);
+                  writeState(true, forced); // intent: we are powering up to ready
+                  return;
+                }
+
+                if (next === 'ready') {
+                  // Boot finished (or restored): drop booting, light the HUD. NOW the
+                  // rail cascade + compass + menu chrome ignite together.
+                  body.classList.remove(BOOTING_CLASS);
+                  body.classList.add(ACTIVE_CLASS);
+                  writeState(true, forced);
+                  return;
+                }
+              };
+
+              // requestPowerOn — go to ready via the loader, unless we are already on
+              // the way (booting) or there (ready). Skips the boot when restoring.
+              const requestPowerOn = (skipBoot) => {
+                if (state === 'ready') return;
+                if (skipBoot) {
+                  // Restore path: land straight in ready so a returning visitor isn't
+                  // marched through the 3.6s boot again.
+                  transition('ready');
+                  return;
+                }
+                if (state === 'booting') return; // already powering up
+                transition('booting');
+              };
+
+              // requestPowerOff — return to idle. Booting cancels to idle (a power-off
+              // press during boot aborts the loader); ready tears straight down.
+              const requestPowerOff = () => {
+                if (state === 'idle') return;
+                transition('idle');
+              };
+
+              // --- Inputs ----------------------------------------------------------
+              // 1) Scroll signal from HeroIsland (the black-hole edge). When forced is
+              //    engaged the scroll signal must NOT power the HUD off (sticky). A
+              //    scroll-ON powers up; once booted we STAY powered, so scroll-OFF is
+              //    ignored unless we were never forced AND never booted — i.e. the only
+              //    thing that powers down is the button (handled below). So here we only
+              //    act on the power-ON edge from scroll.
+              window.addEventListener(POWER_EVENT, (event) => {
+                const detail = event && event.detail ? event.detail : null;
+                if (!detail) return;
+                if (detail.on) requestPowerOn(false);
+                // detail.on === false (scroll left the black hole) is deliberately a
+                // no-op: once booted the HUD stays lit until the power button powers
+                // it off. (The forced override would suppress it anyway.)
               });
+
+              // 2) Power button — toggles the forced override. Engaging it powers the
+              //    HUD on (booting → ready); disengaging it powers OFF (the single way
+              //    back to idle). aria-pressed tracks `forced`.
+              if (btn) {
+                btn.addEventListener('click', () => {
+                  forced = !forced;
+                  applyForced();
+                  if (forced) requestPowerOn(false);
+                  else requestPowerOff();
+                });
+              }
+
+              // --- Init: restore persisted power state (apply classes ASAP, no flash).
+              const persisted = readState();
+              forced = persisted.forced;
+              applyForced();
+              if (persisted.powered) {
+                // Returning visitor who left the HUD on: restore ready directly (no
+                // replayed boot). If they had forced it on, forced is already applied.
+                requestPowerOn(true);
+              }
             })();
           </script>
 

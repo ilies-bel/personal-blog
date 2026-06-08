@@ -375,8 +375,14 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   pointer-events: none;
   transition: opacity 0.5s var(--ease-out-quint) var(--rail-beat);
 }
-/* Hidden during the quiet cinematic scroll — only while the HUD is NOT activated. */
-body:not(.hud-active) .hud-compass { opacity: 0; transition-delay: 0s; }
+/* The compass belongs ONLY to the fully-READY HUD. It is hidden during the quiet
+   cinematic scroll (HUD not activated) AND explicitly during the boot window, so it
+   never appears while the loader is still playing — it ignites WITH the rail the
+   moment booting → ready (hud-active goes on). The booting rule is redundant with
+   :not(.hud-active) today (booting never co-exists with active) but is stated
+   explicitly so the intent survives any future class overlap. */
+body:not(.hud-active) .hud-compass,
+body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
 /* The gauge rose — a fixed-size positioning context holding the faint static
    crosshair frame, the ▲ cursor anchor (dead-centre, never moved) and the ┼
    marker waypoint (centred then translated each rAF). The box is sized so the ┼'s
@@ -645,19 +651,28 @@ body:not(.hud-active) .hud-compass { opacity: 0; transition-delay: 0s; }
 }
 
 /* ---------------------------------------------------------------------------
-   HUD boot sequence (#7) — a brief "powering up" transition played on the
-   hud-active OFF→ON edge. body.hud-booting is added for ~1.2s by the inline
-   script in BaseLayout (MutationObserver on body's class), then removed; this
-   block drives the LOADING readout + a thin progress line + a full-viewport
-   light flicker entirely off that class. It overlaps / leads into the rail
-   cascade. Tunable durations live right here.
+   HUD boot sequence (#2/#3/#7) — the ~3.6s "powering up" loader played BEFORE the
+   HUD ignites. The boot FSM in BaseLayout adds body.hud-booting for the whole
+   window (while the rail/compass/menu stay DARK), then swaps it for body.hud-active
+   so the HUD lights up only once the machine has finished its start-up self-check.
+
+   Everything here is CSS-only off body.hud-booting:
+     • .hud-boot          — the status readout + a STUTTERING progress bar.
+     • .hud-boot-flicker  — a full-viewport power-surge light (hard flashes early,
+                            settling late).
+     • .hud-boot-scan     — a thin line that SWEEPS the viewport once or twice.
+   It reads like a machine starting up, not a flat bar. The duration lives in one
+   var, --hud-boot-dur, which the FSM also writes from HUD_BOOT_DURATION_MS so the
+   CSS animation length can never drift from the JS timer.
    --------------------------------------------------------------------------- */
 :root {
-  --hud-boot-dur: 1.2s;          /* must match BOOT_MS in BaseLayout's script */
+  --hud-boot-dur: 3600ms;        /* must match BOOT_MS / HUD_BOOT_DURATION_MS — the
+                                    FSM also sets this inline so the two stay synced */
 }
 
-/* The LOADING readout, bottom-centre. Hidden until booting, then fades in with a
-   filling progress bar beneath it, and out as the boot ends. */
+/* The status readout, bottom-centre. Hidden until booting, then fades in over the
+   stuttering progress bar; the LABEL text is cycled by the FSM (LOADING →
+   CALIBRATING → ALIGNING ARRAY → SYSTEMS NOMINAL). */
 .hud-boot {
   position: fixed;
   left: 50%;
@@ -675,6 +690,9 @@ body:not(.hud-active) .hud-compass { opacity: 0; transition-delay: 0s; }
   transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
 .hud-boot-label {
+  /* min-width so the readout box doesn't jump as the status text changes length. */
+  min-width: 11rem;
+  text-align: center;
   font-size: 0.72rem;
   letter-spacing: 0.42em;
   /* optical: the big tracking pushes the text right; nudge it back to centre. */
@@ -703,18 +721,27 @@ body.hud-booting .hud-boot {
   visibility: visible;
   transition: opacity 0.2s ease, visibility 0s;
 }
+/* STUTTERING fill — multi-stop keyframes so the bar SURGES, holds, surges again
+   (a system check), instead of a smooth linear sweep. The flats between surges are
+   the "pauses"; linear timing lets each surge read as a discrete jump. */
 body.hud-booting .hud-boot-bar::after {
-  animation: hud-boot-fill var(--hud-boot-dur) var(--ease-out-quint) forwards;
+  animation: hud-boot-fill var(--hud-boot-dur) linear forwards;
 }
 @keyframes hud-boot-fill {
-  0% { width: 0; }
-  85% { width: 100%; opacity: 1; }
+  0%   { width: 0; }
+  8%   { width: 18%; }   /* first surge */
+  18%  { width: 18%; }   /* pause */
+  30%  { width: 46%; }   /* second surge */
+  44%  { width: 46%; }   /* pause */
+  58%  { width: 62%; }   /* third surge */
+  70%  { width: 62%; }   /* pause */
+  86%  { width: 100%; opacity: 1; }  /* final surge to full */
   100% { width: 100%; opacity: 0.5; }
 }
 
-/* Full-viewport light flicker — a quick keyframed surge tinted toward white/--fg
-   that flashes the interface a few times then settles. SUBTLE (a dim flicker, not
-   a strobe). Sits above the scene but below the HUD/controls. pointer-events:none. */
+/* Full-viewport light surge — a few HARD flashes early (power coming online) that
+   settle to a dim shimmer late. SUBTLE radial wash (not a strobe). Sits above the
+   scene but below the HUD/controls. pointer-events:none. */
 .hud-boot-flicker {
   position: fixed;
   inset: 0;
@@ -730,24 +757,72 @@ body.hud-booting .hud-boot-bar::after {
 body.hud-booting .hud-boot-flicker {
   animation: hud-boot-flicker var(--hud-boot-dur) steps(1, end) 1;
 }
+/* Re-timed over 3.6s with a clear power-surge feel: hard flashes in the first
+   third (system coming online), then it settles to faint pulses before going dark
+   for ignition. */
 @keyframes hud-boot-flicker {
   0%   { opacity: 0; }
-  6%   { opacity: 0.55; }
-  12%  { opacity: 0.12; }
-  20%  { opacity: 0.6; }
-  28%  { opacity: 0.05; }
-  40%  { opacity: 0.42; }
-  52%  { opacity: 0.1; }
-  70%  { opacity: 0.22; }
+  3%   { opacity: 0.6; }
+  6%   { opacity: 0.1; }
+  10%  { opacity: 0.62; }
+  14%  { opacity: 0.06; }
+  20%  { opacity: 0.5; }
+  26%  { opacity: 0.08; }
+  34%  { opacity: 0.34; }
+  44%  { opacity: 0.06; }
+  58%  { opacity: 0.18; }
+  72%  { opacity: 0.05; }
   100% { opacity: 0; }
 }
 
-/* Reduced motion: skip the flicker + bar animation entirely. The LOADING readout
-   still shows briefly (its opacity transition is allowed) so the boot is felt,
-   just calmly. */
+/* SCAN sweep — a thin bright line that travels DOWN the viewport (a sensor sweep /
+   CRT pass). Driven off body.hud-booting; fixed, pointer-events:none, low z. The
+   gradient is a narrow band; the animation slides it from above the top edge to
+   below the bottom. It runs ~twice across the window with an ease so each pass
+   accelerates. */
+.hud-boot-scan {
+  position: fixed;
+  inset: 0;
+  z-index: 17;                 /* same layer as the flicker, below the HUD rail */
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent calc(50% - 1px),
+    color-mix(in oklch, var(--highlight) 60%, transparent) 50%,
+    transparent calc(50% + 1px),
+    transparent 100%
+  );
+  /* The band is one viewport tall but its bright line sits at 50%, so translating
+     by ±100% moves the line fully off-screen at each end. */
+  transform: translateY(-100%);
+}
+body.hud-booting .hud-boot-scan {
+  /* Two passes across the boot window. The opacity is keyed in the same animation
+     so the line fades in at the top of a pass and out at the bottom. */
+  animation: hud-boot-scan calc(var(--hud-boot-dur) / 2) var(--ease-out-quint) 2;
+}
+@keyframes hud-boot-scan {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  12%  { opacity: 0.5; }
+  88%  { opacity: 0.5; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+/* Reduced motion: skip the flicker, scan and bar STUTTER entirely. The readout
+   still shows briefly (its opacity transition is allowed) and the bar fills CALMLY
+   so the boot is felt, just without the machine-startup theatrics. */
 @media (prefers-reduced-motion: reduce) {
   body.hud-booting .hud-boot-flicker { animation: none; opacity: 0; }
-  body.hud-booting .hud-boot-bar::after { animation: none; width: 100%; opacity: 0.6; }
+  body.hud-booting .hud-boot-scan { animation: none; opacity: 0; }
+  body.hud-booting .hud-boot-bar::after {
+    animation: hud-boot-fill-calm var(--hud-boot-dur) ease-out forwards;
+  }
+  @keyframes hud-boot-fill-calm {
+    0% { width: 0; opacity: 1; }
+    100% { width: 100%; opacity: 0.6; }
+  }
 }
 
 /* ---------------------------------------------------------------------------
