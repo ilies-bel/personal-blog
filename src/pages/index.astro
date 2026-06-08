@@ -1,13 +1,11 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
-import RedGiantDebugPanel from '../hero/components/RedGiantDebugPanel.tsx';
 import { BEATS, SCROLL_SECTION_COUNT } from '../hero/beats';
 import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
-const isDev = import.meta.env.DEV;
 ---
 
 <BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} type="website" bare>
@@ -18,9 +16,6 @@ const isDev = import.meta.env.DEV;
       hole that pulls the portfolio interface in. The scene is a client-only island;
       three.js never blocks the page. */}
   <BlackHole client:only="react" />
-
-  {/* DEV-ONLY: live red-giant framing tuner (size + on-screen X/Y). Never shipped. */}
-  {isDev && <RedGiantDebugPanel client:only="react" />}
 
   {/* The scroll track. It contributes no visuals of its own — it exists only to
       give the page real scrollable height so the pinned scene can be scrubbed.
@@ -54,36 +49,4 @@ const isDev = import.meta.env.DEV;
     </div>
   </noscript>
 
-  {/* DEV-ONLY styles for the red-giant framing tuner. Inlined + dev-guarded so
-      they never reach the shipped global.css cascade. */}
-  {isDev && (
-    <style is:inline set:html={`
-      .rg-debug {
-        position: fixed; top: 1rem; left: 1rem; z-index: 9999;
-        width: 320px; padding: 0.75rem 0.9rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 13px; color: #c9d4f0;
-        background: rgba(14, 20, 38, 0.82);
-        border: 1px solid rgba(120, 150, 220, 0.35); border-radius: 10px;
-        backdrop-filter: blur(8px);
-      }
-      .rg-debug__title {
-        all: unset; cursor: pointer; display: block; margin-bottom: 0.5rem;
-        color: #8aa8ff; letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px;
-      }
-      .rg-debug__pin { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; cursor: pointer; }
-      .rg-debug__row { display: grid; grid-template-columns: 48px 1fr 44px; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
-      .rg-debug__label { color: #c9d4f0; }
-      .rg-debug__value { text-align: right; color: #e7ecff; }
-      .rg-debug__row input[type='range'] { width: 100%; accent-color: #4d7cff; }
-      .rg-debug__reset {
-        all: unset; cursor: pointer; display: block; width: 100%; box-sizing: border-box;
-        margin-top: 0.5rem; padding: 0.4rem 0; text-align: center;
-        color: #c9d4f0; letter-spacing: 0.1em; font-size: 12px;
-        background: rgba(40, 56, 100, 0.6); border: 1px solid rgba(120, 150, 220, 0.3); border-radius: 6px;
-      }
-      .rg-debug__readout { margin-top: 0.55rem; font-size: 11px; color: #8da0c8; }
-      .rg-debug__hint { color: #6c7da0; }
-    `} />
-  )}
 </BaseLayout>
