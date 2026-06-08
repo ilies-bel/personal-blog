@@ -62,6 +62,11 @@ export const DEBUG_WINDOW_KEYS = {
   giantPosX: '__bhGiantPosX',
   /** Red-giant on-screen Y position: overrides RED_GIANT_PARK.y. */
   giantPosY: '__bhGiantPosY',
+  /** Adaptive-HUD contrast readout. When set (any truthy number) HeroIsland
+   *  mounts a fixed monospace panel showing the live synthetic luma/noise, their
+   *  smoothed values, and the current discrete `data-lume` ('dark' | 'bright')
+   *  the rail is using — so the contrast model can be inspected while scrolling. */
+  hudLume: '__bhHudLume',
 } as const;
 
 // --- cross-layer cursor bridge (window.__bh*) ------------------------------

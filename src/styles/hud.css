@@ -2,9 +2,19 @@
    state is a glyph instrument rail; labels, destination and connector line exist
    only on active hover/focus/selection so the animation stays the visual subject. */
 .hud-system {
-  --hud-line: color-mix(in oklch, var(--fg) 34%, transparent);
+  /* Rail hairline derives from the adaptive --hud-line-opacity (default 0.34
+     reproduces today's look); --hud-line-dim + --hud-gold stay exactly as-is. */
+  --hud-line: color-mix(in oklch, var(--fg) calc(var(--hud-line-opacity) * 100%), transparent);
   --hud-line-dim: color-mix(in oklch, var(--fg) 16%, transparent);
   --hud-gold: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+  /* Adaptive INK: blends a warm white-ish light ink toward a darker warm ink as
+     --hud-ink-dark-weight (0..100, set by the sampler) rises on bright frames, so
+     the rail text/glyphs stay legible whether the scene behind is black or white. */
+  --hud-ink-light: oklch(0.93 0.012 82);   /* warm white-ish, NOT pure white */
+  --hud-ink-dark: oklch(0.32 0.020 82);    /* darker warm ink for bright frames */
+  --hud-ink: color-mix(in oklch, var(--hud-ink-light), var(--hud-ink-dark) calc(var(--hud-ink-dark-weight) * 1%));
+  --hud-muted: color-mix(in oklch, var(--hud-ink) 62%, transparent);
+  --hud-outline: oklch(0.12 0.01 82);      /* opposite-tone dark halo for glyphs */
   position: fixed;
   left: clamp(1.25rem, 5vw, 5rem);
   top: 50%;
@@ -19,7 +29,29 @@
     opacity 0.55s var(--ease-out-quint),
     transform 0.55s var(--ease-out-quint);
 }
-.hud-system::before { display: none; }
+/* Soft instrumentation lane behind the rail — NOT a card. A blurred vertical
+   radial wash hugging the rail, masked to fade top + bottom, with its opacity
+   driven by the adaptive --hud-backdrop-opacity (low baseline, capped low). It
+   only shows once the HUD is visible; hidden otherwise so it never flashes in. */
+.hud-system::before {
+  content: '';
+  display: none;
+  position: absolute;
+  left: 0.4rem;            /* hug the rail */
+  top: -2.5rem;
+  bottom: -2.5rem;         /* rail extent + ~40px pad */
+  width: 4.5rem;
+  background:
+    radial-gradient(120% 60% at 1.2rem 50%,
+      color-mix(in oklch, #000 70%, transparent) 0%,
+      transparent 70%);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+          mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+  filter: blur(6px);
+  opacity: var(--hud-backdrop-opacity);
+  pointer-events: none;
+  z-index: 0;
+}
 .hud-system > * {
   position: relative;
   z-index: 1;
@@ -29,7 +61,7 @@
   transform: translate(0, -50%);
   pointer-events: auto;
 }
-.hud-system[data-visible='true']::before { opacity: 0; }
+.hud-system[data-visible='true']::before { display: block; }
 .hud-nav {
   position: relative;
   width: max-content;
@@ -102,14 +134,21 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--fg-faint);
+  color: var(--hud-muted);
   font: inherit;
   text-align: left;
   cursor: pointer;
   overflow: visible;
   transition:
     width 0.34s var(--ease-out-quint),
-    color 0.2s ease;
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+/* Per-node opacity is adaptive (inactive nodes fade back on noisy frames). Gate
+   it behind the visible HUD so it never fights the container's reveal fade — the
+   .hud-nav container owns opacity 0→1; buttons only carry node opacity once shown. */
+.hud-system[data-visible='true'] .hud-nav-button {
+  opacity: var(--hud-inactive-opacity);
 }
 .hud-nav-button::before {
   content: '';
@@ -127,7 +166,11 @@
 .hud-nav-button[data-active='true'],
 .hud-nav-button[data-selected='true'] {
   width: 11.7rem;
-  color: var(--fg);
+  color: var(--hud-ink);
+}
+.hud-system[data-visible='true'] .hud-nav-button[data-active='true'],
+.hud-system[data-visible='true'] .hud-nav-button[data-selected='true'] {
+  opacity: var(--hud-active-opacity);
 }
 .hud-nav-button[data-active='true']::before,
 .hud-nav-button[data-selected='true']::before {
@@ -140,7 +183,8 @@
    glyph out of --fg-faint and gives the connector tick a dim gold so the eye
    can find the current stage at a glance. */
 .hud-nav-button[data-current='true'] {
-  color: color-mix(in oklch, var(--fg-dim) 78%, var(--fg));
+  /* Quieter than active: the adaptive ink pulled partway back toward muted. */
+  color: color-mix(in oklch, var(--hud-ink) 70%, var(--hud-muted));
 }
 .hud-nav-button[data-current='true']::before {
   width: 0.78rem;
@@ -170,10 +214,26 @@
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+  /* Adaptive legibility stack (drop-shadows follow the masked alpha shape):
+       1-2. Tight opposite-tone OUTLINE halo — opacity driven by --hud-outline-opacity,
+            so on bright/noisy frames the dark rim separates the glyph from the white.
+       3.   Soft dark legibility halo — baseline contrast (kept as-is).
+       4.   Warm GLOW — opacity driven by --hud-glow-opacity, strong on dark frames. */
   filter:
+    drop-shadow(0 0 1px color-mix(in oklch, var(--hud-outline), transparent calc((1 - var(--hud-outline-opacity)) * 100%)))
+    drop-shadow(0 0 2px color-mix(in oklch, var(--hud-outline), transparent calc((1 - var(--hud-outline-opacity)) * 100%)))
     drop-shadow(0 0 16px rgba(0, 0, 0, 1))
-    drop-shadow(0 0 10px color-mix(in oklch, var(--hud-gold) 26%, transparent));
+    drop-shadow(0 0 10px color-mix(in oklch, var(--hud-gold), transparent calc((1 - var(--hud-glow-opacity)) * 100%)));
   transform-origin: 50% 50%;
+  transition: transform 0.22s var(--ease-out-quint);
+}
+/* Active emphasis scales the GLYPH (not the button), so the rail's width-expand
+   transition is untouched. --hud-active-scale rises with scene noise so the lit
+   node stays clearest on busy frames. */
+.hud-nav-button[data-active='true'] .hud-nav-glyph,
+.hud-nav-button[data-selected='true'] .hud-nav-glyph,
+.hud-nav-button[data-current='true'] .hud-nav-glyph {
+  transform: scale(var(--hud-active-scale));
 }
 .hud-nav-copy {
   display: grid;
@@ -304,7 +364,10 @@
     transform: translateY(0.7rem);
     justify-items: stretch;
   }
-  .hud-system::before {
+  .hud-system::before,
+  .hud-system[data-visible='true']::before {
+    /* No soft scrim on mobile — the rail is a horizontal bottom dock there, not a
+       vertical left lane, so the instrumentation-lane wash does not apply. */
     display: none;
   }
   .hud-system[data-visible='true'] {

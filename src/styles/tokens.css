@@ -40,5 +40,18 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Adaptive HUD contrast — defaults are the DARK opening-frame baseline so the
+     rail is readable under SSR / no-JS / before the sampler's first tick. The
+     adaptive sampler in HeroIsland overwrites these on .bh-root per frame; the
+     names are CONSUMED in hud.css. (See src/hero/lib/hudLuminance.ts.) */
+  --hud-ink-dark-weight: 0;     /* 0..100: pull ink toward the dark endpoint */
+  --hud-glow-opacity: 0.5;      /* warm glyph glow strength */
+  --hud-outline-opacity: 0;     /* opposite-tone glyph outline strength */
+  --hud-line-opacity: 0.34;     /* rail hairline opacity (reproduces today's 34%) */
+  --hud-backdrop-opacity: 0.12; /* soft instrumentation-lane scrim opacity */
+  --hud-active-scale: 1;        /* active glyph scale */
+  --hud-active-opacity: 1;      /* active node opacity */
+  --hud-inactive-opacity: 0.7;  /* inactive node opacity */
+
   color-scheme: dark;
 }
