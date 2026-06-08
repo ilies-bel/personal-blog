@@ -446,7 +446,10 @@
   50%      { scale: 0.62; opacity: 0.85; }
 }
 
-/* Core dot — constant in both states, centred on the lock point. */
+/* Core dot — constant in both states, centred on the lock point. Its resting
+   colour is chosen PER STATE (not via a canvas blend, which fails because the
+   canvas is in a separate stacking context): light on the dark states and dark
+   on the bright states, driven by the marker's data-bright attribute below. */
 .star-marker-dot {
   position: absolute;
   top: 50%;
@@ -455,18 +458,27 @@
   height: 0.36rem;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  /* Pure white + difference blend = auto-contrast against the canvas behind it:
-     white renders as (255 - background) per channel, so the dot reads dark over
-     bright nebula/yellow-star surfaces and bright over the dark black-hole state.
-     No box-shadow here — a shadow paints separately from the element and would
-     fight the difference blend (muddy ring), so the blend reads cleanly on its own. */
-  background: #fff;
-  mix-blend-mode: difference;
+  /* DARK-STATE DEFAULT (data-bright unset/false: the 'beginning' speck + 'end'
+     black hole): off-white dot with a dark 1px separating ring + soft glow so it
+     reads cleanly on the dark canvas. */
+  background: var(--marker-line);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--bg) 70%, transparent),
+    0 0 5px 1px color-mix(in oklch, var(--marker-line) 45%, transparent);
   transition: background 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
+/* BRIGHT-STATE RESTING (orange nebula, yellow star, red giant): a near-black dot
+   with a LIGHT separating ring + soft dark halo so it pops on the bright surface.
+   Scoped :not([data-locked]) so a locked marker on a bright state still goes gold
+   below (the locked rule must always win, on every state). */
+.star-marker[data-bright='true']:not([data-locked='true']) .star-marker-dot {
+  background: var(--bg);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--fg) 75%, transparent),
+    0 0 5px 1px color-mix(in oklch, var(--bg) 55%, transparent);
+}
 .star-marker[data-locked='true'] .star-marker-dot {
-  /* Locked: literal Voyager-gold accent, NOT inverted by the blend. */
-  mix-blend-mode: normal;
+  /* Locked: literal Voyager-gold accent on EVERY state (wins over data-bright). */
   background: var(--marker-gold);
   box-shadow:
     0 0 6px 2px color-mix(in oklch, var(--marker-gold) 50%, transparent),

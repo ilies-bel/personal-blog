@@ -31,10 +31,17 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   settledIdForStage,
+  type HudTargetId,
   type MarkerPlacement,
 } from '../HudNavigation';
 import type { MarkerFrame } from '../scene/types';
 import { useSceneState } from './SceneStateContext';
+
+// Which lifecycle states render on a BRIGHT background (orange nebula gas, the
+// yellow photosphere, the red-giant limb). The resting centre dot flips to DARK
+// on these so it stays readable; on the dark states ('beginning' speck, 'end'
+// black hole) it stays the off-white line colour. Static per placement.
+const BRIGHT_STATES: ReadonlySet<HudTargetId> = new Set(['nebula', 'yellow', 'red']);
 
 interface StarMarkerProps {
   /** This marker's placement (which state it belongs to, where it sits, its copy). */
@@ -108,6 +115,11 @@ const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number 
 
 export default function StarMarker({ placement, markerFrameRef }: StarMarkerProps) {
   const { reduced, base } = useSceneState();
+
+  // Static per placement: does this marker sit over a bright scene surface? Drives
+  // the resting dot's colour (dark dot on bright states, light dot on dark states)
+  // via the data-bright attribute below — no canvas blend mode involved.
+  const isBright = BRIGHT_STATES.has(placement.state);
 
   // The DOM element that receives inline left/top updates every rAF. Mutated
   // directly (no React state) to avoid per-frame re-renders.
@@ -259,6 +271,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-visible={visible}
       data-reduced={reduced}
       data-locked={locked}
+      data-bright={isBright}
       data-side={cardSide}
       onFocus={() => {
         focusedRef.current = true;
