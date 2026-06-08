@@ -75,6 +75,11 @@ const DOT_HOLD_END = 0.04;
 const NEBULA_GROW_END = 0.18;
 const STAR_IGNITION_START = 0.316;
 const YELLOW_SETTLE_END = 0.37;
+// The yellow star HOLDS close + centred across 0.37→YELLOW_HOLD_END so the dive-in
+// resolves into a real beat (headline reads on the blazing sun). Only AFTER this hold
+// does the giant grow + the camera travel out to the corner — so yellow→red reads as
+// ONE move (grow + pull to the final corner) instead of "dive in, then reverse out".
+const YELLOW_HOLD_END = 0.42;
 
 // The public cinematic timeline. The existing shaders still understand the older
 // reverse "stage" coordinates, so this is the single handoff from the new story
@@ -123,8 +128,14 @@ export function legacyStageForProgress(progress: number): number {
     // giant growth resumes the descent.
     return lerp(3.02, 2.88, easeOutCubic(segment(p, STAR_IGNITION_START, YELLOW_SETTLE_END)));
   }
+  if (p < YELLOW_HOLD_END) {
+    // YELLOW HOLD: stay at the settled gold (no growth) while the camera sits on the
+    // close yellow-star beat. Growth resumes only after, so the move to the corner is
+    // one continuous gesture rather than starting mid-dive-in.
+    return 2.88;
+  }
   if (p < 0.514) {
-    return lerp(2.88, 2.05, easeInOutCubic(segment(p, YELLOW_SETTLE_END, 0.514)));
+    return lerp(2.88, 2.05, easeInOutCubic(segment(p, YELLOW_HOLD_END, 0.514)));
   }
   if (p < 0.658) {
     return 2.05;
@@ -152,7 +163,9 @@ export function progressForLegacyStage(stage: number): number {
   if (stage >= 3.42) return lerp(DOT_HOLD_END, NEBULA_GROW_END, (4.5 - stage) / (4.5 - 3.42));
   if (stage >= 3.02) return lerp(NEBULA_GROW_END, STAR_IGNITION_START, (3.42 - stage) / (3.42 - 3.02));
   if (stage >= 2.88) return lerp(STAR_IGNITION_START, YELLOW_SETTLE_END, (3.02 - stage) / (3.02 - 2.88));
-  if (stage >= 2.05) return lerp(YELLOW_SETTLE_END, 0.514, (2.88 - stage) / (2.88 - 2.05));
+  // stage 2.88 holds across [YELLOW_SETTLE_END, YELLOW_HOLD_END]; the 2.88→2.05 growth
+  // then maps onto [YELLOW_HOLD_END, 0.514] (in lockstep with legacyStageForProgress).
+  if (stage >= 2.05) return lerp(YELLOW_HOLD_END, 0.514, (2.88 - stage) / (2.88 - 2.05));
   if (stage >= 1.05) return 0.586;
   if (stage >= 0.5) return lerp(0.658, 0.748, (1.05 - stage) / (1.05 - 0.5));
   if (stage >= 0.32) return lerp(0.748, 0.82, (0.5 - stage) / (0.5 - 0.32));
@@ -266,8 +279,19 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     position = mixVec(NEBULA_GATHERED.position, YELLOW_HOLD.position, t);
     target = mixVec(NEBULA_GATHERED.target, YELLOW_HOLD.target, t);
     parallax = 0.05;
+  } else if (p < YELLOW_HOLD_END) {
+    // YELLOW HOLD: the close, centred yellow-star beat. The camera dwells here (the
+    // dive-in has resolved) so the next move reads as its own single gesture.
+    position = YELLOW_HOLD.position;
+    target = YELLOW_HOLD.target;
+    parallax = 0.04;
   } else if (p < 0.514) {
-    const t = easeInOutCubic(segment(p, YELLOW_SETTLE_END, 0.514));
+    // YELLOW → RED giant: ONE continuous move. The giant grows (legacyStage 2.88→2.05)
+    // while the camera travels from the close centred hold straight out to the corner —
+    // a single monotonic gesture (z 17.4→38.2, sliding to the off-centre pose), no
+    // dive-then-reverse. easeOutCubic leads the move so it commits promptly and settles
+    // into the corner rather than lingering.
+    const t = easeOutCubic(segment(p, YELLOW_HOLD_END, 0.514));
     position = mixVec(YELLOW_HOLD.position, RED_COMPOSITION.position, t);
     target = mixVec(YELLOW_HOLD.target, RED_COMPOSITION.target, t);
     parallax = 0.04;
