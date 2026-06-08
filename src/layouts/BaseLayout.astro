@@ -79,44 +79,63 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               planets" <details> dropdown holds the social links (zero-JS, native), and
               a power button toggles the hud-active morph in place without scrolling. */}
           <nav class="overlay-blog" aria-label="Sections">
+            {/* The four section icons are redrawn on ONE shared optical grid so the
+                row reads as a set: each motif fits a ~20px circle centred at (16,16)
+                (radius ~9–10 max), all stroke="currentColor" stroke-width="1.5"
+                fill="none" with round joins/caps, only a small center accent filled.
+                Identical visual mass; the lifecycle motif stays but disciplined. */}
             <div class="overlay-blog-links">
               <a class="overlay-blog-link" href={href('about')} aria-label="About">
-                {/* THE BEGINNING / pale blue dot — faint orbit ring + solid speck. */}
+                {/* THE BEGINNING / pale blue dot — thin ring + small filled speck. */}
                 <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <circle cx="16" cy="16" r="9.5" fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.4" />
-                  <circle cx="16" cy="16" r="2.4" fill="currentColor" />
+                  <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <circle cx="16" cy="16" r="2" fill="currentColor" stroke="none" />
                 </svg>
                 <span class="overlay-blog-label">About</span>
               </a>
               <a class="overlay-blog-link" href={href('writing')} aria-label="Writing">
-                {/* NEBULA — a soft seed of gas (the rail's nebula glyph is a single
-                    filled circle); a faint halo distinguishes it from the dot. */}
-                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <circle cx="16" cy="16" r="9.5" fill="currentColor" opacity="0.16" />
-                  <circle cx="16" cy="16" r="4.5" fill="currentColor" />
+                {/* NEBULA — thin ring + a concentric inner hint and two small orbiting
+                    specks. Same weight/mass as About but distinct (gas, not a dot). */}
+                <svg
+                  class="overlay-blog-icon"
+                  viewBox="0 0 32 32"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="16" cy="16" r="9" />
+                  <circle cx="16" cy="16" r="4" />
+                  <circle cx="16" cy="6" r="0.9" fill="currentColor" stroke="none" />
+                  <circle cx="25" cy="20" r="0.9" fill="currentColor" stroke="none" />
                 </svg>
                 <span class="overlay-blog-label">Writing</span>
               </a>
               <a class="overlay-blog-link" href={href('projects')} aria-label="Projects">
-                {/* YELLOW STAR — the four-point star, echoing the rail glyph. */}
-                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <path
-                    d="M16 2 Q17.7 14.3 30 16 Q17.7 17.7 16 30 Q14.3 17.7 2 16 Q14.3 14.3 16 2 Z"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linejoin="round"
-                  />
+                {/* YELLOW STAR — a 4-point star OUTLINE sized to fit the ~20px circle
+                    (vertices at r~10), 1.5 stroke, round joins. */}
+                <svg
+                  class="overlay-blog-icon"
+                  viewBox="0 0 32 32"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 6 Q17 15 26 16 Q17 17 16 26 Q15 17 6 16 Q15 15 16 6 Z" />
                 </svg>
                 <span class="overlay-blog-label">Projects</span>
               </a>
               <a class="overlay-blog-link" href={href('graveyard')} aria-label="Graveyard">
-                {/* RED GIANT — the swollen teardrop limb (the rail's red-giant glyph). */}
+                {/* RED GIANT — a swollen limb read as a half-toned circle (◐): a ring
+                    OUTLINE with the left hemisphere filled. Same weight, NOT a solid
+                    teardrop, same mass as the others. */}
                 <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <path
-                    d="M16 3 Q18 18 28 21 Q18 24 16 30 Q14 24 4 21 Q14 18 16 3 Z"
-                    fill="currentColor"
-                  />
+                  <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M16 7 A 9 9 0 0 0 16 25 Z" fill="currentColor" stroke="none" opacity="0.85" />
                 </svg>
                 <span class="overlay-blog-label">Graveyard</span>
               </a>
@@ -124,10 +143,11 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
 
             <details class="overlay-blog-socials">
               <summary class="overlay-blog-socials-toggle" aria-label="Links">
-                {/* Two planets — one orbiting the other. */}
+                {/* Two planets — one orbiting the other. Matched to the section-icon
+                    weight (1.5 stroke, ~20px optical footprint). */}
                 <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <circle cx="13" cy="16" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="24" cy="16" r="3.5" fill="currentColor" />
+                  <circle cx="13" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <circle cx="24" cy="16" r="3" fill="currentColor" stroke="none" />
                 </svg>
               </summary>
               <div class="overlay-blog-socials-menu">
@@ -146,34 +166,82 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               aria-pressed="false"
               aria-label="Toggle navigation"
             >
-              {/* IEC power glyph: an open ring broken at the top by a vertical line. */}
+              {/* IEC power glyph: an open ring broken at the top by a vertical line.
+                  Matched to the section-icon weight (1.5 stroke) so the corner reads
+                  as one set; the circular FRAME around it lives in scene.css. */}
               <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
                 <path
-                  d="M16 4 L16 14"
+                  d="M16 6 L16 15"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="1.8"
+                  stroke-width="1.5"
                   stroke-linecap="round"
                 />
                 <path
-                  d="M10.3 9.2 A 8.2 8.2 0 1 0 21.7 9.2"
+                  d="M11 10.5 A 7 7 0 1 0 21 10.5"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="1.8"
+                  stroke-width="1.5"
                   stroke-linecap="round"
                 />
               </svg>
             </button>
           </nav>
 
+          {/* Boot transition layers — driven entirely by body.hud-booting (added for
+              ~1.2s on the hud-active ON transition by the script below). The flicker
+              is a fixed full-viewport light layer; the LOADING readout sits bottom-
+              centre with a thin progress line. Both are CSS-only off the body class
+              (see hud.css → "HUD boot sequence"); aria-hidden so it never announces. */}
+          <div class="hud-boot-flicker" aria-hidden="true"></div>
+          <div class="hud-boot" aria-hidden="true">
+            <span class="hud-boot-label">LOADING</span>
+            <span class="hud-boot-bar"></span>
+          </div>
+
           {/* Self-contained power-button toggle (mirrors the project's zero-import
               inline-script convention, e.g. CustomCursor). It owns body.hud-forced +
               body.hud-active when the visitor forces the morph; HeroIsland's scroll
               callback yields whenever hud-forced is present, so the override is sticky
               until the button is pressed again. No-JS safe (the menu still grows on
-              scroll); keyboard-accessible (it's a real <button>). */}
+              scroll); keyboard-accessible (it's a real <button>).
+
+              It ALSO owns the boot sequence (#7): a MutationObserver watches body's
+              class list and, whenever hud-active newly turns ON (whether from the
+              power button OR from HeroIsland's scroll signal), adds body.hud-booting
+              for BOOT_MS then removes it — playing the LOADING + flicker once. It only
+              fires on the OFF→ON edge (tracked via wasActive), never on turning off,
+              and skips the timed window under reduced-motion (CSS still shows/hides
+              LOADING briefly, just no flicker). */}
           <script is:inline>
             (() => {
+              // Keep in sync with --hud-boot-dur in hud.css. The reduced-motion
+              // handling is purely CSS (the flicker + bar animations are dropped),
+              // so the timed window stays the same here.
+              const BOOT_MS = 1200;
+              const body = document.body;
+
+              // --- Boot sequence: play once on every hud-active OFF→ON edge. ---
+              let wasActive = body.classList.contains('hud-active');
+              let bootTimer = 0;
+              const playBoot = () => {
+                window.clearTimeout(bootTimer);
+                body.classList.add('hud-booting');
+                bootTimer = window.setTimeout(() => {
+                  body.classList.remove('hud-booting');
+                }, BOOT_MS);
+              };
+              const observer = new MutationObserver(() => {
+                const isActive = body.classList.contains('hud-active');
+                if (isActive && !wasActive) playBoot();
+                wasActive = isActive;
+              });
+              observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+              // If the page already loaded at the black hole (hud-active set before
+              // this runs), play the boot once on arrival.
+              if (wasActive) playBoot();
+
+              // --- Power button: sticky manual override of the hud-active morph. ---
               const btn = document.querySelector('.overlay-blog-power');
               if (!btn) return;
               let forced = false;
@@ -182,6 +250,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
                 if (forced) {
                   // Engage the sticky override: force the morph ON and lock out the
                   // scroll-driven toggle (HeroIsland yields while hud-forced is set).
+                  // Adding hud-active here trips the observer above → the boot plays.
                   document.body.classList.add('hud-forced');
                   document.body.classList.add('hud-active');
                 } else {

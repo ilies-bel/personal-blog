@@ -11,6 +11,40 @@ body.bare {
 }
 .bare-main { display: block; }
 
+/* Edge vignette (#8) — a subtle radial edge-darkening laid over the scene so the
+   corner chrome + the left HUD rail read clearer. A fixed full-viewport layer (a
+   body pseudo-element, so no extra markup), transparent at the centre → darker at
+   the edges using --bg at low alpha (mirrors the .bh-overlay::before darkening
+   pattern). z-index sits ABOVE the canvas but BELOW the chrome/HUD. Always on but
+   SUBTLE; it DEEPENS when the HUD is active or booting so the menu pops. The
+   strength is set by --vignette-edge so it's a one-liner to tune. */
+body.bare::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9;                            /* above canvas (0), below overlays (10+) */
+  pointer-events: none;
+  --vignette-edge: 0.34;                 /* edge alpha at rest — "dim slightly" */
+  background: radial-gradient(
+    118% 118% at 50% 46%,
+    transparent 52%,
+    color-mix(in oklch, var(--bg) calc(var(--vignette-edge) * 100%), transparent) 100%
+  );
+  transition: --vignette-edge 0.6s var(--ease-out-quint);
+}
+/* Deepen when the HUD takes over (or is powering up) so the chrome stands out. */
+body.bare.hud-active::after,
+body.bare.hud-booting::after {
+  --vignette-edge: 0.6;
+}
+/* --vignette-edge is not an animatable property in browsers without @property, so
+   register it for a smooth transition; falls back to an instant change otherwise. */
+@property --vignette-edge {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0.34;
+}
+
 /* The scroll track: N stages that exist only to give the page scrollable height.
    They render nothing — the pinned canvas reads scrollY. Each stage is taller than
    one viewport, so the proportional scroll→stage map (scroll.ts) makes a lifecycle
@@ -138,31 +172,59 @@ body.bare.hud-active .overlay-blog-label {
 .overlay-social:hover,
 .overlay-social:focus-visible { color: var(--fg); }
 
-/* Power button: a borderless, quiet power glyph in currentColor. Toggles the
-   hud-active morph in place (sticky override). --fg-dim at rest → --fg on hover;
-   when engaged (aria-pressed='true') it lifts to the record gold so the active
-   state reads. Keyboard-accessible; no essential motion (reduced-motion safe). */
+/* Power button: a CIRCLED power glyph (a thin ring frame echoing the old
+   constellation mark) that toggles the hud-active morph in place (sticky
+   override). --fg-dim at rest → --fg on hover; when engaged (aria-pressed='true')
+   the frame + glyph go gold with a soft outer glow + faint fill tint so the ON
+   state clearly reads. Keyboard-accessible; the glow/colour are non-essential
+   (reduced-motion safe — only the transition is dropped below). */
 .overlay-blog-power {
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
   padding: 0;
-  border: 0;
-  background: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   cursor: pointer;
   color: var(--fg-dim);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.16s ease;
+  display: grid;
+  place-items: center;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
-.overlay-blog-power:hover { color: var(--fg); }
+/* Shrink the glyph so it sits comfortably inside the new ring frame. */
+.overlay-blog-power .overlay-blog-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.overlay-blog-power:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
 .overlay-blog-power:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
   border-radius: 999px;
 }
-.overlay-blog-power[aria-pressed='true'] { color: var(--accent-strong); }
+/* ACTIVE / engaged: gold frame + glyph, a soft outer glow, and a faint gold fill
+   tint so the button obviously reads as ON. */
+.overlay-blog-power[aria-pressed='true'] {
+  color: var(--accent-strong);
+  border-color: var(--accent-strong);
+  background: color-mix(in oklch, var(--highlight) 12%, color-mix(in oklch, var(--bg) 55%, transparent));
+  box-shadow: 0 0 12px color-mix(in oklch, var(--highlight) 45%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-blog-power { transition: none; }
+}
 
 /* On the smallest screens, fold the four section icons away and keep only the
    socials + power controls (the labels were never shown there anyway). */

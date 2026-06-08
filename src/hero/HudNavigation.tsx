@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
@@ -70,14 +70,74 @@ function scrollToStage(stage: number, reduced: boolean): void {
   window.scrollTo({ top: progress * max, behavior: reduced ? 'auto' : 'smooth' });
 }
 
+// --- ASCII-compass data source --------------------------------------------
+// The bottom-of-rail readout names whatever the visitor is currently POINTING
+// at, in this priority order:
+//   1. A rail button under hover / keyboard focus (`pointedId`, set by the row
+//      handlers below).
+//   2. An on-canvas StarMarker that has LOCKED — markers publish their lock on
+//      window.__bhMarkerLock ({active,x,y,hexRadius,owner}); `owner` is a marker
+//      placement id (e.g. 'nebula-02'), which we resolve to its scene/HUD id.
+//   3. Idle fallback: the current scroll stage (`currentId`).
+// Marker locks are polled on a light interval (the lock is a frame-cadence value
+// that must NOT live in React state); we only setState when the resolved id
+// actually changes, so the poll is cheap.
+
+/** Shape of the global the StarMarkers publish when locked (mirrors StarMarker.tsx). */
+interface MarkerLock {
+  active: boolean;
+  owner: string;
+}
+type MarkerLockWindow = Window & { __bhMarkerLock?: MarkerLock | null };
+
+/** A locked marker publishes its PLACEMENT id (e.g. 'nebula-02', 'beginning').
+ *  Resolve that to the HUD target id by looking the placement up in the marker
+ *  table and reading its `state` (placement.state already equals the HudTargetId
+ *  for every scene — the three nebula placements all carry state:'nebula'). */
+function hudIdForMarkerOwner(owner: string): HudTargetId | null {
+  const placement = MARKER_PLACEMENTS.find((m) => m.id === owner);
+  return placement ? placement.state : null;
+}
+
+const MARKER_POLL_MS = 120;
+
 export default function HudNavigation({
   visible,
   reduced,
   currentId,
   base,
 }: HudNavigationProps) {
-  // The mobile readout names the stage the scroll position is currently on.
-  const readoutItem = currentId ? HUD_NAV_BY_ID[currentId] : null;
+  // The rail item the pointer is hovering / the keyboard has focused. null when
+  // nothing on the rail is pointed (then the marker lock or scroll stage wins).
+  const [pointedId, setPointedId] = useState<HudTargetId | null>(null);
+  // The HUD id of a currently-LOCKED on-canvas marker, polled from the global.
+  const [markerId, setMarkerId] = useState<HudTargetId | null>(null);
+
+  // Poll window.__bhMarkerLock on a light interval. The lock is written every rAF
+  // by StarMarker (a frame-cadence value), so we sample it rather than subscribe;
+  // only commit to state when the RESOLVED HUD id changes, keeping renders rare.
+  useEffect(() => {
+    const w = window as unknown as MarkerLockWindow;
+    let lastId: HudTargetId | null = null;
+    const id = window.setInterval(() => {
+      const lock = w.__bhMarkerLock;
+      const next = lock && lock.active ? hudIdForMarkerOwner(lock.owner) : null;
+      if (next !== lastId) {
+        lastId = next;
+        setMarkerId(next);
+      }
+    }, MARKER_POLL_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Resolve the POINTED target with the priority: rail hover/focus → locked
+  // marker → scroll stage. Always resolves to something so the readout is never
+  // blank (it falls back to "you are here").
+  const compassId: HudTargetId | null = pointedId ?? markerId ?? currentId;
+  const compassItem = compassId ? HUD_NAV_BY_ID[compassId] : null;
+  // Whether the readout is naming a deliberately POINTED target (vs. the idle
+  // scroll fallback) — drives a subtly brighter prompt glyph.
+  const compassPointed = pointedId !== null || markerId !== null;
 
   return (
     <div className="hud-system" data-visible={visible}>
@@ -105,6 +165,11 @@ export default function HudNavigation({
                   tabIndex={visible ? 0 : -1}
                   aria-current={isCurrent ? 'location' : undefined}
                   onClick={() => scrollToStage(item.stage, reduced)}
+                  // Feed the ASCII compass: hovering or focusing a row points at it.
+                  onMouseEnter={() => setPointedId(item.id)}
+                  onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}
+                  onFocus={() => setPointedId(item.id)}
+                  onBlur={() => setPointedId((prev) => (prev === item.id ? null : prev))}
                 >
                   <span
                     className="hud-nav-glyph"
@@ -122,16 +187,26 @@ export default function HudNavigation({
         </ol>
       </nav>
 
-      {/* aria-hidden by design: this readout only re-states the label +
-          destination of the currently-focused/active nav button, which the
-          screen reader already announces from the button's own aria-label.
-          Exposing it too would double-announce the same stage, so it stays
-          visual-only (a glanceable readout for the compact mobile layout). */}
-      {readoutItem && (
-        <p className="hud-nav-mobile-readout" aria-hidden="true">
-          <span>{readoutItem.label}</span>
-          <span>{readoutItem.destination}</span>
-        </p>
+      {/* ASCII compass readout, anchored below the rail. Names whatever is being
+          POINTED at (a hovered/focused rail glyph, a locked on-canvas marker) and
+          falls back to the current scroll stage when nothing is pointed. Drawn in
+          the rail's +/tick ASCII language with literal chars; aria-hidden because
+          the rail buttons already announce their own labels (the old mobile readout
+          had the same rationale — this replaces it, now visible on desktop too).
+          The compass markup is rendered even when no scene resolves so its frame
+          never pops in/out. */}
+      {compassItem && (
+        <div className="hud-compass" data-pointed={compassPointed} aria-hidden="true">
+          <pre className="hud-compass-rose">{'     +\n  ───┼───\n     |'}</pre>
+          <p className="hud-compass-read">
+            <span className="hud-compass-prompt">{compassPointed ? '[·]' : ' › '}</span>
+            <span className="hud-compass-label">{compassItem.label}</span>
+          </p>
+          <p className="hud-compass-dest">
+            <span className="hud-compass-arrow">→</span>
+            <span>{compassItem.destination}</span>
+          </p>
+        </div>
       )}
     </div>
   );

@@ -5,6 +5,26 @@
   --hud-line: color-mix(in oklch, var(--fg) 34%, transparent);
   --hud-line-dim: color-mix(in oklch, var(--fg) 16%, transparent);
   --hud-gold: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+
+  /* --- Rail geometry knobs (the rail is ~1.5× larger than before, ALWAYS) -----
+     One set of sizes drives the whole rail so it scales coherently (glyph node,
+     button rest/expanded width, row pitch, the rail-line + its mask gaps). Tune
+     these and the connector/mask math below follows. The DESKTOP rail only — the
+     mobile media block re-uses the older compact sizing. */
+  --rail-col: 3.4rem;          /* glyph column width — sets the glyph node + rail x */
+  --rail-row-h: 3.4rem;        /* button rest height */
+  --rail-row-gap: 0.5rem;      /* gap between rows */
+  --rail-row-pitch: 3.9rem;    /* --rail-row-h + --rail-row-gap (glyph-center spacing) */
+  --rail-expanded: 15rem;      /* button width when expanded (hover/focus/active) */
+  --rail-copy-max: 11rem;      /* label column max-width when revealed */
+  --rail-line-x: 1.7rem;       /* rail-line x = --rail-col / 2 (glyph node center) */
+  --rail-first-center: 3.2rem; /* first glyph center from the rail-line top edge */
+  --rail-gap-half: 1rem;       /* half-width of the transparent gap at each glyph */
+  /* Staggered cascade timing (#4): a HELD beat before anything moves, then each
+     row reveals top→bottom. Per-row delay = beat + (row-1)*step. */
+  --rail-beat: 0.3s;
+  --rail-step: 0.12s;
+
   position: fixed;
   left: clamp(1.25rem, 5vw, 5rem);
   top: 50%;
@@ -48,42 +68,49 @@
   position: absolute;
   top: -1.5rem;
   bottom: -1.5rem;
-  left: 1.15rem;
+  left: var(--rail-line-x);
   width: 1px;
   background: linear-gradient(180deg, transparent, var(--hud-line) 20%, var(--hud-line) 80%, transparent);
   pointer-events: none;
-  /* Transparent gaps at each glyph center. The element runs from -1.5rem above
-     the nav top to +1.5rem below the nav bottom. Glyph centers from line top:
-     2.66rem, 5.36rem, 8.06rem, 10.76rem, 13.46rem. Gap half-width: 0.72rem. */
+  /* Transparent gaps at each glyph center, recomputed from the rail-geometry
+     knobs so they track the bigger rows. The element runs from -1.5rem above the
+     nav top to +1.5rem below it. First glyph center is --rail-first-center from
+     the line's top edge; each subsequent center is +--rail-row-pitch; gap
+     half-width is --rail-gap-half. (5 rows.) */
+  --c1: var(--rail-first-center);
+  --c2: calc(var(--rail-first-center) + var(--rail-row-pitch));
+  --c3: calc(var(--rail-first-center) + 2 * var(--rail-row-pitch));
+  --c4: calc(var(--rail-first-center) + 3 * var(--rail-row-pitch));
+  --c5: calc(var(--rail-first-center) + 4 * var(--rail-row-pitch));
   mask-image: linear-gradient(
     to bottom,
-    black calc(2.66rem - 0.72rem),
-    transparent calc(2.66rem - 0.72rem),
-    transparent calc(2.66rem + 0.72rem),
-    black calc(2.66rem + 0.72rem),
-    black calc(5.36rem - 0.72rem),
-    transparent calc(5.36rem - 0.72rem),
-    transparent calc(5.36rem + 0.72rem),
-    black calc(5.36rem + 0.72rem),
-    black calc(8.06rem - 0.72rem),
-    transparent calc(8.06rem - 0.72rem),
-    transparent calc(8.06rem + 0.72rem),
-    black calc(8.06rem + 0.72rem),
-    black calc(10.76rem - 0.72rem),
-    transparent calc(10.76rem - 0.72rem),
-    transparent calc(10.76rem + 0.72rem),
-    black calc(10.76rem + 0.72rem),
-    black calc(13.46rem - 0.72rem),
-    transparent calc(13.46rem - 0.72rem),
-    transparent calc(13.46rem + 0.72rem),
-    black calc(13.46rem + 0.72rem)
+    black calc(var(--c1) - var(--rail-gap-half)),
+    transparent calc(var(--c1) - var(--rail-gap-half)),
+    transparent calc(var(--c1) + var(--rail-gap-half)),
+    black calc(var(--c1) + var(--rail-gap-half)),
+    black calc(var(--c2) - var(--rail-gap-half)),
+    transparent calc(var(--c2) - var(--rail-gap-half)),
+    transparent calc(var(--c2) + var(--rail-gap-half)),
+    black calc(var(--c2) + var(--rail-gap-half)),
+    black calc(var(--c3) - var(--rail-gap-half)),
+    transparent calc(var(--c3) - var(--rail-gap-half)),
+    transparent calc(var(--c3) + var(--rail-gap-half)),
+    black calc(var(--c3) + var(--rail-gap-half)),
+    black calc(var(--c4) - var(--rail-gap-half)),
+    transparent calc(var(--c4) - var(--rail-gap-half)),
+    transparent calc(var(--c4) + var(--rail-gap-half)),
+    black calc(var(--c4) + var(--rail-gap-half)),
+    black calc(var(--c5) - var(--rail-gap-half)),
+    transparent calc(var(--c5) - var(--rail-gap-half)),
+    transparent calc(var(--c5) + var(--rail-gap-half)),
+    black calc(var(--c5) + var(--rail-gap-half))
   );
 }
 .hud-nav-list {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 0.38rem;
+  gap: var(--rail-row-gap);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -105,10 +132,10 @@
   cursor: pointer;
   position: relative;
   display: grid;
-  grid-template-columns: 2.35rem minmax(0, 1fr);
+  grid-template-columns: var(--rail-col) minmax(0, 1fr);
   align-items: center;
-  width: 2.45rem;
-  height: 2.32rem;
+  width: calc(var(--rail-col) + 0.1rem);
+  height: var(--rail-row-h);
   padding: 0;
   color: var(--fg-faint);
   text-decoration: none;
@@ -120,7 +147,7 @@
 .hud-nav-button::before {
   content: '';
   position: absolute;
-  left: 1.15rem;
+  left: var(--rail-line-x);
   top: 50%;
   width: 0.5rem;
   height: 1px;
@@ -132,12 +159,12 @@
 }
 .hud-nav-button:hover,
 .hud-nav-button:focus-visible {
-  width: 11.7rem;
+  width: var(--rail-expanded);
   color: var(--fg);
 }
 .hud-nav-button:hover::before,
 .hud-nav-button:focus-visible::before {
-  width: 1.1rem;
+  width: 1.5rem;
   background: var(--hud-gold);
 }
 /* Scroll-spy "you are here": the stage the scroll position maps to, when not
@@ -149,25 +176,71 @@
   color: color-mix(in oklch, var(--fg-dim) 78%, var(--fg));
 }
 .hud-nav-button[data-current='true']::before {
-  width: 0.78rem;
+  width: 1.05rem;
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
+/* Keyboard focus ring (#1): keep an accessible ring but make it QUIET and not a
+   tight box hugging the glyph. We push it well clear of the rail with a generous
+   offset and use the dim line colour so it reads as a soft frame, never the harsh
+   gold box of before. Mouse / scroll-current selection get NO box — they get the
+   glyph GLOW below instead. */
 .hud-nav-button:focus-visible {
-  outline: 1px solid var(--hud-gold);
-  outline-offset: 0.25rem;
+  outline: 1px solid var(--hud-line);
+  outline-offset: 0.6rem;
+  border-radius: var(--radius-sm);
 }
 
 /* HUD activation at the black hole (body.hud-active, set by HeroIsland or forced by
    the corner power button): the quiet icon rail becomes an explicit menu — every
    button expands, labels reveal WITHOUT hover, the text lifts to full white and the
-   connector tick brightens to the rail's gold accent. The existing width/colour/
-   max-width transitions animate this for free. (--hud-gold is the rail's accent
-   token in .hud-system above — there is no --hud-amber here.) */
-body.hud-active .hud-nav-button { width: 11.7rem; color: var(--fg); }
-body.hud-active .hud-nav-button::before { width: 1.1rem; background: var(--hud-gold); }
-body.hud-active .hud-nav-copy { max-width: 8.6rem; opacity: 1; transform: none; }
+   connector tick brightens to the rail's gold accent. (--hud-gold is the rail's
+   accent token in .hud-system above — there is no --hud-amber here.)
+
+   Cascade (#4): a HELD beat (--rail-beat) before anything moves, THEN each row
+   reveals top→bottom. The width-expand LEADS each row and the label fade-in FOLLOWS
+   (so a row "opens then writes"). Per-row delays are applied via :nth-child below;
+   the base transitions get the beat delay here. */
+body.hud-active .hud-nav-button {
+  width: var(--rail-expanded);
+  color: var(--fg);
+  transition:
+    width 0.4s var(--ease-out-quint) var(--rail-beat),
+    color 0.3s ease var(--rail-beat);
+}
+body.hud-active .hud-nav-button::before {
+  width: 1.5rem;
+  background: var(--hud-gold);
+  transition:
+    width 0.3s var(--ease-out-quint) var(--rail-beat),
+    background-color 0.3s ease var(--rail-beat);
+}
+body.hud-active .hud-nav-copy {
+  max-width: var(--rail-copy-max);
+  opacity: 1;
+  transform: none;
+}
 body.hud-active .hud-nav-title,
 body.hud-active .hud-nav-destination { color: var(--fg); }
+
+/* Per-row stagger: row N reveals at beat + (N-1)*step. The label (copy) follows
+   the width slightly (its own +0.08s lead-out) so each row opens, then writes.
+   When hud-active turns OFF, the default (non-active) transitions above with NO
+   delay take over, so the rail collapses quickly — never a sluggish reverse. */
+body.hud-active .hud-nav-row:nth-child(1) .hud-nav-button { transition-delay: var(--rail-beat); }
+body.hud-active .hud-nav-row:nth-child(2) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 1 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(3) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 2 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(4) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 3 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(5) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 4 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(1) .hud-nav-button::before { transition-delay: var(--rail-beat); }
+body.hud-active .hud-nav-row:nth-child(2) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 1 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(3) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 2 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(4) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 3 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(5) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 4 * var(--rail-step)); }
+body.hud-active .hud-nav-row:nth-child(1) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 0.08s); }
+body.hud-active .hud-nav-row:nth-child(2) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 1 * var(--rail-step) + 0.08s); }
+body.hud-active .hud-nav-row:nth-child(3) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 2 * var(--rail-step) + 0.08s); }
+body.hud-active .hud-nav-row:nth-child(4) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 3 * var(--rail-step) + 0.08s); }
+body.hud-active .hud-nav-row:nth-child(5) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 4 * var(--rail-step) + 0.08s); }
 
 /* The glyph is an SVG (in public/glyphs/) applied as a mask and painted with the
    link's currentColor, so the rail's faint to gold to current color transitions
@@ -177,8 +250,8 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
   position: relative;
   z-index: 1;
   display: block;
-  width: 2.3rem;
-  height: 1.25rem;
+  width: var(--rail-col);
+  height: 1.75rem;
   margin: 0 auto;
   background-color: currentColor;
   -webkit-mask-image: var(--glyph-mask);
@@ -192,7 +265,20 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
   filter:
     drop-shadow(0 0 16px rgba(0, 0, 0, 1))
     drop-shadow(0 0 10px color-mix(in oklch, var(--hud-gold) 26%, transparent));
+  transition: filter 0.3s ease;
   transform-origin: 50% 50%;
+}
+/* Selected / current / active glyph (#1): NO box outline for mouse or scroll
+   selection — instead the glyph lifts to full --fg (via the button colour rules
+   above) AND gains a soft gold GLOW that follows the masked shape, so it reads
+   like the lit top-right icons. Covers scroll-spy current, hover, and hud-active.
+   The drop-shadow stacks on top of the base dark outline above. */
+.hud-nav-button[data-current='true'] .hud-nav-glyph,
+.hud-nav-button:hover .hud-nav-glyph,
+body.hud-active .hud-nav-button .hud-nav-glyph {
+  filter:
+    drop-shadow(0 0 16px rgba(0, 0, 0, 1))
+    drop-shadow(0 0 6px color-mix(in oklch, var(--hud-gold) 55%, transparent));
 }
 .hud-nav-copy {
   display: grid;
@@ -210,7 +296,7 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
 }
 .hud-nav-button:hover .hud-nav-copy,
 .hud-nav-button:focus-visible .hud-nav-copy {
-  max-width: 8.6rem;
+  max-width: var(--rail-copy-max);
   opacity: 1;
   transform: none;
 }
@@ -220,7 +306,7 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
   text-transform: uppercase;
 }
 .hud-nav-title {
-  font-size: 0.72rem;
+  font-size: 0.95rem;
   line-height: 1;
   letter-spacing: 0.14em;
   color: var(--fg);
@@ -229,7 +315,7 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
     0 0 4px rgba(0, 0, 0, 0.95);
 }
 .hud-nav-destination {
-  font-size: 0.66rem;
+  font-size: 0.82rem;
   line-height: 1;
   letter-spacing: 0.1em;
   color: color-mix(in oklch, var(--fg-dim) 88%, var(--fg));
@@ -241,8 +327,81 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
   display: none;
 }
 
+/* ---------------------------------------------------------------------------
+   ASCII compass readout (#6) — anchored below the rail, desktop-visible.
+   Names whatever is being POINTED at: a hovered/focused rail glyph, a locked
+   on-canvas StarMarker, or (idle) the current scroll stage. The data source +
+   priority live in HudNavigation.tsx; this is purely the look. Drawn in the
+   rail's +/tick ASCII language with literal chars in a mono block. Sits clearly
+   BELOW the last (bigger) row so it never overlaps the bottom glyph.
+   --------------------------------------------------------------------------- */
+.hud-compass {
+  margin-top: 1.6rem;          /* clear space below the last row's glyph */
+  margin-left: 0.2rem;
+  display: grid;
+  gap: 0.18rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  /* Fade in WITH the rail so it doesn't pop before the rail settles. */
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-out-quint) 0.34s;
+}
+.hud-system[data-visible='true'] .hud-compass { opacity: 1; }
+/* The crosshair rose — literal +, ─, ┼, | chars rendered as a tiny diagram. Dim
+   so it reads as a frame, not copy. */
+.hud-compass-rose {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.05;
+  letter-spacing: 0.05em;
+  color: var(--hud-line);
+  white-space: pre;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+}
+.hud-compass-read,
+.hud-compass-dest {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  line-height: 1.2;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+}
+.hud-compass-read {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  color: var(--fg);
+}
+.hud-compass-dest {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  color: var(--fg-dim);
+}
+/* The leading prompt ('[·]' when a real target is pointed, ' › ' idle) + the
+   destination arrow get the rail's gold so the readout shares its signal colour.
+   Brighter when actively pointing (data-pointed). */
+.hud-compass-prompt,
+.hud-compass-arrow {
+  color: color-mix(in oklch, var(--hud-gold) 60%, var(--hud-line));
+  white-space: pre;
+}
+.hud-compass[data-pointed='true'] .hud-compass-prompt,
+.hud-compass[data-pointed='true'] .hud-compass-arrow {
+  color: var(--hud-gold);
+}
+
 @media (max-width: 46rem) {
+  /* The bigger rail (#5) is a DESKTOP concern. On mobile the rail is a compact
+     horizontal strip, so reset the geometry knobs back to the old compact sizes
+     here — the desktop sizing never reaches this layout. */
   .hud-system {
+    --rail-col: 2.35rem;
+    --rail-row-h: 2.55rem;
+    --rail-row-gap: 0.2rem;
+    --rail-expanded: clamp(8.2rem, 39vw, 10.8rem);
+    --rail-copy-max: 8.6rem;
+    --rail-line-x: 1.15rem;
     left: 0;
     right: 0;
     top: auto;
@@ -269,6 +428,8 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
     width: auto;
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--hud-line), transparent);
+    -webkit-mask-image: none;
+    mask-image: none;
   }
   .hud-nav-list {
     display: flex;
@@ -286,14 +447,22 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
   }
   /* On the horizontal mobile rail, hud-active must NOT force the desktop width or
      reveal every label — the buttons stay collapsed icons and the mobile readout
-     carries the text. Only an explicit hover/focus expands a single item. */
-  body.hud-active .hud-nav-button { width: 2.45rem; }
-  body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; }
+     carries the text. Only an explicit hover/focus expands a single item. The
+     desktop cascade delays are also neutralised so a tapped item responds fast. */
+  body.hud-active .hud-nav-button { width: 2.45rem; transition-delay: 0s; }
+  body.hud-active .hud-nav-button::before { transition-delay: 0s; }
+  body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; transition-delay: 0s; }
   .hud-nav-button::before {
     left: 1.15rem;
   }
   .hud-nav-glyph {
     width: 2.35rem;
+    height: 1.25rem;
+  }
+  /* The desktop ASCII compass is hidden on mobile — the horizontal mobile readout
+     below carries the same naming role in the compact layout. */
+  .hud-compass {
+    display: none;
   }
   .hud-nav-copy {
     gap: 0.18rem;
@@ -331,12 +500,131 @@ body.hud-active .hud-nav-destination { color: var(--fg); }
   .hud-nav-glyph {
     animation: none !important;
   }
+  /* Drop the cascade (#4): everything snaps to the hud-active end state with no
+     per-row stagger delay (the :nth-child delays above are zeroed). */
+  body.hud-active .hud-nav-button,
+  body.hud-active .hud-nav-button::before,
+  body.hud-active .hud-nav-copy,
+  body.hud-active .hud-nav-row:nth-child(n) .hud-nav-button,
+  body.hud-active .hud-nav-row:nth-child(n) .hud-nav-button::before,
+  body.hud-active .hud-nav-row:nth-child(n) .hud-nav-copy {
+    transition-delay: 0s;
+  }
+  .hud-compass {
+    transition: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) and (max-width: 46rem) {
   .hud-system,
   .hud-system[data-visible='true'] {
     transform: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   HUD boot sequence (#7) — a brief "powering up" transition played on the
+   hud-active OFF→ON edge. body.hud-booting is added for ~1.2s by the inline
+   script in BaseLayout (MutationObserver on body's class), then removed; this
+   block drives the LOADING readout + a thin progress line + a full-viewport
+   light flicker entirely off that class. It overlaps / leads into the rail
+   cascade. Tunable durations live right here.
+   --------------------------------------------------------------------------- */
+:root {
+  --hud-boot-dur: 1.2s;          /* must match BOOT_MS in BaseLayout's script */
+}
+
+/* The LOADING readout, bottom-centre. Hidden until booting, then fades in with a
+   filling progress bar beneath it, and out as the boot ends. */
+.hud-boot {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 2.4rem);
+  transform: translateX(-50%);
+  z-index: 25;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+.hud-boot-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.42em;
+  /* optical: the big tracking pushes the text right; nudge it back to centre. */
+  padding-left: 0.42em;
+  color: var(--fg-dim);
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
+}
+.hud-boot-bar {
+  position: relative;
+  display: block;
+  width: 9rem;
+  height: 1px;
+  background: var(--hud-line-dim);
+  overflow: hidden;
+}
+.hud-boot-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--accent-strong);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--highlight) 60%, transparent);
+}
+body.hud-booting .hud-boot {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, visibility 0s;
+}
+body.hud-booting .hud-boot-bar::after {
+  animation: hud-boot-fill var(--hud-boot-dur) var(--ease-out-quint) forwards;
+}
+@keyframes hud-boot-fill {
+  0% { width: 0; }
+  85% { width: 100%; opacity: 1; }
+  100% { width: 100%; opacity: 0.5; }
+}
+
+/* Full-viewport light flicker — a quick keyframed surge tinted toward white/--fg
+   that flashes the interface a few times then settles. SUBTLE (a dim flicker, not
+   a strobe). Sits above the scene but below the HUD/controls. pointer-events:none. */
+.hud-boot-flicker {
+  position: fixed;
+  inset: 0;
+  z-index: 17;                 /* above the canvas, below the HUD rail (18) */
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    120% 120% at 50% 50%,
+    color-mix(in oklch, var(--fg) 18%, transparent) 0%,
+    transparent 70%
+  );
+}
+body.hud-booting .hud-boot-flicker {
+  animation: hud-boot-flicker var(--hud-boot-dur) steps(1, end) 1;
+}
+@keyframes hud-boot-flicker {
+  0%   { opacity: 0; }
+  6%   { opacity: 0.55; }
+  12%  { opacity: 0.12; }
+  20%  { opacity: 0.6; }
+  28%  { opacity: 0.05; }
+  40%  { opacity: 0.42; }
+  52%  { opacity: 0.1; }
+  70%  { opacity: 0.22; }
+  100% { opacity: 0; }
+}
+
+/* Reduced motion: skip the flicker + bar animation entirely. The LOADING readout
+   still shows briefly (its opacity transition is allowed) so the boot is felt,
+   just calmly. */
+@media (prefers-reduced-motion: reduce) {
+  body.hud-booting .hud-boot-flicker { animation: none; opacity: 0; }
+  body.hud-booting .hud-boot-bar::after { animation: none; width: 100%; opacity: 0.6; }
 }
 
 /* ---------------------------------------------------------------------------
