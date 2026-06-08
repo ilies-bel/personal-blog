@@ -10,11 +10,15 @@
   /* Adaptive INK: blends a warm white-ish light ink toward a darker warm ink as
      --hud-ink-dark-weight (0..100, set by the sampler) rises on bright frames, so
      the rail text/glyphs stay legible whether the scene behind is black or white. */
-  --hud-ink-light: oklch(0.93 0.012 82);   /* warm white-ish, NOT pure white */
-  --hud-ink-dark: oklch(0.32 0.020 82);    /* darker warm ink for bright frames */
+  --hud-ink-light: oklch(0.95 0.012 82);   /* warm near-white (NOT pure white) */
+  --hud-ink-dark: oklch(0.20 0.018 82);    /* deep warm graphite ink for bright frames */
   --hud-ink: color-mix(in oklch, var(--hud-ink-light), var(--hud-ink-dark) calc(var(--hud-ink-dark-weight) * 1%));
   --hud-muted: color-mix(in oklch, var(--hud-ink) 62%, transparent);
-  --hud-outline: oklch(0.12 0.01 82);      /* opposite-tone dark halo for glyphs */
+  /* Outline is the opposite tone of the ink: a dark halo behind light ink, a light
+     halo behind dark ink. Driven by the same inversion weight as the ink. */
+  --hud-outline-dark: oklch(0.10 0.01 82);
+  --hud-outline-light: oklch(0.96 0.012 82);
+  --hud-outline: color-mix(in oklch, var(--hud-outline-dark), var(--hud-outline-light) calc(var(--hud-ink-dark-weight) * 1%));
   position: fixed;
   left: clamp(1.25rem, 5vw, 5rem);
   top: 50%;
@@ -222,7 +226,7 @@
   filter:
     drop-shadow(0 0 1px color-mix(in oklch, var(--hud-outline), transparent calc((1 - var(--hud-outline-opacity)) * 100%)))
     drop-shadow(0 0 2px color-mix(in oklch, var(--hud-outline), transparent calc((1 - var(--hud-outline-opacity)) * 100%)))
-    drop-shadow(0 0 16px rgba(0, 0, 0, 1))
+    drop-shadow(0 0 14px color-mix(in oklch, var(--hud-outline), transparent 12%))
     drop-shadow(0 0 10px color-mix(in oklch, var(--hud-gold), transparent calc((1 - var(--hud-glow-opacity)) * 100%)));
   transform-origin: 50% 50%;
   transition: transform 0.22s var(--ease-out-quint);

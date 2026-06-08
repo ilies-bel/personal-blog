@@ -310,8 +310,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // Map smoothed luma (L) + noise (N) → the rail's CSS variables. This is the
     // response-curve surface: tweak a formula here to retune how the HUD reacts.
     const applyVars = (L: number, N: number): void => {
-      // Ink: how far to pull the ink toward the DARK endpoint on bright frames.
-      setVar('--hud-ink-dark-weight', round3(clamp01((L - 0.45) / 0.35) * 100));
+      // Tonal inversion: ink lightness is the OPPOSITE of the background luminance.
+      // Full-range crossover (smoothstep around mid-grey) so the ink flips light↔dark
+      // continuously and never lingers as low-contrast mid-grey over a mid-grey field.
+      const invert = L * L * (3 - 2 * L); // smoothstep(0,1,L)
+      setVar('--hud-ink-dark-weight', round3(invert * 100));
       // Warm glow: strong on dark frames, gone on bright ones.
       setVar('--hud-glow-opacity', round3(clamp01(1 - L) * 0.55));
       // Opposite-tone outline halo: rises with brightness AND noise, capped ~0.9.
