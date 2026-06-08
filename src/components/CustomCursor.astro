@@ -338,14 +338,14 @@
     // Per-frame exponential lerp factors (matches the file's POINT_EASE tail-anchor
     // approach). At ~60fps a factor f closes a fraction f of the remaining gap each
     // frame, settling to within ~2% in roughly -ln(0.02)/f frames ≈ (4/f)/60 s, so
-    // 0.30 ≈ 13 frames ≈ 0.22s of glide with most of the visible travel in the first
-    // ~150ms (a confident ease-out, mirroring cubic-bezier(0.22, 1, 0.36, 1)). POS
+    // 0.20 ≈ 20 frames ≈ 0.33s of glide with most of the visible travel in the first
+    // ~220ms (a confident ease-out, mirroring cubic-bezier(0.22, 1, 0.36, 1)). POS
     // eases the cursor position (the glide), ANIM eases the 0..1 gold/opacity/scale
     // envelope (the scale-in). POS is kept a touch FASTER than ANIM so on release the
     // cursor reaches the pointer slightly before the gold finishes fading — the hex
     // is never left visibly drifting off-white (the gold IS the moving thing).
-    const DOCK_POS_EASE = 0.3;    // position glide toward marker centre / pointer
-    const DOCK_ANIM_EASE = 0.26;  // gold + opacity + scale-in envelope
+    const DOCK_POS_EASE = 0.2;    // position glide toward marker centre / pointer
+    const DOCK_ANIM_EASE = 0.17;  // gold + opacity + scale-in envelope
     // The gold hex starts the capture SMALL (scales up to dockTargetScale) — this
     // is the visible "hex forming into place" beat.
     const DOCK_SCALE_START = 0.5; // fraction of the docked scale the hex starts at

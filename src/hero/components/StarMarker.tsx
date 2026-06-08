@@ -49,8 +49,8 @@ function markerLockWindow(): MarkerLockWindow {
 
 // Proximity radii (CSS px from the marker centre). Hysteresis: engage closer than
 // it releases so the lock never flickers at the boundary.
-const LOCK_ENGAGE_RADIUS = 100;
-const LOCK_RELEASE_RADIUS = 130;
+const LOCK_ENGAGE_RADIUS = 70;
+const LOCK_RELEASE_RADIUS = 95;
 
 // Card-flip threshold: when the marker sits in the right ~30% of the viewport the
 // card + connector flip to the LEFT so the card stays on-screen.
