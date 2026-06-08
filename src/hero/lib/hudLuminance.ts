@@ -44,23 +44,30 @@ export interface HudLuminanceControlPoint {
 // change how the HUD reacts at that lifecycle beat. Stages map to lifecycle
 // states (see CLAUDE.md): 0 = black hole, 0.32 = supernova whiteout, 1.05 =
 // collapse, 2.05 = red giant, 2.9 = yellow star, 3.5 = nebula, 4.7 = pale dot.
+// IMPORTANT: these are MEASURED from the real rendered canvas at the rail's actual
+// screen position (left edge, vertically centered) — NOT the frame's overall
+// brightness. The signature bloom/disk lives in the CENTER-RIGHT of the frame; the
+// far-left rail sits over near-black space at EVERY stage, so luma stays low across
+// the board. The supernova flash is the only beat that lifts the left edge much.
+// (Method: hide the HUD, screenshot the scene, mean Rec.709 luma over the
+// x≈60–110, y≈250–540 rail box per scroll progress. Re-run that probe and update
+// these if the camera framing or rail position changes.)
 export const HUD_LUMINANCE_TABLE: readonly HudLuminanceControlPoint[] = [
-  // BLACK HOLE — the bright horizontal bloom streak runs straight THROUGH the
-  // left rail's vertical center, so behind the glyphs it's a near-whiteout. Rated
-  // high so the ink is driven hard to its dark endpoint here (the headline frame).
-  { stage: 0.0, luma: 0.92, noise: 0.85 },
-  // SUPERNOVA — full whiteout blast.
-  { stage: 0.32, luma: 0.95, noise: 0.8 },
-  // COLLAPSE — bright core caving in, still busy.
-  { stage: 1.05, luma: 0.45, noise: 0.55 },
-  // RED GIANT — large warm orb, smoother surface.
-  { stage: 2.05, luma: 0.4, noise: 0.3 },
-  // YELLOW STAR — centered/right, so the left rail sits over a darker field.
-  { stage: 2.9, luma: 0.34, noise: 0.2 },
-  // NEBULA — soft smoky gas, low brightness, medium grain.
-  { stage: 3.5, luma: 0.26, noise: 0.4 },
+  // BLACK HOLE — bloom is center-right; the left rail sits over near-black space.
+  // Still the noisiest frame (drifting particles cross the left edge).
+  { stage: 0.0, luma: 0.05, noise: 0.55 },
+  // SUPERNOVA — the only beat whose blast lifts the far-left edge appreciably.
+  { stage: 0.32, luma: 0.18, noise: 0.6 },
+  // COLLAPSE — bright core is centered; left edge is dark.
+  { stage: 1.05, luma: 0.02, noise: 0.3 },
+  // RED GIANT — the orb is centered/right; left edge dark.
+  { stage: 2.05, luma: 0.02, noise: 0.18 },
+  // YELLOW STAR — centered/right; left rail over a dark field.
+  { stage: 2.9, luma: 0.02, noise: 0.15 },
+  // NEBULA — soft gas spreads wider but the far-left edge is still dim.
+  { stage: 3.5, luma: 0.04, noise: 0.35 },
   // PALE BLUE DOT — a lone speck in a vast black field; near black.
-  { stage: 4.7, luma: 0.06, noise: 0.05 },
+  { stage: 4.7, luma: 0.035, noise: 0.08 },
 ] as const;
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
