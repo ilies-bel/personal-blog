@@ -312,23 +312,33 @@
 }
 
 /* ---------------------------------------------------------------------------
-   StarMarker: a small amber dot+ring anchored to the on-screen star object.
+   StarMarker: a HUD "target lock" anchored to the on-screen star object.
    Positioned with position: fixed; left/top are written directly by rAF so
-   there are no per-frame React re-renders. Fades in/out when a settled state
-   is on screen. The element is always a real <a> link so it remains keyboard-
+   there are no per-frame React re-renders. Fades in/out when a settled state is
+   on screen. The element is always a real <a> link so it remains keyboard-
    focusable and follows the standard focus ring below.
+
+   Three states (toggled by data-locked, computed in the rAF loop):
+     RESTING  — a dotted-outline hexagon + centre dot, quiet/off-white.
+     LOCKED   — solid hexagon + edge tick marks + an animated gold inner hexagon,
+                plus a tethered terminal-style info card.
    --------------------------------------------------------------------------- */
 .star-marker {
-  --marker-amber: var(--hud-amber, color-mix(in oklch, var(--highlight) 86%, var(--fg)));
+  /* Faint off-white for the resting reticle (same derivation the old amber dot
+     used) and the site Voyager-gold for the locked inner hex + accents. */
+  --marker-line: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+  --marker-gold: var(--highlight);
+  /* Reticle box — ~72px so the hexagon reads as a real target, not a speck. */
+  --marker-size: 4.5rem;
+
   position: fixed;
   z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  display: block;
+  width: var(--marker-size);
+  height: var(--marker-size);
   /* Centre the anchor on the computed point (offset already baked in by createScene). */
   translate: -50% -50%;
+  color: var(--marker-line);
   opacity: 0;
   pointer-events: none;
   text-decoration: none;
@@ -339,47 +349,209 @@
   opacity: 1;
   pointer-events: auto;
 }
-/* Reduced motion: visible but no pulsing animation. Still clickable. */
+/* Reduced motion: visible but no animation. Still clickable. */
 .star-marker[data-reduced='true'],
 .star-marker[data-reduced='true'][data-visible='true'] {
   transition: none;
 }
 
-/* Core dot */
+/* The reticle SVG fills the marker box; both hexagons + ticks live inside it.
+   Stacked dark drop-shadows give the thin strokes a tight dark outline so the
+   reticle stays legible over BOTH bright surfaces (the centre of the yellow star)
+   AND busy ones (the red giant's mottled limb) without itself looking heavy. */
+.star-marker-reticle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter:
+    drop-shadow(0 0 1px color-mix(in oklch, var(--bg) 92%, transparent))
+    drop-shadow(0 0 2px color-mix(in oklch, var(--bg) 80%, transparent))
+    drop-shadow(0 0 5px color-mix(in oklch, var(--bg) 60%, transparent));
+}
+
+/* RESTING: dotted hexagon — quiet, but legible. Hidden once locked. */
+.star-marker-hex-dotted {
+  opacity: 0.62;
+  transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.star-marker[data-locked='true'] .star-marker-hex-dotted {
+  opacity: 0;
+}
+
+/* LOCKED: solid hexagon + edge ticks. Hidden until locked. */
+.star-marker-hex-solid,
+.star-marker-ticks {
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.star-marker-hex-solid {
+  /* A touch brighter than the resting dotted line when present. */
+  color: color-mix(in oklch, var(--highlight) 78%, var(--fg));
+}
+.star-marker[data-locked='true'] .star-marker-hex-solid,
+.star-marker[data-locked='true'] .star-marker-ticks {
+  opacity: 0.85;
+}
+
+/* LOCKED: the animated gold inner hexagon — rotates + breathes. Hidden at rest. */
+.star-marker-hex-gold {
+  color: var(--marker-gold);
+  stroke: currentColor;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  /* Sit inside the outer hexagon. The `scale` + `rotate` properties (not the
+     `transform` shorthand) are used so the spin and breathe animations compose
+     cleanly without overwriting one another. */
+  scale: 0.6;
+}
+.star-marker[data-locked='true'] .star-marker-hex-gold {
+  opacity: 0.8;
+  animation:
+    star-marker-spin 16s linear infinite,
+    star-marker-breathe 3s ease-in-out infinite;
+}
+/* Rotation drives the `rotate` property; breathing drives `scale` + opacity.
+   Independent properties → they layer instead of clobbering each other. */
+@keyframes star-marker-spin {
+  from { rotate: 0deg; }
+  to   { rotate: 360deg; }
+}
+@keyframes star-marker-breathe {
+  0%, 100% { scale: 0.56; opacity: 0.5; }
+  50%      { scale: 0.62; opacity: 0.85; }
+}
+
+/* Core dot — constant in both states, centred on the lock point. */
 .star-marker-dot {
   position: absolute;
-  width: 0.38rem;
-  height: 0.38rem;
+  top: 50%;
+  left: 50%;
+  width: 0.36rem;
+  height: 0.36rem;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--marker-amber);
+  background: var(--marker-line);
+  /* A dark ring first (separates the dot from a bright star) then a faint glow. */
   box-shadow:
-    0 0 6px 2px color-mix(in oklch, var(--marker-amber) 55%, transparent),
-    0 0 2px 0px color-mix(in oklch, var(--marker-amber) 90%, transparent);
+    0 0 0 1px color-mix(in oklch, var(--bg) 70%, transparent),
+    0 0 5px 1px color-mix(in oklch, var(--marker-line) 45%, transparent);
+  transition: background 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
-/* Expanding ring */
-.star-marker-ring {
+.star-marker[data-locked='true'] .star-marker-dot {
+  background: var(--marker-gold);
+  box-shadow:
+    0 0 6px 2px color-mix(in oklch, var(--marker-gold) 50%, transparent),
+    0 0 2px 0 color-mix(in oklch, var(--marker-gold) 90%, transparent);
+}
+
+/* The tethered terminal-style card. Hidden until locked, then slides in beside
+   the reticle. Flips to the left side via data-side='left'. */
+.star-marker-card {
   position: absolute;
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
-  border: 1px solid color-mix(in oklch, var(--marker-amber) 52%, transparent);
-  animation: star-marker-pulse 2.6s ease-in-out infinite;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform 0.28s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
-@keyframes star-marker-pulse {
-  0%   { transform: scale(0.72); opacity: 0.7; }
-  60%  { transform: scale(1.18); opacity: 0.18; }
-  100% { transform: scale(0.72); opacity: 0.7; }
+/* Right side (default): card sits to the right of the reticle. */
+.star-marker[data-side='right'] .star-marker-card {
+  left: 100%;
+  transform: translate(-0.4rem, -50%);
+  flex-direction: row;
 }
+/* Left side: card sits to the left; connector + body order reverses. */
+.star-marker[data-side='left'] .star-marker-card {
+  right: 100%;
+  transform: translate(0.4rem, -50%);
+  flex-direction: row-reverse;
+}
+.star-marker[data-locked='true'] .star-marker-card {
+  opacity: 1;
+  pointer-events: auto;
+}
+.star-marker[data-locked='true'][data-side='right'] .star-marker-card,
+.star-marker[data-locked='true'][data-side='left'] .star-marker-card {
+  transform: translate(0, -50%);
+}
+
+/* The thin horizontal connector line tethering card to hexagon. */
+.star-marker-connector {
+  width: 1.4rem;
+  height: 1px;
+  background: color-mix(in oklch, var(--highlight) 70%, var(--fg));
+  flex: 0 0 auto;
+}
+
+/* The card body: terminal panel, mono type, minimal copy. */
+.star-marker-card-body {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.5rem 0.7rem;
+  background: color-mix(in oklch, var(--bg) 82%, transparent);
+  border: 1px solid color-mix(in oklch, var(--highlight) 40%, transparent);
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  text-align: left;
+}
+.star-marker[data-side='left'] .star-marker-card-body {
+  text-align: right;
+}
+.star-marker-card-title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--marker-gold);
+  text-transform: uppercase;
+}
+.star-marker-card-subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+}
+.star-marker-card-open {
+  margin-top: 0.18rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  color: color-mix(in oklch, var(--highlight) 80%, var(--fg));
+}
+
+/* Focus ring: keyboard focus also engages the locked state (see component:
+   onFocus sets focusedRef → rAF loop locks). The reticle box gets the ring. */
 .star-marker:focus-visible {
-  outline: 1px solid var(--marker-amber);
-  outline-offset: 0.3rem;
-  border-radius: 50%;
+  outline: 1px solid var(--marker-gold);
+  outline-offset: 0.35rem;
+  border-radius: var(--radius-sm);
 }
-/* No animation under reduced motion. */
+
+/* Reduced motion: the lock still appears (snap, not animate) so the feature stays
+   usable — only the gold hex's rotation/breathe and the transitions are dropped. */
 @media (prefers-reduced-motion: reduce) {
-  .star-marker-ring {
-    animation: none;
-    transform: scale(1);
-    opacity: 0.45;
+  .star-marker-hex-dotted,
+  .star-marker-hex-solid,
+  .star-marker-ticks,
+  .star-marker-dot,
+  .star-marker-card {
+    transition: none;
   }
+  .star-marker[data-locked='true'] .star-marker-hex-gold {
+    animation: none;
+    opacity: 0.8;
+    transform: scale(0.6);
+  }
+}
+.star-marker[data-reduced='true'][data-locked='true'] .star-marker-hex-gold {
+  animation: none;
+  opacity: 0.8;
+  transform: scale(0.6);
 }
