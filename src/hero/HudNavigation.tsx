@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
@@ -7,6 +7,7 @@ import {
   type HudTargetId,
   type MarkerPlacement,
 } from './sceneTable';
+import type { MarkerFrame } from './scene/types';
 import { progressForLegacyStage } from './timeline';
 
 // The HUD nav rows, on-screen markers, the settled-window gate and their shared
@@ -50,6 +51,10 @@ interface HudNavigationProps {
    *  Drives a quiet ambient marker so the rail reflects scroll position. */
   currentId: HudTargetId | null;
   base: string;
+  /** The scene's per-frame marker frame (stage/visible + projected x/y for the
+   *  anchored marker), owned by HeroIsland. The compass reads it to find the
+   *  on-screen marker nearest the cursor and aim its needle at it. */
+  markerFrameRef: React.RefObject<MarkerFrame | null>;
 }
 
 // Resolve a `public/` glyph asset against the deploy base (same base prop the
@@ -70,74 +75,177 @@ function scrollToStage(stage: number, reduced: boolean): void {
   window.scrollTo({ top: progress * max, behavior: reduced ? 'auto' : 'smooth' });
 }
 
-// --- ASCII-compass data source --------------------------------------------
-// The bottom-of-rail readout names whatever the visitor is currently POINTING
-// at, in this priority order:
-//   1. A rail button under hover / keyboard focus (`pointedId`, set by the row
-//      handlers below).
-//   2. An on-canvas StarMarker that has LOCKED — markers publish their lock on
-//      window.__bhMarkerLock ({active,x,y,hexRadius,owner}); `owner` is a marker
-//      placement id (e.g. 'nebula-02'), which we resolve to its scene/HUD id.
-//   3. Idle fallback: the current scroll stage (`currentId`).
-// Marker locks are polled on a light interval (the lock is a frame-cadence value
-// that must NOT live in React state); we only setState when the resolved id
-// actually changes, so the poll is cheap.
+// --- Aiming-compass data source --------------------------------------------
+// The bottom-of-page readout behaves like a real aiming compass: its needle
+// ROTATES to point at the on-screen StarMarker NEAREST THE CURSOR, names that
+// marker, and shows an IDLE placeholder when no interactive markers are on
+// screen. Priority for the NAME:
+//   1. A rail button under hover / keyboard focus (`pointedId`) — a deliberate
+//      pointing gesture overrides naming (the needle still tracks the cursor).
+//   2. The on-screen marker nearest the cursor (the dominant behaviour). Each
+//      marker carries its own copy (title/subtitle), more specific than the
+//      scene HUD label — used so the nebula's three markers stay distinct.
+//   3. Idle fallback: no interactive markers AND no rail hover -> NO SIGNAL.
+// The needle angle + the nearest target are recomputed every rAF off the cursor
+// and the scene's marker frame (a frame-cadence value that must NOT live in
+// React state); the needle DOM is mutated directly each frame, and React state
+// flips ONLY when the named target / idle flag changes — exactly the cheap
+// pattern StarMarker uses (lastVisible/lastLocked).
 
-/** Shape of the global the StarMarkers publish when locked (mirrors StarMarker.tsx). */
-interface MarkerLock {
-  active: boolean;
-  owner: string;
-}
-type MarkerLockWindow = Window & { __bhMarkerLock?: MarkerLock | null };
-
-/** A locked marker publishes its PLACEMENT id (e.g. 'nebula-02', 'beginning').
- *  Resolve that to the HUD target id by looking the placement up in the marker
- *  table and reading its `state` (placement.state already equals the HudTargetId
- *  for every scene — the three nebula placements all carry state:'nebula'). */
-function hudIdForMarkerOwner(owner: string): HudTargetId | null {
-  const placement = MARKER_PLACEMENTS.find((m) => m.id === owner);
-  return placement ? placement.state : null;
+/** The compass copy: either a specific on-screen marker (use its own title /
+ *  subtitle) or a rail-hovered HUD scene (use its label / destination). */
+interface CompassCopy {
+  /** Top line — the target name. */
+  label: string;
+  /** Bottom line — the destination. */
+  dest: string;
 }
 
-const MARKER_POLL_MS = 120;
+/** A marker placement carries its own card copy; prefer it for the compass so
+ *  the nebula's three writing markers read distinctly. */
+function copyForMarker(placement: MarkerPlacement): CompassCopy {
+  return { label: placement.title, dest: placement.subtitle };
+}
+
+/** A rail-hovered scene names by its HUD row (label + destination). */
+function copyForHudId(id: HudTargetId): CompassCopy {
+  const item = HUD_NAV_BY_ID[id];
+  return { label: item.label, dest: item.destination };
+}
+
+/** The current aiming result, committed to React state only when it changes.
+ *  `markerId` is the nearest placement id (null when no markers are in range),
+ *  driving the named copy; `idle` is true when there is nothing to aim at and
+ *  no rail hover, swapping the readout to the NO SIGNAL placeholder. */
+interface AimState {
+  markerId: string | null;
+  idle: boolean;
+}
+
+// 0deg of the needle's CSS rotation points UP (north). atan2(dy, dx) measures
+// from the +x axis (east) increasing toward +y (screen-down). So a marker due
+// EAST is atan2 = 0 and we want the needle at +90deg; a marker due SOUTH is
+// atan2 = +90 and we want +180deg; hence rotate = atan2Deg + 90. The needle
+// glyph (▲) is authored pointing UP, matching the 0deg = north convention.
+const NEEDLE_NORTH_OFFSET_DEG = 90;
 
 export default function HudNavigation({
   visible,
   reduced,
   currentId,
   base,
+  markerFrameRef,
 }: HudNavigationProps) {
   // The rail item the pointer is hovering / the keyboard has focused. null when
-  // nothing on the rail is pointed (then the marker lock or scroll stage wins).
+  // nothing on the rail is pointed (then the nearest marker / scroll stage wins).
   const [pointedId, setPointedId] = useState<HudTargetId | null>(null);
-  // The HUD id of a currently-LOCKED on-canvas marker, polled from the global.
-  const [markerId, setMarkerId] = useState<HudTargetId | null>(null);
+  // The aiming result (nearest marker id + idle flag), recomputed each rAF off
+  // the cursor + marker frame; committed only when it actually changes.
+  const [aim, setAim] = useState<AimState>({ markerId: null, idle: true });
 
-  // Poll window.__bhMarkerLock on a light interval. The lock is written every rAF
-  // by StarMarker (a frame-cadence value), so we sample it rather than subscribe;
-  // only commit to state when the RESOLVED HUD id changes, keeping renders rare.
+  // Live cursor position tracked via a ref (NOT state) so the rAF loop can aim
+  // the needle every frame without re-rendering — mirrors StarMarker.pointerRef.
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  // The needle element, mutated directly each frame (rotation via inline style).
+  const needleRef = useRef<HTMLSpanElement>(null);
+  // The compass element, used to measure the needle's pivot (its centre) so the
+  // angle is computed from the compass, not the viewport origin.
+  const compassRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const w = window as unknown as MarkerLockWindow;
-    let lastId: HudTargetId | null = null;
-    const id = window.setInterval(() => {
-      const lock = w.__bhMarkerLock;
-      const next = lock && lock.active ? hudIdForMarkerOwner(lock.owner) : null;
-      if (next !== lastId) {
-        lastId = next;
-        setMarkerId(next);
-      }
-    }, MARKER_POLL_MS);
-    return () => window.clearInterval(id);
+    const onMove = (event: MouseEvent): void => {
+      pointerRef.current = { x: event.clientX, y: event.clientY };
+    };
+    document.addEventListener('mousemove', onMove, { passive: true });
+    return () => document.removeEventListener('mousemove', onMove);
   }, []);
 
-  // Resolve the POINTED target with the priority: rail hover/focus → locked
-  // marker → scroll stage. Always resolves to something so the readout is never
-  // blank (it falls back to "you are here").
-  const compassId: HudTargetId | null = pointedId ?? markerId ?? currentId;
-  const compassItem = compassId ? HUD_NAV_BY_ID[compassId] : null;
-  // Whether the readout is naming a deliberately POINTED target (vs. the idle
-  // scroll fallback) — drives a subtly brighter prompt glyph.
-  const compassPointed = pointedId !== null || markerId !== null;
+  // The aiming rAF loop. Each frame: gather the markers currently interactive on
+  // screen (frame.visible AND this scene is the settled one), compute each one's
+  // screen px (anchored markers ride the projected origin; the rest sit at a
+  // viewport fraction — same math as StarMarker), find the one nearest the
+  // cursor, rotate the needle toward it, and commit the named target / idle flag
+  // to state ONLY when it flips. Cleans up on unmount.
+  useEffect(() => {
+    let rafId = 0;
+    let lastMarkerId: string | null = null;
+    let lastIdle = true;
+
+    function tick(): void {
+      rafId = requestAnimationFrame(tick);
+      const frame = markerFrameRef.current;
+      const cursor = pointerRef.current;
+
+      // Candidate markers: those whose state is the settled one on screen RIGHT
+      // NOW (same gate StarMarker uses for its own visibility/interactivity).
+      let nearest: MarkerPlacement | null = null;
+      let nearestX = 0;
+      let nearestY = 0;
+      if (frame && frame.visible && cursor) {
+        const settled = settledIdForStage(frame.stage);
+        let bestDistSq = Number.POSITIVE_INFINITY;
+        for (const placement of MARKER_PLACEMENTS) {
+          if (placement.state !== settled) continue;
+          const x = placement.anchored ? frame.x : placement.vx * window.innerWidth;
+          const y = placement.anchored ? frame.y : placement.vy * window.innerHeight;
+          const dx = cursor.x - x;
+          const dy = cursor.y - y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            nearest = placement;
+            nearestX = x;
+            nearestY = y;
+          }
+        }
+      }
+
+      // Aim the needle at the nearest marker (direction from the needle's pivot,
+      // i.e. the compass centre, to the marker's screen position). Mutate the DOM
+      // directly — no setState — so rotation is smooth and render-free.
+      const needle = needleRef.current;
+      const compass = compassRef.current;
+      if (needle && compass && nearest) {
+        const rect = compass.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const atan2Deg = Math.atan2(nearestY - cy, nearestX - cx) * (180 / Math.PI);
+        needle.style.transform = `rotate(${(atan2Deg + NEEDLE_NORTH_OFFSET_DEG).toFixed(1)}deg)`;
+      }
+
+      // Commit the named target / idle flag only when it flips. Idle = nothing to
+      // aim at AND no rail hover (the rail-hover check reads the latest state via
+      // the lastIdle compare below; pointedId lives in React state, so we fold it
+      // in at render time rather than here — see `idle` derivation in JSX).
+      const nextMarkerId = nearest ? nearest.id : null;
+      const nextIdle = nearest === null;
+      if (nextMarkerId !== lastMarkerId || nextIdle !== lastIdle) {
+        lastMarkerId = nextMarkerId;
+        lastIdle = nextIdle;
+        setAim({ markerId: nextMarkerId, idle: nextIdle });
+      }
+    }
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [markerFrameRef]);
+
+  // Resolve the COMPASS COPY. Naming priority: rail hover/focus (a deliberate
+  // pointing gesture) → the nearest on-screen marker → null. The needle aims at
+  // the nearest marker regardless; rail hover only overrides the NAME.
+  const nearestPlacement = aim.markerId
+    ? MARKER_PLACEMENTS.find((m) => m.id === aim.markerId) ?? null
+    : null;
+  const copy: CompassCopy | null = pointedId
+    ? copyForHudId(pointedId)
+    : nearestPlacement
+      ? copyForMarker(nearestPlacement)
+      : null;
+  // Idle = nothing to aim at AND no rail hover. The compass then shows NO SIGNAL
+  // and the needle is hidden/centred (CSS off the data-idle attribute).
+  const idle = copy === null;
+  // Whether the needle is actively aiming at a real marker (gold) vs. idle (dim).
+  const aiming = nearestPlacement !== null;
 
   return (
     <>
@@ -189,33 +297,57 @@ export default function HudNavigation({
       </nav>
       </div>
 
-      {/* ASCII compass readout, anchored below the rail. Names whatever is being
-          POINTED at (a hovered/focused rail glyph, a locked on-canvas marker) and
-          falls back to the current scroll stage when nothing is pointed. Drawn in
-          the rail's +/tick ASCII language with literal chars; aria-hidden because
-          the rail buttons already announce their own labels (the old mobile readout
-          had the same rationale — this replaces it, now visible on desktop too).
-          The compass markup is rendered even when no scene resolves so its frame
-          never pops in/out.
+      {/* Aiming compass, anchored bottom-centre. Its needle ROTATES (set every rAF
+          above) toward the on-screen marker NEAREST THE CURSOR and names that
+          marker; when no marker is on screen / in range and the rail is not
+          hovered it falls IDLE (a dim NO SIGNAL placeholder, needle hidden).
+          aria-hidden because the rail buttons + markers already announce their own
+          labels (the old mobile readout had the same rationale — this replaces it,
+          now visible on desktop too). The markup is always rendered (its frame
+          never pops in/out); data-idle swaps the copy + hides the needle.
 
           IMPORTANT: rendered as a SIBLING of .hud-system, not a child. .hud-system
           carries a transform (translate(...,-50%) for vertical centring), and a CSS
           transform on an ancestor makes position:fixed resolve against that ancestor
           instead of the viewport — which trapped the compass mid-rail. As a sibling
           its position:fixed bottom-centre resolves against the viewport correctly. */}
-      {compassItem && (
-        <div className="hud-compass" data-visible={visible} data-pointed={compassPointed} aria-hidden="true">
-          <pre className="hud-compass-rose">{'     +\n  ───┼───\n     |'}</pre>
-          <p className="hud-compass-read">
-            <span className="hud-compass-prompt">{compassPointed ? '[·]' : ' › '}</span>
-            <span className="hud-compass-label">{compassItem.label}</span>
+      <div
+        ref={compassRef}
+        className="hud-compass"
+        data-visible={visible}
+        data-aiming={aiming}
+        data-idle={idle}
+        data-reduced={reduced}
+        aria-hidden="true"
+      >
+        {/* The crosshair rose with a rotating needle pivoted on its centre. The
+            ── ┼ ── cross is the static frame; the needle (▲, authored pointing
+            UP) rotates over it. */}
+        <span className="hud-compass-rose">
+          <pre className="hud-compass-cross">{'     +\n  ───┼───\n     |'}</pre>
+          <span ref={needleRef} className="hud-compass-needle" aria-hidden="true">
+            ▲
+          </span>
+        </span>
+        {idle ? (
+          <p className="hud-compass-read hud-compass-read--idle">
+            <span className="hud-compass-prompt">[ </span>
+            <span className="hud-compass-label">NO SIGNAL</span>
+            <span className="hud-compass-prompt"> ]</span>
           </p>
-          <p className="hud-compass-dest">
-            <span className="hud-compass-arrow">→</span>
-            <span>{compassItem.destination}</span>
-          </p>
-        </div>
-      )}
+        ) : (
+          <>
+            <p className="hud-compass-read">
+              <span className="hud-compass-prompt">{aiming ? '[·]' : ' › '}</span>
+              <span className="hud-compass-label">{copy.label}</span>
+            </p>
+            <p className="hud-compass-dest">
+              <span className="hud-compass-arrow">→</span>
+              <span>{copy.dest}</span>
+            </p>
+          </>
+        )}
+      </div>
     </>
   );
 }

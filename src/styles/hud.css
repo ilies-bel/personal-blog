@@ -355,9 +355,16 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   transition: opacity 0.5s var(--ease-out-quint) 0.34s;
 }
 .hud-compass[data-visible='true'] { opacity: 1; }
-/* The crosshair rose — literal +, ─, ┼, | chars rendered as a tiny diagram. Dim
-   so it reads as a frame, not copy. */
+/* The crosshair rose — a positioning context that holds the static +,─,┼,| cross
+   AND the rotating needle pivoted on its centre. */
 .hud-compass-rose {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+/* The static cross frame — literal +, ─, ┼, | chars. Dim so it reads as a frame,
+   not copy. */
+.hud-compass-cross {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -366,6 +373,31 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   color: var(--hud-line);
   white-space: pre;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+}
+/* The aiming needle — a small glyph authored pointing UP (0deg = north), rotated
+   each rAF by HudNavigation to aim at the nearest on-screen marker. Centred on the
+   cross's centre via the grid; transform-origin is its own centre so it spins in
+   place. No CSS transition on the transform — the per-frame JS set IS the
+   animation, so a transition would only lag the cursor. */
+.hud-compass-needle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  line-height: 1;
+  color: var(--hud-gold);
+  transform-origin: center;
+  text-shadow: 0 0 10px color-mix(in oklch, var(--hud-gold) 55%, transparent);
+  pointer-events: none;
+}
+/* Idle: no marker to aim at — fade the needle out so the cross reads as a quiet,
+   un-aimed frame. */
+.hud-compass[data-idle='true'] .hud-compass-needle {
+  opacity: 0;
+}
+.hud-compass[data-aiming='true'] .hud-compass-cross {
+  color: color-mix(in oklch, var(--hud-line) 80%, var(--hud-gold));
 }
 .hud-compass-read,
 .hud-compass-dest {
@@ -386,17 +418,29 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   letter-spacing: 0.14em;
   color: var(--fg-dim);
 }
-/* The leading prompt ('[·]' when a real target is pointed, ' › ' idle) + the
-   destination arrow get the rail's gold so the readout shares its signal colour.
-   Brighter when actively pointing (data-pointed). */
+/* The leading prompt ('[·]' when actively aiming, ' › ' for a rail-hover name) +
+   the destination arrow get the rail's gold so the readout shares its signal
+   colour. Brighter when the needle is actively aiming at a marker (data-aiming). */
 .hud-compass-prompt,
 .hud-compass-arrow {
   color: color-mix(in oklch, var(--hud-gold) 60%, var(--hud-line));
   white-space: pre;
 }
-.hud-compass[data-pointed='true'] .hud-compass-prompt,
-.hud-compass[data-pointed='true'] .hud-compass-arrow {
+.hud-compass[data-aiming='true'] .hud-compass-prompt,
+.hud-compass[data-aiming='true'] .hud-compass-arrow {
   color: var(--hud-gold);
+}
+/* Idle placeholder: NO SIGNAL — dim, faint, all the signal colour drained so the
+   instrument reads as scanning/empty rather than naming a destination. */
+.hud-compass-read--idle {
+  color: var(--fg-faint);
+}
+.hud-compass-read--idle .hud-compass-label {
+  color: var(--fg-faint);
+  letter-spacing: 0.2em;
+}
+.hud-compass-read--idle .hud-compass-prompt {
+  color: var(--fg-faint);
 }
 
 @media (max-width: 46rem) {

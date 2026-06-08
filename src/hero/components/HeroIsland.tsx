@@ -267,7 +267,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         {MARKER_PLACEMENTS.map((placement) => (
           <StarMarker key={placement.id} placement={placement} markerFrameRef={markerFrameRef} />
         ))}
-        <ExplorationHud />
+        <ExplorationHud markerFrameRef={markerFrameRef} />
         <ScrollHint />
       </div>
     </SceneStateProvider>
