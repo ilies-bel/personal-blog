@@ -24,10 +24,10 @@ body.bare::after {
   inset: 0;
   z-index: 9;                            /* above canvas (0), below overlays (10+) */
   pointer-events: none;
-  --vignette-edge: 0.34;                 /* edge alpha at rest — "dim slightly" */
+  --vignette-edge: 0.46;                 /* edge alpha at rest — dim a bit more */
   background: radial-gradient(
     118% 118% at 50% 46%,
-    transparent 52%,
+    transparent 44%,
     color-mix(in oklch, var(--bg) calc(var(--vignette-edge) * 100%), transparent) 100%
   );
   transition: --vignette-edge 0.6s var(--ease-out-quint);
@@ -35,7 +35,7 @@ body.bare::after {
 /* Deepen when the HUD takes over (or is powering up) so the chrome stands out. */
 body.bare.hud-active::after,
 body.bare.hud-booting::after {
-  --vignette-edge: 0.6;
+  --vignette-edge: 0.72;
 }
 /* --vignette-edge is not an animatable property in browsers without @property, so
    register it for a smooth transition; falls back to an instant change otherwise. */

@@ -18,6 +18,8 @@
   --rail-expanded: 15rem;      /* button width when expanded (hover/focus/active) */
   --rail-copy-max: 11rem;      /* label column max-width when revealed */
   --rail-line-x: 1.7rem;       /* rail-line x = --rail-col / 2 (glyph node center) */
+  --rail-glyph-edge: 2.85rem;  /* glyph node right edge from column left — connector
+                                  ticks start HERE so they never cross the icon */
   --rail-first-center: 3.2rem; /* first glyph center from the rail-line top edge */
   --rail-gap-half: 1rem;       /* half-width of the transparent gap at each glyph */
   /* Staggered cascade timing (#4): a HELD beat before anything moves, then each
@@ -145,17 +147,13 @@
     color 0.2s ease;
 }
 .hud-nav-button::before {
-  content: '';
-  position: absolute;
-  left: var(--rail-line-x);
-  top: 50%;
-  width: 0.5rem;
-  height: 1px;
-  background: var(--hud-line-dim);
-  transform: translate(-50%, -50%);
-  transition:
-    width 0.22s var(--ease-out-quint),
-    background-color 0.2s ease;
+  /* The connector tick is REMOVED — at the bigger rail size it read either as a
+     strikethrough across the glyph or as a stray underscore hugging the label.
+     The vertical rail line + the glyph nodes already carry the structure, so the
+     tick is pure noise. Kept as a display:none rule (rather than deleting) so the
+     hover/current/active ::before rules below are harmless no-ops. */
+  content: none;
+  display: none;
 }
 .hud-nav-button:hover,
 .hud-nav-button:focus-visible {
@@ -164,7 +162,9 @@
 }
 .hud-nav-button:hover::before,
 .hud-nav-button:focus-visible::before {
-  width: 1.5rem;
+  /* Stay in the gap: glyph edge (2.85) + 0.5 = 3.35rem, just shy of the label at
+     --rail-col (3.4rem). Brighten, don't lengthen into the text. */
+  width: 0.5rem;
   background: var(--hud-gold);
 }
 /* Scroll-spy "you are here": the stage the scroll position maps to, when not
@@ -176,7 +176,7 @@
   color: color-mix(in oklch, var(--fg-dim) 78%, var(--fg));
 }
 .hud-nav-button[data-current='true']::before {
-  width: 1.05rem;
+  width: 0.5rem;
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
 /* Keyboard focus ring (#1): keep an accessible ring but make it QUIET and not a
@@ -189,6 +189,22 @@
   outline-offset: 0.6rem;
   border-radius: var(--radius-sm);
 }
+
+/* LONGER rail once the HUD is active: the selector spreads vertically so it reads
+   as a full menu (more breathing room between rows), not a compact instrument. We
+   bump the row gap + pitch (and the first-glyph center, which the rail-line mask
+   gaps derive from, so the line stays aligned). Driven by overriding the geometry
+   knobs under body.hud-active; the row-gap transition animates the spread. */
+body.hud-active .hud-system,
+.hud-system.is-active {
+  --rail-row-gap: 1.6rem;
+  --rail-row-pitch: 5rem;        /* --rail-row-h (3.4) + --rail-row-gap (1.6) */
+  --rail-first-center: 3.2rem;   /* unchanged: first node still anchors near the top */
+}
+/* Note: body.hud-active is on <body>; the rail (.hud-system) is a descendant, so the
+   override above targets it. (gap doesn't reliably transition when its var() source
+   changes, so the rows snap to the wider spacing — the per-row label cascade still
+   carries the activation motion.) */
 
 /* HUD activation at the black hole (body.hud-active, set by HeroIsland or forced by
    the corner power button): the quiet icon rail becomes an explicit menu — every
@@ -208,7 +224,7 @@ body.hud-active .hud-nav-button {
     color 0.3s ease var(--rail-beat);
 }
 body.hud-active .hud-nav-button::before {
-  width: 1.5rem;
+  width: 0.5rem;
   background: var(--hud-gold);
   transition:
     width 0.3s var(--ease-out-quint) var(--rail-beat),
@@ -350,11 +366,17 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   font-family: var(--font-mono);
   text-transform: uppercase;
   text-align: center;
-  /* Fade in WITH the rail so it doesn't pop before the rail settles. */
-  opacity: 0;
-  transition: opacity 0.5s var(--ease-out-quint) 0.34s;
+  /* The compass belongs to the ACTIVATED HUD — it appears WITH the hud-active
+     morph (after the rail cascade beat), not during the quiet cinematic scroll.
+     The visible state is the DEFAULT here; the hidden state is gated on the body
+     NOT being hud-active (a single rule below), so there is no same-element
+     opacity conflict to resolve by specificity. */
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 0.5s var(--ease-out-quint) var(--rail-beat);
 }
-.hud-compass[data-visible='true'] { opacity: 1; }
+/* Hidden during the quiet cinematic scroll — only while the HUD is NOT activated. */
+body:not(.hud-active) .hud-compass { opacity: 0; transition-delay: 0s; }
 /* The gauge rose — a fixed-size positioning context holding the faint static
    crosshair frame, the ▲ cursor anchor (dead-centre, never moved) and the ┼
    marker waypoint (centred then translated each rAF). The box is sized so the ┼'s
