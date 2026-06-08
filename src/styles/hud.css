@@ -357,6 +357,18 @@
   transition:
     opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
+/* BRIGHT STATES (orange nebula, yellow star, red giant): flip the whole OFF-WHITE
+   outer reticle to near-black so it reads against the bright surface. All three
+   off-white parts — the resting dotted hex, the locked solid outer hex and the 3
+   tick spikes — stroke with currentColor (= --marker-line), so re-pointing the one
+   variable flips all three at once. The element's own `color: var(--marker-line)`
+   re-resolves from this override too (custom-property cascade), but we also set
+   `color` explicitly so currentColor is guaranteed near-black here. The GOLD inner
+   hex + locked dot use --marker-gold, NOT --marker-line, so they STAY gold. */
+.star-marker[data-bright='true'] {
+  --marker-line: var(--bg);
+  color: var(--bg);
+}
 /* Reduced motion: visible but no animation. Still clickable. */
 .star-marker[data-reduced='true'],
 .star-marker[data-reduced='true'][data-visible='true'] {
@@ -378,6 +390,18 @@
     drop-shadow(0 0 1.2px color-mix(in oklch, var(--bg) 90%, transparent))
     drop-shadow(0 0 2.5px color-mix(in oklch, var(--bg) 78%, transparent))
     drop-shadow(0 0 6px color-mix(in oklch, var(--bg) 55%, transparent));
+}
+/* BRIGHT STATES: the strokes are now near-BLACK (see the data-bright rule above),
+   so the dark legibility halo no longer separates them from the bright surface —
+   it needs to flip to a LIGHT halo. Same multi-layer shape / blur radii / opacities
+   as the default stack, just swapping --bg (dark) for --fg (light): the black
+   reticle gets a soft white outline so it stays crisp on the orange/yellow/red. */
+.star-marker[data-bright='true'] .star-marker-reticle {
+  filter:
+    drop-shadow(0 0 0.6px color-mix(in oklch, var(--fg) 96%, transparent))
+    drop-shadow(0 0 1.2px color-mix(in oklch, var(--fg) 90%, transparent))
+    drop-shadow(0 0 2.5px color-mix(in oklch, var(--fg) 78%, transparent))
+    drop-shadow(0 0 6px color-mix(in oklch, var(--fg) 55%, transparent));
 }
 
 /* RESTING: dotted hexagon — quiet, but legible. Hidden once locked. */
