@@ -1,4 +1,5 @@
 import { clamp01, segment } from './scroll';
+import { legacyStageForProgressFromTable } from './sceneTable';
 
 // ===========================================================================
 // LIFECYCLE DIRECTION — the single toggle that decides which way time runs.
@@ -62,10 +63,6 @@ const easeInOutCubic = (t: number): number => {
   const x = clamp01(t);
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 };
-const easeInQuart = (t: number): number => {
-  const x = clamp01(t);
-  return x * x * x * x;
-};
 const easeOutExpo = (t: number): number => {
   const x = clamp01(t);
   return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
@@ -86,8 +83,14 @@ const RED_HOLD_END = 0.678;      // widened: 0.658 -> 0.678 (more settled red-gi
 
 // The public cinematic timeline. The existing shaders still understand the older
 // reverse "stage" coordinates, so this is the single handoff from the new story
-// into the proven morph machinery. `progress` is the RAW scroll value; we run it
-// through lifecycleProgress() so LIFECYCLE_DIRECTION owns which way time flows.
+// into the proven morph machinery. `progress` is the RAW scroll value; the table
+// walker runs it through lifecycleProgress() so LIFECYCLE_DIRECTION owns which
+// way time flows.
+//
+// The former 11-band if-ladder now lives as the declarative SEGMENTS table in
+// sceneTable.ts; this delegates to the generic band-walker over that table,
+// which reproduces the same progress->stage curve numerically identically. Edit
+// the table (one weight) to re-time a scene, not this function.
 //
 // Phase bands (in lifecycleProgress space) match the cinematic spec exactly:
 //   0.00-0.16 nebulaFormation | 0.16-0.22 yellowStarIgnition |
@@ -96,63 +99,7 @@ const RED_HOLD_END = 0.678;      // widened: 0.658 -> 0.678 (more settled red-gi
 //   0.62-0.72 collapse        | 0.72-0.80 supernova          |
 //   0.80-0.94 blackHoleFormation | 0.94-1.00 blackHoleHold / portfolio lure.
 export function legacyStageForProgress(progress: number): number {
-  const p = lifecycleProgress(progress);
-
-  // --- THE PALE-BLUE-DOT OPENING (progress 0.00 -> 0.18) -------------------
-  // The page OPENS on a lone pale-blue speck (the cosmic "you are here"), which
-  // then runs a longer lightspeed approach before the nebula resolves. The dot
-  // state needs stage >= 4.5 (see lifecycle.ts `dot`), so the top of the arc
-  // reaches up to DOT_STAGE 4.70. The nebula first appears smaller, then grows
-  // into its held frame before the collapse window takes over.
-  if (p < DOT_HOLD_END) {
-    // DOT HOLD: a near-pixel speck in a vast black field. Barely moves (4.70 -> 4.50)
-    // so the opening frame rests as a single quiet point before anything happens.
-    return lerp(4.7, 4.5, smoothstep(segment(p, 0.0, DOT_HOLD_END)));
-  }
-  if (p < NEBULA_GROW_END) {
-    // DOT -> NEBULA grow: linear on purpose. The shader uses the same stage span
-    // to scale the cloud out from the pale-blue point, so easing here would make
-    // the visible growth clump at the end instead of reading as steady travel.
-    return lerp(4.5, 3.42, segment(p, DOT_HOLD_END, NEBULA_GROW_END));
-  }
-  if (p < STAR_IGNITION_START) {
-    // THE COLLAPSE — the heart of the nebula -> star transition. Stage walks the
-    // WHOLE collapse window (3.42 -> 3.02, the lifecycle's [3.0, 3.5] band) across a
-    // GENEROUS scroll stretch so the gas visibly streams INWARD and FEEDS the forming
-    // star instead of the old 6%-of-scroll flick that skipped the window (which made
-    // the star pop "out of nowhere"). easeInOutCubic so the infall accelerates into
-    // the middle of the window and eases as the core fills.
-    return lerp(3.42, 3.02, easeInOutCubic(segment(p, NEBULA_GROW_END, STAR_IGNITION_START)));
-  }
-  if (p < YELLOW_SETTLE_END) {
-    // IGNITION + CONTEMPLATION: the star has condensed out of the gas; finish into
-    // the settled gold (3.02 -> 2.88, the gas-free 2.88->3.0 yellow band) and hold
-    // there so the visitor can read the headline on the blazing sun before the red-
-    // giant growth resumes the descent.
-    return lerp(3.02, 2.88, easeOutCubic(segment(p, STAR_IGNITION_START, YELLOW_SETTLE_END)));
-  }
-  if (p < YELLOW_HOLD_END) {
-    // YELLOW HOLD: stay at the settled gold (no growth) while the camera sits on the
-    // close yellow-star beat. Growth resumes only after, so the move to the corner is
-    // one continuous gesture rather than starting mid-dive-in.
-    return 2.88;
-  }
-  if (p < RED_HOLD_START) {
-    return lerp(2.88, 2.05, easeInOutCubic(segment(p, YELLOW_HOLD_END, RED_HOLD_START)));
-  }
-  if (p < RED_HOLD_END) {
-    return 2.05;
-  }
-  if (p < 0.748) {
-    return lerp(1.05, 0.5, easeInQuart(segment(p, RED_HOLD_END, 0.748)));
-  }
-  if (p < 0.82) {
-    return lerp(0.5, 0.32, easeOutCubic(segment(p, 0.748, 0.82)));
-  }
-  if (p < 0.946) {
-    return lerp(0.32, 0.08, easeOutExpo(segment(p, 0.82, 0.946)));
-  }
-  return lerp(0.08, 0.0, smoothstep(segment(p, 0.946, 1.0)));
+  return legacyStageForProgressFromTable(progress);
 }
 
 // Approximate inverse used only for HUD previews, where matching the selected
