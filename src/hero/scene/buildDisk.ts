@@ -53,6 +53,9 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
 
   const uniforms: Uniforms = {
     uTime: { value: 0 },
+    // dedicated always-live clock for the opening pale-blue-dot's brightness breath
+    // (uTime is frozen across the nebula window, which includes the dot — see frame()).
+    uDotTime: { value: 0 },
     uOmega0: { value: CFG.omega0 },
     uSpinDir: { value: CFG.spinDir },
     uBetaScale: { value: CFG.betaScale },

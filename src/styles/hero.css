@@ -243,14 +243,14 @@ body.bare.is-scrolled .overlay-blog {
   }
 }
 
-/* Whisper: small, dim, elaborating the big line. Shared; never swaps. */
+/* Whisper: small, elaborating the big line. Shared; never swaps. */
 .bh-beat-whisper {
   margin: 0;
   max-width: min(34rem, 80vw);
   font-family: var(--font-mono);
   font-size: clamp(0.8rem, 1.3vw, 0.98rem);
   line-height: 1.55;
-  color: var(--fg-dim);
+  color: var(--fg);
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
@@ -262,9 +262,13 @@ body.bare.is-scrolled .overlay-blog {
   .bh-overlay[data-exploring='true'] { opacity: 0.28 !important; }
 }
 
-/* A faint affordance, shown only at the very top, fades on first scroll. It
-   eases in once on first paint to catch the eye, then rests — no perpetual
-   pulse (motion is spent introducing the hint, not looping forever). */
+/* A faint affordance, shown only at the very top (unmounted by ScrollHint on
+   first scroll). It eases in once on first paint to catch the eye, then settles
+   into a slow, perpetual breath of light — a quiet opacity pulse so the hint
+   keeps gently inviting the scroll. The pulse is sequenced AFTER the intro (it
+   starts at the intro's resting 0.86 and only begins once the ease-in has run),
+   and is disabled under prefers-reduced-motion (see the reduced-motion block,
+   which also `display: none`s the hint). */
 .bh-hint {
   position: fixed;
   left: 50%;
@@ -281,7 +285,11 @@ body.bare.is-scrolled .overlay-blog {
   color: var(--fg-faint);
   pointer-events: auto;
   opacity: 0.86;
-  animation: bh-hint-in 0.9s var(--ease-out-quint) both;
+  /* intro ease-in (once), then the perpetual breath kicks in after the 0.9s
+     intro completes (delay) and loops forever. */
+  animation:
+    bh-hint-in 0.9s var(--ease-out-quint) both,
+    bh-hint-pulse 3.6s ease-in-out 0.9s infinite;
 }
 .bh-hint-start {
   appearance: none;
@@ -344,6 +352,14 @@ body.bare.is-scrolled .overlay-blog {
   0%, 100% { transform: scaleY(0.42); opacity: 0.45; }
   45% { transform: scaleY(1); opacity: 0.95; }
 }
+/* Perpetual breath of light: a slow, calm opacity swell-and-fade so the hint
+   keeps softly inviting the scroll. Symmetric loop (0%/100% match) so the
+   infinite repeat never jumps; rests near the intro's 0.86 and breathes between
+   ~0.55 (exhale) and ~1.0 (inhale). */
+@keyframes bh-hint-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
 
 /* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
    stay reachable, so the island renders every beat fully and shows BOTH big lines
@@ -384,7 +400,9 @@ body.bare.is-scrolled .overlay-blog {
     margin-bottom: 0.4rem;
   }
   .bh-beat-line--up { display: none !important; }
-  .bh-hint { display: none !important; }
+  /* Hint is unmounted by ScrollHint under reduced motion and hidden here too;
+     belt-and-suspenders, also kill the perpetual breath so no opacity loops. */
+  .bh-hint { display: none !important; animation: none !important; }
 
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] {
