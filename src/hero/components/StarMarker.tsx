@@ -47,10 +47,16 @@ function markerLockWindow(): MarkerLockWindow {
   return window as unknown as MarkerLockWindow;
 }
 
-// Proximity radii (CSS px from the marker centre). Hysteresis: engage closer than
-// it releases so the lock never flickers at the boundary.
-const LOCK_ENGAGE_RADIUS = 70;
-const LOCK_RELEASE_RADIUS = 95;
+// The lock hitbox is a circle that touches the hexagon's PEAKS (vertices). The
+// hexagon is a regular flat-top hexagon spanning 100 units (HEX_POINTS) inside a
+// 116-unit viewBox, so its circumradius (centre→vertex) is 50 of those 116 units.
+// On screen the marker box width maps to the full 116 units, so the peak radius in
+// CSS px is boxWidth * (50 / 116). HEX_PEAK_RATIO is that factor; the engage radius
+// is computed per-frame from the marker's measured width (below).
+const HEX_PEAK_RATIO = 50 / 116;
+// Hysteresis: release a touch farther than engage so the lock never flickers at the
+// boundary. RELEASE_MARGIN is added to the geometry-derived engage radius.
+const LOCK_RELEASE_MARGIN = 14; // px past the peak before the lock drops
 
 // Card-flip threshold: when the marker sits in the right ~30% of the viewport the
 // card + connector flip to the LEFT so the card stays on-screen.
@@ -196,8 +202,13 @@ export default function StarMarker({ markerFrameRef }: StarMarkerProps) {
           const dx = p.x - frame.x;
           const dy = p.y - frame.y;
           const distSq = dx * dx + dy * dy;
-          const engageSq = LOCK_ENGAGE_RADIUS * LOCK_ENGAGE_RADIUS;
-          const releaseSq = LOCK_RELEASE_RADIUS * LOCK_RELEASE_RADIUS;
+          // Engage radius = the hexagon's on-screen peak (circumradius), so the lock
+          // circle touches each vertex. Derived from the marker's measured width.
+          const boxWidth = el ? el.getBoundingClientRect().width : 0;
+          const engageRadius = boxWidth * HEX_PEAK_RATIO;
+          const releaseRadius = engageRadius + LOCK_RELEASE_MARGIN;
+          const engageSq = engageRadius * engageRadius;
+          const releaseSq = releaseRadius * releaseRadius;
           if (!lastLocked && distSq <= engageSq) nextLocked = true;
           else if (lastLocked && distSq > releaseSq) nextLocked = false;
         } else if (!focusedRef.current) {
