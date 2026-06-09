@@ -493,7 +493,7 @@ export const SCENES: readonly LifecycleScene[] = [
       // frame. NEBULA_GROW_END is now 0.195; collapse starts at 0.33. The text fades
       // in as the cloud settles (~0.195) and out well before collapse (~0.28).
       at: 0.21,
-      text: { inStart: 0.185, inEnd: 0.205, outStart: 0.265, outEnd: 0.295 },
+      text: { inStart: 0.185, inEnd: 0.2, outStart: 0.28, outEnd: 0.295 },
       state: 'nebula',
       down: 'One boundary can outlive a thousand generated lines.',
       up: 'One boundary can outlive a thousand generated lines.',
@@ -527,7 +527,7 @@ export const SCENES: readonly LifecycleScene[] = [
       // YELLOW STAR — ignites by ~0.33 (STAR_IGNITION_START) and dwells through
       // ~0.395 (YELLOW_SETTLE_END). The headline sits in the stable window.
       at: 0.355,
-      text: { inStart: 0.31, inEnd: 0.335, outStart: 0.375, outEnd: 0.395 },
+      text: { inStart: 0.31, inEnd: 0.325, outStart: 0.385, outEnd: 0.395 },
       state: 'yellow star',
       down: 'Systems grow. Interfaces drift. Complexity compounds.',
       up: 'Systems grow. Interfaces drift. Complexity compounds.',
@@ -560,7 +560,7 @@ export const SCENES: readonly LifecycleScene[] = [
     beat: {
       // RED GIANT — the hold band (stage 2.05, progress ~0.524 -> 0.678).
       at: 0.601,
-      text: { inStart: 0.524, inEnd: 0.562, outStart: 0.638, outEnd: 0.676 },
+      text: { inStart: 0.524, inEnd: 0.545, outStart: 0.655, outEnd: 0.676 },
       state: 'red giant',
       down: 'My work is to keep the center readable.',
       up: 'My work is to keep the center readable.',
