@@ -2,11 +2,13 @@
    full-bleed shell. Light text on a dark ground reads lighter, so prose runs a
    touch more line-height. */
 .prose {
-  max-width: var(--max);
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
   margin-inline: auto;
   padding-top: clamp(2.5rem, 8vw, 5rem);
-  font-size: 1.12rem;
-  line-height: 1.78;
+  font-size: 17px;
+  line-height: 1.75;
 }
 /* The article header is a page-hero in the same language as the writing index
    and About: a mono kicker (one rare gold signal), a display title at the
@@ -65,9 +67,9 @@
   color: var(--highlight);
 }
 .article-header h1 {
-  font-size: clamp(2.35rem, 6.6vw, 4.5rem);
-  line-height: 1.0;
-  letter-spacing: -0.05em;
+  font-size: clamp(44px, 5vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
   margin: 0;
   color: var(--fg);
   text-wrap: balance;
@@ -109,7 +111,7 @@
   letter-spacing: 0.08em;
   color: var(--fg-faint);
 }
-.prose p { margin: 1.3rem 0; }
+.prose p { margin: 1.3rem 0; color: #c7bfb4; }
 .prose h2 { font-size: 1.65rem; margin: 2.75rem 0 1rem; }
 .prose h3 { font-size: 1.3rem; margin: 2rem 0 0.75rem; }
 .prose a { font-weight: 600; }
