@@ -78,6 +78,25 @@ body.article-page .bh-backdrop::after {
       color-mix(in oklch, var(--bg) 64%, transparent) 90%,
       var(--bg) 100%);
 }
+/* Horizontal reading scrim: a left↔right darkening band over the live backdrop
+   that deepens the edges and the centre so long-form copy reads cleanly while the
+   ring stays felt. Attached to .bh-backdrop::before (the ::after pseudo is the
+   column-ellipse wash; base.css already disables body.article-page::before, so we
+   can't hang it there). The backdrop is position:fixed; inset:0, so this pseudo
+   is effectively a fixed full-viewport scrim — matching the intended
+   linear-gradient(90deg, …) horizontal darkening. It sits at backdrop z-index 0;
+   .prose is lifted to z-index 1 so the reading column is never covered. */
+body.article-page .bh-backdrop::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(90deg,
+    rgba(0, 0, 0, 0.88),
+    rgba(0, 0, 0, 0.62),
+    rgba(0, 0, 0, 0.88));
+  pointer-events: none;
+  z-index: 0;
+}
 
 /* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
 .bh-identity {
@@ -187,10 +206,8 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
       transparent 100%);
   opacity: 0.78;
 }
-.bh-root[data-exploring='true'] .bh-overlay,
-.bh-overlay[data-exploring='true'] {
-  opacity: 0.42;
-}
+/* Exploration mode no longer dims the manifesto overlay — the big line stays at
+   full bone (matching the identity name) in every mode. */
 .bh-beat {
   position: absolute;
   z-index: 1;
@@ -201,7 +218,7 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   will-change: opacity, transform;
 }
 
-/* Big line: both directions stacked in the same box, crossfaded by [data-active]. */
+/* Big line: one line per beat, always shown at full bone (no direction swap). */
 .bh-beat-big {
   position: relative;
   display: grid;
@@ -215,39 +232,14 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   font-size: clamp(2rem, 6vw, 4rem);
   line-height: 1.04;
   letter-spacing: 0;
+  /* Same bright bone as the identity name and the active HUD labels (var(--fg)),
+     with the active-HUD's opaque shadow so it stays crisp over the bright star.
+     Always fully opaque — never translucent over the starfield. */
   color: var(--fg);
   text-wrap: balance;
-  text-shadow: 0 0 26px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.7);
-  opacity: 0;
-  transform: translateY(0.18em);
-  transition: opacity 0.18s linear, transform 0.18s var(--ease-out-quint);
-}
-.bh-beat-line--up { grid-area: 1 / 1; }
-.bh-beat-line[data-active='true'] {
+  text-shadow: 0 0 18px rgba(0, 0, 0, 1), 0 0 4px rgba(0, 0, 0, 0.95);
   opacity: 1;
-  transform: translateY(0);
-}
-.bh-beat[data-opening='pending'] .bh-beat-line[data-active='true'],
-.bh-beat[data-opening='pending'] .bh-beat-whisper {
-  opacity: 0;
-  transform: translateY(0.28rem);
-}
-.bh-beat[data-opening='run'] .bh-beat-line[data-active='true'],
-.bh-beat[data-opening='run'] .bh-beat-whisper {
-  animation: bh-opening-copy 1.1s var(--ease-out-quint) both;
-}
-.bh-beat[data-opening='run'] .bh-beat-whisper {
-  animation-delay: 0.08s;
-}
-@keyframes bh-opening-copy {
-  from {
-    opacity: 0;
-    transform: translateY(0.28rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  transform: none;
 }
 
 /* Whisper: small, elaborating the big line. Shared; never swaps. */
@@ -265,8 +257,6 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
   .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
   .bh-identity-name { font-size: 1.05rem; }
-  .bh-root[data-exploring='true'] .bh-overlay,
-  .bh-overlay[data-exploring='true'] { opacity: 0.28 !important; }
 }
 
 /* A faint affordance, shown only at the very top (unmounted by ScrollHint on
@@ -407,7 +397,6 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
     inset: auto !important;
     margin-bottom: 0.4rem;
   }
-  .bh-beat-line--up { display: none !important; }
   /* Hint is unmounted by ScrollHint under reduced motion and hidden here too;
      belt-and-suspenders, also kill the perpetual breath so no opacity loops.
      The breath now lives on .bh-hint-label, so explicitly silence it too. */

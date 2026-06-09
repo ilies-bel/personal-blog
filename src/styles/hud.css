@@ -179,6 +179,13 @@
   width: 0.5rem;
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
+/* Active readout value: the stage label of the lit (current) row — at the black
+   hole this is the readout the HUD shows. Lift it to ~12px and warm bone so the
+   live readout reads clearly without restyling the rest of the rail. */
+.hud-nav-button[data-current='true'] .hud-nav-title {
+  font-size: 0.75rem;
+  color: #eee5d8;
+}
 /* Keyboard focus ring (#1): keep an accessible ring but make it QUIET and not a
    tight box hugging the glyph. We push it well clear of the rail with a generous
    offset and use the dim line colour so it reads as a soft frame, never the harsh
@@ -1146,14 +1153,14 @@ body.hud-booting .hud-boot-scan {
 }
 .star-marker-card-subtitle {
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.69rem;
   letter-spacing: 0.04em;
   color: var(--fg-dim);
 }
 .star-marker-card-open {
   margin-top: 0.18rem;
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.69rem;
   letter-spacing: 0.16em;
   color: color-mix(in oklch, var(--highlight) 80%, var(--fg));
 }
