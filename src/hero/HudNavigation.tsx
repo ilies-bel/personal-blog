@@ -399,11 +399,22 @@ export default function HudNavigation({
           </span>
         </span>
         {idle ? (
-          <p className="hud-compass-read hud-compass-read--idle">
-            <span className="hud-compass-prompt">[ </span>
-            <span className="hud-compass-label">NO SIGNAL</span>
-            <span className="hud-compass-prompt"> ]</span>
-          </p>
+          <>
+            <p className="hud-compass-read hud-compass-read--idle">
+              <span className="hud-compass-prompt">[ </span>
+              <span className="hud-compass-label">NO SIGNAL</span>
+              <span className="hud-compass-prompt"> ]</span>
+            </p>
+            {/* Reserve the second (destination) line's height even when idle so the
+                grid block is the SAME height in both states — the rose + first
+                readout line never shift vertically when toggling idle↔active. It
+                carries the exact .hud-compass-dest metrics but is visibility:hidden
+                (a non-breaking space, .is-spacer) so it occupies space without
+                showing as filler. */}
+            <p className="hud-compass-dest hud-compass-dest--spacer" aria-hidden="true">
+              &nbsp;
+            </p>
+          </>
         ) : (
           <>
             <p className="hud-compass-read">

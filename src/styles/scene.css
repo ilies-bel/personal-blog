@@ -334,54 +334,40 @@ body.hud-booting .overlay-blog-power {
   box-shadow: 0 0 12px color-mix(in oklch, var(--highlight) 45%, transparent);
 }
 
-/* CHARGING look while the HUD is powering up (#4). The button needs a positioning
-   context for the sweep ring, and its glyph brightens in steps. The whole button
-   pulses softly so it reads as drawing power. */
+/* CHARGING look while the HUD is powering up (#4). The whole button PULSES on load
+   — a gold glow that swells and fades in place — so it reads as the corner control
+   drawing power. (No rotating ring: the pulse alone is the charge cue.) position:
+   relative is kept harmlessly in case any future ::overlay wants a positioning
+   context; it costs nothing without a ::before to host. */
 .overlay-blog-power {
   position: relative;
 }
 body.hud-booting .overlay-blog-power {
   animation: overlay-power-charge 0.9s ease-in-out infinite;
 }
-/* A conic sweep ring that rotates around the button frame — like a charge meter
-   filling. Sits just outside the glyph, masked to a thin annulus so only the ring
-   edge shows. pointer-events:none; clipped to the round button. */
-.overlay-blog-power::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 999px;
-  pointer-events: none;
-  opacity: 0;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    transparent 250deg,
-    color-mix(in oklch, var(--highlight) 70%, transparent) 320deg,
-    var(--accent-strong) 360deg
-  );
-  /* Mask to a thin ring so the conic shows only at the frame edge, not a filled
-     disc over the glyph. */
-  -webkit-mask: radial-gradient(closest-side, transparent 72%, #000 74%);
-  mask: radial-gradient(closest-side, transparent 72%, #000 74%);
-}
-body.hud-booting .overlay-blog-power::before {
-  opacity: 1;
-  animation: overlay-power-sweep 1.2s linear infinite;
-}
-@keyframes overlay-power-sweep {
-  to { transform: rotate(360deg); }
-}
+/* The pulse: a gold (var(--highlight)/var(--accent-strong)) glow that breathes from
+   a calm rest to an unmistakable bright peak at 50%, with the border + glyph colour
+   nudged toward full gold on the upswing so the whole button feels like it's lighting
+   up. Returns to a soft floor each cycle so the rhythm reads as "charging". */
 @keyframes overlay-power-charge {
-  0%, 100% { box-shadow: 0 0 8px color-mix(in oklch, var(--highlight) 30%, transparent); }
-  50%      { box-shadow: 0 0 16px color-mix(in oklch, var(--highlight) 60%, transparent); }
+  0%, 100% {
+    border-color: var(--accent-strong);
+    color: var(--accent-strong);
+    box-shadow: 0 0 8px color-mix(in oklch, var(--highlight) 32%, transparent);
+  }
+  50% {
+    border-color: var(--highlight);
+    color: var(--highlight);
+    box-shadow:
+      0 0 22px color-mix(in oklch, var(--highlight) 75%, transparent),
+      0 0 6px color-mix(in oklch, var(--highlight) 90%, transparent);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-power { transition: none; }
-  /* Drop the charge animations; the static lit/charging tint above still reads. */
+  /* Drop the charge pulse; the static lit/charging tint above still reads. */
   body.hud-booting .overlay-blog-power { animation: none; }
-  body.hud-booting .overlay-blog-power::before { animation: none; opacity: 0.6; transform: none; }
 }
 
 /* On the smallest screens, fold the four section icons away and keep only the

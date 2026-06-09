@@ -364,6 +364,25 @@
     // is never left visibly drifting off-white (the gold IS the moving thing).
     const DOCK_POS_EASE = 0.2;    // position glide toward marker centre / pointer
     const DOCK_ANIM_EASE = 0.17;  // gold + opacity + scale-in envelope
+    // The position ease above is asymptotic — it APPROACHES the marker centre but
+    // never arrives, and the rAF loop idles once settled, so the docked hex used to
+    // park several px short (measured ~6px down-left; see dockTransform's root-cause
+    // note). These two close the tail so the dock is PIXEL-EXACT at any frame cadence
+    // without changing the visible glide:
+    //   • DOCK_POS_MIN_STEP — a floor on how far the position moves toward the target
+    //     each frame, so the asymptote can't crawl to a halt while still off-centre.
+    //   • DOCK_SNAP_EPS — once within this distance, snap EXACTLY onto the centre.
+    //     Kept < 1px (under the gold hex's ~1.5px stroke) so the snap is invisible;
+    //     only the imperceptible last sub-pixel is snapped, the glide stays eased.
+    // A px/frame FLOOR on the closing glide. The eased fraction (dist * DOCK_POS_EASE)
+    // dominates the visible travel while the cursor is still far from the centre; this
+    // floor only takes over for the LAST few px, where the asymptote would otherwise
+    // crawl (and stall outright if the rAF loop is being throttled while otherwise
+    // idle). At 2.5px/frame the tail closes in ~2-3 frames even when frames are sparse,
+    // so the dock is pixel-exact at any cadence; the value is small enough that the
+    // close-in is imperceptible against the eased approach.
+    const DOCK_POS_MIN_STEP = 2.5;  // px/frame floor on the closing glide
+    const DOCK_SNAP_EPS = 0.6;      // px; within this, land exactly on centre
     // The gold hex starts the capture SMALL (scales up to dockTargetScale) — this
     // is the visible "hex forming into place" beat.
     const DOCK_SCALE_START = 0.5; // fraction of the docked scale the hex starts at
@@ -382,33 +401,44 @@
       cursor.style.setProperty('--dock-op', String(liveOp));
     };
 
-    // ---- docked rig sub-pixel alignment (Change C) ---------------------------
-    // The docked gold hex felt ~1px asymmetric vs the marker's white outer hex.
-    // EMPIRICAL ROOT CAUSE (high-DPR pixel measurement, AA-coverage-weighted edge
-    // centroids — see scratchpad/centroid-edges.mjs): the docked rig (gold hex AND
-    // its centre dot, TOGETHER — they stay concentric with each other) renders a
-    // constant HALF DEVICE PIXEL up-and-LEFT of the marker centre it docks onto, at
-    // EVERY device-pixel ratio and every dock coordinate. The hex is geometrically
-    // symmetric about its own centre, but that centre lands at (marker - 0.5dev,
-    // marker - 0.5dev): on a 1× display that is a full 1px lean (the reported
-    // "~1px asymmetric"); on a 2× display 0.5px. It is NOT the (non-integer) dock
-    // scale and NOT the polygon coords — snapping either left the 0.5dev offset
-    // untouched; it is the browser rasterising the rig's content half a device pixel
-    // toward the layer origin. Because the marker's OWN white outer hex is a separate
-    // element painted at the true marker centre, that 0.5dev cursor bias reads as the
-    // gold hex sitting off-centre inside the white one.
-    //
-    // FIX: nudge the docked transform by +0.5 DEVICE px (= 0.5 / devicePixelRatio CSS
-    // px) on both axes so the rig's painted centre lands ON the marker centre. It is
-    // expressed in DEVICE px (not a fixed CSS px) so it self-corrects across DPRs — a
-    // fixed +0.5px CSS nudge over-corrects at 2× (measured: flips to +0.5dev the other
-    // way). Applied ONLY to the docked transform, so the free (undocked) ball still
-    // pins to the exact raw pointer. devicePixelRatio is read per-write (cheap) so a
-    // window dragged between a Retina and non-Retina display stays aligned.
-    const dockTransform = (x: number, y: number): string => {
-      const corr = 0.5 / (window.devicePixelRatio || 1); // +0.5 device px, in CSS px
-      return `translate3d(${x + corr}px, ${y + corr}px, 0)`;
+    // Eased step that GUARANTEES convergence: move `from` toward `to` by the larger
+    // of the eased fraction and DOCK_POS_MIN_STEP, then SNAP exactly to `to` within
+    // DOCK_SNAP_EPS (or when the floor step would overshoot). This keeps the visible
+    // glide eased while killing the asymptotic shortfall that left the docked hex
+    // parked off-centre when the rAF loop idled. Pure (no side effects); returns the
+    // new coordinate this frame.
+    const closeToward = (from: number, to: number): number => {
+      const gap = to - from;
+      const dist = Math.abs(gap);
+      if (dist <= DOCK_SNAP_EPS) return to; // last sub-pixel: land exactly on centre
+      const eased = dist * DOCK_POS_EASE;
+      const step = Math.max(eased, DOCK_POS_MIN_STEP);
+      if (step >= dist) return to;          // floor step would reach/overshoot → snap
+      return from + Math.sign(gap) * step;
     };
+
+    // ---- docked rig centring -------------------------------------------------
+    // The docked gold hex sat visibly DOWN-LEFT of the marker's white outer hex.
+    // EMPIRICAL ROOT CAUSE (pixel measurement at DPR 1 AND 2 — see
+    // scratchpad/measure-hex-center.mjs): the gold-hex centre landed a CONSTANT ~6
+    // CSS px up-and-left of the marker centre — and it was ~6px at BOTH 1× and 2×,
+    // i.e. NOT scaling with device pixels, so it was never a half-device-pixel paint
+    // bias. It was the POSITION EASE: `renderX += (dockX - renderX) * DOCK_POS_EASE`
+    // is an asymptotic lerp that only ever APPROACHES dockX, and the rAF loop idles
+    // once the cursor settles — so the glide PARKED several px short of the marker
+    // centre (the gap left when the loop stopped scheduling frames). The white hex is
+    // a separate element painted at the true marker centre, so that shortfall read as
+    // the gold hex off-centre inside the white one.
+    //
+    // FIX: the glide stays eased (the visible travel is unchanged), but its TAIL is
+    // closed exactly — see the dock branch in loop(): each frame the position also
+    // moves at least DOCK_POS_MIN_STEP px toward the target, and within DOCK_SNAP_EPS
+    // it SNAPS onto the centre. DOCK_SNAP_EPS is < 1px (under the gold hex's ~1.5px
+    // stroke) so the snap is invisible, yet the settled hex is now pixel-exact at any
+    // frame cadence. The transform therefore writes renderX/renderY directly — no
+    // extra correction term (the disproven +0.5-device-px nudge is gone).
+    const dockTransform = (x: number, y: number): string =>
+      `translate3d(${x}px, ${y}px, 0)`;
 
     // Push a point into the ring (overwriting the oldest once full).
     const pushPoint = (x: number, y: number, now: number): void => {
@@ -635,11 +665,12 @@
       // false, so we fall straight through to normal raw-pointer pinning with no
       // glide-back. One transform write + one CSS-var batch per frame; no allocs.
       if (syncDock()) {
-        renderX += (dockX - renderX) * DOCK_POS_EASE;
-        renderY += (dockY - renderY) * DOCK_POS_EASE;
+        // Eased glide toward the marker centre, but with the asymptotic TAIL closed
+        // (min step + snap) so the hex lands pixel-exact rather than parking ~6px
+        // short when the loop idles — see DOCK_POS_MIN_STEP / DOCK_SNAP_EPS.
+        renderX = closeToward(renderX, dockX);
+        renderY = closeToward(renderY, dockY);
         dockAnim += (1 - dockAnim) * DOCK_ANIM_EASE;
-        // +0.5 device px on both axes cancels the rig's half-device-pixel paint
-        // bias so the settled gold hex sits dead-centre in the marker (Change C).
         cursor.style.transform = dockTransform(renderX, renderY);
         writeDockVars(dockAnim, dockTargetScale);
         raf = requestAnimationFrame(loop);
@@ -726,8 +757,8 @@
       // we fall through to normal pointer handling this frame (no glide-back).
       if (syncDock()) {
         if (reduceMotion) {
-          // Same +0.5 device px sub-pixel correction as the loop's dock branch so
-          // the snapped (no-glide) docked hex is grid-centred too (Change C).
+          // No glide under reduced motion: snap straight onto the marker centre
+          // (dockX/dockY ARE the centre — dockTransform applies no correction term).
           cursor.style.transform = dockTransform(dockX, dockY);
         } else {
           kick();

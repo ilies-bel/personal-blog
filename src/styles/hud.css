@@ -545,6 +545,15 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
 .hud-compass[data-locked='true'] .hud-compass-dest {
   color: color-mix(in oklch, var(--hud-gold) 62%, var(--fg-dim));
 }
+/* Invisible height-reserving twin of the destination line, rendered only in the
+   idle branch (NO SIGNAL). It inherits .hud-compass-dest's font-size / line-height /
+   letter-spacing so it occupies EXACTLY one destination row, keeping the grid block
+   the same height in both states — so the rose + first readout line never shift when
+   toggling idle↔active. visibility:hidden (not display:none) so it still takes layout
+   space; it must never look like visible filler. */
+.hud-compass-dest--spacer {
+  visibility: hidden;
+}
 /* Idle placeholder: NO SIGNAL — dim, faint, all the signal colour drained so the
    instrument reads as scanning/empty rather than naming a destination. */
 .hud-compass-read--idle {
