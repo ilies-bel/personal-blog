@@ -1,36 +1,12 @@
-// The manifesto overlay: sparse text beats pinned over the canvas and cross-faded
-// by normalized scroll progress. Copy + timing live in ../beats (shared with
-// index.astro's SSR fallback).
-import { useEffect, useState } from 'react';
+// The manifesto overlay: sparse text beats pinned over the canvas, each shown at
+// full bone across its scroll band (no fade, no direction swap, no opening intro).
+// Copy + timing live in ../beats (shared with index.astro's SSR fallback).
 import { BEATS } from '../beats';
-import { SCROLL_DOWN, SCROLL_UP } from '../lib/constants';
 import { band } from '../scroll';
 import { useSceneState } from './SceneStateContext';
 
 export default function ManifestoOverlay() {
-  const { progress, direction, reduced, explorationMode } = useSceneState();
-  const [openingStarted, setOpeningStarted] = useState(false);
-
-  useEffect(() => {
-    if (reduced) {
-      setOpeningStarted(true);
-      return;
-    }
-
-    let secondFrame = 0;
-    let timer = 0;
-    const firstFrame = requestAnimationFrame(() => {
-      secondFrame = requestAnimationFrame(() => {
-        timer = window.setTimeout(() => setOpeningStarted(true), 180);
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(firstFrame);
-      cancelAnimationFrame(secondFrame);
-      window.clearTimeout(timer);
-    };
-  }, [reduced]);
+  const { progress, reduced, explorationMode } = useSceneState();
 
   return (
     <div
@@ -46,32 +22,18 @@ export default function ManifestoOverlay() {
         const opacity = reduced
           ? 1
           : band(progress, beat.text.inStart, beat.text.outEnd);
-        const y = 0;
         const visible = opacity > 0.05;
         return (
           <div
             className="bh-beat"
             key={i}
-            data-opening={i === 0 && !reduced ? (openingStarted ? 'run' : 'pending') : undefined}
-            style={reduced ? { opacity } : { opacity, transform: `translate3d(0, ${y}px, 0)` }}
+            style={{ opacity }}
             aria-hidden={!reduced && !visible}
           >
-            {/* Big line: direction-specific copy lets the same visual state read as
-                a forward lifecycle on scroll down and a reverse arc on scroll up. */}
+            {/* Big line: one line per beat, always shown at full bone. No
+                direction-based swap — the copy is the same in both directions. */}
             <h2 className="bh-beat-big">
-              <span
-                className="bh-beat-line bh-beat-line--down"
-                data-active={reduced || direction === SCROLL_DOWN}
-              >
-                {beat.down}
-              </span>
-              <span
-                className="bh-beat-line bh-beat-line--up"
-                data-active={reduced || direction === SCROLL_UP}
-                aria-hidden={!reduced && direction !== SCROLL_UP}
-              >
-                {beat.up}
-              </span>
+              <span className="bh-beat-line">{beat.down}</span>
             </h2>
 
             {/* The lifecycle state names what's on screen — the canvas already
