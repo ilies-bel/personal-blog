@@ -256,6 +256,36 @@ export const diskVertexShader = /* glsl */ `
     vNebLight = 1.0;                            // nebula light factor (1 = full bright; no-op off-nebula)
     vNebGrow = 1.0;                             // dot→nebula growth (1 outside transition)
     vEaten = 0.0;                               // core-swallow progress (set in the collapse block)
+
+    // === EARLY CULL #1: the whole SECONDARY image, off the black hole ==========
+    // PERF, pixel-identical. The disk is drawn TWICE (buildDisk.ts): a PRIMARY pass
+    // (uImageSign=+1, the only normally-visible image) and a SECONDARY (lensed) pass
+    // (uImageSign=-1). Far below (line ~1104) the secondary branch already does
+    //     if(uMorph > 0.25 || uGiant > 0.0) drop = true;
+    // i.e. the ENTIRE secondary image is dropped (bright=0, gl_PointSize=0 → zero
+    // pixels) for every state past the resting black hole — nebula, yellow star,
+    // red giant, supernova and pale-blue-dot all satisfy uGiant>0 (and the dot/nebula
+    // also push uMorph). That 'drop' decision there depends ONLY on the uniforms
+    // uImageSign / uMorph / uGiant, which are CHEAP and already known here at the top
+    // of main(). So we hoist EXACTLY that same condition and bail BEFORE paying for
+    // the reverse-supernova noise block + the giant/sun/nebula morph + the trailing
+    // lighting block — work whose result the existing code throws away anyway.
+    //
+    // Pixel-identical because: for these particles the unmodified shader emits
+    // gl_PointSize=0 (no rasterised fragments) — they contribute ZERO pixels today.
+    // We reproduce that exact visible result: gl_PointSize=0 and an off-clip
+    // gl_Position (w>0, |x|,|y|,|z| > w → outside the clip volume → fully clipped),
+    // so the rasteriser draws nothing, identical to size-0. The condition is the SAME
+    // boolean as line ~1104, so we never cull a secondary particle the original keeps.
+    // At the resting black hole (uMorph<=0.25 AND uGiant==0) this is FALSE → the
+    // secondary lensed image still renders through the full path, byte-for-byte.
+    if(uImageSign < 0.0 && (uMorph > 0.25 || uGiant > 0.0)){
+      gl_Position  = vec4(2.0, 2.0, 2.0, 1.0); // outside clip volume → fully clipped
+      gl_PointSize = 0.0;
+      vBright = 0.0;                            // match the dropped-particle output
+      return;
+    }
+
     // radius from the parameter — adjustable radial distribution (uDistrib)
     float r0 = uRin + (uRout-uRin) * pow(aU, uDistrib);
     float r = r0;
@@ -1139,6 +1169,39 @@ export const diskVertexShader = /* glsl */ `
     // carve above already fades out as morph rises). Only behindAmt>0.35 (far side)
     // is dropped, so the near face of the disk still shows IN FRONT of the hole.
     if(rFin < uHole*0.98 && behindAmt > 0.35 && reCarve > 0.5) drop = true;
+
+    // === EARLY CULL #2: dropped particles skip the trailing lighting/size block ===
+    // PERF, pixel-identical. 'drop' is now FINAL (the lines above, 1100..1171, are its
+    // only writers; below it is only READ). A dropped particle is occluded — behind
+    // the gravitational lens / inside the shadow carve / outside the secondary guard —
+    // and in the unmodified shader the tail does exactly:
+    //     if(drop) bright = 0.0;        (zeroes every brightness contribution)
+    //     if(drop) gl_PointSize = 0.0;  (zero point size → ZERO rasterised fragments)
+    // so it contributes NO pixels today; only its (size-0) gl_Position differs, which
+    // is visually irrelevant when no fragments are produced.
+    //
+    // 'drop' genuinely depends on the EXPENSIVE transformed position (clipP/viewP, the
+    // lens math), so it can't be hoisted above the position block — but it IS known
+    // before the SECOND expensive chunk: the whole brightness pipeline below (Doppler,
+    // gravitational redshift, emissivity, the reverse-supernova lighting with its
+    // smoothstep/exp/pow swarm, AND the uGiant>0 sun-surface lighting block — which
+    // itself calls fbm()). Every output of that block is either 'bright' (forced to 0
+    // for a dropped particle) or a varying (vHeat/vGiant/vExplode/vSunLimb…) that only
+    // feeds the FRAGMENT shader — and a size-0 point spawns no fragments, so those
+    // varyings are never read. Computing all of it is pure waste for a dropped grain.
+    //
+    // So we bail here with the SAME visible result the original produces for a dropped
+    // particle: gl_PointSize=0 and an off-clip gl_Position (fully clipped). No fragment
+    // is rasterised either way → byte-identical output. (Variables the size block reads
+    // — morphFlare, vGiant, yellowSurf — are moot here: the original's final
+    // 'if(drop) gl_PointSize = 0.0;' overrides whatever size they produced.)
+    if(drop){
+      gl_Position  = vec4(2.0, 2.0, 2.0, 1.0); // outside clip volume → fully clipped
+      gl_PointSize = 0.0;
+      vBright = 0.0;                            // match the dropped-particle output
+      return;
+    }
+
     float coreFade;
     if(behindAmt > 0.35){
       coreFade = smoothstep(uHole*0.95, uHole*1.20, rFin);              // back: carved, soft edge
