@@ -31,8 +31,14 @@ import {
   CURSOR_WINDOW_KEYS,
   readDebugNumber,
 } from '../lib/constants';
-import { createScene } from '../scene/createScene';
-import type { MarkerFrame } from '../scene/types';
+// createScene (and, transitively, three.js + GPUComputationRenderer + UnrealBloom
+// + every rig + the ~1800-line shader) is imported DYNAMICALLY inside the mount
+// effect below — not statically here — so the ~200 KB-gzip engine lands in its own
+// async chunk that is fetched only after the page shell + the instant intro loader
+// have painted. A static import would fold the whole engine into this island's
+// initial bundle and block first paint. Only the TYPE is imported eagerly (types
+// are erased at build time, so this costs nothing at runtime). See the effect.
+import type { SceneHandle, MarkerFrame } from '../scene/types';
 import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
@@ -119,6 +125,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     const isReduced = prefersReducedMotion();
     setReduced(isReduced);
 
+    // The three.js engine is loaded lazily (dynamic import) so it never blocks first
+    // paint. Because the import resolves on a later microtask, the effect can be torn
+    // down (Strict-Mode double-invoke, fast route change, motion-preference re-run)
+    // BEFORE createScene exists. We track that with `cancelled` and stash the eventual
+    // dispose in `disposeRef`: cleanup disposes whatever has been created so far, and
+    // a late-arriving createScene that finds `cancelled` set disposes itself at once.
+    let cancelled = false;
+    let disposeRef: SceneHandle | null = null;
+
     // Backdrop mode: no scroll, no morph timeline. The scene is pinned to a fixed
     // lifecycle frame and rendered as a static, dimmed atmosphere behind page copy.
     if (backdrop) {
@@ -130,8 +145,14 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         const value = typeof override === 'number' ? override : fallback;
         return Math.min(BUILT_STAGES, Math.max(0, value));
       };
-      const dispose = createScene(host, isReduced, { getStage: pinnedStage });
-      return () => dispose();
+      void import('../scene/createScene').then(({ createScene }) => {
+        if (cancelled) return;
+        disposeRef = createScene(host, isReduced, { getStage: pinnedStage });
+      });
+      return () => {
+        cancelled = true;
+        disposeRef?.();
+      };
     }
 
     // Drive the opening chrome (name + top-right menu) from a single source of
@@ -213,22 +234,36 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     const getStage = (): number => legacyStageForProgress(progressRef.current);
     const getProgress = (): number => progressRef.current;
 
-    const dispose = createScene(host, isReduced, {
-      getStage,
-      getProgress,
-      getFocusTarget: () => null,
-      isExplorationMode: () => explorationModeRef.current,
-      onMarkerFrame: (m) => { markerFrameRef.current = m; },
+    // Pull in the three.js engine asynchronously, THEN build the scene. The scroll
+    // tracker above is pure JS and stays synchronous, so scroll is wired the instant
+    // the island hydrates; only the heavy GPU scene waits for its own chunk. The
+    // tracker already snapshotted the initial scroll position, so createScene reads
+    // the right stage/progress as soon as it arrives.
+    void import('../scene/createScene').then(({ createScene }) => {
+      if (cancelled) return;
+      const dispose = createScene(host, isReduced, {
+        getStage,
+        getProgress,
+        getFocusTarget: () => null,
+        isExplorationMode: () => explorationModeRef.current,
+        onMarkerFrame: (m) => { markerFrameRef.current = m; },
+      });
+      disposeRef = dispose;
+      // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
+      // can't import scene/three code). Published on window under the __bh* hook
+      // convention; deleted on unmount so other pages never see a stale closure.
+      window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
     });
-    // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
-    // can't import scene/three code). Published on window under the __bh* hook
-    // convention; deleted on unmount so other pages never see a stale closure.
-    window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
     return () => {
+      cancelled = true;
       unsub();
       tracker.stop();
       delete window[CURSOR_WINDOW_KEYS.hitGiant];
-      dispose();
+      // Dispose the scene if it has already been created; if the engine chunk is
+      // still in flight, the `cancelled` guard above stops it from ever building.
+      // (We dispose via disposeRef, not a `dispose` local, because createScene now
+      // resolves inside the dynamic import's .then() and is out of scope here.)
+      disposeRef?.();
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
       // ONLY the island-owned chrome class (is-scrolled) and the transient boot
       // class (hud-booting) — a half-finished loader must not survive an unmount.

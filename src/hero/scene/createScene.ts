@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, readDebugNumber } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
@@ -433,6 +433,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const t0 = performance.now();
   let raf = 0;
   let stopped = false;
+  // One-shot guard for the "scene is ready" signal. The instant intro loader (a
+  // pure-SSR overlay in index.astro) sits over this black canvas at full load and
+  // must fade out the moment the GPU cloud is ACTUALLY on screen — not on a blind
+  // timeout. So after the first frame composites we dispatch SCENE_READY_EVENT once
+  // (the loader's inline listener fades itself out). Backdrop mode (reading pages)
+  // has no loader, so the event is harmless there. See frame().
+  let firstFramePainted = false;
 
   // easeOut (cubic) is a single-source-of-truth easing owned by lifecycle.ts
   // (imported above). The intro dezoom ramp below still uses it. The supernova
@@ -1136,6 +1143,19 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
     updateLensUniforms();
     postRig.render();
+
+    // First real frame is now drawn to the canvas (postRig.render() just ran). Tell
+    // the page ONCE so the instant intro loader fades out over actual pixels, not a
+    // guessed delay. Dispatched synchronously here — not via a deferred rAF — so the
+    // signal can't be lost to background-tab rAF throttling; the loader's own 0.7s
+    // opacity fade gives the compositor ample time to present this frame before it is
+    // uncovered. Note we only reach this line AFTER the early document.hidden return
+    // above, so the event always trails a genuine paint. Backdrop mode (reading
+    // pages) has no loader, so the event is simply unobserved there.
+    if (!firstFramePainted) {
+      firstFramePainted = true;
+      window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
+    }
   }
 
   onResize();
