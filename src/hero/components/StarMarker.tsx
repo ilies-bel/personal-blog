@@ -37,11 +37,13 @@ import {
 import type { MarkerFrame } from '../scene/types';
 import { useSceneState } from './SceneStateContext';
 
-// Which lifecycle states render on a BRIGHT background (orange nebula gas, the
-// yellow photosphere, the red-giant limb). The resting centre dot flips to DARK
-// on these so it stays readable; on the dark states ('beginning' speck, 'end'
-// black hole) it stays the off-white line colour. Static per placement.
-const BRIGHT_STATES: ReadonlySet<HudTargetId> = new Set(['nebula', 'yellow', 'red']);
+// Which lifecycle states render on a BRIGHT surface (the yellow photosphere, the
+// red-giant limb). The resting centre dot + reticle flip to DARK on these so they
+// stay readable; on the other states ('beginning' speck, 'nebula' — whose markers
+// sit in the sparse/dark gas — and the 'end' black hole) they keep the off-white
+// line colour. Nebula is deliberately EXCLUDED so it keeps the white reticle.
+// Static per placement.
+const BRIGHT_STATES: ReadonlySet<HudTargetId> = new Set(['yellow', 'red']);
 
 interface StarMarkerProps {
   /** This marker's placement (which state it belongs to, where it sits, its copy). */
