@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { BEATS } from '../beats';
 import { SCROLL_DOWN, SCROLL_UP } from '../lib/constants';
-import { fadeInOut, segment } from '../scroll';
+import { band } from '../scroll';
 import { useSceneState } from './SceneStateContext';
 
 export default function ManifestoOverlay() {
@@ -39,14 +39,14 @@ export default function ManifestoOverlay() {
     >
       {BEATS.map((beat, i) => {
         // Under reduced motion every beat is shown (so all copy is reachable).
-        // Otherwise each line owns a non-overlapping explicit band: fade in, hold,
-        // fade out, then leave visual-only space before the next headline arrives.
+        // Otherwise each beat owns a non-overlapping band [inStart, outEnd]: the
+        // line is shown at FULL opacity across its whole band (no fade) so the big
+        // headline always reads at the same bright bone as the identity name and
+        // the active HUD labels, then hard-cuts out when the next band begins.
         const opacity = reduced
           ? 1
-          : fadeInOut(progress, beat.text.inStart, beat.text.inEnd, beat.text.outStart, beat.text.outEnd);
-        const enter = reduced ? 1 : segment(progress, beat.text.inStart, beat.text.inEnd);
-        const exit = reduced ? 0 : segment(progress, beat.text.outStart, beat.text.outEnd);
-        const y = (1 - enter) * 12 - exit * 16;
+          : band(progress, beat.text.inStart, beat.text.outEnd);
+        const y = 0;
         const visible = opacity > 0.05;
         return (
           <div

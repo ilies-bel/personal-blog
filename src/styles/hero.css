@@ -227,17 +227,17 @@ body.bare.is-scrolled .overlay-blog {
   font-size: clamp(2rem, 6vw, 4rem);
   line-height: 1.04;
   letter-spacing: 0;
+  /* Same bright bone as the identity name and the active HUD labels (var(--fg)),
+     with the active-HUD's opaque shadow so it stays crisp over the bright star. */
   color: var(--fg);
   text-wrap: balance;
-  text-shadow: 0 0 26px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 0 18px rgba(0, 0, 0, 1), 0 0 4px rgba(0, 0, 0, 0.95);
   opacity: 0;
-  transform: translateY(0.18em);
-  transition: opacity 0.18s linear, transform 0.18s var(--ease-out-quint);
+  transform: none;
 }
 .bh-beat-line--up { grid-area: 1 / 1; }
 .bh-beat-line[data-active='true'] {
   opacity: 1;
-  transform: translateY(0);
 }
 .bh-beat[data-opening='pending'] .bh-beat-line[data-active='true'],
 .bh-beat[data-opening='pending'] .bh-beat-whisper {
