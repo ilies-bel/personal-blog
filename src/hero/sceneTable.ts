@@ -564,7 +564,7 @@ export const SCENES: readonly LifecycleScene[] = [
       state: 'red giant',
       down: 'My work is to keep the center readable.',
       up: 'My work is to keep the center readable.',
-      whisper: "the ai keeps adding. nobody's left who understands it.",
+      whisper: 'The AI keeps adding. Nobody is left who understands it.',
     },
   },
   {
@@ -599,7 +599,7 @@ export const SCENES: readonly LifecycleScene[] = [
       state: 'black hole',
       down: 'Explore the projects.',
       up: 'Explore the projects.',
-      whisper: 'even the repo you were proud of.',
+      whisper: 'Even the repo you were proud of can collapse.',
     },
   },
 ];

@@ -13,9 +13,9 @@
   --line: oklch(0.34 0.026 82);         /* tarnished hairlines, always 1px */
 
   /* Text ramp (contrast vs --bg noted) */
-  --fg: oklch(0.94 0.006 82);           /* white light, body + display */
-  --fg-dim: oklch(0.72 0.014 82);       /* smoked silver, secondary text */
-  --fg-faint: oklch(0.595 0.016 82);    /* etched gray, labels/dates only */
+  --fg: oklch(0.86 0.02 80.1);          /* #d8d0c3 warm bone, body + display */
+  --fg-dim: oklch(0.777 0.018 76.1);    /* #bdb5aa smoked silver, secondary text */
+  --fg-faint: oklch(0.62 0.02 78.2);    /* #8d8579 etched gray, labels/dates only */
 
   /* Brand */
   --accent: oklch(0.73 0.095 78);       /* aged gold, links/focus/active chrome */

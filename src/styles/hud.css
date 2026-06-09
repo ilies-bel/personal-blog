@@ -142,6 +142,13 @@
   width: 0.78rem;
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
+/* Active readout value: the stage label of the lit (current) row — at the black
+   hole this is the readout the HUD shows. Lift it to ~12px and warm bone so the
+   live readout reads clearly without restyling the rest of the rail. */
+.hud-nav-button[data-current='true'] .hud-nav-title {
+  font-size: 0.75rem;
+  color: #eee5d8;
+}
 .hud-nav-button:focus-visible {
   outline: 1px solid var(--hud-gold);
   outline-offset: 0.25rem;
@@ -206,7 +213,7 @@
     0 0 4px rgba(0, 0, 0, 0.95);
 }
 .hud-nav-destination {
-  font-size: 0.66rem;
+  font-size: 0.69rem;
   line-height: 1;
   letter-spacing: 0.1em;
   color: color-mix(in oklch, var(--fg-dim) 88%, var(--fg));
@@ -536,14 +543,14 @@
 }
 .star-marker-card-subtitle {
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.69rem;
   letter-spacing: 0.04em;
   color: var(--fg-dim);
 }
 .star-marker-card-open {
   margin-top: 0.18rem;
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.69rem;
   letter-spacing: 0.16em;
   color: color-mix(in oklch, var(--highlight) 80%, var(--fg));
 }

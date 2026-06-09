@@ -78,6 +78,25 @@ body.article-page .bh-backdrop::after {
       color-mix(in oklch, var(--bg) 64%, transparent) 90%,
       var(--bg) 100%);
 }
+/* Horizontal reading scrim: a left↔right darkening band over the live backdrop
+   that deepens the edges and the centre so long-form copy reads cleanly while the
+   ring stays felt. Attached to .bh-backdrop::before (the ::after pseudo is the
+   column-ellipse wash; base.css already disables body.article-page::before, so we
+   can't hang it there). The backdrop is position:fixed; inset:0, so this pseudo
+   is effectively a fixed full-viewport scrim — matching the intended
+   linear-gradient(90deg, …) horizontal darkening. It sits at backdrop z-index 0;
+   .prose is lifted to z-index 1 so the reading column is never covered. */
+body.article-page .bh-backdrop::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(90deg,
+    rgba(0, 0, 0, 0.88),
+    rgba(0, 0, 0, 0.62),
+    rgba(0, 0, 0, 0.88));
+  pointer-events: none;
+  z-index: 0;
+}
 
 /* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
 .bh-identity {
