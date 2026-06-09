@@ -194,8 +194,7 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
 .bh-beat {
   position: absolute;
   z-index: 1;
-  /* indent past the rail's reserved band so the copy never starts under the rail line */
-  left: calc(var(--edge-x) + var(--story-reserve));
+  left: var(--edge-x);
   right: var(--edge-x);
   bottom: clamp(2rem, 8vh, 5rem);
   max-width: min(40rem, 84vw);
@@ -261,10 +260,6 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   color: var(--fg);
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
-}
-@media (max-width: 46rem) {
-  /* Rail becomes a bottom strip here — no left rail to clear, so drop the indent. */
-  .bh-beat { left: var(--edge-x); }
 }
 @media (max-width: 34rem) {
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
