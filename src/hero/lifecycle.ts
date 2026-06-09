@@ -400,22 +400,72 @@ export function lifecycle(input: LifecycleInput): StarState {
   const yrGrow = 1 - smoothstep01((stage - RED_EXIT_START) / (RED_SHRINK_END - RED_EXIT_START));
   const yrColor = 1 - smoothstep01((stage - RED_COLOR_EXIT_START) / (RED_SHRINK_END - RED_COLOR_EXIT_START));
 
-  // During the gravitational collapse (stage 3.05..3.5) the CLOUD shows the
-  // nebula particles falling inward, and the mesh star fades IN via starFormed as
-  // they reach the core — so this window overrides the plain yellow→red mesh slot
-  // (which would otherwise hide the cloud and show the full mesh from 3.5 down).
-  // Bounded to the window's lower edge so BELOW it (stage ≤ 3.04) the normal
-  // yellow-mesh slot resumes (mesh at full size, cloud hidden) — clean handoff.
-  const collapsing = inWindow === 1 && (simBlend > 0.001 || starFormed > 0.001);
+  // --- BODY OWNERSHIP (single source of truth) -----------------------------
+  // Exactly two foreground bodies can render: the point CLOUD (nebula / dot /
+  // red giant / collapse gas) and the MESH yellow star. Which one owns each
+  // frame used to be decided by several overlapping predicates whose boundaries
+  // only ALMOST lined up — every mismatch was a gap (wrong fallthrough body
+  // flashes) or a bleed (two bodies at once). This block is the ONE place that
+  // decides ownership, as a TOTAL banded function of `stage`: every stage maps
+  // to a body, and the two bodies are mutually exclusive except in the two
+  // short, DECLARED crossfade bands (the collapse floor at 3.0, and the
+  // yellow<->red swap at SWAP_STAGE). cloudShown / sunRigVisible are projected
+  // from it, so they can never gap or bleed by construction.
+  //
+  // Bands (high stage = top of page):
+  //   stage >= 3.5            CLOUD            nebula + dot
+  //   3.0  <  stage < 3.5     CLOUD (+mesh fades in UNDER it near the floor)
+  //   2.95 <  stage <= 3.0    CLOUD->MESH      collapse-floor crossfade
+  //   SWAP <  stage <= 2.95   MESH             settled yellow star
+  //   SWAP-0.03 < stage <=SWAP MESH->CLOUD     flash-swap crossfade
+  //   stage <= SWAP-0.03      CLOUD            red giant / below
+  const COLLAPSE_FLOOR_XFADE = 0.05; // 3.00 -> 2.95: cloud yields to the formed mesh
+  const SWAP_XFADE = 0.03; // 2.88 -> 2.85: mesh yields to the red-giant cloud
+  // mesh reveal INSIDE the collapse window: hold the forming mesh hidden under
+  // the dense gas until the star is nearly complete (starFormed ramps 0.85->1.0,
+  // i.e. ~stage 3.08->3.00) — AFTER the nebula text has faded (~stage 3.05) — so
+  // it reveals as a clean cross-fade, never a warm body under the nebula copy.
+  const meshFormIn = smoothstep01((starFormed - 0.85) / 0.15);
+  // Per-body presence weights. cloudW/meshW are booleans-as-weights here; a body
+  // renders iff its weight > 0. The only places BOTH are > 0 are the two declared
+  // crossfade bands (handoffs that dissolve under bloom).
+  let cloudW: number;
+  let meshW: number;
+  if (stage >= NEBULA_ACTIVE_STAGE) {
+    // nebula + dot: pure cloud
+    cloudW = 1;
+    meshW = 0;
+  } else if (stage > NEB_COLLAPSE_LO) {
+    // collapse window: cloud owns; mesh fades in UNDER it near the floor
+    cloudW = 1;
+    meshW = meshFormIn;
+  } else if (stage > NEB_COLLAPSE_LO - COLLAPSE_FLOOR_XFADE) {
+    // collapse-FLOOR crossfade: cloud fades out, mesh (already full) takes over
+    cloudW = 1 - smoothstep01((NEB_COLLAPSE_LO - stage) / COLLAPSE_FLOOR_XFADE);
+    meshW = 1;
+  } else if (stage > SWAP_STAGE) {
+    // settled yellow star: pure mesh
+    cloudW = 0;
+    meshW = 1;
+  } else if (stage > SWAP_STAGE - SWAP_XFADE) {
+    // flash-SWAP crossfade: mesh yields to the red-giant cloud
+    meshW = 1 - smoothstep01((SWAP_STAGE - stage) / SWAP_XFADE);
+    cloudW = 1 - meshW;
+  } else {
+    // red giant / below: pure cloud
+    cloudW = 1;
+    meshW = 0;
+  }
+  // `collapsing` retained as a DERIVED alias for the grade/dome/starfield
+  // consumers below (they ask "are we inside the gas-collapse window?"). It is
+  // now simply the collapse window membership — no density-epsilon gate, so it
+  // can't dead-band against the nebula threshold.
+  const collapsing = inWindow === 1;
 
-  // Mesh visible across its side, plus a short overhang into the bright flash so
-  // the handoff cross-dissolves under the bloom rather than hard-cutting. In the
-  // collapse window the mesh only shows once the cloud has started feeding it.
-  const sunRigVisible = collapsing ? starFormed > 0.01 : inYRWindow && stage > SWAP_STAGE - 0.05;
-  // Inside the slot, the cloud body only shows on the cloud side (the opaque mesh
-  // owns the yellow side); outside the slot the cloud renders everything. During
-  // the collapse the cloud is ALWAYS shown (it IS the infalling gas feeding the star).
-  const cloudShown = collapsing ? true : inYRWindow ? cloudSide : true;
+  // Projected from the single ownership model above — gap-free and bleed-free by
+  // construction. A body renders iff its presence weight is non-zero.
+  const cloudShown = cloudW > 0.001;
+  const sunRigVisible = meshW > 0.001;
   // The RED GIANT phase: the cloud-rendered big red star. It owns the shared star
   // dome (see starBackVisible), so the lensed/warp starfield (`starPts` — the BLACK
   // HOLE's background) must be OFF here, or its olive/red-graded speckle bleeds
