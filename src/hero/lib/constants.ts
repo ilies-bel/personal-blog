@@ -22,6 +22,19 @@ export const HUD_FORCED_BODY_CLASS = 'hud-forced';
  *  goes on. Centralized here so the class string is never spelled inline — it is
  *  referenced from the inline FSM AND from hud.css / scene.css. */
 export const HUD_BOOTING_BODY_CLASS = 'hud-booting';
+/** Toggled on <body> once the hero has painted its FIRST real frame (the GPU
+ *  cloud is actually on the canvas). Drives the instant intro loader's fade-out:
+ *  the loader is full-opacity at load (pure SSR markup, zero JS), and adding this
+ *  class transitions it to transparent + pointer-events:none. The trigger is the
+ *  ACTUAL first paint — the scene dispatches SCENE_READY_EVENT after its first
+ *  frame() composites — NOT a blind timeout. A safety timeout only adds the class
+ *  if that event somehow never arrives (e.g. a failed WebGL context) so the loader
+ *  can never get stuck over a dead canvas. Centralized here so the string is never
+ *  spelled inline — referenced from the inline loader script (index.astro) AND from
+ *  scene.css. This class is ORTHOGONAL to the HUD body classes above: the loader
+ *  fades on first paint, the HUD boot FSM ignites later at the black hole — they
+ *  never touch each other's class. */
+export const SCENE_READY_BODY_CLASS = 'scene-ready';
 /** localStorage key persisting the chosen exploration-HUD target. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM
@@ -55,6 +68,14 @@ export interface HudPowerEventDetail {
  *  pushes this value into the CSS var on init so the two can never drift). ~3.6s:
  *  long enough to read like a machine running its start-up self-check. */
 export const HUD_BOOT_DURATION_MS = 3600;
+/** The window CustomEvent the scene dispatches ONCE, after its first frame has
+ *  rendered + composited (see createScene's frame()). The instant intro loader
+ *  listens for it to fade itself out (add SCENE_READY_BODY_CLASS). The name lives
+ *  here so the dispatcher (createScene) and the listener (the inline loader script
+ *  in index.astro) can never disagree on the string. The inline script can't import
+ *  this module — no bundler on an is:inline script — so it spells the SAME literal
+ *  and MUST be kept in sync with this value. */
+export const SCENE_READY_EVENT = 'scene:ready';
 
 // --- scroll direction ------------------------------------------------------
 export type ScrollDirection = 'down' | 'up';

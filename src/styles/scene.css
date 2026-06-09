@@ -45,6 +45,69 @@ body.bare.hud-booting::after {
   initial-value: 0.34;
 }
 
+/* --- Instant intro loader ---------------------------------------------------- */
+/* A pure-CSS intro overlay (markup in index.astro) that paints the instant the
+   document arrives — no JS, no font wait beyond the sitewide faces — so the visitor
+   never stares at a blank black page while the ~200 KB-gzip three.js engine chunk
+   loads, parses, allocates ~40 MB of typed arrays and compiles the shader. It fills
+   the viewport ABOVE everything (canvas 0, vignette/chrome/HUD up to ~21), in the
+   site's own palette: a single quiet pale speck pulsing under the wordmark — the
+   pale-blue-dot the scene itself opens on — so the wait reads as the dot about to
+   bloom, not a broken page. It fades out (and stops catching pointer events) the
+   moment the hero paints its first real frame: body.scene-ready, added by the inline
+   listener in index.astro on the scene:ready event the scene dispatches. */
+.scene-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 60;                           /* above the corner chrome (21) + any HUD */
+  display: grid;
+  place-items: center;
+  background: var(--bg);                 /* the graphite room, matching the scene edges */
+  /* Fade only the overlay out once ready; the canvas underneath is already painting.
+     A touch slower than a UI tick so the hand-off to the live scene reads as a calm
+     dissolve, not a cut. */
+  opacity: 1;
+  transition: opacity 0.7s var(--ease-out-quint);
+}
+.scene-loader-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+}
+/* The pale speck — the opening pale-blue dot, rendered as a small soft disc with a
+   faint halo. It breathes (scale + glow) so the screen feels alive while we wait. */
+.scene-loader-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--fg);
+  box-shadow: 0 0 12px 2px color-mix(in oklch, var(--fg) 45%, transparent);
+  animation: scene-loader-pulse 2s var(--ease-out-quint) infinite;
+}
+.scene-loader-name {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;                   /* balance the trailing tracking so it reads centred */
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+@keyframes scene-loader-pulse {
+  0%, 100% { transform: scale(0.82); opacity: 0.5; }
+  50%      { transform: scale(1.12); opacity: 1; }
+}
+/* Ready: dissolve the overlay and let pointer events fall through to the live scene.
+   Kept in the DOM (no display:none) so the transition can run; it is inert after. */
+body.scene-ready .scene-loader {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Reduced motion: drop the breathing pulse (a steady speck), keep the gentle fade. */
+@media (prefers-reduced-motion: reduce) {
+  .scene-loader-dot { animation: none; }
+}
+
 /* The scroll track: N stages that exist only to give the page scrollable height.
    They render nothing — the pinned canvas reads scrollY. Each stage is taller than
    one viewport, so the proportional scroll→stage map (scroll.ts) makes a lifecycle

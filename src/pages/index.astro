@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
 import { BEATS, SCROLL_SECTION_COUNT } from '../hero/beats';
+import { SCENE_READY_EVENT, SCENE_READY_BODY_CLASS } from '../hero/lib/constants';
 import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -9,13 +10,59 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 ---
 
 <BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} type="website" bare>
+  {/* Instant intro loader — pure server-rendered HTML + CSS, ZERO JavaScript
+      dependency, so it paints the moment the document arrives (long before the
+      ~200 KB-gzip three.js engine chunk downloads, parses, allocates its typed
+      arrays and compiles the shader). It sits over the (black) canvas in the site's
+      own palette: a single quiet pale speck — the pale-blue-dot opening the scene
+      itself begins on — pulsing under a wordmark, so the wait reads as "the dot is
+      about to bloom", not "the page is broken". It fades out smoothly once the hero
+      paints its FIRST real frame (body.scene-ready, added by the inline listener
+      below on the scene:ready event). aria-hidden — it is pure decoration over the
+      same copy the manifesto/SSR fallback already announce. Styling lives in
+      scene.css under "Instant intro loader". */}
+  <div class="scene-loader" aria-hidden="true">
+    <div class="scene-loader-mark">
+      <span class="scene-loader-dot"></span>
+      <span class="scene-loader-name">ILIÈS BELDJILALI</span>
+    </div>
+  </div>
+
+  {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout. A
+      tiny zero-import <script is:inline> (mirrors the CustomCursor convention) runs
+      the moment the body parses: it adds body.scene-ready when the scene dispatches
+      scene:ready (its first composited frame). A long safety timeout is the ONLY
+      fallback — it fires solely if that event never arrives (a failed WebGL context
+      / a browser with JS but no WebGL), so the loader can never get stuck over a
+      dead canvas. The event name + class literals mirror src/hero/lib/constants.ts
+      (SCENE_READY_EVENT / SCENE_READY_BODY_CLASS) — kept in sync via the values
+      interpolated below so the two can never drift. */}
+  <script is:inline define:vars={{ readyEvent: SCENE_READY_EVENT, readyClass: SCENE_READY_BODY_CLASS }}>
+    (() => {
+      const reveal = () => document.body.classList.add(readyClass);
+      // Primary signal: the scene's first composited frame. Once is enough.
+      window.addEventListener(readyEvent, reveal, { once: true });
+      // Safety fallback ONLY — never the normal path. Long enough that the engine
+      // has surely painted on any real device; if it hasn't (no WebGL), we still
+      // lift the loader so the page isn't trapped behind it.
+      window.setTimeout(reveal, 8000);
+    })();
+  </script>
+
   {/* The signature object: a GPU-particle stellar lifecycle pinned to the center
       of the viewport. As the visitor scrolls, one normalized timeline runs
       forward: a lone pale blue dot blooms into a nebula, a yellow star forms, the
       star grows into a red giant, collapses, detonates, and resolves into the black
-      hole that pulls the portfolio interface in. The scene is a client-only island;
-      three.js never blocks the page. */}
-  <BlackHole client:only="react" />
+      hole that pulls the portfolio interface in.
+
+      client:visible (not client:only) so Astro ships + hydrates the page shell —
+      including the instant loader above — FIRST, then mounts the hero. The hero is
+      above the fold, so client:visible fires essentially immediately; the win is
+      that the loader paints with zero JS on the critical path and the heavy engine
+      (dynamically imported inside HeroIsland) downloads off it. The component is
+      SSR-safe: every window/three.js touch lives inside its mount effect, so the
+      server only renders the empty canvas shell + manifesto chrome. */}
+  <BlackHole client:visible />
 
   {/* The scroll track. It contributes no visuals of its own — it exists only to
       give the page real scrollable height so the pinned scene can be scrubbed.
