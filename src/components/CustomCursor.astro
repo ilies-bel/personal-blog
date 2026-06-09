@@ -342,11 +342,13 @@
     let dockTargetScale = 0.95; // docked hex scale for the active lock (dockScaleFor)
     let pointerInside = true; // false while the pointer is outside the window
     // The marker's white outer hex polygon ≈ hexRadius * 2 * (100/116) px wide
-    // (viewBox -8..108). The gold inner hex should sit at ~0.6× of that (matching
-    // the marker's own inner-hex scale), and the cursor's hex box is 40px wide, so:
-    //   dockScale = (hexRadius * 2 * 100/116 * 0.6) / 40
+    // (viewBox -8..108). The gold inner hex should sit at ~0.66× of that (a touch
+    // above the marker's own ~0.56–0.62 breathe so the docked hex reads slightly
+    // larger, but still well inside the white outer hex with a clear gap), and the
+    // cursor's hex box is 40px wide, so:
+    //   dockScale = (hexRadius * 2 * 100/116 * 0.66) / 40
     const HEX_VIEWBOX_RATIO = 100 / 116; // polygon span / viewBox span
-    const INNER_HEX_FRACTION = 0.6;      // gold inner hex vs white outer hex
+    const INNER_HEX_FRACTION = 0.66;     // gold inner hex vs white outer hex
     const dockScaleFor = (hexRadius: number): number =>
       (hexRadius * 2 * HEX_VIEWBOX_RATIO * INNER_HEX_FRACTION) / 40;
 
@@ -378,6 +380,34 @@
       cursor.style.setProperty('--dock-scale', String(liveScale));
       cursor.style.setProperty('--dock-gold', String(anim));
       cursor.style.setProperty('--dock-op', String(liveOp));
+    };
+
+    // ---- docked rig sub-pixel alignment (Change C) ---------------------------
+    // The docked gold hex felt ~1px asymmetric vs the marker's white outer hex.
+    // EMPIRICAL ROOT CAUSE (high-DPR pixel measurement, AA-coverage-weighted edge
+    // centroids — see scratchpad/centroid-edges.mjs): the docked rig (gold hex AND
+    // its centre dot, TOGETHER — they stay concentric with each other) renders a
+    // constant HALF DEVICE PIXEL up-and-LEFT of the marker centre it docks onto, at
+    // EVERY device-pixel ratio and every dock coordinate. The hex is geometrically
+    // symmetric about its own centre, but that centre lands at (marker - 0.5dev,
+    // marker - 0.5dev): on a 1× display that is a full 1px lean (the reported
+    // "~1px asymmetric"); on a 2× display 0.5px. It is NOT the (non-integer) dock
+    // scale and NOT the polygon coords — snapping either left the 0.5dev offset
+    // untouched; it is the browser rasterising the rig's content half a device pixel
+    // toward the layer origin. Because the marker's OWN white outer hex is a separate
+    // element painted at the true marker centre, that 0.5dev cursor bias reads as the
+    // gold hex sitting off-centre inside the white one.
+    //
+    // FIX: nudge the docked transform by +0.5 DEVICE px (= 0.5 / devicePixelRatio CSS
+    // px) on both axes so the rig's painted centre lands ON the marker centre. It is
+    // expressed in DEVICE px (not a fixed CSS px) so it self-corrects across DPRs — a
+    // fixed +0.5px CSS nudge over-corrects at 2× (measured: flips to +0.5dev the other
+    // way). Applied ONLY to the docked transform, so the free (undocked) ball still
+    // pins to the exact raw pointer. devicePixelRatio is read per-write (cheap) so a
+    // window dragged between a Retina and non-Retina display stays aligned.
+    const dockTransform = (x: number, y: number): string => {
+      const corr = 0.5 / (window.devicePixelRatio || 1); // +0.5 device px, in CSS px
+      return `translate3d(${x + corr}px, ${y + corr}px, 0)`;
     };
 
     // Push a point into the ring (overwriting the oldest once full).
@@ -608,7 +638,9 @@
         renderX += (dockX - renderX) * DOCK_POS_EASE;
         renderY += (dockY - renderY) * DOCK_POS_EASE;
         dockAnim += (1 - dockAnim) * DOCK_ANIM_EASE;
-        cursor.style.transform = `translate3d(${renderX}px, ${renderY}px, 0)`;
+        // +0.5 device px on both axes cancels the rig's half-device-pixel paint
+        // bias so the settled gold hex sits dead-centre in the marker (Change C).
+        cursor.style.transform = dockTransform(renderX, renderY);
         writeDockVars(dockAnim, dockTargetScale);
         raf = requestAnimationFrame(loop);
         return;
@@ -694,7 +726,9 @@
       // we fall through to normal pointer handling this frame (no glide-back).
       if (syncDock()) {
         if (reduceMotion) {
-          cursor.style.transform = `translate3d(${dockX}px, ${dockY}px, 0)`;
+          // Same +0.5 device px sub-pixel correction as the loop's dock branch so
+          // the snapped (no-glide) docked hex is grid-centred too (Change C).
+          cursor.style.transform = dockTransform(dockX, dockY);
         } else {
           kick();
         }
