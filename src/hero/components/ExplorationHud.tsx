@@ -17,12 +17,13 @@ interface ExplorationHudProps {
 }
 
 export default function ExplorationHud({ markerFrameRef }: ExplorationHudProps) {
-  const { explorationMode, reduced, scrollHudId, base } = useSceneState();
+  const { explorationMode, reduced, scrollHudId, progress, base } = useSceneState();
   return (
     <HudNavigation
       visible={explorationMode}
       reduced={reduced}
       currentId={scrollHudId}
+      progress={progress}
       base={base}
       markerFrameRef={markerFrameRef}
     />

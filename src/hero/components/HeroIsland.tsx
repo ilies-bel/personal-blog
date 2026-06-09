@@ -4,7 +4,7 @@
 // lifecycle, and the cross-cutting runtime state. Frame-cadence values that must
 // NOT trigger React renders are kept as refs; render-relevant snapshots are
 // published through SceneStateProvider and consumed by the presentational
-// sub-components (HeroIdentity / ManifestoOverlay / ScrollHint). The HUD keeps its
+// sub-components (HeroIdentity / ManifestoOverlay). The HUD keeps its
 // own prop interface, fed from the same state.
 //
 // The three.js scene (renderer, rigs, GLSL, the per-frame loop) lives in
@@ -43,7 +43,6 @@ import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
-import ScrollHint from './ScrollHint';
 import StarMarker from './StarMarker';
 
 declare global {
@@ -310,7 +309,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           <StarMarker key={placement.id} placement={placement} markerFrameRef={markerFrameRef} />
         ))}
         <ExplorationHud markerFrameRef={markerFrameRef} />
-        <ScrollHint />
       </div>
     </SceneStateProvider>
   );

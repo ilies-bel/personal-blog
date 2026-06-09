@@ -26,6 +26,14 @@
 
   --max: 46rem;                          /* readable measure for prose / lists (.measure) */
   --gutter: clamp(1.5rem, 5vw, 5rem);    /* full-bleed edge gutters */
+  /* Fixed-chrome edge inset — the single left/right rail for the hero's floating
+     chrome (identity, HUD rail, story copy). Was hard-coded as clamp(1.25rem,5vw,5rem)
+     in three places; now one token so the layers share an edge. Distinct from
+     --gutter (the in-flow page measure padding); this is viewport chrome. */
+  --edge-x: clamp(1.25rem, 5vw, 5rem);
+  /* Horizontal band the desktop HUD rail reserves on the left so the story copy,
+     indented by --edge-x + --story-reserve, never sits under the rail's vertical line. */
+  --story-reserve: 5.5rem;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-pill: 999px;

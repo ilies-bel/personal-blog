@@ -83,7 +83,7 @@ body.article-page .bh-backdrop::after {
 .bh-identity {
   position: fixed;
   top: clamp(1rem, 3vw, 2.1rem);
-  left: clamp(1.25rem, 5vw, 5rem);
+  left: var(--edge-x);
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -194,8 +194,9 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
 .bh-beat {
   position: absolute;
   z-index: 1;
-  left: clamp(1.25rem, 5vw, 5rem);
-  right: clamp(1.25rem, 5vw, 5rem);
+  /* indent past the rail's reserved band so the copy never starts under the rail line */
+  left: calc(var(--edge-x) + var(--story-reserve));
+  right: var(--edge-x);
   bottom: clamp(2rem, 8vh, 5rem);
   max-width: min(40rem, 84vw);
   will-change: opacity, transform;
@@ -261,109 +262,16 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
+@media (max-width: 46rem) {
+  /* Rail becomes a bottom strip here — no left rail to clear, so drop the indent. */
+  .bh-beat { left: var(--edge-x); }
+}
 @media (max-width: 34rem) {
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
   .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
   .bh-identity-name { font-size: 1.05rem; }
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] { opacity: 0.28 !important; }
-}
-
-/* A faint affordance, shown only at the very top (unmounted by ScrollHint on
-   first scroll). It eases in once on first paint to catch the eye, then settles
-   into a slow, perpetual breath of light — a quiet opacity pulse so the hint
-   keeps gently inviting the scroll. The pulse is sequenced AFTER the intro (it
-   starts at the intro's resting 0.86 and only begins once the ease-in has run),
-   and is disabled under prefers-reduced-motion (see the reduced-motion block,
-   which also `display: none`s the hint). */
-.bh-hint {
-  position: fixed;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3vh, 1.5rem));
-  transform: translateX(-50%);
-  z-index: 10;
-  display: grid;
-  justify-items: center;
-  gap: 0.42rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-  pointer-events: auto;
-  opacity: 0.86;
-  /* Container does the one-time intro only (fade-in, then rests at 0.86). The
-     perpetual breath lives on .bh-hint-label so only the TEXT pulses — the
-     vertical line is static (no sweep). */
-  animation: bh-hint-in 0.9s var(--ease-out-quint) both;
-}
-.bh-hint-start {
-  appearance: none;
-  display: grid;
-  justify-items: center;
-  gap: 0.55rem;
-  margin: 0;
-  padding: 0.25rem 0.4rem 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-}
-.bh-hint-label {
-  display: block;
-  line-height: 1;
-  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
-  /* Perpetual breath lives on the TEXT only (line left alone). Starts after the
-     container's 0.9s intro (delay) so it picks up where the fade-in rests; its
-     opacity multiplies with the container's 0.86. */
-  animation: bh-hint-pulse 3.6s ease-in-out 0.9s infinite;
-}
-.bh-hint-start:hover,
-.bh-hint-start:focus-visible {
-  color: var(--fg);
-}
-.bh-hint-start:focus-visible,
-.bh-hint-skip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-  border-radius: var(--radius-sm);
-}
-.bh-hint-line {
-  display: block;
-  width: 1px;
-  height: 2.2rem;
-  background: linear-gradient(180deg, var(--fg-faint), transparent);
-  transform-origin: 50% 0;
-}
-.bh-hint-skip {
-  color: var(--fg-dim);
-  font-size: 0.66rem;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  text-decoration: none;
-  border-bottom: 1px solid color-mix(in oklch, var(--fg-dim) 42%, transparent);
-  padding-bottom: 0.18rem;
-  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
-  transition: color 0.16s ease, border-color 0.16s ease;
-}
-.bh-hint-skip:hover {
-  color: var(--fg);
-  border-color: var(--fg);
-}
-@keyframes bh-hint-in {
-  from { opacity: 0; transform: translate(-50%, 0.4rem); }
-  to { opacity: 0.86; transform: translate(-50%, 0); }
-}
-/* Perpetual breath of light: a slow, calm opacity swell-and-fade so the hint
-   keeps softly inviting the scroll. Symmetric loop (0%/100% match) so the
-   infinite repeat never jumps; rests near the intro's 0.86 and breathes between
-   ~0.55 (exhale) and ~1.0 (inhale). */
-@keyframes bh-hint-pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
 }
 
 /* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
@@ -408,11 +316,6 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
     margin-bottom: 0.4rem;
   }
   .bh-beat-line--up { display: none !important; }
-  /* Hint is unmounted by ScrollHint under reduced motion and hidden here too;
-     belt-and-suspenders, also kill the perpetual breath so no opacity loops.
-     The breath now lives on .bh-hint-label, so explicitly silence it too. */
-  .bh-hint { display: none !important; animation: none !important; }
-  .bh-hint-label { animation: none !important; }
 
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] {

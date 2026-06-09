@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
+  sceneForProgress,
   settledIdForStage,
   type HudNavItem,
   type HudTargetId,
@@ -9,6 +10,7 @@ import {
 } from './sceneTable';
 import type { MarkerFrame } from './scene/types';
 import { progressForLegacyStage } from './timeline';
+import { SCROLL_HINT_DISMISS_AT } from './lib/constants';
 
 // The HUD nav rows, on-screen markers, the settled-window gate and their shared
 // types now live in sceneTable.ts (the pure data layer). They are re-exported
@@ -50,6 +52,10 @@ interface HudNavigationProps {
   /** The target the current scroll position maps to (scroll-spy "you are here").
    *  Drives a quiet ambient marker so the rail reflects scroll position. */
   currentId: HudTargetId | null;
+  /** 0..1 scroll progress. Splits the compass idle copy: at/near a settled beat it
+   *  is merely SCANNING; in a transition band past the opening hold it prompts the
+   *  visitor to scroll back onto a beat. */
+  progress: number;
   base: string;
   /** The scene's per-frame marker frame (stage/visible + projected x/y for the
    *  anchored marker), owned by HeroIsland. The compass reads it to find the
@@ -92,7 +98,8 @@ function scrollToStage(stage: number, reduced: boolean): void {
 //   2. The on-screen marker nearest the cursor (the dominant behaviour). Each
 //      marker carries its own copy (title/subtitle), more specific than the
 //      scene HUD label — used so the nebula's three markers stay distinct.
-//   3. Idle fallback: no interactive markers AND no rail hover -> NO SIGNAL.
+//   3. Idle fallback: no interactive markers AND no rail hover -> the idle scan copy
+//      (SEEKING SIGNAL, or SCROLL BACK TO THE POINT in a mid-transition band).
 // The ┼ offset + the nearest target are recomputed every rAF off the cursor and
 // the scene's marker frame (a frame-cadence value that must NOT live in React
 // state); the ┼ DOM transform is mutated directly each frame, and React state
@@ -123,7 +130,7 @@ function copyForHudId(id: HudTargetId): CompassCopy {
 /** The current aiming result, committed to React state only when it changes.
  *  `markerId` is the nearest placement id (null when no markers are in range),
  *  driving the named copy; `idle` is true when there is nothing to aim at and
- *  no rail hover, swapping the readout to the NO SIGNAL placeholder. */
+ *  no rail hover, swapping the readout to the idle scan placeholder. */
 interface AimState {
   markerId: string | null;
   idle: boolean;
@@ -138,8 +145,8 @@ interface AimState {
 // SCALE is tuned so the radius spans MIN→MAX across roughly a viewport-half of
 // cursor distance; it SHRINKS toward MIN as the cursor closes on the marker
 // (proximity convergence).
-const WAYPOINT_MIN_OFFSET = 3; // px — closest the ┼ gets to the ▲ (essentially on it)
-const WAYPOINT_MAX_OFFSET = 16; // px — farthest the ┼ rides out from the ▲
+const WAYPOINT_MIN_OFFSET = 4; // px — closest the ┼ gets to the ▲ (essentially on it)
+const WAYPOINT_MAX_OFFSET = 22; // px — farthest the ┼ rides out from the ▲
 const WAYPOINT_OFFSET_SCALE = 0.04; // px of offset per px of cursor→marker distance
 
 function clamp(value: number, min: number, max: number): number {
@@ -170,6 +177,7 @@ export default function HudNavigation({
   visible,
   reduced,
   currentId,
+  progress,
   base,
   markerFrameRef,
 }: HudNavigationProps) {
@@ -305,11 +313,18 @@ export default function HudNavigation({
     : nearestPlacement
       ? copyForMarker(nearestPlacement)
       : null;
-  // Idle = nothing to aim at AND no rail hover. The compass then shows NO SIGNAL
+  // Idle = nothing to aim at AND no rail hover. The compass then shows its idle copy
   // and the needle is hidden/centred (CSS off the data-idle attribute).
   const idle = copy === null;
   // Whether the ┼ is actively aiming at a real marker (gold) vs. idle (dim).
   const aiming = nearestPlacement !== null;
+  // Idle copy split: at/near a settled beat the instrument is merely SCANNING
+  // ("SEEKING SIGNAL"); in a transition band between beats there is no settled
+  // marker to find AND we are past the opening hold, so the cue is to scroll back
+  // onto a beat ("SCROLL BACK TO THE POINT").
+  const phase = sceneForProgress(progress).phase;
+  const atTop = progress <= SCROLL_HINT_DISMISS_AT;
+  const recovery = idle && phase === 'transition' && !atTop;
 
   return (
     <>
@@ -367,7 +382,7 @@ export default function HudNavigation({
           position around the ▲ along the cursor→marker bearing, so the line ▲→┼
           shows which way to move the cursor; its offset shrinks as the cursor nears
           the marker. When no marker is on screen / in range and the rail is not
-          hovered it falls IDLE (a dim NO SIGNAL placeholder, the ┼ parked & faded).
+          hovered it falls IDLE (a dim scan placeholder, the ┼ parked & faded).
           aria-hidden because the rail buttons + markers already announce their own
           labels (the old mobile readout had the same rationale — this replaces it,
           now visible on desktop too). The markup is always rendered (its frame
@@ -384,6 +399,7 @@ export default function HudNavigation({
         data-aiming={aiming}
         data-locked={locked}
         data-idle={idle}
+        data-recovery={recovery}
         data-reduced={reduced}
         aria-hidden="true"
       >
@@ -402,7 +418,7 @@ export default function HudNavigation({
           <>
             <p className="hud-compass-read hud-compass-read--idle">
               <span className="hud-compass-prompt">[ </span>
-              <span className="hud-compass-label">NO SIGNAL</span>
+              <span className="hud-compass-label">{recovery ? 'SCROLL BACK TO THE POINT' : 'SEEKING SIGNAL'}</span>
               <span className="hud-compass-prompt"> ]</span>
             </p>
             {/* Reserve the second (destination) line's height even when idle so the

@@ -1,6 +1,6 @@
 // Shared state for the hero island: the scroll-driven snapshot the presentational
 // sub-components render from. HeroIsland provides it; ManifestoOverlay /
-// HeroIdentity / ScrollHint / ExplorationHud consume it. Frame-cadence values
+// HeroIdentity / ExplorationHud consume it. Frame-cadence values
 // that must NOT trigger React renders stay as refs inside HeroIsland — only
 // render-relevant snapshots live here.
 import { createContext, useContext, type ReactNode } from 'react';

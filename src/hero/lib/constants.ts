@@ -92,7 +92,10 @@ export const DIRECTION_DEADZONE = 0.0008;
 /** Past this scroll fraction the opening chrome (name + menu) fades out; small
  *  enough that the very first wheel nudge begins the hide. */
 export const CHROME_HIDE_AT = 0.015;
-/** Once the visitor has moved this far, the first-visit cue has done its job. */
+/** Once the visitor has moved this far, the opening hold is over. Also marks the
+ *  compass's at-top vs recovery boundary: at/below this the bottom-centre compass
+ *  is still in the opening hold and stays in plain SEEKING-SIGNAL scan; past it, a
+ *  mid-transition idle band switches the compass to its SCROLL-BACK recovery cue. */
 export const SCROLL_HINT_DISMISS_AT = 0.035;
 /** Scroll fraction at which the final selected-work HUD would arm. NOTE: the HUD
  *  is now ALWAYS visible (see HeroIsland — explorationMode starts true), so nothing
