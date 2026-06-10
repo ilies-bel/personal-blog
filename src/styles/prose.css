@@ -7,8 +7,9 @@
   max-width: 680px;
   margin-inline: auto;
   padding-top: clamp(2.5rem, 8vw, 5rem);
-  font-size: 17px;
-  line-height: 1.75;
+  /* Body sentence lands on the --text-body rung (16px) with the prose leading. */
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 /* The article header is a page-hero in the same language as the writing index
    and About: a mono kicker (one rare gold signal), a display title at the
@@ -31,7 +32,7 @@
   margin-bottom: 1.85rem;
   color: var(--accent-strong);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-label);
   letter-spacing: 0.08em;
   text-decoration: none;
   transition: color 0.18s ease;
@@ -61,15 +62,15 @@
   width: max-content;
   max-width: 100%;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-  letter-spacing: 0.18em;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--highlight);
 }
 .article-header h1 {
-  font-size: clamp(44px, 5vw, 72px);
-  line-height: 0.95;
-  letter-spacing: -0.04em;
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
   margin: 0;
   color: var(--fg);
   text-wrap: balance;
@@ -79,7 +80,8 @@
   max-width: 42rem;
   margin: 1.25rem 0 0;
   color: var(--fg-dim);
-  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  /* Muted lead — the sub-title rung between body and section titles. */
+  font-size: var(--text-subtitle);
   line-height: 1.58;
   text-wrap: pretty;
   text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
@@ -99,7 +101,7 @@
   border-radius: var(--radius-pill);
   color: var(--fg-dim);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: var(--text-micro);
   line-height: 1;
   background: color-mix(in oklch, var(--bg) 55%, transparent);
 }
@@ -107,13 +109,13 @@
 .article-header .article-meta {
   margin: 1.25rem 0 0;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-label);
   letter-spacing: 0.08em;
   color: var(--fg-faint);
 }
 .prose p { margin: 1.3rem 0; color: #c7bfb4; }
-.prose h2 { font-size: 1.65rem; margin: 2.75rem 0 1rem; }
-.prose h3 { font-size: 1.3rem; margin: 2rem 0 0.75rem; }
+.prose h2 { font-size: var(--text-title); margin: 2.75rem 0 1rem; }
+.prose h3 { font-size: var(--text-subtitle); margin: 2rem 0 0.75rem; }
 .prose a { font-weight: 600; }
 .prose ul, .prose ol { padding-left: 1.4rem; }
 .prose li { margin: 0.4rem 0; }
@@ -129,7 +131,7 @@
   color: var(--fg-dim);
   font-family: var(--font-quote);
   font-style: italic;
-  font-size: 1.3rem;
+  font-size: var(--text-title);
   line-height: 1.4;
 }
 .prose blockquote p:first-child { margin-top: 0; }

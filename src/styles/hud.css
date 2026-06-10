@@ -191,11 +191,12 @@
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
 /* Active readout value: the stage label of the lit (current) row — at the black
-   hole this is the readout the HUD shows. Lift it to ~12px and warm bone so the
-   live readout reads clearly without restyling the rest of the rail. */
+   hole this is the readout the HUD shows. It sits one HUD rung down so it reads as
+   the live readout, and uses the cool overlay bone so it holds on the bright star
+   (replacing the old hard-coded #eee5d8). */
 .hud-nav-button[data-current='true'] .hud-nav-title {
-  font-size: 0.75rem;
-  color: #eee5d8;
+  font-size: var(--text-label);
+  color: var(--fg-overlay);
 }
 /* Keyboard focus ring (#1): keep an accessible ring but make it QUIET and not a
    tight box hugging the glyph. We push it well clear of the rail with a generous
@@ -253,7 +254,9 @@ body.hud-active .hud-nav-copy {
   opacity: 1;
   transform: none;
 }
-body.hud-active .hud-nav-title,
+/* At the black hole the labels brighten to full presence — the title to the cool
+   overlay bone (it floats on the star), the destination to warm --fg below it. */
+body.hud-active .hud-nav-title { color: var(--fg-overlay); }
 body.hud-active .hud-nav-destination { color: var(--fg); }
 
 /* Per-row stagger: row N reveals at beat + (N-1)*step. The label (copy) follows
@@ -340,16 +343,17 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   text-transform: uppercase;
 }
 .hud-nav-title {
-  font-size: 0.95rem;
+  font-size: var(--text-hud);
   line-height: 1;
-  letter-spacing: 0.14em;
-  color: var(--fg);
+  letter-spacing: var(--tracking-label);
+  /* HUD title floats over the star — cool overlay bone (Task 3a) holds authority. */
+  color: var(--fg-overlay);
   text-shadow:
     0 0 18px rgba(0, 0, 0, 1),
     0 0 4px rgba(0, 0, 0, 0.95);
 }
 .hud-nav-destination {
-  font-size: 0.82rem;
+  font-size: var(--text-hud);
   line-height: 1;
   letter-spacing: 0.1em;
   color: color-mix(in oklch, var(--fg-dim) 88%, var(--fg));
@@ -398,6 +402,24 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   opacity: 1;
   pointer-events: none;
   transition: opacity 0.5s var(--ease-out-quint) var(--rail-beat);
+}
+/* Local text scrim (Task 3b): a soft dark pool centred behind the bottom compass
+   so its readout keeps authority on the brightest orange-star frame, the same
+   restrained treatment as the manifesto block. Bleeds past the box and fades to
+   transparent at every edge so it never reads as a panel; sits behind the rose +
+   readout (z -1) and never catches pointer events. */
+.hud-compass::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -1.1rem -2.2rem;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 120% at 50% 60%,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(0, 0, 0, 0.24) 46%,
+      rgba(0, 0, 0, 0.08) 72%,
+      transparent 100%);
 }
 /* The compass is the page's single bottom-centre scroll-state instrument, visible
    throughout the cinematic scroll. Hidden ONLY until the scene's first frame paints
@@ -510,15 +532,16 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
 }
 .hud-compass-read {
-  font-size: 0.95rem;
+  font-size: var(--text-hud);
   letter-spacing: 0.12em;
-  color: var(--fg);
+  /* The compass read floats over the star — cool overlay bone (Task 3a). */
+  color: var(--fg-overlay);
   /* Smoothly warm to gold when the lock engages (data-locked) rather than snap. */
   transition: color 0.32s var(--ease-out-quint), text-shadow 0.32s var(--ease-out-quint);
 }
 .hud-compass-dest {
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
   color: var(--fg-dim);
   transition: color 0.32s var(--ease-out-quint);
 }
@@ -673,12 +696,14 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   .hud-nav-copy {
     gap: 0.18rem;
   }
+  /* On the compact mobile strip the title/destination/readout all collapse onto the
+     micro rung — they're glance-only labels at this size. */
   .hud-nav-title {
-    font-size: 0.66rem;
+    font-size: var(--text-micro);
     letter-spacing: 0.1em;
   }
   .hud-nav-destination {
-    font-size: 0.6rem;
+    font-size: var(--text-micro);
   }
   .hud-nav-mobile-readout {
     display: flex;
@@ -687,7 +712,7 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
     margin: -0.15rem 0 0;
     color: var(--fg-dim);
     font-family: var(--font-mono);
-    font-size: 0.62rem;
+    font-size: var(--text-micro);
     line-height: 1;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -770,7 +795,7 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   /* min-width so the readout box doesn't jump as the status text changes length. */
   min-width: 11rem;
   text-align: center;
-  font-size: 0.72rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.42em;
   /* optical: the big tracking pushes the text right; nudge it back to centre. */
   padding-left: 0.42em;
@@ -1182,29 +1207,28 @@ body.hud-booting .hud-boot-scan {
   text-align: right;
 }
 
-/* Eyebrow — mono, uppercase, letter-spaced, gold. */
+/* Eyebrow — mono, uppercase, letter-spaced, gold (chapter-label rung). */
 .star-marker-card-eyebrow {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-label);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-label);
   color: var(--marker-gold);
   text-transform: uppercase;
 }
-/* Headline — the dominant element: large, full bone, tight, monospaced to match
-   the reference. */
+/* Headline — the dominant element: card-title rung, full bone, tight, monospaced. */
 .star-marker-card-headline {
   font-family: var(--font-mono);
-  font-size: 1.5rem;
+  font-size: var(--text-title);
   font-weight: 600;
   line-height: 1.12;
   letter-spacing: -0.01em;
   color: var(--fg);
 }
-/* Desc / body — dim, comfortable line-height, wraps to ~2 lines. */
+/* Desc / body — dim, comfortable line-height, wraps to ~2 lines (small-body rung). */
 .star-marker-card-desc {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-body-sm);
   line-height: 1.45;
   letter-spacing: 0.01em;
   color: var(--fg-dim);
@@ -1213,7 +1237,7 @@ body.hud-booting .hud-boot-scan {
 .star-marker-card-tags {
   margin-top: 0.05rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.04em;
   color: color-mix(in oklch, var(--fg-dim) 78%, var(--bg));
 }
@@ -1223,7 +1247,7 @@ body.hud-booting .hud-boot-scan {
 .star-marker-card-cta {
   margin-top: 0.2rem;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-body-sm);
   letter-spacing: 0.06em;
   color: var(--highlight);
   text-decoration: underline;

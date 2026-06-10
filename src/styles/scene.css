@@ -87,7 +87,7 @@ body.bare.hud-booting::after {
 }
 .scene-loader-name {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-label);
   letter-spacing: 0.32em;
   text-indent: 0.32em;                   /* balance the trailing tracking so it reads centred */
   text-transform: uppercase;
@@ -182,7 +182,7 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
   overflow: hidden;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-hud);
   letter-spacing: 0.04em;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
   /* A gold underline that SWEEPS in on hover. Drawn as a bottom-anchored background
@@ -266,7 +266,7 @@ body.bare.hud-active .overlay-blog-label {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-hud);
   letter-spacing: 0.04em;
 }
 .overlay-social {
@@ -394,16 +394,17 @@ body.bare.about-page .overlay-blog { display: none; }
 .scene-fallback-name {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+  font-weight: var(--weight-bold);
+  /* Mirrors the identity name lockup (same rung as .bh-identity-name). */
+  font-size: var(--text-subtitle);
   letter-spacing: 0.02em;
   color: var(--fg);
 }
 .scene-fallback-role {
   margin: 0 0 1.5rem;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  letter-spacing: 0.16em;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--fg-faint);
 }
