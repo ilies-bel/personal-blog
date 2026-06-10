@@ -121,7 +121,9 @@ export interface StarState {
   yellow: boolean;
   /** nebula slot active (stage ≥ 3.5). Gates the timeline/grade. */
   nebula: boolean;
-  /** the shader's nebula geometry is active (the real nebula OR the collapse window). uNebula. */
+  /** the shader's nebula geometry is active (the real nebula OR the collapse window AND its
+   *  floor crossfade — held via inWindowGeo so the cloud reads as converging gas through the
+   *  floor, never the shader's red-giant default). uNebula. */
   nebulaShader: boolean;
   /** pale-blue-dot slot active (stage ≥ 4.5). uDot. */
   dot: boolean;
@@ -301,12 +303,27 @@ export function lifecycle(input: LifecycleInput): StarState {
   // NEB_COLLAPSE_HI (3.5, dispersed nebula) / NEB_COLLAPSE_LO (3.0, window floor —
   // the yellow-mesh slot already owns 2.7–3.5) now live in sceneTable.ts.
   const inWindow = stage > NEB_COLLAPSE_LO && stage < NEB_COLLAPSE_HI ? 1 : 0;
+  // The collapse GEOMETRY scalars (prog/collapse/simBlend) use an EXTENDED gate that
+  // also covers the floor CROSSFADE band (NEB_COLLAPSE_LO-0.05 → NEB_COLLAPSE_LO, i.e.
+  // 2.95→3.0, where bodyOwnership dissolves the cloud into the formed yellow mesh).
+  // Without this, those scalars hard-snapped to 0 at the floor — so the sim-collapsed
+  // (converged, blue) gas reverted to the analytic DISPERSED nebula for the few eased
+  // frames the cloud is still shown there, a visible "gas re-expands / turns orange"
+  // pop right where the old red-giant flashed. Holding the geometry gate across the
+  // crossfade keeps the gas CONVERGED on the forming core (collapse≈1, simBlend held)
+  // so it dissolves cleanly under the mesh. The DERIVED consumers (`collapsing`, the
+  // grade, the starfield gate) still key off the unextended `inWindow` so their timing
+  // is byte-identical — only the cloud's own geometry/density is held through the floor.
+  const FLOOR_XFADE = 0.05; // mirror transitions.ts' COLLAPSE_FLOOR_XFADE (the bodyOwnership band)
+  const inWindowGeo = stage > NEB_COLLAPSE_LO - FLOOR_XFADE && stage < NEB_COLLAPSE_HI ? 1 : 0;
   // ONE smooth window progress drives everything so density and star size move on
   // a single INVERTED scale (no field racing ahead of another): prog = 0 at the
-  // dispersed nebula (3.5) → 1 right at the window floor (3.0). Spanning the WHOLE
-  // window (not a narrow sub-band) makes the transition fluid — the star grows
+  // dispersed nebula (3.5) → 1 right at the window floor (3.0), then HELD at 1 across
+  // the floor crossfade (the smoothstep clamps ≥1 below 3.0, gated by inWindowGeo so it
+  // still zeroes out for the yellow star / red giant below the crossfade). Spanning the
+  // WHOLE window (not a narrow sub-band) makes the transition fluid — the star grows
   // gradually and the gas thins gradually across the entire scroll, in lockstep.
-  const prog = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
+  const prog = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
   // `collapse` is the GPGPU drive. It LEADS the star growth (prog^0.85 still ramps
   // faster than the star's prog^1.8) so the gas falls inward and piles onto the core
   // BEFORE the star reaches full size — the inflow visibly FEEDS the star. The 0.85
@@ -323,7 +340,11 @@ export function lifecycle(input: LifecycleInput): StarState {
   // the accreting gas keeps reading right up to the floor (no bare-core frame). It
   // eases in over a wide edge band (/0.16) and only tapers in the final stretch
   // (1 - 0.45*prog, not 0.85) so the sim-driven infall doesn't thin out early.
-  const simBlend = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
+  // simBlend uses the EXTENDED geo gate too, so the sim-collapsed (converged) gas is
+  // held through the floor crossfade instead of snapping back to the analytic dispersed
+  // nebula. At the floor prog≈1, so it sits at its window-floor value (≈0.55) across the
+  // band — the gas stays piled on the core as it dissolves under the mesh.
+  const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
   // cloud DENSITY/brightness fades the gas as the star forms — but the OLD curve
   // ((1-prog)^1.6) crashed to ~0 by prog≈0.85 while the star (prog^1.8) was only ~0.7
   // formed, leaving a frame with the gas GONE and a bare bright core on black (the
