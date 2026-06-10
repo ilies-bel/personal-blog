@@ -375,6 +375,14 @@ export interface MarkerPlacement {
   title: string;
   /** Card subtitle line. Compass dest copy; the richer card's `body` fallback. */
   subtitle: string;
+  /** Background class under this marker — drives the adaptive 3-layer treatment
+   *  (stroke colour, halo direction, blurred backing plate). Static per placement
+   *  (authored, not sampled): the canvas is a separate stacking context so per-frame
+   *  luminance is not cheaply available. */
+  bg: 'dark' | 'bright' | 'noisy';
+  /** Per-destination-type inner glyph (public/glyphs path). Painted with the
+   *  marker's adaptive currentColor via CSS mask — same mechanism as the HUD rail. */
+  glyph: string;
   // --- Richer card copy (all optional; each falls back to title/subtitle) ----
   /** The mono uppercase, letter-spaced gold label at the top of the card (e.g.
    *  'ABOUT / 01'). Falls back to `title` when absent. */
@@ -473,6 +481,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'about',
         title: 'ABOUT',
         subtitle: 'Who I am',
+        bg: 'dark',
+        glyph: 'glyphs/glyph-marker-about.svg',
         eyebrow: 'ABOUT / 01',
         headline: 'Hi, I’m Iliès.',
         body: 'Web software, technical writing, understandable systems.',
@@ -515,6 +525,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 01',
         subtitle: 'Notes & essays',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-writing.svg',
         eyebrow: 'WRITING / 01',
         headline: 'Notes from the build.',
         body: 'Essays on software that stays readable as it grows.',
@@ -529,6 +541,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 02',
         subtitle: 'Notes & essays',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-writing.svg',
         eyebrow: 'WRITING / 02',
         headline: 'Thinking in systems.',
         body: 'Boundaries, interfaces, and the cost of complexity over time.',
@@ -543,6 +557,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 03',
         subtitle: 'Notes & essays',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-writing.svg',
         eyebrow: 'WRITING / 03',
         headline: 'Working with the machine.',
         body: 'On AI-assisted code, and keeping the center understandable.',
@@ -583,6 +599,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'projects',
         title: 'PROJECTS',
         subtitle: 'Things I build',
+        bg: 'bright',
+        glyph: 'glyphs/glyph-marker-projects.svg',
         eyebrow: 'PROJECTS / 01',
         headline: 'Things I build.',
         body: 'Shipped software, side projects, and tools that earned their keep.',
@@ -622,6 +640,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-graveyard.svg',
         eyebrow: 'GRAVEYARD / 01',
         headline: 'Things I abandoned.',
         body: 'Dead repos, false starts, and what each one was trying to teach.',
@@ -663,6 +683,8 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'posts/thanks-for-scrolling-to-the-bottom',
         title: 'INSPIRATION',
         subtitle: 'Why this site exists',
+        bg: 'dark',
+        glyph: 'glyphs/glyph-marker-story.svg',
         eyebrow: 'INSPIRATION / 01',
         headline: 'Why this site exists.',
         body: 'The idea behind the black hole, and thanks for scrolling this far.',
