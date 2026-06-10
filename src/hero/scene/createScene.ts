@@ -198,8 +198,26 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // These bands are used ONLY by the dev framing-nudge hooks (RedGiantDebugPanel): they
   // shape the in/out weight of a live tuning nudge so it matches the beat and never
   // snaps. Production applies no nudge (the hooks are unset).
-  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.46, 0.514];
-  const RED_GIANT_NUDGE_OUT: readonly [number, number] = [0.62, 0.70];
+  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.28, 0.36];
+  const RED_GIANT_NUDGE_OUT: readonly [number, number] = [0.36, 0.43];
+
+  // --- AUTONOMOUS-ACCELERATED DOLLY-BACK (black-hole load) --------------------
+  // A TIME-BASED backward dolly that runs on load while the black-hole chapter is on
+  // screen (raw scroll 0-14%): the camera pulls AWAY from the event horizon on its own
+  // over ~DOLLY_DUR seconds, asymptotes to a bounded MAX_BACK, then HOLDS (settles —
+  // it does not drift forever or loop). Scrolling DEEPER into the chapter ACCELERATES
+  // the retreat (a scroll-POSITION term that can push it faster/further within the
+  // same bound); the autonomous wall-clock drift is the FLOOR. NO scroll-velocity is
+  // read anywhere. Composed as a TRUE dolly (move along the view->target axis), faded
+  // out as the chapter is left so there is no pop, and fully disabled under reduced
+  // motion (snap to the held pose). See the application block in frame().
+  const DOLLY_MAX_BACK = 7.0;   // world units of backward travel at full retreat
+  const DOLLY_DUR = 4.0;        // seconds for the autonomous ease to reach MAX_BACK
+  const DOLLY_CHAPTER_END = 0.14; // raw progress: black-hole chapter upper edge
+  const DOLLY_FADE_END = 0.2;   // raw progress: offset fully faded out by here (no pop)
+  // Scratch vectors reused each frame so the dolly never allocates on the hot path.
+  const dollyDir = new THREE.Vector3();
+  const dollyTarget = new THREE.Vector3();
 
   let mouseX = 0;
   let mouseY = 0;
@@ -908,6 +926,34 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       frameLookTarget.x += mouseX * cameraPose.parallax * 0.35;
       frameLookTarget.y += -mouseY * cameraPose.parallax * 0.18;
     }
+    // --- AUTONOMOUS-ACCELERATED DOLLY-BACK (black-hole load) ------------------
+    // A bounded, time-based backward dolly that runs while the black-hole chapter is
+    // on screen (raw progress < DOLLY_CHAPTER_END). It is a PURE function of the
+    // wall-clock load time + scroll POSITION — never scroll velocity. Disabled under
+    // reduced motion (the held pose stands as-is).
+    if (!reduced) {
+      // Autonomous FLOOR: eases out to 1 over DOLLY_DUR seconds since mount, then HOLDS
+      // (settles — easeOut asymptotes, min() clamps, so no further drift, no loop).
+      const autonomousT = easeOut(Math.min(t / DOLLY_DUR, 1));
+      // Scroll ACCELERATION: how deep the visitor has scrolled INTO the 0-14% chapter
+      // (a scroll-POSITION term). Scrolling deeper advances the retreat faster/further.
+      const scrollT = smoothstep01(progress / DOLLY_CHAPTER_END);
+      // The autonomous drift is the floor; scroll can push it further within the bound.
+      const effectiveT = Math.max(autonomousT, scrollT);
+      // Fade the whole offset out smoothly as the chapter is left (no pop at the edge).
+      const chapterFade = 1 - smoothstep01((progress - DOLLY_CHAPTER_END) / (DOLLY_FADE_END - DOLLY_CHAPTER_END));
+      const dollyBack = DOLLY_MAX_BACK * effectiveT * chapterFade;
+      if (dollyBack > 0.0001) {
+        // TRUE dolly: move the camera AWAY from the look target along the view axis
+        // (so it reads as pulling off the hole), not just along world-z.
+        dollyTarget.set(frameLookTarget.x, frameLookTarget.y, frameLookTarget.z);
+        dollyDir.copy(camera.position).sub(dollyTarget); // target -> camera
+        if (dollyDir.lengthSq() > 1e-6) {
+          dollyDir.normalize();
+          camera.position.addScaledVector(dollyDir, dollyBack);
+        }
+      }
+    }
     // DEV-ONLY framing nudge. The red-giant off-centre composition now lives entirely
     // in the camera keyframes (timeline's RED_COMPOSITION/COLLAPSE_PULL — one continuous
     // travel, no separate park add). These hooks let the dev panel nudge that framing
@@ -972,7 +1018,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // Tiny and time-based: it sells one shock event without turning the scroll into
     // a game-camera wobble.
     if (!reduced) {
-      const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016; // rad, ~0.09°
+      // PER-CHAPTER STILLNESS: the idle roll is REDUCED across the chapters that should
+      // read as calm/symmetric — the yellow star (raw 43-58%, stabilise) and the pale
+      // dot / content band (raw >= 74%, near-static). `idleRollScale` rides scroll
+      // POSITION (never velocity): full elsewhere, ~0.25 across yellow, ~0.08 on the dot.
+      const inYellow = progress >= 0.43 && progress <= 0.58;
+      const inDot = progress >= 0.74;
+      const idleRollScale = inDot ? 0.08 : inYellow ? 0.25 : 1.0;
+      const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016 * idleRollScale; // rad, ~0.09° at full
       const sh = cameraPose.shake;
       if (sh > 0.0001) {
         const f = t * 47.0; // fast carrier for the rumble

@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
+import { sceneForProgress } from '../sceneTable';
 import { hudIdForStage, MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { prefersReducedMotion } from '../lib/config';
 import {
@@ -171,7 +172,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // once per transition, never every scroll sample. The FSM decides what to honour:
       // it suppresses the scroll power-off while the corner override (body.hud-forced)
       // is engaged and keeps the HUD lit once booted, so the island can dispatch freely.
-      const atEnd = hudIdForStage(legacyStageForProgress(progressRef.current)) === 'beginning';
+      // CONTENT UNLOCK (raw 88-100%): arm the HUD across the whole pale-dot/content
+      // band, not just the last frame. The 'beginning' SCENE owns lifecycle 0.00-0.12
+      // = raw 88-100% exactly (segment 1 in the RE-TIMED table), so gate on the SCENE
+      // id rather than the stage>=4.7 threshold (which only fired at raw=1.0). The
+      // stage-threshold hudIdForStage stays the scroll-spy source for the rail below.
+      const atEnd = sceneForProgress(progressRef.current).sceneId === 'beginning';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         window.dispatchEvent(
