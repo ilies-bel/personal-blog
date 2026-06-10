@@ -577,10 +577,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // The point cloud is always the RED GIANT body, never the yellow star → uYellow 0.
     setDisk('uYellow', 0);
     // uNebula spans the real nebula AND the whole collapse handoff: the window plus its
-    // FLOOR crossfade (lifecycle holds simBlend>0 across the crossfade via inWindowGeo, so
-    // nebulaShader stays true there). This is what keeps the cloud reading as converging
-    // nebula gas through the floor — instead of the disk shader falling back to its
-    // red-giant default and flashing a full red giant behind the forming yellow star.
+    // FLOOR crossfade (lifecycle holds the collapse geometry simBlend>0 across the crossfade
+    // via inWindowGeo, so nebulaShader stays true there). This keeps the cloud reading as
+    // converging nebula gas through the floor — instead of the disk shader falling back to
+    // its red-giant default and flashing a full red giant behind the forming yellow star.
     setDisk('uNebula', look.nebulaShader ? 1 : 0);
     setDisk('uDot', look.dot ? 1 : 0);
     setDisk('uNebulaGrow', look.nebulaGrow);
