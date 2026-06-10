@@ -631,6 +631,14 @@ export const diskVertexShader = /* glsl */ `
       // The SAME recipe drives two states by palette + radius:
       //   - red giant : uGiant alone (no later state) → big, deep red, vSunRed=1
       //   - yellow sun: uYellow → smaller, gold, vSunRed=0
+      // The red giant is the DEFAULT whenever the cloud isn't explicitly yellow / nebula /
+      // dot. uNebula is now held high across the WHOLE nebula→star collapse handoff — the
+      // real nebula, the collapse window AND its floor crossfade band (lifecycle holds the
+      // collapse geometry simBlend>0 there via inWindowGeo, so nebulaShader → uNebula stays
+      // 1). So the cloud reads as converging nebula GAS through the handoff and this default
+      // stays 0 there. Without that hold, the floor crossfade (where simBlend/uNebula used
+      // to snap to 0 while bodyOwnership still kept the cloud briefly visible UNDER the
+      // forming yellow mesh) flashed a full red giant for a few eased frames.
       float redGiant = (uYellow < 0.5 && uNebula < 0.5 && uDot < 0.5) ? 1.0 : 0.0;
       float sunOn    = (uYellow > 0.5 || redGiant > 0.5) ? 1.0 : 0.0;
       if(sunOn > 0.5){
