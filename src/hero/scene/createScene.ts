@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
-import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
+import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
@@ -15,6 +15,33 @@ import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
 import type { SceneHandle, SceneHooks } from './types';
+
+/**
+ * The few frame-local STATEFUL multipliers applyLook needs that are NOT pure
+ * functions of `look` alone. They are resolved each frame (from the focusGlow
+ * ease, the gravity-sim sample, the streak latch and the debug overrides) and
+ * passed IN so applyLook stays a single straight `look → uniforms` projection
+ * with no recomputation. A single instance is created once and MUTATED in place
+ * each frame, so calling applyLook allocates nothing on the hot path.
+ */
+interface ApplyLookCtx {
+  /** disk emission multiplier from the HUD focus ease (1 + focusGlow*0.18). */
+  focusEmission: number;
+  /** bloom multiplier from the HUD focus ease (1 + focusGlow*0.12). */
+  focusBloom: number;
+  /** dome-star brightness multiplier from the HUD focus ease (1 + focusGlow*0.08). */
+  focusDome: number;
+  /** hyperspace gas dim (1 - 0.6*streakValue), latched in frame(). */
+  streakGasDim: number;
+  /** resolved disk uSimBlend after the gravity-sim sample (0 if no sample). */
+  simBlend: number;
+  /** red-giant uGiantScale after the giantSize debug override. */
+  giantScale: number;
+  /** nebula uNebLight after the nebLight debug override. */
+  nebLight: number;
+  /** debug-only additive bloom (nebulaFlash * 0.18); 0 in normal play. */
+  nebulaFlashBloom: number;
+}
 
 export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): SceneHandle {
   const diskParticles = tuneParticlesForDevice();
@@ -483,6 +510,116 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
+  // --- look → uniforms/bloom/grade projection (the de-duplicated twin-write) ---
+  // setDisk expresses the primary/secondary disk twin-write ONCE, so a uniform
+  // can never be half-written (the old forgotten-secondary bug becomes impossible).
+  // Created here (outside frame) so the hot path never allocates a closure. Both
+  // materials share the SAME uniform NAMES (secondary = primary.clone()), so one
+  // name drives both writes.
+  const setDisk = (name: string, value: unknown): void => {
+    diskMatPrimary.uniforms[name].value = value;
+    diskMatSecondary.uniforms[name].value = value;
+  };
+
+  // One long-lived ctx instance, MUTATED in place each frame (never re-allocated),
+  // carrying the frame-local stateful multipliers applyLook can't derive from
+  // `look` alone.
+  const applyCtx: ApplyLookCtx = {
+    focusEmission: 1,
+    focusBloom: 1,
+    focusDome: 1,
+    streakGasDim: 1,
+    simBlend: 0,
+    giantScale: 0,
+    nebLight: 1,
+    nebulaFlashBloom: 0,
+  };
+
+  // applyLook OWNS the look → uniforms / sun-rig / visibility / bloom / grade
+  // projection. It is the single home of the ~50 straight `look.X → uniform`
+  // copies (and every disk twin-write goes through setDisk). It is defined ONCE
+  // here, capturing the rigs, and its body allocates nothing (no `new`, no object
+  // /array literals, no map/filter, no closures) so it is hot-path safe. frame()
+  // keeps only the genuinely STATEFUL clock work and calls this.
+  const applyLook = (look: StarState, ctx: ApplyLookCtx): void => {
+    // --- transition 1: reverse supernova ---
+    setDisk('uMorph', look.morph);
+    ringMat.uniforms.uMorph.value = look.morph;
+    // particle-side shock-breakout glow (rides the time envelope via look.flash).
+    setDisk('uFlash', look.flash);
+    // surface-collapse progress (0 full red-giant sphere → 1 collapsed to the point).
+    setDisk('uCollapse', look.kCollapse);
+    // black-hole geometric shrink (1 outside the black-hole state; shader-gated).
+    setDisk('uBlackHoleScale', look.blackHoleScale);
+
+    // --- transition 2: red giant (held at 1 once a later placeholder takes over) ---
+    setDisk('uGiant', look.giantHeld);
+    // Red-giant-ONLY scale; ctx.giantScale already folds in the giantSize override.
+    setDisk('uGiantScale', ctx.giantScale);
+    // The point cloud is always the RED GIANT body, never the yellow star → uYellow 0.
+    setDisk('uYellow', 0);
+    // uNebula spans the real nebula AND the collapse window (analytic placement held).
+    setDisk('uNebula', look.nebulaShader ? 1 : 0);
+    setDisk('uDot', look.dot ? 1 : 0);
+    setDisk('uNebulaGrow', look.nebulaGrow);
+    // resolved sim blend (after the gravity-sim sample) + nebula light model strength.
+    setDisk('uSimBlend', ctx.simBlend);
+    setDisk('uNebLight', ctx.nebLight);
+
+    // --- yellow star → red giant: FLASH-SWAP transition ----------------------
+    setDisk('uYrFlash', look.yrFlash);
+    // grow + colour curves default to 1 (no-op) outside cloudSide.
+    setDisk('uYrGrow', look.cloudSide ? look.yrGrow : 1);
+    setDisk('uYrMix', look.cloudSide ? look.yrColor : 1);
+
+    // disk base emission (folds the stateful focus/streak multipliers via ctx).
+    setDisk('uBright', look.baseBright * look.cloudBright * ctx.focusEmission * ctx.streakGasDim);
+    // disk in-shader saturation (after the sun/nebula overrides resolved in lifecycle).
+    setDisk('uSat', look.diskSat);
+
+    // --- sun-rig look (mesh yellow star + shared star backdrop dome) ----------
+    // young forming star grows from a tiny core to full size as the gas accretes.
+    sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.05 + 0.95 * look.starFormed : 1.0);
+    // HOT YOUNG STAR: blue-white while small/forming, cooling to gold near full size.
+    sunRig.surfaceMat.uniforms.uBlue.value = look.starFormed > 0 ? 1 - look.starFormed * look.starFormed : 0;
+    sunRig.surfaceMat.uniforms.uRed.value = 0;
+    sunRig.coronaMat.uniforms.uRed.value = 0;
+    // FLARES (coronal loops + corona haze) only AFTER the star is fully sized.
+    const flarePresence = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.97) / 0.03) : 1;
+    sunRig.loopMat.uniforms.uFade.value = flarePresence;
+    sunRig.coronaMat.uniforms.uFade.value = flarePresence;
+    sunRig.starMat.uniforms.uOpacity.value = 1;
+    // Mesh visible across its side (cross-dissolves under the bloom at the swap).
+    sunRig.group.visible = look.sunRigVisible;
+    // shared star backdrop dome behind BOTH star states (hidden for BH/nebula/dot/collapse).
+    sunRig.starBack.visible = look.starBackVisible;
+    // compensate the dome for the red giant's dimmer grade + the HUD focus lift.
+    sunRig.starMat.uniforms.uBright.value = STAR_BACK_BASE_BRIGHT * look.starBackBright * ctx.focusDome;
+
+    // --- body visibility (cloud vs mesh) + gravity teardown ------------------
+    diskPrimary.visible = look.cloudShown;
+    diskSecondary.visible = look.cloudShown;
+    starPts.visible = look.starPtsVisible;
+    // plain starfield brightness behind the scene.
+    starMat.uniforms.uStarBright.value = look.starBright;
+    // remove ALL gravity once the star forms (warp arcs, lensed ghost, photon ring).
+    warpSeg.visible = !look.gravityGone;
+    warpSeg2.visible = !look.gravityGone;
+    diskSecondary.visible = !look.gravityGone; // no lensed disk ghost behind the star
+    ringPts.visible = !look.gravityGone; // no photon ring around the star
+    starSecPts.visible = false; // secondary lensed star image stays off
+
+    // --- bloom + auto-exposure + grade + disk-saturation (all resolved finals) ---
+    bloom.strength = look.bloomStrength * ctx.focusBloom + ctx.nebulaFlashBloom;
+    bloom.radius = look.bloomRadius;
+    gradePass.uniforms.uExposure.value = look.exposure;
+    gradePass.uniforms.uOlive.value = look.olive;
+    gradePass.uniforms.uWarmth.value = look.warmth;
+    gradePass.uniforms.uSat.value = look.gradeSat;
+    gradePass.uniforms.uToneComp.value = look.toneComp; // tone-map compression (low for red giant)
+    gradePass.uniforms.uGrain.value = look.grain; // per-state film grain (0 in the nebula)
+  };
+
   function frame(): void {
     if (stopped) return;
     if (document.hidden) {
@@ -544,14 +681,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       stage = morphOverride;
       progress = progressForLegacyStage(morphOverride);
     }
-    // `morph` (= min(1, stage)) drives the transition-1 uniforms below;
-    // lifecycle() recomputes it from the same formula for the look scalars.
-    const morph = Math.min(1, stage);              // transition 1 progress (0..1)
-
-    // --- transition 1: reverse supernova ---
-    diskMatPrimary.uniforms.uMorph.value = morph;
-    diskMatSecondary.uniforms.uMorph.value = morph;
-    ringMat.uniforms.uMorph.value = morph;
     // Scroll-anchored supernova: a deterministic Gaussian in `stage`. No clock —
     // `nova` depends ONLY on scroll position, so it is identical every visit and
     // replays symmetrically when scrubbed in either direction (fully reversible).
@@ -624,70 +753,33 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       nearFactor: NEAR_FACTOR,
       cfg: CFG,
     });
+    // HUD focus ease (stateful — integrates focusTarget across frames). The three
+    // multipliers it drives (disk emission, bloom, dome brightness) are fed into
+    // applyCtx; applyLook reads them so the disk/bloom/dome writes stay one place.
     focusGlow += ((focusTarget ? 1 : 0) - focusGlow) * (reduced ? 1 : 0.08);
-    const focusEmission = 1 + focusGlow * 0.18;
-    const focusBloom = 1 + focusGlow * 0.12;
+    applyCtx.focusEmission = 1 + focusGlow * 0.18;
+    applyCtx.focusBloom = 1 + focusGlow * 0.12;
+    applyCtx.focusDome = 1 + focusGlow * 0.08;
 
-    // the particle-side shock-breakout glow follows the SAME time envelope, so
-    // the additive blast core peaks together with the screen whiteout. The shader's
-    // morph gates (smoothstep(0.40,0.50,uMorph), flashGate) still apply, so the seed
-    // stays dark before the breakout regardless of `nova`.
-    diskMatPrimary.uniforms.uFlash.value = look.flash;
-    diskMatSecondary.uniforms.uFlash.value = look.flash;
-    // surface-collapse progress (0 full red-giant sphere → 1 collapsed to the point)
-    diskMatPrimary.uniforms.uCollapse.value = look.kCollapse;
-    diskMatSecondary.uniforms.uCollapse.value = look.kCollapse;
-    // black-hole geometric shrink: the disk physically CONTRACTS toward the origin as
-    // the hole implodes, so it reads as visibly smaller (not just farther). 1 at the
-    // hero / past the breakout; the shader gates it to the black-hole state.
-    diskMatPrimary.uniforms.uBlackHoleScale.value = look.blackHoleScale;
-    diskMatSecondary.uniforms.uBlackHoleScale.value = look.blackHoleScale;
-
-    // --- transitions 3-5: yellow star → nebula → pale blue dot ---
-    // REVIEW MODE (placeholders, no real morph): the new states HARD-SWAP — each
-    // slot snaps to that state's stand-in at the stage midpoint (see lifecycle.ts
-    // for look.yellow/look.nebula/look.dot). Replace this block (and the matching shader
-    // placeholders, marked "REVIEW PLACEHOLDER") with the real morphs later; the
-    // timeline placement stays the same.
-
-    // --- transition 2: red giant (held at 1 once a later placeholder takes over) ---
-    diskMatPrimary.uniforms.uGiant.value = look.giantHeld;
-    diskMatSecondary.uniforms.uGiant.value = look.giantHeld;
+    // --- transition 2: red-giant SIZE override (giantSize debug hook) ----------
     // Red-giant SIZE is a RED-GIANT-ONLY scale (uGiantScale) so resizing the orb never
     // balloons the nebula/dot/sun states or the gravity-sim seed (all share the base
-    // uGiantR). lifecycle.giantScale ramps it from a SMALL newborn star (tiny vs the black
-    // hole) up to the full bloated size as the camera comes in (the scale-contrast reveal).
-    // DEV: the red-giant framing panel can override the held size live (world radius →
-    // ×base scale). Only overrides while pinned at the held giant; ramping states unchanged.
+    // uGiantR). lifecycle.giantScale ramps it from a SMALL newborn star up to the full
+    // bloated size as the camera comes in. DEV: the red-giant framing panel can override
+    // the held size live (world radius → ×base scale). Resolved here (stateful debug read)
+    // and fed to applyLook via applyCtx; only overrides while pinned at the held giant.
     const giantSizeOverride = readDebugNumber(DEBUG_WINDOW_KEYS.giantSize);
-    const giantScaleValue =
+    applyCtx.giantScale =
       typeof giantSizeOverride === 'number'
         ? giantSizeOverride / (diskMatPrimary.uniforms.uGiantR.value as number)
         : look.giantScale;
-    diskMatPrimary.uniforms.uGiantScale.value = giantScaleValue;
-    diskMatSecondary.uniforms.uGiantScale.value = giantScaleValue;
-    // The orb stays centred (uGiantCenter = origin); its off-centre FRAMING is the
-    // camera move baked into the red-giant keyframes, not a geometry move — the star is at origin.
     // Axial spin: roll the red-giant photosphere on its own tilted pole (≈23°) at a
     // slow, cinematic rate (~60 s / rotation). t accumulates seconds, so the angle
-    // grows monotonically; the shader gates it to the displayed red giant only.
+    // grows monotonically; the shader gates it to the displayed red giant only. This is
+    // a per-frame TIME write (stateful clock), so it stays in frame().
     const giantSpin = reduced ? 0 : t * RED_GIANT_SPIN_RATE;
     diskMatPrimary.uniforms.uGiantSpin.value = giantSpin;
     diskMatSecondary.uniforms.uGiantSpin.value = giantSpin;
-    // The POINT CLOUD is always the RED GIANT (its grainy body), never the yellow
-    // star — the yellow star is the mesh sun rig. So the cloud's uYellow stays 0;
-    // the look.yellow flag still gates the timeline (laterActive / grade) inside lifecycle.
-    diskMatPrimary.uniforms.uYellow.value = 0;
-    diskMatSecondary.uniforms.uYellow.value = 0;
-    // uNebula is 1 across the real nebula AND the gravitational-collapse window so
-    // the cloud holds the analytic nebula placement (the sim's seed/home) while the
-    // sim collapses it inward via uSimBlend below.
-    diskMatPrimary.uniforms.uNebula.value = look.nebulaShader ? 1 : 0;
-    diskMatSecondary.uniforms.uNebula.value = look.nebulaShader ? 1 : 0;
-    diskMatPrimary.uniforms.uDot.value = look.dot ? 1 : 0;
-    diskMatSecondary.uniforms.uDot.value = look.dot ? 1 : 0;
-    diskMatPrimary.uniforms.uNebulaGrow.value = look.nebulaGrow;
-    diskMatSecondary.uniforms.uNebulaGrow.value = look.nebulaGrow;
 
     // --- nebula → star collapse: BAKED gravity-sim flipbook ---------------------
     // The real chaotic collapse sim is run ONCE and snapshotted into a flipbook at
@@ -715,15 +807,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         simBlend = look.simBlend;
       }
     }
-    diskMatPrimary.uniforms.uSimBlend.value = simBlend;
-    diskMatSecondary.uniforms.uSimBlend.value = simBlend;
+    // Resolved sim blend (stateful — gated on the sample above) and nebula light
+    // model strength (with its debug override) fed to applyLook via applyCtx; the
+    // actual uSimBlend / uNebLight twin-writes happen in applyLook.
+    applyCtx.simBlend = simBlend;
     // nebula light model strength (ambient+depth+self-occlusion). Always full; the
     // factor only touches nebula particles. DEBUG: window.__bhNebLight pins it (0 =
     // flat self-emission, 1 = full light model) so the look can be A/B'd live.
     const nebLightOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebLight);
-    const nebLightValue = typeof nebLightOverride === 'number' ? nebLightOverride : 1;
-    diskMatPrimary.uniforms.uNebLight.value = nebLightValue;
-    diskMatSecondary.uniforms.uNebLight.value = nebLightValue;
+    applyCtx.nebLight = typeof nebLightOverride === 'number' ? nebLightOverride : 1;
 
     // --- yellow star → red giant: FLASH-SWAP transition ----------------------
     // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
@@ -739,45 +831,20 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     //   3. That gold sphere then GROWS (uYrGrow) from the yellow radius to the
     //      red-giant radius while its colour LERPS gold → red (uYrMix), a single
     //      monotonic curve — so no red→yellow→red wobble.
-    diskMatPrimary.uniforms.uYrFlash.value = look.yrFlash;
-    diskMatSecondary.uniforms.uYrFlash.value = look.yrFlash;
-
-    // grow + colour curves default to 1 (no-op) outside cloudSide.
-    diskMatPrimary.uniforms.uYrGrow.value  = look.cloudSide ? look.yrGrow  : 1;
-    diskMatSecondary.uniforms.uYrGrow.value = look.cloudSide ? look.yrGrow  : 1;
-    diskMatPrimary.uniforms.uYrMix.value   = look.cloudSide ? look.yrColor : 1;
-    diskMatSecondary.uniforms.uYrMix.value = look.cloudSide ? look.yrColor : 1;
-
-    // The MESH holds small + fully gold across its whole side (no early redden,
-    // no early shrink) — all the growing/cooling is the cloud's job now. This
-    // removes the dual-schedule overlap that caused the two-entity + flicker bugs.
-    // GRAVITATIONAL-COLLAPSE handoff: while the nebula collapses to feed the star
-    // (look.starFormed 0→1) the mesh GROWS from a tiny core to full size as the gas
-    // accretes onto it (the star is fed into existence), hidden under the bloom +
-    // the bright converging cloud. Outside the window it sits at full size.
+    // --- yellow star → red giant: FLASH-SWAP (uYrFlash/uYrGrow/uYrMix) and the
+    // whole sun-rig / body-visibility / bloom / grade projection now live in
+    // applyLook (see below). What STAYS here is the genuinely STATEFUL work that
+    // can't be a pure function of `look`:
+    //   • `growing` (a derived flag the clickable gates read this frame),
+    //   • the glowMat colour LATCH (`glowSettled` persists across frames),
+    //   • the click gates (`sunClickable` / `redGiantClickable`, read by handlers),
+    //   • the distant-star presence ramp (a function of `stage`, not in StarState),
+    //   • the hyperspace-streak direction latch + its gas-dim multiplier.
     const growing = look.starFormed > 0 && look.starFormed < 1;
-    sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.05 + 0.95 * look.starFormed : 1.0);
-    // HOT YOUNG STAR: blue-white while still small/forming (mass→heat), cooling to
-    // gold as it reaches full size. Stays blue through most of the growth and only
-    // cools to gold near full size (1 - starFormed² holds the blue longer) so the
-    // young-star colour actually reads before it settles.
-    sunRig.surfaceMat.uniforms.uBlue.value = look.starFormed > 0 ? 1 - look.starFormed * look.starFormed : 0;
-    sunRig.surfaceMat.uniforms.uRed.value = 0;
-    sunRig.coronaMat.uniforms.uRed.value = 0;
-    // FLARES (coronal loops + corona haze) only AFTER the star is fully sized:
-    // suppressed entirely while growing, ramping in over the last 3% of growth so
-    // the young forming star is a clean orb, not a flaring one. 1 outside the window.
-    const flarePresence = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.97) / 0.03) : 1;
-    // The yellow star is now an ENERGETIC main-sequence beat (cf. the reference's
-    // erupting prominences + coronal loops), so the settled star runs its flares at
-    // FULL strength — no more dying-star quieting. flarePresence still suppresses
-    // them while the young star is forming so it reveals as a clean orb first.
-    sunRig.loopMat.uniforms.uFade.value = flarePresence;
-    sunRig.coronaMat.uniforms.uFade.value = flarePresence;
     // the glow shell cools blue→gold with the star as it grows. setRGB mutates the
     // existing THREE.Color in place (no allocation); the settled branch only writes
     // when it actually changes (`glowSettled` latch) so the constant gold isn't
-    // re-set every frame while the star holds.
+    // re-set every frame while the star holds. STATEFUL (latch across frames) → here.
     if (growing) {
       (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
         0.35 + 0.65 * look.starFormed,
@@ -792,18 +859,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(0.72, 0.56, 0.24);
       glowSettled = true;
     }
-    sunRig.starMat.uniforms.uOpacity.value = 1;
 
-    // Mesh visible across its side, plus a short overhang into the bright flash so
-    // the handoff cross-dissolves under the bloom rather than hard-cutting. The
-    // gold particle sphere appears at/just-below the peak (cloudSide) under the
-    // same flash → the two textures are never both clearly visible.
-    sunRig.group.visible = look.sunRigVisible;
     // CLICK ERUPTIONS gate: the star is clickable only when its mesh is shown AND it
     // is fully formed (not growing) — i.e. the settled yellow star or the red-giant
     // hold while the mesh is up. Read by the pointerdown handler (which lives outside
     // frame()) so a click while the nebula/forming/black-hole is on screen does nothing.
-    sunClickable = sunRig.group.visible && !growing;
+    sunClickable = look.sunRigVisible && !growing;
     // RED-GIANT CLICK gate: the particle giant is clickable only when the settled,
     // FULL-SIZE, idle red giant is the visible body. `cloudSide` is the cloud-rendered
     // red-giant slot (stage 2.05→2.88); we additionally require it to be at full size
@@ -819,42 +880,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       look.yrGrow > 0.9 &&
       look.yrColor > 0.9 &&
       look.kCollapse < 0.02;
-    // The twinkling star backdrop dome is a SEPARATE scene object, so it can sit
-    // behind BOTH the yellow star (mesh rig) and the RED GIANT (point cloud) — the
-    // two states share one star field — while staying hidden for the black hole
-    // (which keeps the warping lensed starfield), the nebula, the dot and the
-    // collapse window. See look.starBackVisible in lifecycle().
-    sunRig.starBack.visible = look.starBackVisible;
-    // Compensate the dome's brightness for the red giant's dimmer post grade so the
-    // shared star field reads the SAME behind both star states (see starBackBright).
-    sunRig.starMat.uniforms.uBright.value = STAR_BACK_BASE_BRIGHT * look.starBackBright * (1 + focusGlow * 0.08);
-    // Outside the yellow⇄red slot the cloud renders the red giant, the nebula AND
-    // the pale-blue-dot. Inside the slot, the cloud body only shows on the cloud
-    // side (the opaque mesh owns the yellow side).
-    diskPrimary.visible = look.cloudShown;
-    diskSecondary.visible = look.cloudShown;
-    // Hide the lensed background starfield while the opaque mesh body is present
-    // (it would bleed through); restore it once the cloud body takes over. ALSO
-    // hide it across the NEBULA (the gas cloud sits alone against pure black).
-    starPts.visible = look.starPtsVisible;
-
-    // the star/warp lensing only makes sense while the hole exists — fade it (the
-    // look.lensLive ramp + look.starBright are computed in lifecycle()). Once the SUN
-    // forms we drop the gravitational-warp background entirely and restore the plain
-    // starfield to full brightness (look.starBright) behind the star.
-    starMat.uniforms.uStarBright.value = look.starBright;
+    // distant-star presence ramp: a function of `stage` (not in StarState), so it
+    // stays here. Visibility also gates on look.gravityGone.
     distantStarPts.visible = !look.gravityGone && stage < 0.45;
     distantStarUniforms.uPresence.value = distantStarPts.visible ? 1 - smoothstep01((stage - 0.08) / 0.34) : 0;
-    // Completely remove ALL gravity once the star forms (look.gravityGone): the warp
-    // arcs, the secondary (lensed) disk image, and the photon ring are switched off
-    // — a star has no event horizon bending light around it. The plain (un-lensed)
-    // starfield behind it is restored via uStarBright above. Below ~giant 0.02 these
-    // are gone entirely.
-    warpSeg.visible = !look.gravityGone;
-    warpSeg2.visible = !look.gravityGone;
-    diskSecondary.visible = !look.gravityGone;   // no lensed disk ghost behind the star
-    ringPts.visible = !look.gravityGone;          // no photon ring around the star
-    starSecPts.visible = false;              // secondary lensed star image stays off
 
     // --- hyperspace streaks: dot ⇄ nebula lightspeed approach ---------------
     // The nebula's own gas grains trail into long radial lanes while the camera
@@ -862,7 +891,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // envelope over that window (0 elsewhere), so the streak rig is only present
     // while it is hot. Direction is latched from eased-stage velocity on a deadzone,
     // so a fast scroll either way flows the lanes in the matching direction and a
-    // parked frame holds the last flow instead of stuttering.
+    // parked frame holds the last flow instead of stuttering. STATEFUL (latch) → here.
     const dStreakStage = stage - prevStreakStage;
     if (Math.abs(dStreakStage) > 0.0006) streakDir = dStreakStage > 0 ? 1 : -1;
     prevStreakStage = stage;
@@ -877,35 +906,17 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // LANES take over the frame (the gas dissolves into the lightspeed lines rather
     // than the lanes sitting on a full-bright blob). Held to ~0.4 floor so the cloud
     // still reads underneath the lanes, not pitch black. 1 (no-op) outside the jump.
-    const streakGasDim = 1 - 0.6 * streakValue;
-    // The point-cloud red giant body renders at full base brightness; in the
-    // yellow→red slot it simply appears under the swap flash (no ramp-in — its
-    // gold→red look is driven by uYrMix/uYrFlash in the shader, not by emission).
-    // Collapse cloud brightness (look.cloudBright): inside the collapse window it
-    // brightens the converging infall (light pouring into the star) then fades the
-    // cloud out as the mesh star forms — clean handoff. Exactly 1 outside the window.
-    diskMatPrimary.uniforms.uBright.value = look.baseBright * look.cloudBright * focusEmission * streakGasDim;
-    diskMatSecondary.uniforms.uBright.value = look.baseBright * look.cloudBright * focusEmission * streakGasDim;
-    // Bloom + auto-exposure + grade + disk-saturation are all resolved by
-    // lifecycle() (including the sun / red-giant / nebula branch overrides), so the
-    // shell just assigns the finals. See lifecycle.ts for the per-beat reasoning
-    // (the nebula branch carries the SHO-palette grade tuning).
-    //
-    // The old `preFlashDarken`/`nebulaDark` block that greyed bloom + exposure
-    // across stage ~3.13–3.47 has been REMOVED: it existed only to set up the
-    // nebula whiteout, and with that flash gone it just dimmed the frame to grey
-    // exactly as the nebula appeared. The nebula now reads at its own graded
-    // brightness with no pre-darken dip. `nebulaFlash` is the debug-only hook.
-    bloom.strength = look.bloomStrength * focusBloom + nebulaFlash * 0.18;
-    bloom.radius = look.bloomRadius;
-    gradePass.uniforms.uExposure.value = look.exposure;
-    gradePass.uniforms.uOlive.value = look.olive;
-    gradePass.uniforms.uWarmth.value = look.warmth;
-    gradePass.uniforms.uSat.value = look.gradeSat;
-    gradePass.uniforms.uToneComp.value = look.toneComp; // tone-map compression (low for red giant)
-    gradePass.uniforms.uGrain.value = look.grain; // per-state film grain (0 in the nebula)
-    diskMatPrimary.uniforms.uSat.value = look.diskSat;
-    diskMatSecondary.uniforms.uSat.value = look.diskSat;
+    // Fed to applyLook (the disk uBright twin-write) via applyCtx.
+    applyCtx.streakGasDim = 1 - 0.6 * streakValue;
+    // debug-only additive bloom (0 in normal play); folded into applyLook's bloom.
+    applyCtx.nebulaFlashBloom = nebulaFlash * 0.18;
+
+    // === applyLook() — the look → uniforms / sun-rig / visibility / bloom / grade
+    // projection. ONE home for the ~50 straight `look.X → uniform` copies (every
+    // disk twin-write through setDisk), so a forgotten-secondary write is impossible.
+    // The stateful multipliers it needs (focus eases, resolved giantScale/nebLight/
+    // simBlend, streak gas-dim, nebula-flash bloom) were written into applyCtx above.
+    applyLook(look, applyCtx);
 
     // --- master forward camera rig ------------------------------------------
     // Progress, not object identity, owns the camera: calm drift while the nebula
