@@ -7,41 +7,24 @@ import {
   type HudTargetId,
   type MarkerPlacement,
 } from './sceneTable';
+import { hudIdForStage } from './lifecycleMachine';
 import type { MarkerFrame } from './scene/types';
 import { progressForLegacyStage } from './timeline';
 
 // The HUD nav rows, on-screen markers, the settled-window gate and their shared
-// types now live in sceneTable.ts (the pure data layer). They are re-exported
-// here so the existing import paths ('../HudNavigation') resolve UNCHANGED. The
-// duplicated literals + the byte-identical settled-window body that used to sit
-// here are gone (the table is the single source).
-export { HUD_NAV_ITEMS, MARKER_PLACEMENTS, settledIdForStage };
+// types now live in sceneTable.ts (the pure data layer); the scroll-spy
+// `hudIdForStage` now lives in lifecycleMachine.ts (the single lifecycle
+// selector). They are re-exported here so the existing import paths
+// ('../HudNavigation') resolve UNCHANGED. The duplicated literals, the
+// byte-identical settled-window body, and the former local hudIdForStage copy
+// that used to sit here are gone (the table + the machine are the single sources).
+export { HUD_NAV_ITEMS, MARKER_PLACEMENTS, settledIdForStage, hudIdForStage };
 export type { HudNavItem, HudTargetId, MarkerPlacement };
 
 export const HUD_NAV_BY_ID = HUD_NAV_ITEMS.reduce<Record<HudTargetId, HudNavItem>>((acc, item) => {
   acc[item.id] = item;
   return acc;
 }, {} as Record<HudTargetId, HudNavItem>);
-
-// Items in ascending `stage` order — the source list happens to already be sorted,
-// but the scroll-spy mapping below depends on it, so make that contract explicit
-// rather than relying on authoring order.
-const HUD_NAV_BY_STAGE: readonly HudNavItem[] = [...HUD_NAV_ITEMS].sort((a, b) => a.stage - b.stage);
-
-/**
- * Scroll-spy: map a lifecycle stage (0..5, the same transition-space `getStage`
- * produces) to the HUD target the visitor is currently "on" — the last stage
- * they have scrolled past. Returns the first item while still above it, so the
- * top of the rail (BLACK HOLE / stage 0) lights up at the very top of the page.
- */
-export function hudIdForStage(stage: number): HudTargetId {
-  let current = HUD_NAV_BY_STAGE[0];
-  for (const item of HUD_NAV_BY_STAGE) {
-    if (stage >= item.stage) current = item;
-    else break;
-  }
-  return current.id;
-}
 
 interface HudNavigationProps {
   visible: boolean;

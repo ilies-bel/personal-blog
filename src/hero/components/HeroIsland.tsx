@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
-import { hudIdForStage, MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
+import { hudIdForStage, resolve } from '../lifecycleMachine';
+import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -170,7 +171,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // scroll sample. The FSM decides what to honour: it suppresses the scroll
       // power-off while the corner override (body.hud-forced) is engaged and keeps
       // the HUD lit once booted, so the island can dispatch freely.
-      const atEnd = hudIdForStage(legacyStageForProgress(progressRef.current)) === 'end';
+      const atEnd = hudIdForStage(resolve(progressRef.current).stage) === 'end';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         window.dispatchEvent(
@@ -189,7 +190,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       const previous = publishedProgressRef.current;
       const crossedHint = crossedProgressThreshold(previous, nextProgress, SCROLL_HINT_DISMISS_AT);
       const hudStageChanged = explorationModeRef.current
-        && hudIdForStage(legacyStageForProgress(previous)) !== hudIdForStage(legacyStageForProgress(nextProgress));
+        && hudIdForStage(resolve(previous).stage) !== hudIdForStage(resolve(nextProgress).stage);
 
       if (
         !force
@@ -280,7 +281,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
   // same forward-progress to shader-stage expression the scene uses.
   const scrollHudId: HudTargetId | null = explorationMode
-    ? hudIdForStage(legacyStageForProgress(progress))
+    ? hudIdForStage(resolve(progress).stage)
     : null;
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own
