@@ -1214,11 +1214,16 @@ body.hud-booting .hud-boot-scan {
   background: radial-gradient(circle, color-mix(in oklch, var(--bg) 60%, transparent) 0%, transparent 68%);
   opacity: 0.5;
 }
-/* BRIGHT: a gentle light-cored wash that fades into a dark rim so the near-black
-   reticle still has a quiet seat on the bright photosphere. */
+/* BRIGHT: a soft DARK halo that deepens local contrast behind the near-black
+   reticle so it reads on the bright photosphere / orange limb. Restrained — a
+   radial fade to transparent, never a hard disc. Applies to BOTH bright markers
+   (yellow star + red giant): both sit on bright surfaces and want a dark seat. */
 .star-marker[data-bg='bright'] .star-marker-plate {
-  background: radial-gradient(circle, color-mix(in oklch, var(--fg) 35%, transparent) 0%, color-mix(in oklch, var(--bg) 28%, transparent) 45%, transparent 72%);
-  opacity: 0.6;
+  background: radial-gradient(circle,
+    color-mix(in oklch, var(--bg) 42%, transparent) 0%,
+    color-mix(in oklch, var(--bg) 24%, transparent) 50%,
+    transparent 74%);
+  opacity: 0.62;
 }
 /* NOISY: a larger, denser dark disc to carve the marker out of the busy gas/limb —
    the strongest plate of the three. */

@@ -99,9 +99,12 @@ export interface Segment {
 }
 
 // --------------------------------------------------------------------------
-// THE TABLE. Eleven spans, authored top-of-page -> bottom-of-page. The weights
-// prefix-sum to the EXACT former breakpoints:
-//   [0, 0.055, 0.195, 0.33, 0.395, 0.47, 0.524, 0.678, 0.748, 0.82, 0.946, 1.0]
+// THE TABLE. Twelve spans, authored top-of-page -> bottom-of-page. The weights
+// prefix-sum to the former breakpoints with ONE added intermediate breakpoint
+// (0.215) where the former single nebula-collapse span (0.135) was split into a
+// short idle held-frame (3a, 0.02) + the remaining collapse (3b, 0.115); every
+// PRE-EXISTING breakpoint is preserved (0.02 + 0.115 = 0.135), only 0.215 is new:
+//   [0, 0.055, 0.195, 0.215, 0.33, 0.395, 0.47, 0.524, 0.678, 0.748, 0.82, 0.946, 1.0]
 // Two facts encoded honestly (both reproduce today's curve; do NOT "tidy"):
 //   1. Band 7 ends stage 2.05, band 8 STARTS stage 1.05 — a real discontinuity.
 //   2. settledWindow is a hand-tuned tolerance, not the idle band's stage span.
@@ -115,7 +118,7 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 4.5,
     easing: 'smoothstep',
     phase: 'idle',
-    settledWindow: [4.5, 4.72],
+    settledWindow: [4.5, 4.7],
   },
   // 2 — NEBULA grow: dot blooms into the cloud, linear on purpose (4.5 -> 3.42).
   {
@@ -126,17 +129,32 @@ export const SEGMENTS: readonly Segment[] = [
     easing: 'linear',
     phase: 'transition',
   },
-  // 3 — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02).
-  // The nebula idle/settled window rides this nebula span (placement among a
-  // scene's segments is free; settledIdForStage scans them all).
+  // 3a — NEBULA held frame: a brief IDLE micro-hold at the fullest, most-settled
+  // cloud (stage 3.42, where bloom ends and collapse begins). This is the ONLY
+  // nebula idle hold, so it is where the nebula writing markers may appear — the
+  // strict idle-only gate (settledIdForStage) refuses to show them across the
+  // collapse transition below. Tight window around the pinch. Its weight (0.02)
+  // is carved out of the former single collapse span's 0.135 (3a + 3b = 0.135),
+  // so every pre-existing breakpoint in the prefix-sum is preserved.
   {
     sceneId: 'nebula',
-    weight: 0.135,
+    weight: 0.02,
+    stageStart: 3.42,
+    stageEnd: 3.42,
+    easing: 'linear',
+    phase: 'idle',
+    settledWindow: [3.4, 3.44],
+  },
+  // 3b — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02). Pure
+  // transition now (the held-frame idle window moved to 3a above), so NO marker
+  // shows while the gas is collapsing.
+  {
+    sceneId: 'nebula',
+    weight: 0.115,
     stageStart: 3.42,
     stageEnd: 3.02,
     easing: 'easeInOutCubic',
     phase: 'transition',
-    settledWindow: [3.38, 3.5],
   },
   // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88).
   {
@@ -174,7 +192,7 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 2.05,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [2.0, 2.12],
+    settledWindow: [2.03, 2.07],
   },
   // 8 — END collapse: stage JUMPS to 1.05 here (band 7 ended 2.05) then falls
   // to 0.5 — the intentional discontinuity. easeInQuart.
@@ -212,14 +230,14 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 0.0,
     easing: 'smoothstep',
     phase: 'idle',
-    settledWindow: [0.0, 0.12],
+    settledWindow: [0.0, 0.08],
   },
 ];
 
 /** Prefix-sum of the segment weights — the progress breakpoints. Length is
  *  SEGMENTS.length + 1: STARTS[i] is span i's start progress, STARTS[i + 1] its
  *  end. Computed once at module load. Equals (to float precision)
- *  [0, 0.055, 0.195, 0.33, 0.395, 0.47, 0.524, 0.678, 0.748, 0.82, 0.946, 1.0]. */
+ *  [0, 0.055, 0.195, 0.215, 0.33, 0.395, 0.47, 0.524, 0.678, 0.748, 0.82, 0.946, 1.0]. */
 export const STARTS: readonly number[] = (() => {
   const out: number[] = [0];
   let acc = 0;
@@ -293,9 +311,16 @@ export function sceneForProgress(progress: number): SceneSelection {
  * the held scene's id for `stage`, or null mid-transition. This is the SINGLE
  * source of the windows that createScene.ts and HudNavigation.tsx both used to
  * hardcode (formerly required to stay byte-identical by hand).
+ *
+ * STRICT idle-only: the gate matches ONLY segments whose `phase === 'idle'`. A
+ * settledWindow that happens to sit on a transition span is IGNORED — a marker
+ * is structurally impossible to show during any morph. (Every scene that owns a
+ * marker therefore carries its settledWindow on a real idle hold; the nebula's
+ * fullest-cloud "held frame" is a dedicated idle micro-hold so it still shows.)
  */
 export function settledIdForStage(stage: number): HudTargetId | null {
   for (const seg of SEGMENTS) {
+    if (seg.phase !== 'idle') continue; // STRICT: never during a transition
     const win = seg.settledWindow;
     if (win && stage >= win[0] && stage <= win[1]) return seg.sceneId;
   }
@@ -640,7 +665,7 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
-        bg: 'noisy',
+        bg: 'bright',
         glyph: 'glyphs/glyph-marker-graveyard.svg',
         eyebrow: 'GRAVEYARD / 01',
         headline: 'Things I abandoned.',

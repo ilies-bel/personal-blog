@@ -988,7 +988,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // gate and HudNavigation's both read the ONE table (no more byte-identical
       // duplication to keep in sync by hand).
       const settled = settledIdForStage(stage) !== null;
-      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });
+      // STRICT: never publish a marker as visible while the supernova flash/morph
+      // envelope is active. `nova` (the clockless Gaussian flash envelope computed
+      // above) > ~0.01 means a blast is on screen — suppress the marker so it can
+      // never flash for a frame as a window edge is crossed during a fast scroll.
+      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled && nova < 0.01 });
     }
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
