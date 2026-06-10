@@ -231,33 +231,6 @@ export interface StarState {
    *  disk material. (The trail DIRECTION is latched in frame() from scroll velocity.) */
   streak: number;
 
-  // --- camera scale story ---
-  /** dezoom distance factor (NEAR_FACTOR → 1 across the intro). */
-  distFactor: number;
-  /** lifecycle zoom choreography multiplier. */
-  zoom: number;
-  /** detonation recoil: anticipation pull-in → hard kick → overshoot-settle (rides nova + morph). */
-  novaKick: number;
-  /** camera-shake "trauma" envelope (0..1) for the blast; frame() turns it into jitter+roll. */
-  shakeAmp: number;
-  /** transient FOV punch (degrees, added to base fov) on the detonation. */
-  fovKick: number;
-  /** extra azimuth sweep during the intro (eases out). */
-  introSweep: number;
-  /** resting azimuth rotation (t * rotateSpeed). */
-  rotation: number;
-  /** scroll-driven quarter-circle (90°) orbit of the CAMERA around the black hole as
-   *  it shrinks (stage 0 → ~0.46), eased to rest before the breakout so the camera is
-   *  still when the nova fires. Pure in stage → scrolling back up unwinds it exactly. */
-  orbitSweep: number;
-  /** red giant → yellow star recompose: a two-axis camera orbit (azimuth) that, with the
-   *  park-out and the elevation term below, swings the off-centre limb comp round to a
-   *  CENTRED, whole-ball view across stage 2.1→2.5. Added to the azimuth sum. */
-  redYellowAz: number;
-  /** the elevation/pitch half of that recompose orbit (radians, added to the camera
-   *  inclination) — lifts the eye above the equator so the star reads as a whole ball,
-   *  not an edge-on disc, by stage 2.5. */
-  redYellowElev: number;
   /** black-hole-only geometry shrink: 1 at the hero → small fraction as the disk
    *  implodes toward the seed, reinforcing the collapse so the hole reads as visibly
    *  SMALLER (not just farther). Drives uBlackHoleScale; the shader gates it to the
@@ -270,7 +243,7 @@ export interface StarState {
  * per-frame star look. No side effects.
  */
 export function lifecycle(input: LifecycleInput): StarState {
-  const { stage, t, reduced, nova, intro, rotateSpeed, nearFactor, cfg } = input;
+  const { stage, reduced, nova, cfg } = input;
 
   const morph = Math.min(1, stage); // transition 1 progress (0..1)
 
@@ -684,9 +657,6 @@ export function lifecycle(input: LifecycleInput): StarState {
     bloomRadius = cfg.bloomRad;
   }
 
-  // dezoom distance factor (0 close → 1 rest). Reduced motion lands at the rest frame.
-  const distFactor = nearFactor + (1 - nearFactor) * intro;
-
   // --- black-hole geometric shrink (drives uBlackHoleScale on the disk) -------
   // The HOLE physically CONTRACTS as it implodes (stage ~0.10 → 0.46): full disk down
   // to a small fraction, reinforcing the seed collapse so the hole reads as visibly
@@ -711,122 +681,6 @@ export function lifecycle(input: LifecycleInput): StarState {
   //   buildDisk uGiantScale AND createScene's RED_GIANT_RADIUS; keep all three in sync.
   const giantScale = GIANT_FULL;
 
-  // --- lifecycle zoom choreography (the scale story) ---
-  // DEPRECATED / DEAD CAMERA SCALARS: the values computed from here down that feed
-  // the camera (zoom, orbitSweep, novaKick, shakeAmp, fovKick, introSweep, rotation,
-  // redYellowAz, redYellowElev) are NO LONGER CONSUMED by the render loop. The active
-  // camera is the progress-based keyframe rig in timeline.ts (cameraPoseForProgress),
-  // which createScene writes directly to camera.position/lookAt. These remain only so
-  // StarState's shape is unchanged; they are safe to delete in a dedicated cleanup
-  // pass (out of scope for this cinematic-polish change). Do NOT wire them back into
-  // the camera — timeline.ts owns the camera grammar.
-  // The camera story (scrolling DOWN, stage rising):
-  //   1. HERO → SEED (0 → 0.46): the black hole SHRINKS geometrically (blackHoleScale),
-  //      so the camera holds a steady frame (the shrink + orbit carry the "gets small").
-  //   2. BLAST (0.46 → ~0.95): SAME ZOOM. The supernova fires on a locked frame (the
-  //      subtle shake/novaKick still ride on top — see shakeAmp/novaKick), no zoom move.
-  //   3. RED REVEAL (1.0 → 1.7): the star is born SMALL (giantScale above) in a wide
-  //      frame → tiny vs the black hole; the camera then comes IN modestly while the star
-  //      GROWS to full, landing on the off-centre limb comp (RED_GIANT_PARK). The SIZE
-  //      ramp does the scale reveal; the camera move is a gentle accompanying push-in.
-  // Reduced motion = 1.
-  let zoom = 1.0;
-  if (!reduced) {
-    const ZOOM_HERO = 0.56; // close at the hero BH → dist≈11 (BH fills the frame)
-    const ZOOM_HOLD = 1.0; // steady frame from the implosion through the blast
-    const ZOOM_RED_WIDE = 2.7; // the small newborn star (radius ~4.5) sits in a WIDE frame
-    //   (dist≈54) → small disc with lots of black margin (tiny vs the huge black hole).
-    const ZOOM_RED_HOLD = 1.65; // come IN to the medium star (dist≈33) as it grows to ~9 — it
-    //   fills more of the frame as a solid, dense red star; the GROWTH does the scale reveal.
-    const ZOOM_RED_UNZOOM = 2.4; // red→yellow: pull BACK (dist≈48) so the whole red giant
-    //   recedes and sits small-and-whole, ready to CONTRACT into the yellow star. (Replaces
-    //   the old zoom-IN wipe — the transition is now unzoom-then-shrink, not a close push-in.)
-    // hero push-in eases out as the implosion gets underway (stage 0 → 0.18), settling to
-    // the steady ZOOM_HOLD — no big seed pull-back (the geometric shrink carries the scale).
-    const heroT = smoothstep01(stage / 0.18);
-    const heroZoom = ZOOM_HERO + (ZOOM_HOLD - ZOOM_HERO) * heroT; // 0.56 → 1.0, then HOLD
-    // RED REVEAL: pull to the WIDE newborn frame as the giant forms (0.95 → 1.15), HOLD
-    // wide through the scale-contrast beat, then come IN to the limb comp (1.25 → 1.7) as
-    // the star grows — a gentle push-in accompanying the growth, not a big dolly.
-    const wideT = smoothstep01((stage - 0.95) / 0.2); // ease out to the wide newborn frame
-    const inT = easeOut(smoothstep01((stage - 1.25) / 0.45)); // gentle come-in as it grows
-    const revealZoom = heroZoom + (ZOOM_RED_WIDE - heroZoom) * wideT; // HOLD → WIDE
-    const redHoldZoom = revealZoom + (ZOOM_RED_HOLD - revealZoom) * inT; // WIDE → IN (comp)
-    // RED → YELLOW unzoom: pull back from the held comp (1.65) to ZOOM_RED_UNZOOM (2.4)
-    // across 2.0→2.5, in lockstep with the recompose orbit, then HOLD steady through the
-    // shrink (2.5→2.9) so the contraction reads as the STAR shrinking, not the camera.
-    const unzoomT = smoothstep01((stage - 2.0) / (2.5 - 2.0));
-    zoom = redHoldZoom + (ZOOM_RED_UNZOOM - redHoldZoom) * unzoomT;
-    // YELLOW-STAR push-in: once the cloud has shrunk + handed off to the gold mesh
-    // (≈2.85) the star sits TINY at the unzoom distance (dist≈48). The yellow star is
-    // now its OWN proper beat — a blazing sun that should FILL the frame like the
-    // reference — so come IN to frame it close (ZOOM_YELLOW → dist≈11). It is a HUMP,
-    // not a hold: IN across 2.85→2.95, hold on the close blazing star through the
-    // gas-free settled band (2.95→3.0), then ease back OUT across 3.0→3.15 BEFORE the
-    // collapse gas (inWindow, from 3.0) brightens — so the close frame never coincides
-    // with the infalling cloud (which would over-bloom to a white blob). Above 3.15 the
-    // nebula immersion (nebIn) owns the camera.
-    const ZOOM_YELLOW = 0.55; // close on the full-size yellow star (dist≈11) → fills the frame
-    const yellowIn = smoothstep01((stage - 2.85) / 0.1); // come IN across 2.85→2.95
-    const yellowOut = smoothstep01((stage - 3.0) / 0.15); // ease back OUT across 3.0→3.15
-    const yellowInT = yellowIn * (1 - yellowOut); // hump: 0 → 1 (2.95–3.0) → 0
-    zoom = zoom + (ZOOM_YELLOW - zoom) * yellowInT;
-    // nebula: fly the camera DEEP INSIDE the cloud so the gas fills the whole frame
-    // and wraps past every edge — immersed, like flying through it. (The old radial-
-    // spoke problem that once forced us back outside is gone: the geometry is now a
-    // fully-hashed, domain-warped volume with no radial banding, so from inside it
-    // reads as turbulent gas all around, not spokes.) Ease in as the nebula arrives
-    // (3.1 → 3.7), hold immersed, then make a HYPERSPACE JUMP out to the dot.
-    const ZOOM_NEBULA = 0.72; // slower, calmer immersion; gas still fills the frame
-    const ZOOM_DOT = 4.6; // pull far out so the beginning is nearly a single pixel
-    const nebIn = smoothstep01((stage - 3.1) / 0.6);
-    zoom = zoom + (ZOOM_NEBULA - zoom) * nebIn; // ease into the cloud
-    // The jump to the dot is an AGGRESSIVE dezoom (Star Wars lightspeed): instead
-    // of a gentle late ease, the pull-back ENGAGES as we leave the nebula (≈3.6)
-    // and ACCELERATES — a cubic ease-in (jumpRaw²·…) front-loads almost no motion
-    // then whips outward, so the camera's velocity peaks together with the streak
-    // field (lifecycle.streak), selling the punch into lightspeed. It tops out a
-    // touch before the dot (4.4) so the final speck rests still, not still flying.
-    const jumpRaw = Math.min(Math.max((stage - 3.6) / (4.4 - 3.6), 0), 1);
-    const jumpT = jumpRaw * jumpRaw * (3.0 - 2.0 * jumpRaw) * jumpRaw; // smoothstep × extra ease-in → whip
-    zoom = zoom + (ZOOM_DOT - zoom) * jumpT; // jump out for the dot
-  }
-  // --- detonation recoil: anticipation → kick → overshoot-settle -------------
-  // A restrained three-act recoil on the blast (distance multiplier on top of the
-  // zoom story). It rides BOTH:
-  //   • morph  — the scroll-space approach to the breakout (the "charge up"), and
-  //   • nova   — the TIME envelope of the blast itself (so a fast scroller still
-  //              feels the kick fire and ring out after the wheel has stopped).
-  //
-  //   1. ANTICIPATION: as morph climbs toward the breakout (0.5), pull the camera
-  //      slightly IN — the world holds its breath, drawing inward before the blast.
-  //   2. KICK: when nova fires, a modest outward shove (the shockwave nudges the
-  //      camera back). nova rises fast then decays, so this is the gentle punch.
-  //   3. SETTLE: the kick decays with nova's tail; a damped sinusoid on the tail
-  //      gives one small outward overshoot that rings back to rest, so it doesn't
-  //      just deflate — it recoils and settles like a soft impact.
-  // Kept subtle: a hint of pull-in, a modest outward shove, a barely-there ring —
-  // enough to feel the world recoil from the blast without a big lurch.
-  const charge = smoothstep01((morph - 0.34) / 0.16) * (1 - smoothstep01((morph - 0.5) / 0.06));
-  const anticipation = -0.025 * charge; // pull IN up to 2.5% just before breakout
-  // nova² front-loads the punch into the rise/peak; the damped ring lives on the tail.
-  const kickPunch = 0.12 * nova * nova;
-  const ring = 0.018 * nova * Math.sin(nova * 22.0) * (1 - nova); // one faint bounce on the decay
-  const novaKick = reduced ? 1 : 1 + anticipation + kickPunch + ring;
-
-  // camera-shake "trauma" envelope. CRUCIAL TIMING: the whiteout pass is opaque
-  // while nova is near its peak (rise+hold+early decay), so a rattle that peaked
-  // WITH nova would happen entirely behind the white and be invisible. Instead we
-  // shape it as a hump that is ZERO at nova=1 (hidden) and PEAKS as the whiteout
-  // CLEARS — nova falling through ≈0.5 — so the camera is visibly rattling exactly
-  // when the remnant is first revealed, then rings out as nova → 0. 4·n·(1−n)
-  // peaks at n=0.5 (=1.0) and is 0 at both ends. 0 under reduced motion.
-  const shakeAmp = reduced ? 0 : 4 * nova * (1 - nova);
-  // a gentle FOV breath on the detonation — the lens widens a touch then settles,
-  // a faint blast-wave cue. Rides the same reveal-timed hump as the shake (peaks
-  // as the whiteout clears, not behind it) so the breath is seen on the reveal.
-  const fovKick = reduced ? 0 : 3.0 * shakeAmp;
-
   // --- hyperspace streaks (dot ⇄ nebula) -----------------------------------
   // Radial light streaks live across the dot approach and linger into the small-
   // nebula arrival, so the first cloud frame reads as a lightspeed destination
@@ -841,35 +695,6 @@ export function lifecycle(input: LifecycleInput): StarState {
   const streakIn = smoothstep01((stage - STREAK_LO) / STREAK_IN_WIDTH);
   const streakOut = smoothstep01((stage - (STREAK_HI - STREAK_DOT_FADE)) / STREAK_DOT_FADE);
   const streak = reduced ? 0 : streakIn * (1 - streakOut);
-
-  // azimuth: a small extra sweep during the intro, then steady rotation.
-  const introSweep = reduced ? 0 : (1 - intro) * 0.45; // eases out as we settle
-  const rotation = reduced ? 0 : t * rotateSpeed;
-  // quarter-circle (90°) CAMERA orbit around the shrinking black hole across stage
-  // 0 → ~0.46, eased to rest so the camera is STILL when the nova fires at the
-  // breakout. It saturates to a constant +π/2 well before the red-giant park begins
-  // (stage 1.35), so across the park it is just a fixed azimuth baseline and never
-  // fights the RED_GIANT_PARK positional slide. Pure in stage → scrolling up reverses
-  // the orbit exactly (no latch, no history). Reduced motion never orbits.
-  const ORBIT_END = 0.46;
-  const ORBIT_MAG = Math.PI / 2;
-  const orbitSweep = reduced ? 0 : ORBIT_MAG * smoothstep01(stage / ORBIT_END);
-
-  // --- red giant → yellow star: recompose orbit (two-axis) ------------------
-  // From the held off-centre limb comp, swing the camera AROUND the star on two axes
-  // (azimuth + elevation) so it ends CENTRED and whole, in lockstep with the park-out
-  // (createScene's parkOut runs 2.1→2.5) and the unzoom below — one combined "pull back
-  // and roll to centre" gesture. The park-out removes the lateral OFFSET (translation);
-  // this orbit changes the VIEWING ANGLE (which side of the sphere we see) — different
-  // DOF, sharing the same 2.1→2.5 window, so they resolve to centred-and-whole exactly
-  // once (no double-recentre / overshoot). Pure in stage → scrolls both ways.
-  const RY_ORBIT_LO = 2.1;
-  const RY_ORBIT_HI = 2.5;
-  const RY_AZ_MAG = (22 * Math.PI) / 180; // ~22° azimuth swing
-  const RY_ELEV_MAG = (14 * Math.PI) / 180; // ~14° pitch up (above the fixed 5° incl)
-  const ryOrbitT = reduced ? 0 : smoothstep01((stage - RY_ORBIT_LO) / (RY_ORBIT_HI - RY_ORBIT_LO));
-  const redYellowAz = ryOrbitT * RY_AZ_MAG;
-  const redYellowElev = ryOrbitT * RY_ELEV_MAG;
 
   return {
     morph,
@@ -917,16 +742,6 @@ export function lifecycle(input: LifecycleInput): StarState {
     grain,
     diskSat,
     streak,
-    distFactor,
-    zoom,
-    novaKick,
-    shakeAmp,
-    fovKick,
-    introSweep,
-    rotation,
-    orbitSweep,
-    redYellowAz,
-    redYellowElev,
     blackHoleScale,
   };
 }
