@@ -1151,41 +1151,102 @@ body.hud-booting .hud-boot-scan {
   flex: 0 0 auto;
 }
 
-/* The card body: terminal panel, mono type, minimal copy. */
+/* The card body: a larger terminal panel. A two-column flex (text + media
+   placeholder) so the future orbital diagram can sit beside the copy. The copy
+   column WRAPS now (no nowrap), so the headline/body break to ~2 lines inside a
+   fixed measure rather than blowing out the panel width. */
 .star-marker-card-body {
-  display: grid;
-  gap: 0.12rem;
-  padding: 0.5rem 0.7rem;
-  background: color-mix(in oklch, var(--bg) 82%, transparent);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  width: 23rem;
+  max-width: min(23rem, calc(100vw - 6rem));
+  padding: 0.95rem 1.1rem;
+  background: color-mix(in oklch, var(--bg) 86%, transparent);
   border: 1px solid color-mix(in oklch, var(--highlight) 40%, transparent);
   border-radius: var(--radius-sm);
-  backdrop-filter: blur(6px);
-  white-space: nowrap;
+  backdrop-filter: blur(8px);
   text-align: left;
 }
+/* The copy column — eyebrow → headline → desc → tags → cta, stacked. */
+.star-marker-card-text {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0; /* allow the flex child to shrink + let its text wrap */
+  flex: 1 1 auto;
+}
+/* Left-side variant: copy reads right-aligned and the media slot trails on the
+   left so the text still hugs the connector edge nearest the reticle. */
 .star-marker[data-side='left'] .star-marker-card-body {
+  flex-direction: row-reverse;
   text-align: right;
 }
-.star-marker-card-title {
+
+/* Eyebrow — mono, uppercase, letter-spaced, gold. */
+.star-marker-card-eyebrow {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.14em;
   color: var(--marker-gold);
   text-transform: uppercase;
 }
-.star-marker-card-subtitle {
+/* Headline — the dominant element: large, full bone, tight, monospaced to match
+   the reference. */
+.star-marker-card-headline {
   font-family: var(--font-mono);
-  font-size: 0.69rem;
-  letter-spacing: 0.04em;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+/* Desc / body — dim, comfortable line-height, wraps to ~2 lines. */
+.star-marker-card-desc {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
   color: var(--fg-dim);
 }
-.star-marker-card-open {
-  margin-top: 0.18rem;
+/* Tag row — mono, joined by ' · ' in the markup; sits a touch dimmer than body. */
+.star-marker-card-tags {
+  margin-top: 0.05rem;
   font-family: var(--font-mono);
-  font-size: 0.69rem;
-  letter-spacing: 0.16em;
-  color: color-mix(in oklch, var(--highlight) 80%, var(--fg));
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: color-mix(in oklch, var(--fg-dim) 78%, var(--bg));
+}
+/* CTA — mono signal line, gold, with a subtle underline. The trailing ' →' is
+   part of the text node; on lock the whole line nudges right a hair (motion is
+   disabled under prefers-reduced-motion / data-reduced below). */
+.star-marker-card-cta {
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--highlight);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--highlight) 45%, transparent);
+  text-underline-offset: 0.22em;
+  transition: transform 0.28s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.star-marker[data-locked='true'] .star-marker-card-cta {
+  transform: translateX(0.18rem);
+}
+.star-marker[data-side='left'][data-locked='true'] .star-marker-card-cta {
+  transform: translateX(-0.18rem);
+}
+
+/* Media placeholder — reserves the future orbital diagram / icon slot so the
+   layout already accounts for it. A faint dotted box, no content yet. */
+.star-marker-card-media {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 6rem;
+  height: 6rem;
+  border: 1px dashed color-mix(in oklch, var(--highlight) 22%, transparent);
+  border-radius: var(--radius-sm);
 }
 
 /* Focus ring: keyboard focus also engages the locked state (see component:
@@ -1203,14 +1264,26 @@ body.hud-booting .hud-boot-scan {
   .star-marker-hex-solid,
   .star-marker-ticks,
   .star-marker-dot,
-  .star-marker-card {
+  .star-marker-card,
+  .star-marker-card-cta {
     transition: none;
+  }
+  .star-marker[data-locked='true'] .star-marker-card-cta,
+  .star-marker[data-side='left'][data-locked='true'] .star-marker-card-cta {
+    transform: none;
   }
   .star-marker[data-locked='true'] .star-marker-hex-gold {
     animation: none;
     opacity: 0.8;
     transform: scale(0.6);
   }
+}
+.star-marker[data-reduced='true'] .star-marker-card-cta {
+  transition: none;
+}
+.star-marker[data-reduced='true'][data-locked='true'] .star-marker-card-cta,
+.star-marker[data-reduced='true'][data-side='left'][data-locked='true'] .star-marker-card-cta {
+  transform: none;
 }
 .star-marker[data-reduced='true'][data-locked='true'] .star-marker-hex-gold {
   animation: none;
