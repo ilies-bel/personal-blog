@@ -38,12 +38,10 @@ import {
   NEBULA_ACTIVE_STAGE,
   NEB_COLLAPSE_HI,
   NEB_COLLAPSE_LO,
-  RED_COLOR_EXIT_START,
-  RED_EXIT_START,
-  RED_SHRINK_END,
-  SWAP_STAGE,
   YELLOW_ACTIVE_STAGE,
 } from './sceneTable';
+// The yellow↔red renderer handoff lives in its own colocated, pure module.
+import { GIANT_RADIUS_SCALE, bodyOwnership, yellowRedSwap } from './transitions';
 
 // --- easing helpers (the single source of truth; frame() imports these too) ---
 // easeOutCubic — fast pull-back that settles softly into the resting pose.
@@ -342,36 +340,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   const nebulaShader = nebula || simBlend > 0.001;
 
   // --- yellow star → red giant: FLASH-SWAP transition ----------------------
-  // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
-  // (mesh sun rig — small, gold, textured) becomes the RED GIANT (point cloud —
-  // big, deep red, grainy) as `stage` falls 3 → 2. The two bodies have totally
-  // different textures, so they DON'T crossfade co-located. Instead a subtle
-  // light flash fires at SWAP_STAGE and the mesh hands off to a gold particle
-  // sphere that grows + cools to the red giant.
-  // SWAP_STAGE (2.88, mesh<->cloud crossover, AFTER the cloud has fully shrunk
-  // to <=2.85) now lives in sceneTable.ts.
-  const inYRWindow = stage >= 2.05 && stage < 3.5 && !nebula; // the whole yellow→red slot (inclusive lower bound so the held red-giant beat at exactly stage 2.05 is interactive)
-  const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.88 .. 3.5 → yellow mesh
-  const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.88 → particle body (owns the shrink)
-
-  // subtle flash envelope (its own stage-space gaussian, separate from the
-  // supernova flash which lives in morph space and is tied to stage 0→1).
-  const YR_FLASH_SIGMA = 0.04; // tighter than before — a brief, faint cross-dissolve cue only
-  const yrFlash = inYRWindow ? Math.exp(-Math.pow((stage - SWAP_STAGE) / YR_FLASH_SIGMA, 2.0)) : 0;
-
-  // grow + colour curves. The red giant holds full size while parked, then — once the
-  // recompose orbit + unzoom have centred it (stage ~2.5) — SMOOTHLY CONTRACTS from full
-  // (~9 units) down to the yellow size (~1.6, = full × 0.18 in the shader) across a
-  // GENEROUS window so it's a continuous shrink, not the old 0.18-stage snap. The colour
-  // reddens→gold across the same window so it cools to a smooth gold ball exactly as it
-  // reaches the small size — primed for a seamless mesh handoff. Decoupled from SWAP_STAGE
-  // (explicit RED_SHRINK_END) so the cloud finishes shrinking BEFORE the mesh swaps in.
-  // RED_EXIT_START (2.5, shrink begins right after the recompose lands),
-  // RED_COLOR_EXIT_START (2.52, colour cools just behind the size) and
-  // RED_SHRINK_END (2.85, fully shrunk to yellow size before the 2.88 swap) now
-  // live in sceneTable.ts.
-  const yrGrow = 1 - smoothstep01((stage - RED_EXIT_START) / (RED_SHRINK_END - RED_EXIT_START));
-  const yrColor = 1 - smoothstep01((stage - RED_COLOR_EXIT_START) / (RED_SHRINK_END - RED_COLOR_EXIT_START));
+  // The yellow↔red renderer handoff (window/side flags + flash/grow/colour curves)
+  // is owned by transitions.ts — the colocated, pure module for this swap. The math
+  // is unchanged (same SWAP_STAGE etc.); it just lives in one home now.
+  const { inYRWindow, meshSide, cloudSide, yrFlash, yrGrow, yrColor } = yellowRedSwap(stage, nebula);
 
   // --- BODY OWNERSHIP (single source of truth) -----------------------------
   // Exactly two foreground bodies can render: the point CLOUD (nebula / dot /
@@ -392,43 +364,12 @@ export function lifecycle(input: LifecycleInput): StarState {
   //   SWAP <  stage <= 2.95   MESH             settled yellow star
   //   SWAP-0.03 < stage <=SWAP MESH->CLOUD     flash-swap crossfade
   //   stage <= SWAP-0.03      CLOUD            red giant / below
-  const COLLAPSE_FLOOR_XFADE = 0.05; // 3.00 -> 2.95: cloud yields to the formed mesh
-  const SWAP_XFADE = 0.03; // 2.88 -> 2.85: mesh yields to the red-giant cloud
-  // mesh reveal INSIDE the collapse window: hold the forming mesh hidden under
-  // the dense gas until the star is nearly complete (starFormed ramps 0.85->1.0,
-  // i.e. ~stage 3.08->3.00) — AFTER the nebula text has faded (~stage 3.05) — so
-  // it reveals as a clean cross-fade, never a warm body under the nebula copy.
-  const meshFormIn = smoothstep01((starFormed - 0.85) / 0.15);
-  // Per-body presence weights. cloudW/meshW are booleans-as-weights here; a body
-  // renders iff its weight > 0. The only places BOTH are > 0 are the two declared
-  // crossfade bands (handoffs that dissolve under bloom).
-  let cloudW: number;
-  let meshW: number;
-  if (stage >= NEBULA_ACTIVE_STAGE) {
-    // nebula + dot: pure cloud
-    cloudW = 1;
-    meshW = 0;
-  } else if (stage > NEB_COLLAPSE_LO) {
-    // collapse window: cloud owns; mesh fades in UNDER it near the floor
-    cloudW = 1;
-    meshW = meshFormIn;
-  } else if (stage > NEB_COLLAPSE_LO - COLLAPSE_FLOOR_XFADE) {
-    // collapse-FLOOR crossfade: cloud fades out, mesh (already full) takes over
-    cloudW = 1 - smoothstep01((NEB_COLLAPSE_LO - stage) / COLLAPSE_FLOOR_XFADE);
-    meshW = 1;
-  } else if (stage > SWAP_STAGE) {
-    // settled yellow star: pure mesh
-    cloudW = 0;
-    meshW = 1;
-  } else if (stage > SWAP_STAGE - SWAP_XFADE) {
-    // flash-SWAP crossfade: mesh yields to the red-giant cloud
-    meshW = 1 - smoothstep01((SWAP_STAGE - stage) / SWAP_XFADE);
-    cloudW = 1 - meshW;
-  } else {
-    // red giant / below: pure cloud
-    cloudW = 1;
-    meshW = 0;
-  }
+  // Per-body presence weights, owned by transitions.ts. cloudW/meshW are
+  // booleans-as-weights; a body renders iff its weight > 0. The only places BOTH
+  // are > 0 are the two declared crossfade bands (handoffs that dissolve under
+  // bloom). The 6-branch ladder is identical — just relocated to its colocated
+  // home; `starFormed` (computed above) is passed in so the value is computed once.
+  const { cloudW, meshW } = bodyOwnership(stage, starFormed);
   // `collapsing` retained as a DERIVED alias for the grade/dome/starfield
   // consumers below (they ask "are we inside the gas-collapse window?"). It is
   // now simply the collapse window membership — no density-epsilon gate, so it
@@ -677,8 +618,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   // (uYrGrow/uYrMix), then holds the red giant at a stable radius. Do not reuse
   // the old reverse "tiny newborn red star" reveal here; that made the held giant
   // shrink while its headline was readable and broke the physical lifecycle.
-  const GIANT_FULL = 10.5 / 4.2; // medium, dense held size (world radius 10.5) — matches
-  //   buildDisk uGiantScale AND createScene's RED_GIANT_RADIUS; keep all three in sync.
+  // medium, dense held size (world radius 10.5). The "keep all three in sync" scale
+  // (buildDisk uGiantScale, createScene RED_GIANT_RADIUS, this) now has ONE source:
+  // GIANT_RADIUS_SCALE in transitions.ts.
+  const GIANT_FULL = GIANT_RADIUS_SCALE;
   const giantScale = GIANT_FULL;
 
   // --- hyperspace streaks (dot ⇄ nebula) -----------------------------------

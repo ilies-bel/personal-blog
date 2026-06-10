@@ -3,6 +3,14 @@
 
 import { NEBULA_PLACE_FN } from '../gravitySim';
 import { LENS_GLSL } from './lens.glsl';
+import { YELLOW_RED_RADIUS_RATIO } from '../transitions';
+
+// The dying-star size factor, as a GLSL float literal interpolated into the vertex
+// shader's `mix(<ratio>, 1.0, uYrGrow)` grow term. SINGLE SOURCE: transitions.ts'
+// YELLOW_RED_RADIUS_RATIO — the SAME constant createScene uses for SUN_RIG_RADIUS,
+// so the gold particle sphere stays size-matched to the mesh at the swap (no pop).
+// String(0.18) === '0.18' → the assembled GLSL is byte-identical to the old literal.
+const YR_RADIUS_RATIO_GLSL = String(YELLOW_RED_RADIUS_RATIO);
 
 // Number of CONCURRENT click eruptions the PARTICLE red giant can host. Mirrors the
 // yellow-star mesh's SUN_ERUPT_SLOTS (sun.glsl.ts) so the two bodies feel identical:
@@ -637,10 +645,11 @@ export const diskVertexShader = /* glsl */ `
         // sun keeps its 0.92 (that branch is only hit when uYellow>0.5, inert here).
         float sunRadFac = (redGiant > 0.5) ? rgScale : 0.92;
         // yellow → red giant grow: at uYrGrow=0 the cloud is size-matched to the
-        // yellow mesh (×0.18 = SUN_RIG_RADIUS/RED_GIANT_RADIUS), inflating to the
-        // full red-giant radius at uYrGrow=1. No-op (×1.0) everywhere else.
-        // KEEP 0.18 IN SYNC with SUN_RIG_RADIUS's factor so the swap stays seamless.
-        sunRadFac *= mix(0.18, 1.0, uYrGrow);
+        // yellow mesh (×YELLOW_RED_RADIUS_RATIO = SUN_RIG_RADIUS/RED_GIANT_RADIUS),
+        // inflating to the full red-giant radius at uYrGrow=1. No-op (×1.0) elsewhere.
+        // The factor is interpolated from transitions.ts' YELLOW_RED_RADIUS_RATIO (the
+        // SAME constant createScene uses for SUN_RIG_RADIUS) → byte-identical 0.18.
+        sunRadFac *= mix(${YR_RADIUS_RATIO_GLSL}, 1.0, uYrGrow);
         // ROTATION-LOCK (red giant only): the photosphere mottle 'm' is built from the
         // SPUN 'sphere'/'sp' (sp = sphere*1.25, and 'sphere' was already rolled by
         // rotateAxis(uGiantSpin) above), so it already rotates rigidly with the body. The

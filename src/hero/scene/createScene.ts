@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01 } from '../lifecycle';
+import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
 import { settledIdForStage } from '../sceneTable';
@@ -83,14 +84,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor the red giant CONTRACTS into. The red giant's
-  // TRUE world radius is uGiantR (4.2) × uGiantScale (9.0/4.2) = 9.0 units (the held
-  // medium-dense giant). So the dying star lands at 9.0 × 0.18 ≈ 1.62 — the exact size
-  // the cloud shrinks to. NOTE: the cloud's grow factor in the vertex shader
-  // (`mix(0.18, 1.0, uYrGrow)`) MUST equal this 0.18 so the gold particle sphere is
-  // size-matched to the mesh at the swap (no pop). Keep this uGiantScale in sync with
-  // buildDisk + lifecycle's GIANT_FULL.
-  const RED_GIANT_RADIUS = 4.2 * (10.5 / 4.2); // = 10.5; uGiantR × uGiantScale (held giant)
-  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * 0.18; // dying star: small grow anchor ≈ 1.62
+  // TRUE world radius is uGiantR (4.2) × uGiantScale (GIANT_RADIUS_SCALE) = 10.5 units
+  // (the held medium-dense giant). So the dying star lands at 10.5 × 0.18 ≈ 1.89 — the
+  // exact size the cloud shrinks to. The grow factor in the vertex shader
+  // (`mix(0.18, 1.0, uYrGrow)`) MUST equal this YELLOW_RED_RADIUS_RATIO so the gold
+  // particle sphere is size-matched to the mesh at the swap (no pop); the shader
+  // interpolates the SAME constant in (see disk.glsl.ts). The held-giant scale is the
+  // single source GIANT_RADIUS_SCALE (shared with buildDisk + lifecycle's GIANT_FULL).
+  const RED_GIANT_RADIUS = 4.2 * GIANT_RADIUS_SCALE; // = 10.5; uGiantR × uGiantScale (held giant)
+  const SUN_RIG_RADIUS = RED_GIANT_RADIUS * YELLOW_RED_RADIUS_RATIO; // dying star: small grow anchor
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
 
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
