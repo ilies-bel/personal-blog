@@ -345,10 +345,12 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
    Cinematic dive transition
    ---------------------------------------------------------------------------
    The marker-dive flow: clicking the black-hole 'end' marker flies the live
-   three.js camera INTO the star while this fixed white layer ramps to full
-   opacity (driven inline by HeroIsland's onDiveProgress); the page then SPA-
-   navigates UNDER the white, and the destination's astro:page-load handler
-   (in BaseLayout) eases the overlay back out and plays the content rise-up.
+   three.js camera INTO the star while this fixed bloom layer ramps to a SOFT,
+   CAPPED veil (a warm radial wash — never a full whiteout; driven inline by
+   HeroIsland's onDiveProgress, whose peak the scene caps via DIVE_WHITE_PEAK);
+   the page then SPA-navigates UNDER the veil, and the destination's
+   astro:page-load handler (in BaseLayout) eases the overlay back out and plays
+   the content rise-up.
    The overlay is persisted across ClientRouter swaps (transition:persist), so
    it must START hidden via CSS — a fresh page that wasn't reached by a dive
    never shows it.
@@ -360,11 +362,22 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   opacity: 0;
   /* Above the HUD boot layers (max z-index 25 in hud.css) + the corner chrome
      (1000 in chrome.css); below the custom cursor (which is pointer-events:none
-     and only a thin dot, so the white reads cleanly beneath it). */
+     and only a thin dot, so the bloom reads cleanly beneath it). */
   z-index: 9999;
-  /* No white/bloom token exists in tokens.css, so the bloom apex uses pure white
-     (the supernova whiteout the dive mimics is also full white). */
-  background: #fff;
+  /* A SOFT VEIL, not a whiteout. Two things keep it gentle against this dark, moody
+     site: (1) the colour is --bloom, a warm slightly-dimmed bone rather than clinical
+     #fff; (2) it's a radial-gradient that glows BRIGHTEST at the screen centre (where
+     the star's collapse projects) and falls off to transparent at the edges — so the
+     veil reads as a bloom radiating from the core, never a flat sheet blanketing the
+     frame. The overlay's own opacity is also capped well under 1 by the scene
+     (DIVE_WHITE_PEAK), so even at the apex you still see the plunge glowing through. */
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--bloom) 0%,
+    color-mix(in oklch, var(--bloom) 88%, transparent) 38%,
+    color-mix(in oklch, var(--bloom) 55%, transparent) 68%,
+    transparent 96%
+  );
 }
 
 /* The destination content "resurfaces" out of the receding bloom: it rises +

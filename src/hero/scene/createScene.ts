@@ -559,12 +559,24 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const DIVE_APEX_FRAC = 0.82;
   const DIVE_REDUCED_S = 0.28;
   // The white overlay stays ~dark until the plunge is this far along, then ramps to
-  // full over the rest of the run-to-apex. This is what keeps the camera move visible
-  // FIRST and the bloom LAST (the inverse of the original front-loaded white). Tuned to
-  // 0.40 so the bloom begins rising just as the camera reaches the core — covering the
-  // moment the bright accretion disk would otherwise recede behind the camera, so the
-  // sequence reads "disk rushing up → bloom swallows it" with no dark gap between.
-  const DIVE_WHITE_START = 0.40;
+  // its capped peak over the rest of the run-to-apex. This is what keeps the camera
+  // move visible FIRST and the bloom LAST (the inverse of the original front-loaded
+  // white). Pushed LATER (0.55) so the camera plunge dominates and the wash is brief —
+  // the visitor sees a clear fall down the throat, and the veil only appears as a soft
+  // glow near the apex, matching the wanted "faint, brief wash rather than a full
+  // whiteout". The bloom still begins just as the camera reaches the core, covering the
+  // moment the bright accretion disk would recede behind the camera.
+  const DIVE_WHITE_START = 0.55;
+  // The bloom is a SOFT VEIL, not a whiteout. The published overlay strength is scaled
+  // by this peak cap so that even at the apex the overlay never reaches full opaque
+  // white — you can still faintly see the scene/plunge glowing through it. This is the
+  // single source of the cap (scaled here before onDiveProgress, not in HeroIsland), so
+  // both the geometric dive and the reduced-motion fade get the same gentle ceiling.
+  // The apex (navigate) trigger stays on the UNCAPPED `raw` below, so this only changes
+  // the visible whiteness, never the navigation timing. 0.62 reads as a soft luminous
+  // veil over a dark, moody site — present enough to feel like a deliberate bloom you
+  // can still see the plunge through, never the blinding #fff whiteout it replaced.
+  const DIVE_WHITE_PEAK = 0.62;
   // The plunge falls toward (and just PAST) the world origin where the star sits, so the
   // camera reads as falling THROUGH the event horizon, not braking on its face. From the
   // new TOP-of-page black-hole pose the live camera sits ~z=22 (plus the autonomous
@@ -1077,7 +1089,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // === DIVE OVERRIDE: plunge the live camera into the star (world origin) =======
     // Runs after the scroll camera is fully resolved, so a 0-strength dive is a no-op
     // and the plunge starts seamlessly from the live pose. The bloom overlay strength
-    // is published via diveOnProgress; onApex fires once for the caller to navigate.
+    // is published via diveOnProgress — capped to a SOFT VEIL (DIVE_WHITE_PEAK), never a
+    // whiteout; onApex fires once (on uncapped raw) for the caller to navigate.
     if (diveActive) {
       const raw = Math.min(1, (performance.now() - diveStart) / 1000 / (reduced ? DIVE_REDUCED_S : DIVE_DURATION_S));
       if (!reduced) {
@@ -1098,12 +1111,16 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         camera.updateProjectionMatrix();
       }
       // WHITE TRAILS — held near zero until the plunge is DIVE_WHITE_START through the
-      // run, then ramped HARD (easeInQuart, the accelerating curve, over the remaining
-      // window up to the apex). This is the inverse of the original front-loaded white:
-      // the camera move is fully visible first; the bloom only takes over near the apex.
+      // run, then ramped (easeInQuart, the accelerating curve, over the remaining window
+      // up to the apex) toward the DIVE_WHITE_PEAK ceiling — NOT full white. This is the
+      // inverse of the original front-loaded white: the camera move is fully visible
+      // first; the bloom only takes over near the apex, and even then only as a soft
+      // capped veil you can see the plunge through. The cap lives here (single source)
+      // so HeroIsland just mirrors `s` straight to overlay.style.opacity.
       const whiteRaw = Math.min(1, (raw - DIVE_WHITE_START) / (DIVE_APEX_FRAC - DIVE_WHITE_START));
-      diveStrength = whiteRaw <= 0 ? 0 : easeInQuart(whiteRaw);
+      diveStrength = whiteRaw <= 0 ? 0 : easeInQuart(whiteRaw) * DIVE_WHITE_PEAK;
       diveOnProgress?.(diveStrength);
+      // Apex/navigate fires on the UNCAPPED `raw` so the cap never shifts nav timing.
       if (!diveApexFired && raw >= DIVE_APEX_FRAC) { diveApexFired = true; diveOnApex?.(); }
     } else {
       diveStrength = 0;

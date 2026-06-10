@@ -60,12 +60,12 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
     <ClientRouter />
   </head>
   <body class={bodyClasses}>
-    {/* Cinematic dive overlay — a single full-viewport white layer present on EVERY
+    {/* Cinematic dive overlay — a single full-viewport bloom layer present on EVERY
         page, persisted across ClientRouter swaps (transition:persist) so the home
-        page's dive can ramp its opacity to full white, the navigation swaps the page
-        body UNDER it, and the destination's page-load handler eases it back out for
-        the "resurface". Starts hidden via CSS (opacity 0), so a normal page load /
-        navigation never sees it. */}
+        page's dive can ramp its opacity to a soft, capped warm veil (never full white),
+        the navigation swaps the page body UNDER it, and the destination's page-load
+        handler eases it back out for the "resurface". Starts hidden via CSS (opacity 0),
+        so a normal page load / navigation never sees it. */}
     <div class="dive-overlay" data-dive-overlay transition:persist aria-hidden="true"></div>
     {/* Sitewide custom cursor — covers both layout branches below. */}
     <CustomCursor />
@@ -606,9 +606,9 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
 
     {/* RESURFACE — runs on every ClientRouter navigation (and the initial load).
         If we arrived via a dive (the sessionStorage flag set by HeroIsland), the
-        persisted overlay is sitting at full white over the freshly-swapped page, so
-        we ease it back out and play the content rise-up. Otherwise we make sure the
-        overlay is hidden instantly (a normal nav must never flash white). The flag is
+        persisted overlay is sitting at its capped soft bloom over the freshly-swapped
+        page, so we ease it back out and play the content rise-up. Otherwise we make sure
+        the overlay is hidden instantly (a normal nav must never flash). The flag is
         single-use (removed on read), so a manual reload of the destination never
         replays the resurface. Lives outside the bare/standard branches so it covers
         both. Bundled (no is:inline) so it re-binds across swaps. */}
@@ -624,10 +624,18 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
         }
         if (!overlay) return;
         if (dived) {
-          // Arriving from a dive: overlay is full-white → ease it out + rise the
-          // content. The body[data-resurface] attribute gates the content keyframe
-          // in hero.css (and is auto-removed when that animation ends).
-          overlay.style.transition = 'opacity 0.6s ease-out';
+          // Arriving from a dive: the overlay is sitting at its capped soft veil →
+          // ease it out + rise the content. The body[data-resurface] attribute gates
+          // the content keyframe in hero.css (and is auto-removed when that animation
+          // ends). The recede is lengthened to 0.8s and reuses the project's eased
+          // curve (--ease-out-quint, resolved from the computed root style so we don't
+          // re-literalise the cubic-bezier) — a softer, gentler dissolve that matches
+          // the lower-peak veil instead of the old abrupt 0.6s ease-out.
+          const easeQuint =
+            getComputedStyle(document.documentElement)
+              .getPropertyValue('--ease-out-quint')
+              .trim() || 'ease-out';
+          overlay.style.transition = `opacity 0.8s ${easeQuint}`;
           requestAnimationFrame(() => {
             overlay.style.opacity = '0';
           });

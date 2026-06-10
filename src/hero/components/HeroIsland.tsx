@@ -347,10 +347,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       goTo(opts.href);                          // engine not ready → straight nav
       return;
     }
-    // The persisted full-white overlay (in BaseLayout). The scene ramps its opacity
-    // per frame via onDiveProgress; on the destination page a page-load handler eases
-    // it back out for the "resurface". A sessionStorage flag tells that handler we
-    // arrived via a dive (so a normal nav doesn't get the resurface animation).
+    // The persisted soft-veil bloom overlay (in BaseLayout — a warm radial bloom, not a
+    // full-white sheet). The scene ramps its opacity per frame via onDiveProgress (and
+    // caps the peak well under 1, so this is the single mirror — no extra scaling here);
+    // on the destination page a page-load handler eases it back out for the "resurface".
+    // A sessionStorage flag tells that handler we arrived via a dive (so a normal nav
+    // doesn't get the resurface animation).
     const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
     try { sessionStorage.setItem('bh:dive', '1'); } catch { /* private mode — skip */ }
     handle.beginDive({

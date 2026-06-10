@@ -88,5 +88,13 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Dive bloom — the soft veil the marker-dive washes over the screen at the swap.
+     A warm, slightly-dimmed bone (NOT clinical pure white) so the glow belongs to the
+     dark/gold palette rather than blinding against it. Sits a touch above --fg
+     (#d8d0c3) in lightness so it still reads as a luminous bloom, but it is never the
+     #fff sheet it replaced. The overlay's own opacity is capped well under 1 in the
+     scene, so this colour only ever shows as a faint warm wash. */
+  --bloom: oklch(0.95 0.018 80);        /* warm bone bloom, dive veil only */
+
   color-scheme: dark;
 }
