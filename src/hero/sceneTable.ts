@@ -411,6 +411,20 @@ export interface ManifestoBeat {
   whisper: string;
 }
 
+/** A scene's optional "linger here" knob. While the active scene declares dwell,
+ *  the morph's internal follow-ease is DAMPED (see createScene) so the lifecycle
+ *  position lags the raw scroll target a little — the visitor "dwells" on the beat
+ *  for a beat longer. It is a damping of the existing ease, NOT a scroll hijack:
+ *  the page scrollbar stays fully native (no preventDefault, no scrollTo, scrollY
+ *  is never touched), so it remains accessible and reversible. Under reduced motion
+ *  it is ignored (the ease is already instant). */
+export interface SceneDwell {
+  /** How strongly to linger on this scene. 0 = no slowdown (same as absent);
+   *  ~1 = strongest lingering. Values are gentle by design — keep below ~0.6 unless
+   *  a beat genuinely wants to feel sticky. */
+  strength: number;
+}
+
 /** One lifecycle scene: its HUD nav row, on-screen markers, and manifesto beat,
  *  colocated so re-timing or re-copying a scene happens in ONE place. */
 export interface LifecycleScene {
@@ -418,6 +432,17 @@ export interface LifecycleScene {
   hud: HudNavItem;
   markers: readonly MarkerPlacement[];
   beat?: ManifestoBeat;
+  /** Optional scroll-slowdown for this scene. Absent = no dwell (strength 0). When
+   *  present, the morph eases more slowly while this scene is active so the visitor
+   *  lingers on the beat — a damping of the internal ease, never a scroll hijack
+   *  (see SceneDwell). */
+  dwell?: SceneDwell;
+  /** When true, reaching this scene REQUESTS the HUD power-on (and leaving it
+   *  requests power-off). Declared on the terminal black-hole scene so the bottom
+   *  hero ignites the HUD. Absent elsewhere. The actual edge-detect + event dispatch
+   *  lives in HeroIsland; this flag is the single source of "which scene arms the
+   *  HUD" so it is no longer a hardcoded string test. */
+  activatesHud?: boolean;
 }
 
 // The five scenes, authored top-of-page -> bottom-of-page. The projections below
@@ -604,6 +629,9 @@ export const SCENES: readonly LifecycleScene[] = [
         cta: 'Walk the graveyard',
       },
     ],
+    // RED GIANT — the contemplative beat. A modest dwell so the morph lingers a
+    // touch longer here than the brighter nebula/yellow beats. Gentle by design.
+    dwell: { strength: 0.5 },
     beat: {
       // RED GIANT — the hold band (stage 2.05, progress ~0.524 -> 0.678).
       at: 0.601,
@@ -642,6 +670,13 @@ export const SCENES: readonly LifecycleScene[] = [
         cta: 'Read the story',
       },
     ],
+    // BLACK HOLE — the terminal hero. A light dwell so the final settle reads as
+    // slightly stickier than the brighter beats above it. Gentle by design.
+    dwell: { strength: 0.4 },
+    // The ONLY scene that arms the HUD: reaching the black hole requests HUD
+    // power-on (leaving it requests power-off). This replaces the former hardcoded
+    // `=== 'end'` test in HeroIsland with a table-driven flag.
+    activatesHud: true,
     beat: {
       // BLACK HOLE — enters after the easeOutExpo settle has visually completed
       // (~0.82 -> 0.946). This is the terminal state, so the line holds through
@@ -668,6 +703,31 @@ export const HUD_NAV_ITEMS: readonly HudNavItem[] = SCENES.map((s) => s.hud);
 export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = SCENES.flatMap((s) => s.markers);
 
 export const BEATS: ManifestoBeat[] = SCENES.flatMap((s) => (s.beat ? [s.beat] : []));
+
+/** Scene id -> its full LifecycleScene. The single index used by the per-scene
+ *  property accessors below (dwell / activatesHud) so a reader never re-finds a
+ *  scene by hand. Built once at module load. */
+const SCENE_BY_ID: Record<HudTargetId, LifecycleScene> = SCENES.reduce(
+  (acc, scene) => {
+    acc[scene.id] = scene;
+    return acc;
+  },
+  {} as Record<HudTargetId, LifecycleScene>,
+);
+
+/** The dwell STRENGTH (0..1) declared by a scene, or 0 when it has none. This is
+ *  the single read of the `dwell` field — lifecycleMachine.resolve() folds it into
+ *  the resolved position so createScene can damp its follow-ease. Pure. */
+export function dwellForScene(id: HudTargetId): number {
+  return SCENE_BY_ID[id]?.dwell?.strength ?? 0;
+}
+
+/** Whether a scene arms the HUD (its `activatesHud` flag). The single read of the
+ *  flag — HeroIsland's HUD-power edge-detector uses it instead of a hardcoded id.
+ *  Only the 'end' scene is flagged today, so the request still fires exactly there. */
+export function sceneActivatesHud(id: HudTargetId): boolean {
+  return SCENE_BY_ID[id]?.activatesHud === true;
+}
 
 // ===========================================================================
 // CAMERA TABLE

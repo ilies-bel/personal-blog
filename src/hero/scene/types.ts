@@ -36,6 +36,13 @@ export interface SceneHooks {
   getStage: () => number;
   /** Returns the normalized forward scroll progress (0..1) for the camera rig. */
   getProgress?: () => number;
+  /** Returns the active scene's dwell STRENGTH (0..1) for the CURRENT scroll
+   *  position, 0 when the active scene declares no dwell. The render loop DAMPS its
+   *  morph follow-ease by this amount so the visitor lingers on a dwelling beat. It
+   *  is a damping of the internal ease only — the page scrollbar is never touched.
+   *  Optional: backdrop mode and reduced motion ignore it (the ease is already
+   *  instant under reduced motion). */
+  getDwell?: () => number;
   /** Active HUD target. The render loop uses this only for a quiet focus boost;
    *  the stage preview itself still flows through getStage(). */
   getFocusTarget?: () => HudTargetId | null;

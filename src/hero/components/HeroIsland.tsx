@@ -16,6 +16,7 @@ import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
 import { hudIdForStage, resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
+import { sceneActivatesHud } from '../sceneTable';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -170,7 +171,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // scroll sample. The FSM decides what to honour: it suppresses the scroll
       // power-off while the corner override (body.hud-forced) is engaged and keeps
       // the HUD lit once booted, so the island can dispatch freely.
-      const atEnd = hudIdForStage(resolve(progressRef.current).stage) === 'end';
+      // Table-driven: ask the scene the scroll-spy maps to whether IT arms the HUD
+      // (its `activatesHud` flag), instead of hardcoding `=== 'end'`. Only the 'end'
+      // scene is flagged, so this fires on exactly the same edge as before — but the
+      // "which scene arms the HUD" decision now lives on the scene, not in this if.
+      const atEnd = sceneActivatesHud(hudIdForStage(resolve(progressRef.current).stage));
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         window.dispatchEvent(
@@ -233,6 +238,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // shader stage is a legacy implementation coordinate derived from it.
     const getStage = (): number => legacyStageForProgress(progressRef.current);
     const getProgress = (): number => progressRef.current;
+    // The active scene's dwell strength (0..1) for the live scroll position, read
+    // from the same pure resolver everything else uses. createScene damps its morph
+    // follow-ease by this so dwelling beats (red giant, black hole) feel stickier —
+    // mirrors how getStage/getProgress flow into the scene. No scrollbar is touched.
+    const getDwell = (): number => resolve(progressRef.current).dwell;
 
     // Pull in the three.js engine asynchronously, THEN build the scene. The scroll
     // tracker above is pure JS and stays synchronous, so scroll is wired the instant
@@ -244,6 +254,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       const dispose = createScene(host, isReduced, {
         getStage,
         getProgress,
+        getDwell,
         getFocusTarget: () => null,
         isExplorationMode: () => explorationModeRef.current,
         onMarkerFrame: (m) => { markerFrameRef.current = m; },

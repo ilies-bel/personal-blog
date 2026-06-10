@@ -25,6 +25,7 @@
 // walkers via lifecycleProgress(), so this module never touches direction itself.
 // ===========================================================================
 import {
+  dwellForScene,
   HUD_NAV_ITEMS,
   legacyStageForProgressFromTable,
   sceneForProgress,
@@ -59,6 +60,11 @@ export interface LifecyclePosition {
   stage: number;
   /** The raw scroll value passed in (0..1), echoed back. */
   progress: number;
+  /** The active scene's dwell STRENGTH (0..1), 0 when the scene declares none.
+   *  Read from the scene's `dwell.strength` (see sceneTable). The scene render loop
+   *  uses it to DAMP its morph follow-ease so the visitor lingers on a dwelling beat
+   *  — a damping of the internal ease only, never a scroll hijack. */
+  dwell: number;
 }
 
 /**
@@ -76,6 +82,7 @@ export function resolve(progress: number): LifecyclePosition {
     settledId: settledIdForStage(stage),
     stage,
     progress,
+    dwell: dwellForScene(scene.sceneId),
   };
 }
 
