@@ -494,7 +494,17 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // --- lifecycle position, smoothed toward the scroll target ---
     const exploring = hooks.isExplorationMode?.() === true;
     const focusTarget = exploring ? hooks.getFocusTarget?.() ?? null : null;
-    const follow = reduced ? 1 : 0.28;
+    // Per-scene DWELL damps the morph follow-ease so the visitor lingers on a
+    // dwelling beat (e.g. the contemplative red giant). dwell is the active scene's
+    // strength 0..1 (0 when none): at 0 follow is exactly 0.28 — IDENTICAL to before
+    // for undwelled scenes — and rises in stickiness with strength. The map
+    // 0.28 * (1 - 0.6 * dwell) spans 0.28 (dwell 0) -> 0.112 (dwell 1); a Math.max
+    // floor of 0.1 guarantees follow can never reach 0 (which would stall the morph)
+    // and never exceeds 0.28 (dwell is clamped >= 0, so the term <= 0.28). Under
+    // reduced motion the ease is already instant (follow = 1) and dwell is ignored —
+    // the morph snaps, so there is nothing to linger on and accessibility is kept.
+    const dwell = reduced ? 0 : Math.max(0, Math.min(1, hooks.getDwell?.() ?? 0));
+    const follow = reduced ? 1 : Math.max(0.1, 0.28 * (1 - 0.6 * dwell));
     const progressTarget = Math.max(0, Math.min(1, hooks.getProgress?.() ?? progress));
     const stageTarget = hooks.getStage();
     // SETTLE SNAP — land on the restored scroll state, don't animate into it.
