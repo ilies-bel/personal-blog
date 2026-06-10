@@ -352,23 +352,27 @@ export function lifecycle(input: LifecycleInput): StarState {
   // only ALMOST lined up — every mismatch was a gap (wrong fallthrough body
   // flashes) or a bleed (two bodies at once). This block is the ONE place that
   // decides ownership, as a TOTAL banded function of `stage`: every stage maps
-  // to a body, and the two bodies are mutually exclusive except in the two
-  // short, DECLARED crossfade bands (the collapse floor at 3.0, and the
-  // yellow<->red swap at SWAP_STAGE). cloudShown / sunRigVisible are projected
-  // from it, so they can never gap or bleed by construction.
+  // to a body, and the two bodies are mutually exclusive except in the ONE
+  // short, DECLARED crossfade band (the collapse floor at 3.0). The yellow<->red
+  // swap at SWAP_STAGE is a HARD FLIP — never a crossfade — so the ~1.2M-point
+  // red-giant cloud can never render BEHIND the still-opaque yellow mesh (that
+  // overlap used to flash reddish grain behind the small gold sun). The flip is
+  // masked by the existing yrFlash whiteout centred at SWAP_STAGE. cloudShown /
+  // sunRigVisible are projected from it, so they can never gap or bleed by
+  // construction.
   //
   // Bands (high stage = top of page):
   //   stage >= 3.5            CLOUD            nebula + dot
   //   3.0  <  stage < 3.5     CLOUD (+mesh fades in UNDER it near the floor)
   //   2.95 <  stage <= 3.0    CLOUD->MESH      collapse-floor crossfade
   //   SWAP <  stage <= 2.95   MESH             settled yellow star
-  //   SWAP-0.03 < stage <=SWAP MESH->CLOUD     flash-swap crossfade
-  //   stage <= SWAP-0.03      CLOUD            red giant / below
+  //   stage <= SWAP           CLOUD            red giant / below (HARD FLIP at SWAP)
   // Per-body presence weights, owned by transitions.ts. cloudW/meshW are
-  // booleans-as-weights; a body renders iff its weight > 0. The only places BOTH
-  // are > 0 are the two declared crossfade bands (handoffs that dissolve under
-  // bloom). The 6-branch ladder is identical — just relocated to its colocated
-  // home; `starFormed` (computed above) is passed in so the value is computed once.
+  // booleans-as-weights; a body renders iff its weight > 0. The only place BOTH
+  // are > 0 is the single declared collapse-floor crossfade band (a handoff that
+  // dissolves under bloom); the yellow<->red swap is a hard flip. The ladder is
+  // relocated to its colocated home; `starFormed` (computed above) is passed in
+  // so the value is computed once.
   const { cloudW, meshW } = bodyOwnership(stage, starFormed);
   // `collapsing` retained as a DERIVED alias for the grade/dome/starfield
   // consumers below (they ask "are we inside the gas-collapse window?"). It is

@@ -157,9 +157,13 @@ export interface BodyOwnership {
  * to be decided by several overlapping predicates whose boundaries only ALMOST
  * lined up — every mismatch was a gap (wrong fallthrough body flashes) or a bleed
  * (two bodies at once). This is the ONE place that decides ownership: every stage
- * maps to a body, and the two bodies are mutually exclusive except in the two
- * short, DECLARED crossfade bands (the collapse floor at 3.0, and the yellow↔red
- * swap at SWAP_STAGE). lifecycle()'s cloudShown / sunRigVisible are projected from
+ * maps to a body, and the two bodies are mutually exclusive except in the ONE
+ * short, DECLARED crossfade band (the collapse floor at 3.0). The yellow↔red swap
+ * at SWAP_STAGE is a HARD FLIP — never a crossfade — so the ~1.2M-point red-giant
+ * cloud can never render BEHIND the still-opaque yellow mesh (that overlap used to
+ * flash reddish grain behind the small gold sun). The flip is masked by the
+ * existing yrFlash whiteout (a stage-space gaussian centred at SWAP_STAGE, computed
+ * in yellowRedSwap()). lifecycle()'s cloudShown / sunRigVisible are projected from
  * the returned weights, so they can never gap or bleed by construction.
  *
  * Bands (high stage = top of page):
@@ -167,15 +171,13 @@ export interface BodyOwnership {
  *   3.0  <  stage < 3.5     CLOUD (+mesh fades in UNDER it near the floor)
  *   2.95 <  stage <= 3.0    CLOUD->MESH      collapse-floor crossfade
  *   SWAP <  stage <= 2.95   MESH             settled yellow star
- *   SWAP-0.03 < stage <=SWAP MESH->CLOUD     flash-swap crossfade
- *   stage <= SWAP-0.03      CLOUD            red giant / below
+ *   stage <= SWAP           CLOUD            red giant / below (HARD FLIP at SWAP)
  *
  * @param starFormed the mesh-star reveal ramp (lifecycle's `starFormed`); used to
  *   reveal the forming mesh under the dense gas only as the star nears completion.
  */
 export function bodyOwnership(stage: number, starFormed: number): BodyOwnership {
   const COLLAPSE_FLOOR_XFADE = 0.05; // 3.00 -> 2.95: cloud yields to the formed mesh
-  const SWAP_XFADE = 0.03; // 2.88 -> 2.85: mesh yields to the red-giant cloud
   // mesh reveal INSIDE the collapse window: hold the forming mesh hidden under
   // the dense gas until the star is nearly complete (starFormed ramps 0.85->1.0,
   // i.e. ~stage 3.08->3.00) — AFTER the nebula text has faded (~stage 3.05) — so
@@ -202,12 +204,11 @@ export function bodyOwnership(stage: number, starFormed: number): BodyOwnership 
     // settled yellow star: pure mesh
     cloudW = 0;
     meshW = 1;
-  } else if (stage > SWAP_STAGE - SWAP_XFADE) {
-    // flash-SWAP crossfade: mesh yields to the red-giant cloud
-    meshW = 1 - smoothstep01((SWAP_STAGE - stage) / SWAP_XFADE);
-    cloudW = 1 - meshW;
   } else {
-    // red giant / below: pure cloud
+    // HARD FLIP at SWAP_STAGE → red giant / below: pure cloud. No crossfade band:
+    // the mesh and the cloud are mutually exclusive across the swap so the
+    // ~1.2M-point cloud never renders behind the still-opaque yellow mesh. The
+    // instantaneous swap is masked by the yrFlash whiteout centred at SWAP_STAGE.
     cloudW = 1;
     meshW = 0;
   }
