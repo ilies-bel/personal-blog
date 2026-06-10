@@ -369,10 +369,27 @@ export interface MarkerPlacement {
   anchored?: boolean;
   /** Path appended to BASE_URL for the link + card navigation. */
   href: string;
-  /** Card title line (already in the casing it should render). */
+  /** Card title line (already in the casing it should render). Still drives the
+   *  aiming-compass copy and the link a11y label; the richer card uses it as the
+   *  fallback for `eyebrow`/`headline` when those are absent. */
   title: string;
-  /** Card subtitle line. */
+  /** Card subtitle line. Compass dest copy; the richer card's `body` fallback. */
   subtitle: string;
+  // --- Richer card copy (all optional; each falls back to title/subtitle) ----
+  /** The mono uppercase, letter-spaced gold label at the top of the card (e.g.
+   *  'ABOUT / 01'). Falls back to `title` when absent. */
+  eyebrow?: string;
+  /** The big bone headline — the dominant element (e.g. 'Hi, I’m Iliès.'). Falls
+   *  back to `title` when absent. */
+  headline?: string;
+  /** The short description line under the headline (1–2 lines, dim). Falls back
+   *  to `subtitle` when absent. */
+  body?: string;
+  /** Keyword chips, rendered joined by ' · '. Omitted entirely when absent/empty. */
+  tags?: readonly string[];
+  /** The CTA link text (e.g. 'Read about me'); the component appends the ' →'
+   *  arrow. Falls back to the legacy '[ OPEN ]' affordance when absent. */
+  cta?: string;
 }
 
 export interface ManifestoBeat {
@@ -431,6 +448,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'about',
         title: 'ABOUT',
         subtitle: 'Who I am',
+        eyebrow: 'ABOUT / 01',
+        headline: 'Hi, I’m Iliès.',
+        body: 'Web software, technical writing, understandable systems.',
+        tags: ['Fast', 'Readable', 'Usable'],
+        cta: 'Read about me',
       },
     ],
     beat: {
@@ -468,6 +490,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 01',
         subtitle: 'Notes & essays',
+        eyebrow: 'WRITING / 01',
+        headline: 'Notes from the build.',
+        body: 'Essays on software that stays readable as it grows.',
+        tags: ['Essays', 'Craft'],
+        cta: 'Read the writing',
       },
       {
         id: 'nebula-02',
@@ -477,6 +504,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 02',
         subtitle: 'Notes & essays',
+        eyebrow: 'WRITING / 02',
+        headline: 'Thinking in systems.',
+        body: 'Boundaries, interfaces, and the cost of complexity over time.',
+        tags: ['Systems', 'Design'],
+        cta: 'Read the writing',
       },
       {
         id: 'nebula-03',
@@ -486,6 +518,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 03',
         subtitle: 'Notes & essays',
+        eyebrow: 'WRITING / 03',
+        headline: 'Working with the machine.',
+        body: 'On AI-assisted code, and keeping the center understandable.',
+        tags: ['AI', 'Practice'],
+        cta: 'Read the writing',
       },
     ],
     beat: {
@@ -521,6 +558,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'projects',
         title: 'PROJECTS',
         subtitle: 'Things I build',
+        eyebrow: 'PROJECTS / 01',
+        headline: 'Things I build.',
+        body: 'Shipped software, side projects, and tools that earned their keep.',
+        tags: ['Shipped', 'Tools'],
+        cta: 'See the projects',
       },
     ],
     beat: {
@@ -555,6 +597,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
+        eyebrow: 'GRAVEYARD / 01',
+        headline: 'Things I abandoned.',
+        body: 'Dead repos, false starts, and what each one was trying to teach.',
+        tags: ['Dead repos', 'Lessons'],
+        cta: 'Walk the graveyard',
       },
     ],
     beat: {
@@ -588,6 +635,11 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'posts/thanks-for-scrolling-to-the-bottom',
         title: 'INSPIRATION',
         subtitle: 'Why this site exists',
+        eyebrow: 'INSPIRATION / 01',
+        headline: 'Why this site exists.',
+        body: 'The idea behind the black hole, and thanks for scrolling this far.',
+        tags: ['Story', 'Colophon'],
+        cta: 'Read the story',
       },
     ],
     beat: {

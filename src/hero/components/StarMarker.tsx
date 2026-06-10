@@ -123,6 +123,17 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // via the data-bright attribute below — no canvas blend mode involved.
   const isBright = BRIGHT_STATES.has(placement.state);
 
+  // Richer-card copy, with the documented fallbacks so a marker that only carries
+  // the legacy title/subtitle still renders a complete-looking panel:
+  //   eyebrow  → title       headline → title       body → subtitle
+  //   tags     → omitted when absent/empty
+  //   cta      → the legacy '[ OPEN ]' affordance text when absent
+  const eyebrow = placement.eyebrow ?? placement.title;
+  const headline = placement.headline ?? placement.title;
+  const body = placement.body ?? placement.subtitle;
+  const tags = placement.tags && placement.tags.length > 0 ? placement.tags : null;
+  const cta = placement.cta ? `${placement.cta} →` : '[ OPEN ]';
+
   // The DOM element that receives inline left/top updates every rAF. Mutated
   // directly (no React state) to avoid per-frame re-renders.
   const elRef = useRef<HTMLAnchorElement>(null);
@@ -269,7 +280,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       ref={elRef}
       className="star-marker"
       href={resolveHref(base, placement.href)}
-      aria-label={`${placement.title}. ${placement.subtitle}.`}
+      aria-label={`${headline} ${body}`}
       data-visible={visible}
       data-reduced={reduced}
       data-locked={locked}
@@ -338,13 +349,24 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       {/* The constant centre dot — present in both states. */}
       <span className="star-marker-dot" aria-hidden="true" />
 
-      {/* The tethered terminal-style card — revealed with the locked state. */}
+      {/* The tethered terminal-style card — revealed with the locked state. The
+          richer panel: eyebrow → headline → desc → tags → CTA, with a reserved
+          media slot for the future orbital diagram. Decorative (aria-hidden); the
+          <a> carries the real accessible name (headline + body) above. */}
       <span className="star-marker-card" aria-hidden="true">
         <span className="star-marker-connector" />
         <span className="star-marker-card-body">
-          <span className="star-marker-card-title">{placement.title}</span>
-          <span className="star-marker-card-subtitle">{placement.subtitle}</span>
-          <span className="star-marker-card-open">[ OPEN ]</span>
+          <span className="star-marker-card-text">
+            <span className="star-marker-card-eyebrow">{eyebrow}</span>
+            <span className="star-marker-card-headline">{headline}</span>
+            <span className="star-marker-card-desc">{body}</span>
+            {tags ? (
+              <span className="star-marker-card-tags">{tags.join(' · ')}</span>
+            ) : null}
+            <span className="star-marker-card-cta">{cta}</span>
+          </span>
+          {/* placeholder: orbital diagram + icons go here */}
+          <span className="star-marker-card-media" />
         </span>
       </span>
     </a>
