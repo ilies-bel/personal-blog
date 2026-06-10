@@ -20,6 +20,12 @@ export interface SceneState {
    *  scrolled past. Drives the quiet "you are here" marker so the rail tracks
    *  scroll position without expanding. */
   scrollHudId: HudTargetId | null;
+  /** True when the hero chrome currently overlaps a BRIGHT lifecycle zone — the
+   *  supernova whiteout flash and the bright yellow-star beat. Drives the adaptive
+   *  dark-stroke UI: when true the overlay flips chrome text/strokes to a dark
+   *  graphite for legibility against the bright canvas; false over the dark states
+   *  (black hole / red giant / nebula / dot), where warm bone reads cleanly. */
+  brightZone: boolean;
   /** import.meta.env.BASE_URL, resolved once. */
   base: string;
 }

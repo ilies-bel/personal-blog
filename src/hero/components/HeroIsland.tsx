@@ -79,6 +79,24 @@ function crossedProgressThreshold(previous: number, next: number, threshold: num
   return (previous < threshold && next >= threshold) || (previous >= threshold && next < threshold);
 }
 
+// BRIGHT-ZONE bands in shader-stage space (the same 0..5 coordinate `resolve().stage`
+// returns). The hero chrome reads warm bone over the dark states and flips to a dark
+// graphite stroke over these two bright beats so it stays legible against the bleached
+// canvas:
+//   • SUPERNOVA whiteout flash — the breakout sits at stage ~0.5 (segments 8/9 sweep
+//     1.05 → 0.32 through it); a band around it covers the blinding frames.
+//   • YELLOW STAR — the settled gold holds flat at stage 2.88 (segments 4/5); a band
+//     around it covers the bright photosphere beat.
+// Defined as data, so the two beats and their soft edges read in one place.
+const BRIGHT_STAGE_BANDS: ReadonlyArray<readonly [number, number]> = [
+  [0.35, 0.78], // supernova whiteout flash
+  [2.6, 3.02], // bright yellow-star beat (settled gold + ignition into it)
+];
+
+function isBrightZoneStage(stage: number): boolean {
+  return BRIGHT_STAGE_BANDS.some(([lo, hi]) => stage >= lo && stage <= hi);
+}
+
 export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Frame-cadence marker data from the scene (position of the star object in CSS px).
@@ -292,9 +310,17 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   const base = import.meta.env.BASE_URL ?? '/';
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
   // same forward-progress to shader-stage expression the scene uses.
+  const lifecycleStage = resolve(progress).stage;
   const scrollHudId: HudTargetId | null = explorationMode
-    ? hudIdForStage(resolve(progress).stage)
+    ? hudIdForStage(lifecycleStage)
     : null;
+  // Adaptive dark stroke: is the chrome currently over a BRIGHT lifecycle zone? Two
+  // bright beats bleach the canvas behind the warm-bone chrome — the supernova flash
+  // (shader stage ~0.5, the breakout) and the bright yellow-star hold (settled gold at
+  // stage ~2.88). Derived purely from the shader stage already tracked here (no extra
+  // scroll read). Over the dark states (black hole / red giant / nebula / dot) this is
+  // false → warm bone. The provider hands it down; the CSS [data-zone] flips the tokens.
+  const brightZone = isBrightZoneStage(lifecycleStage);
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own
   // chrome and copy, and dims this layer via CSS (.bh-backdrop).
@@ -308,10 +334,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   return (
     <SceneStateProvider
-      state={{ progress, direction, reduced, explorationMode, scrollHudId, base }}
+      state={{ progress, direction, reduced, explorationMode, scrollHudId, brightZone, base }}
       actions={{}}
     >
-      <div className="bh-root" data-exploring={explorationMode}>
+      {/* data-zone="bright" over the supernova flash + yellow-star beat flips the
+          chrome tokens to a dark graphite stroke (see hud.css [data-zone]); warm bone
+          everywhere else. The swap is CSS-transitioned so it eases, never pops. */}
+      <div className="bh-root" data-exploring={explorationMode} data-zone={brightZone ? 'bright' : 'dark'}>
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
         <HeroIdentity />
         <ManifestoOverlay />

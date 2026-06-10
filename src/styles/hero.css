@@ -4,6 +4,44 @@
    height). See BlackHole.tsx for the three.js side. */
 
 .bh-root { position: relative; }
+
+/* ADAPTIVE DARK STROKE ON BRIGHT ZONES ------------------------------------------
+   The hero chrome (identity, manifesto, HUD rail) defaults to the warm-bone token
+   ramp (--fg / --fg-dim / --fg-faint + the aged-gold accents). Over the two BRIGHT
+   lifecycle beats — the supernova whiteout flash and the bright yellow-star hold —
+   the canvas behind the chrome bleaches, so warm bone loses contrast. HeroIsland
+   sets data-zone="bright" on .bh-root across those beats (derived from the shader
+   stage); here we OVERRIDE the token ramp to a dark graphite within that subtree, so
+   every consumer that reads var(--fg) etc. flips to a legible dark stroke at once.
+   The room (canvas clear colour) is untouched; only the DOM chrome restyles.
+
+   The swap is eased with a colour transition on the chrome wrappers so it never pops
+   as the visitor scrolls into/out of the bright band. The override is scoped to the
+   .bh-root subtree (a descendant of :root), so it cleanly reverts to warm bone the
+   instant data-zone leaves "bright". */
+.bh-root[data-zone='bright'] {
+  --fg: oklch(0.30 0.012 80);          /* dark graphite — legible on the bright canvas */
+  --fg-dim: oklch(0.36 0.012 78);      /* dark graphite, secondary text */
+  --fg-faint: oklch(0.44 0.012 78);    /* mid graphite, labels/dates */
+  --accent: oklch(0.40 0.05 70);       /* deepened gold so links/active chrome stay dark */
+  --accent-strong: oklch(0.34 0.055 64);
+  --highlight: oklch(0.36 0.05 66);    /* dark signal so HUD gold reads on the bright zone */
+  --line: oklch(0.40 0.020 82);        /* darker hairlines */
+}
+/* Smooth the flip: transition the colour-bearing chrome so the warm-bone ↔ dark-
+   graphite swap eases over the band edge instead of snapping on the threshold. The
+   manifesto text colour rides on .bh-beat-line / -big / -whisper; the identity on
+   .bh-identity-*; the rail on .hud-system. */
+.bh-identity,
+.bh-identity-name,
+.bh-identity-role,
+.bh-beat-line,
+.bh-beat-big,
+.bh-beat-whisper,
+.hud-system {
+  transition: color 0.45s var(--ease-out-quint);
+}
+
 .bh-stage {
   position: fixed;
   inset: 0;

@@ -44,9 +44,13 @@ export const GradeShader = {
       // blue is pulled DOWN (never green-above-red, which is what read as olive):
       // the shadows go warm charcoal/bone, matching the engraving reference, not moss.
       // (uOlive kept as the uniform name for back-compat; it now drives the warm grade.)
+      // PALETTE: the black hole spec is black / graphite / cold-white / bone — a
+      // cool-neutral room with only a FAINT warm bone. The tint is pulled toward
+      // neutral graphite (blue lifted 0.82 → 0.90 so the cast is a subtle bone, not
+      // an amber/olive wash) and the floor flattened toward neutral charcoal.
       float shW = 1.0 - smoothstep(0.0, 0.5, luma);          // weight in the shadows
-      col *= mix(vec3(1.0), vec3(1.06, 1.00, 0.82), uOlive*shW);
-      col += vec3(0.022, 0.018, 0.012) * uOlive;             // warm-graphite floor
+      col *= mix(vec3(1.0), vec3(1.04, 1.00, 0.90), uOlive*shW);
+      col += vec3(0.018, 0.017, 0.015) * uOlive;             // neutral-graphite floor (faint bone)
       col += vec3(0.005);                                     // slight neutral floor
       // fine grain
       float g = hash(vUv*uResolution + fract(uTime)*97.0);
@@ -146,8 +150,12 @@ export const NovaShader = {
       // a cold grey/white screen wipe. The peak is a warm white-gold; it never goes
       // fully blue-white. The cast is stronger (0.42 white mix vs 0.6) so the warm
       // temperature survives the bleach instead of washing to neutral grey.
-      vec3 cold = vec3(1.0, 0.97, 0.90);   // warm-white shock front (was blue-white)
-      vec3 warm = vec3(1.0, 0.82, 0.55);   // ~#FFD18C cooling amber-gold
+      // PALETTE (supernova): white-hot center → amber edge → burnt-orange shadows.
+      // The hot peak stays a warm white; the cooling trailing edge is pushed toward a
+      // clear BURNT ORANGE (green 0.82 → 0.74, blue 0.55 → 0.40) so the flash cools
+      // into the same burnt-orange shadow family the debris ramp carries.
+      vec3 cold = vec3(1.0, 0.97, 0.90);   // warm-white shock front (white-hot center)
+      vec3 warm = vec3(1.0, 0.74, 0.40);   // ~#FFBC66 cooling burnt-orange edge
       vec3 tint = mix(warm, cold, smoothstep(0.35, 0.90, uNova));
       vec3 white = mix(vec3(1.0), tint, 0.42); // warm-tinted, never neutral white
       col = mix(col, white, clamp(bleach, 0.0, 1.0));
