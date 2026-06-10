@@ -138,12 +138,12 @@ export const SEGMENTS: readonly Segment[] = [
   // so every pre-existing breakpoint in the prefix-sum is preserved.
   {
     sceneId: 'nebula',
-    weight: 0.02,
+    weight: 0.07,
     stageStart: 3.42,
     stageEnd: 3.42,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [3.4, 3.44],
+    settledWindow: [3.39, 3.45],
   },
   // 3b — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02). Pure
   // transition now (the held-frame idle window moved to 3a above), so NO marker
@@ -173,7 +173,7 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 2.88,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [2.86, 2.9],
+    settledWindow: [2.875, 2.9],
   },
   // 6 — RED grow: the giant grows, one continuous move (2.88 -> 2.05).
   {
@@ -187,7 +187,7 @@ export const SEGMENTS: readonly Segment[] = [
   // 7 — RED hold: the flat red-giant beat (flat 2.05).
   {
     sceneId: 'red',
-    weight: 0.154,
+    weight: 0.104,
     stageStart: 2.05,
     stageEnd: 2.05,
     easing: 'linear',
@@ -591,6 +591,9 @@ export const SCENES: readonly LifecycleScene[] = [
         cta: 'Read the writing',
       },
     ],
+    // NEBULA — a gentle dwell so the bloom/collapse around the held frame slow down
+    // and the visitor lingers on the fullest cloud rather than blinking past it.
+    dwell: { strength: 0.45 },
     beat: {
       // NEBULA — after the longer lightspeed approach, the cloud grows into the held
       // frame. NEBULA_GROW_END is now 0.195; collapse starts at 0.33. The text fades
@@ -660,8 +663,8 @@ export const SCENES: readonly LifecycleScene[] = [
       {
         id: 'red',
         state: 'red',
-        vx: 0.5,
-        vy: 0.46,
+        vx: 0.68,
+        vy: 0.4,
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
