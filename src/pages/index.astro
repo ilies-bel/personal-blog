@@ -14,9 +14,11 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       dependency, so it paints the moment the document arrives (long before the
       ~200 KB-gzip three.js engine chunk downloads, parses, allocates its typed
       arrays and compiles the shader). It sits over the (black) canvas in the site's
-      own palette: a single quiet pale speck — the pale-blue-dot opening the scene
-      itself begins on — pulsing under a wordmark, so the wait reads as "the dot is
-      about to bloom", not "the page is broken". It fades out smoothly once the hero
+      own palette: a single quiet pale speck — a neutral wordmark-pulse placeholder,
+      NOT the scene itself (the scene now OPENS ON THE BLACK HOLE at the top and winds
+      down to the lonely pale blue dot at the bottom) — pulsing under a wordmark, so
+      the wait reads as "the hero is about to ignite", not "the page is broken". It
+      fades out smoothly once the hero
       paints its FIRST real frame (body.scene-ready, added by the inline listener
       below on the scene:ready event). aria-hidden — it is pure decoration over the
       same copy the manifesto/SSR fallback already announce. Styling lives in
@@ -50,10 +52,11 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   </script>
 
   {/* The signature object: a GPU-particle stellar lifecycle pinned to the center
-      of the viewport. As the visitor scrolls, one normalized timeline runs
-      forward: a lone pale blue dot blooms into a nebula, a yellow star forms, the
-      star grows into a red giant, collapses, detonates, and resolves into the black
-      hole that pulls the portfolio interface in.
+      of the viewport. As the visitor scrolls DOWN, one normalized timeline runs the
+      lifecycle in REVERSE: the page opens on the black hole (the big hero that pulls
+      the portfolio interface in), un-detonates through the supernova into a red
+      giant, settles back to a yellow star, dissolves into a nebula, and resolves to
+      the lonely pale blue dot — the quiet speck at the bottom of the page.
 
       client:visible (not client:only) so Astro ships + hydrates the page shell —
       including the instant loader above — FIRST, then mounts the hero. The hero is
@@ -78,13 +81,16 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       the page stays meaningful and indexable for crawlers / no-JS. */}
   {/* The static no-JS / crawler fallback mirrors the live overlay's big line +
       whisper for every beat, mapped over the same BEATS so the SSR copy can
-      never drift from the live copy. */}
+      never drift from the live copy. The reverse arc plays black hole -> ... ->
+      pale blue dot top-to-bottom, so the list is reversed (slice() first, never
+      mutating BEATS) to match that physical order — index 0 is now the black-hole
+      beat, which is the page <h1>; the dot beat lands last. */}
   <noscript>
     <div class="scene-fallback measure">
       <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
       <p class="scene-fallback-role">Software Engineer</p>
 
-      {BEATS.map((beat, i) => (
+      {BEATS.slice().reverse().map((beat, i) => (
         <Fragment>
           {i === 0 ? <h1>{beat.down}</h1> : <h2>{beat.down}</h2>}
           <p>{beat.whisper}</p>

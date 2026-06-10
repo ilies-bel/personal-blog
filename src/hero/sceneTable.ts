@@ -99,7 +99,10 @@ export interface Segment {
 }
 
 // --------------------------------------------------------------------------
-// THE TABLE. Eleven spans, authored top-of-page -> bottom-of-page. The weights
+// THE TABLE. Eleven spans, authored in LIFECYCLE order (pale-blue-dot first ->
+// black hole last). Under the active REVERSE direction the visitor walks this from
+// the BACK as they scroll down, so it now reads bottom-of-page -> top-of-page
+// physically; the table itself (weights, stage endpoints) is unchanged. The weights
 // prefix-sum to the EXACT former breakpoints:
 //   [0, 0.055, 0.195, 0.33, 0.395, 0.47, 0.524, 0.678, 0.748, 0.82, 0.946, 1.0]
 // Two facts encoded honestly (both reproduce today's curve; do NOT "tidy"):
@@ -204,7 +207,8 @@ export const SEGMENTS: readonly Segment[] = [
     easing: 'easeOutExpo',
     phase: 'transition',
   },
-  // 11 — END event horizon: the settled black hole at the bottom (0.08 -> 0.0).
+  // 11 — END event horizon: the settled black hole — now at the physical TOP of the
+  // page (lifecycle end, reverse-direction start) (0.08 -> 0.0).
   {
     sceneId: 'end',
     weight: 0.054,
@@ -403,7 +407,10 @@ export interface LifecycleScene {
   beat?: ManifestoBeat;
 }
 
-// The five scenes, authored top-of-page -> bottom-of-page. The projections below
+// The five scenes, authored in LIFECYCLE order (beginning/pale-blue-dot first ->
+// end/black hole last). Under the active REVERSE direction this is walked from the
+// back as the visitor scrolls down (black hole at the physical top, the lonely dot
+// at the physical bottom). The projections below
 // preserve the former HUD_NAV_ITEMS / MARKER_PLACEMENTS / BEATS order exactly:
 // nav rows are one-per-scene in this order; markers are flattened in this order
 // (nebula owns three); beats are one-per-scene in this order.
@@ -434,9 +441,11 @@ export const SCENES: readonly LifecycleScene[] = [
       },
     ],
     beat: {
-      // PALE BLUE DOT — the opening speck (stage ~4.7 at the very top). Copy is
-      // fully visible immediately, then fades out before the dot blooms into the
-      // nebula. Dot hold is now 0.00 -> 0.055, so the fade-out starts at 0.06.
+      // PALE BLUE DOT — the lonely speck the reverse arc resolves to (stage ~4.7).
+      // In LIFECYCLE space it is the first beat (these bands are lifecycleProgress
+      // values), but under the active reverse direction it sits at the PHYSICAL
+      // BOTTOM of the page. Copy is fully visible across the dot's hold, then fades
+      // as the dot is left behind. Dot hold is 0.00 -> 0.055, fade-out starts 0.06.
       at: 0.025,
       text: { inStart: 0.0, inEnd: 0.0, outStart: 0.06, outEnd: 0.09 },
       state: 'pale blue dot',
@@ -592,8 +601,10 @@ export const SCENES: readonly LifecycleScene[] = [
     ],
     beat: {
       // BLACK HOLE — enters after the easeOutExpo settle has visually completed
-      // (~0.82 -> 0.946). This is the terminal state, so the line holds through
-      // progress=1 instead of fading away at the absolute bottom.
+      // (~0.82 -> 0.946 in lifecycleProgress). This is the lifecycle's terminal
+      // state, so the line holds through lifecycleProgress=1 instead of fading away.
+      // Under the active reverse direction that maps to the PHYSICAL TOP of the page,
+      // so this is the hero line the visitor opens on.
       at: 0.968,
       text: { inStart: 0.955, inEnd: 0.965, outStart: 1.02, outEnd: 1.02 },
       state: 'black hole',

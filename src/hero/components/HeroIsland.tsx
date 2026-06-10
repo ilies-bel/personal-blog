@@ -161,16 +161,17 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // menu pinned alongside it (no separate scroll threshold to drift). Tracked
     // through chromeVisibleRef so the DOM is only touched on an actual transition.
     const syncChrome = (): void => {
-      // HUD activation REQUEST: once the REAL scroll position reaches the bottom hero
-      // (the black hole / 'end' stage), the island asks the boot FSM to power the HUD
-      // on (and asks it to power off again when scroll leaves). It does NOT touch
-      // body.hud-active itself — the FSM owns that class so the loader → ignite
-      // sequence is sequenced in exactly one place. We dispatch only on the at-end
-      // EDGE (ref-tracked) so the request fires once per transition, never every
-      // scroll sample. The FSM decides what to honour: it suppresses the scroll
-      // power-off while the corner override (body.hud-forced) is engaged and keeps
-      // the HUD lit once booted, so the island can dispatch freely.
-      const atEnd = hudIdForStage(legacyStageForProgress(progressRef.current)) === 'end';
+      // HUD activation REQUEST: once the REAL scroll position reaches the PHYSICAL
+      // BOTTOM of the page (under the reverse arc that is the lonely pale-blue-dot /
+      // 'beginning' scene), the island asks the boot FSM to power the HUD on (and asks
+      // it to power off again when scroll leaves) — preserving the "you've reached the
+      // end, here's the menu" feel. It does NOT touch body.hud-active itself — the FSM
+      // owns that class so the loader → ignite sequence is sequenced in exactly one
+      // place. We dispatch only on the at-bottom EDGE (ref-tracked) so the request fires
+      // once per transition, never every scroll sample. The FSM decides what to honour:
+      // it suppresses the scroll power-off while the corner override (body.hud-forced)
+      // is engaged and keeps the HUD lit once booted, so the island can dispatch freely.
+      const atEnd = hudIdForStage(legacyStageForProgress(progressRef.current)) === 'beginning';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         window.dispatchEvent(

@@ -19,19 +19,21 @@ import {
 //     1 - userScrollProgress, so the SAME downward scroll walks the lifecycle
 //     the other way.
 //
-// TEMPORARY direction (this pass keeps the normal lifecycle):
-//     nebula -> yellow star -> red giant -> collapse/supernova -> black hole
-// The FINAL intended direction (a later pass, NOT performed here):
-//     black hole -> reverse supernova -> red giant -> yellow star -> nebula
+// ACTIVE direction — the lifecycle now runs REVERSE as the visitor scrolls DOWN:
+//     black hole -> reverse supernova -> red giant -> yellow star -> nebula ->
+//     pale blue dot
+// So the top of the page (userScrollProgress = 0) OPENS ON THE BLACK HOLE — the
+// big hero you land on — and the bottom (userScrollProgress = 1) RESOLVES TO THE
+// LONELY PALE BLUE DOT, the quiet speck the arc winds down to.
 //
-// To perform the future inversion, flip LIFECYCLE_DIRECTION to "reverse". Every
-// downstream system (camera poses, the legacy "stage" mapping, beats, HUD) reads
-// lifecycleProgress through legacyStageForProgress / cameraPoseForProgress, so
-// the single flag below is the only edit the inversion requires here. The shader
+// The whole inversion is THIS ONE FLAG. Every downstream system (camera poses,
+// the legacy "stage" mapping, scene selection, beats, HUD) reads lifecycleProgress
+// through legacyStageForProgress / cameraPoseForProgress / sceneForProgress, so
+// flipping LIFECYCLE_DIRECTION is the only edit it requires here. The shader
 // "stage" coordinate stays untouched — lifecycle.ts remains a pure function of it.
 // ===========================================================================
 export type LifecycleDirection = 'normal' | 'reverse';
-export const LIFECYCLE_DIRECTION: LifecycleDirection = 'normal';
+export const LIFECYCLE_DIRECTION: LifecycleDirection = 'reverse';
 
 /** Map the raw scroll value (0..1, increases scrolling down) to the value the
  *  lifecycle renderer consumes. Normal = identity; reverse = mirror. This is the
