@@ -96,8 +96,10 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     // geometry offset — so uGiantCenter defaults to origin.
     uGiantScale: { value: 10.5 / 4.2 }, // red-giant-only radius ×base. MEDIUM (~10.5, dense) not
     //   the old bloated ~17.6 — the fixed grain count goes sparse on a huge sphere. The
-    //   lifecycle ramps this during the reveal (small newborn → this held size); kept in
-    //   sync with lifecycle's GIANT_FULL so the held giant doesn't pop.
+    //   lifecycle ramps this during the reveal (small newborn → this held size). This is
+    //   the SAME value as transitions.ts' GIANT_RADIUS_SCALE (= 10.5/4.2), the single
+    //   source shared with lifecycle's GIANT_FULL + createScene's RED_GIANT_RADIUS — keep
+    //   in sync (left as the literal here so this uniform default reads at a glance).
     uGiantCenter: { value: new THREE.Vector3(0, 0, 0) }, // centred; framing is a camera move
     uGiantSpin: { value: 0 }, // axial spin angle (radians); driven per-frame from uTime
     uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
