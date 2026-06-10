@@ -522,7 +522,15 @@ export function lifecycle(input: LifecycleInput): StarState {
   // star's background. It stays HIDDEN for: the black hole (it keeps the warping
   // lensed starfield), the nebula and the dot (gas/speck alone on black), and the
   // gravitational-collapse window (the infalling gas sits alone on black).
-  const starBackVisible = redGiantPhase && !nebula && !dot && !collapsing;
+  //
+  // It MUST also show on the YELLOW MESH side (the settled yellow-star hold), not
+  // only across the red-giant phase — otherwise the dark-indigo dome never appears
+  // behind the yellow star. `meshSide` (transitions.ts) is exactly the yellow-mesh
+  // band (inYRWindow && stage > SWAP_STAGE, ≈2.88..3.5); the `!collapsing` clause
+  // still removes the part of that band that overlaps the gravitational collapse
+  // (stage 3.0..3.5), so the dome shows on the gas-free yellow star but not under
+  // the infalling collapse gas. `redGiantPhase` keeps it on for the red giant.
+  const starBackVisible = (redGiantPhase || meshSide) && !nebula && !dot && !collapsing;
   if (sunWindow) {
     // The yellow star is a PROPER, bright main-sequence beat (cf. the reference): a
     // blazing gold-white sun in a wide luminous halo. Graded HOT — high exposure, a

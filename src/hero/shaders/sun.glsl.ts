@@ -334,11 +334,31 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     // red giant's haze is untouched.
     float outerFade = smoothstep(df+0.02, df+0.30, r);
     vec3 indigo = vec3(0.30, 0.30, 0.60);
-    c = mix(c, indigo, outerFade * 0.55 * (1.0 - uRed));
+    c = mix(c, indigo, outerFade * 0.70 * (1.0 - uRed));
     c = mix(c, vec3(0.92,0.40,0.07), uRed);          // gold/indigo corona → dim sodium-orange haze
     // base pulled DOWN (1.05 → 0.55) so the tight rim glow doesn't add up into a broad
     // bloom-feeding wash; the red giant still dims further to a faint haze (×0.35).
-    gl_FragColor = vec4(c*corona*0.55*mix(1.0, 0.35, uRed)*uFade, 1.0);
+    vec3 outCol = c*corona*0.55*mix(1.0, 0.35, uRed)*uFade;
+
+    // --- DARK INDIGO AMBIENT WASH (yellow star only) -------------------------
+    // The tight gold rim above decays to ~0 within a few hundredths of r, so the
+    // region around the star stays BLACK and the indigo never reads — the backdrop
+    // dome is only sparse star points, so the SPACE between them is pure black. Add
+    // a separate broad, faint indigo FILL that genuinely lights the surround: a soft
+    // bell peaking just outside the rim and fading back to black well before the
+    // billboard edge, so we get a visible dark-indigo halo around the pale-gold star
+    // while the extreme outer room stays true black. DIM on purpose ("dark indigo",
+    // present but not blown out). Gated by (1-uRed) so the red giant's surround is
+    // untouched, and by uFade so it blooms in with the rest of the atmosphere.
+    float washIn  = smoothstep(df - 0.01, df + 0.14, r);          // ramp up just past the rim
+    float washOut = 1.0 - smoothstep(df + 0.22, df + 0.62, r);    // fade back to black before the room
+    float wash = washIn * washOut;
+    // gentle azimuthal variation so it isn't a flat disc; keeps it reading as haze.
+    float washMod = 0.80 + 0.20 * st;
+    vec3 indigoWash = vec3(0.16, 0.16, 0.40);                     // deep, dark indigo fill
+    outCol += indigoWash * wash * washMod * 0.42 * (1.0 - uRed) * uFade;
+
+    gl_FragColor = vec4(outCol, 1.0);
   }`;
 
 // --- dedicated yellow-stage star backdrop (plain, depth-tested) ---
