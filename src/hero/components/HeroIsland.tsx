@@ -16,7 +16,7 @@ import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
 import { hudIdForStage, resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
-import { sceneActivatesHud } from '../sceneTable';
+import { sceneForProgress } from '../sceneTable';
 import { prefersReducedMotion } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -162,20 +162,22 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // menu pinned alongside it (no separate scroll threshold to drift). Tracked
     // through chromeVisibleRef so the DOM is only touched on an actual transition.
     const syncChrome = (): void => {
-      // HUD activation REQUEST: once the REAL scroll position reaches the bottom hero
-      // (the black hole / 'end' stage), the island asks the boot FSM to power the HUD
-      // on (and asks it to power off again when scroll leaves). It does NOT touch
-      // body.hud-active itself — the FSM owns that class so the loader → ignite
-      // sequence is sequenced in exactly one place. We dispatch only on the at-end
-      // EDGE (ref-tracked) so the request fires once per transition, never every
-      // scroll sample. The FSM decides what to honour: it suppresses the scroll
-      // power-off while the corner override (body.hud-forced) is engaged and keeps
-      // the HUD lit once booted, so the island can dispatch freely.
-      // Table-driven: ask the scene the scroll-spy maps to whether IT arms the HUD
-      // (its `activatesHud` flag), instead of hardcoding `=== 'end'`. Only the 'end'
-      // scene is flagged, so this fires on exactly the same edge as before — but the
-      // "which scene arms the HUD" decision now lives on the scene, not in this if.
-      const atEnd = sceneActivatesHud(hudIdForStage(resolve(progressRef.current).stage));
+      // HUD activation REQUEST: once the REAL scroll position reaches the PHYSICAL
+      // BOTTOM of the page (under the reverse arc that is the lonely pale-blue-dot /
+      // 'beginning' scene), the island asks the boot FSM to power the HUD on (and asks
+      // it to power off again when scroll leaves) — preserving the "you've reached the
+      // end, here's the menu" feel. It does NOT touch body.hud-active itself — the FSM
+      // owns that class so the loader → ignite sequence is sequenced in exactly one
+      // place. We dispatch only on the at-bottom EDGE (ref-tracked) so the request fires
+      // once per transition, never every scroll sample. The FSM decides what to honour:
+      // it suppresses the scroll power-off while the corner override (body.hud-forced)
+      // is engaged and keeps the HUD lit once booted, so the island can dispatch freely.
+      // CONTENT UNLOCK (raw 88-100%): arm the HUD across the whole pale-dot/content
+      // band, not just the last frame. The 'beginning' SCENE owns lifecycle 0.00-0.12
+      // = raw 88-100% exactly (segment 1 in the RE-TIMED table), so gate on the SCENE
+      // id rather than the stage>=4.7 threshold (which only fired at raw=1.0). The
+      // stage-threshold hudIdForStage stays the scroll-spy source for the rail below.
+      const atEnd = sceneForProgress(progressRef.current).sceneId === 'beginning';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         window.dispatchEvent(

@@ -1,12 +1,13 @@
 // ===========================================================================
 // beats.ts — copy timing for the stellar-lifecycle hero.
 //
-// The scroll is one continuous normalized cinematic: a lone pale blue dot blooms
-// into a nebula → yellow star → red giant → collapse → supernova → black hole →
-// portfolio lure. The big lines are direction-aware: scroll down reads the
-// current forward lifecycle; scroll up carries the future reverse arc.
-// Text is deliberately sparse and appears only during stable states; the camera
-// is free to move during collapse/release without asking the visitor to read.
+// The scroll is one continuous normalized cinematic, played in REVERSE as the
+// visitor scrolls down: it opens on the black hole (the portfolio lure) → reverse
+// supernova → red giant → yellow star → nebula → and winds down to the lonely
+// pale blue dot at the bottom. The big lines keep separate down/up copy slots (the
+// same line today) so direction-specific phrasing can return without reworking the
+// beats. Text is deliberately sparse and appears only during stable states; the
+// camera is free to move during collapse/release without asking the visitor to read.
 //
 // All copy is real, selectable DOM text (never baked into the canvas) so it
 // stays indexable. Straight quotes only; no em/en dashes, no curly quotes.
