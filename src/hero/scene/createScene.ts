@@ -6,7 +6,7 @@ import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
-import { settledIdForStage } from '../sceneTable';
+import { settledIdForStage, easeInQuart } from '../sceneTable';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
 import { buildStarfield, buildDistantStar } from './buildStarfield';
@@ -14,7 +14,7 @@ import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
-import type { SceneHandle, SceneHooks } from './types';
+import type { SceneHandle, SceneHooks, DiveOptions } from './types';
 
 /**
  * The few frame-local STATEFUL multipliers applyLook needs that are NOT pure
@@ -519,6 +519,35 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // sane dt so a backgrounded-tab time jump never teleports a ripple across the disc.
   let prevEruptT = 0;
 
+  // --- cinematic dive: plunge the LIVE camera INTO the star, bloom to white ----
+  // A one-shot state machine driven entirely from frame(): once beginDive() arms
+  // it, the dive OVERRIDES the resolved scroll camera each frame — easing the live
+  // pose toward (and THROUGH) the world origin while a white-overlay strength ramps
+  // to full. onApex fires once at DIVE_APEX_FRAC so the caller (HeroIsland) can SPA-
+  // navigate under the whiteout. A non-active dive is a perfect no-op: the override
+  // block only runs while diveActive is true, so the scroll camera is untouched.
+  let diveActive = false;
+  let diveStart = 0;
+  let diveApexFired = false;
+  let diveOnApex: (() => void) | null = null;
+  let diveOnProgress: ((s: number) => void) | null = null;
+  // Scratch vectors created ONCE (the dive must not allocate on the hot path). The
+  // FROM pose is snapshotted from the live camera at beginDive() so the plunge
+  // starts seamlessly from wherever the scroll pose currently is.
+  const diveFromPos = new THREE.Vector3();
+  const diveFromTarget = new THREE.Vector3();
+  const DIVE_TARGET_POS = new THREE.Vector3();
+  const ORIGIN_VEC = new THREE.Vector3(0, 0, 0);
+  // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
+  let diveStrength = 0;
+  // Plunge timing. The apex (bloom peak / navigate point) lands at 82% of the run,
+  // leaving a short tail of camera travel hidden under the full-white overlay while
+  // the destination page loads. Reduced motion skips the geometric plunge entirely
+  // and just runs a brief white fade (DIVE_REDUCED_S).
+  const DIVE_DURATION_S = 1.2;
+  const DIVE_APEX_FRAC = 0.82;
+  const DIVE_REDUCED_S = 0.28;
+
   // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
   // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
   // breakout (stage 0.5 == morph 0.5), computed inline in frame(). It depends ONLY
@@ -1014,6 +1043,26 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     }
     camera.lookAt(frameLookTarget);
 
+    // === DIVE OVERRIDE: plunge the live camera into the star (world origin) =======
+    // Runs after the scroll camera is fully resolved, so a 0-strength dive is a no-op
+    // and the plunge starts seamlessly from the live pose. The bloom overlay strength
+    // is published via diveOnProgress; onApex fires once for the caller to navigate.
+    if (diveActive) {
+      const raw = Math.min(1, (performance.now() - diveStart) / 1000 / (reduced ? DIVE_REDUCED_S : DIVE_DURATION_S));
+      if (!reduced) {
+        const k = easeInQuart(raw);              // accelerating fall toward the star
+        DIVE_TARGET_POS.set(0, 0, -8);           // fall THROUGH the horizon, not onto its face
+        camera.position.lerpVectors(diveFromPos, DIVE_TARGET_POS, k);
+        frameLookTarget.lerpVectors(diveFromTarget, ORIGIN_VEC, k);
+        camera.lookAt(frameLookTarget);
+      }
+      diveStrength = easeOut(Math.min(1, raw / DIVE_APEX_FRAC));
+      diveOnProgress?.(diveStrength);
+      if (!diveApexFired && raw >= DIVE_APEX_FRAC) { diveApexFired = true; diveOnApex?.(); }
+    } else {
+      diveStrength = 0;
+    }
+
     // The supernova flash originates from the STAR, not the screen centre. The
     // star sits at world origin the whole time; projecting it through the current
     // (off-centre, collapse-framed) camera gives the on-screen point where the
@@ -1262,6 +1311,22 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   onResize();
   frame();
 
+  // Arm the cinematic dive. Snapshots the live camera pose so the plunge starts
+  // seamlessly from wherever the scroll camera currently sits, then lets frame()'s
+  // dive-override block drive the rest. No-op if a dive is already running (a second
+  // click can't restart or stack the plunge). targetNdc is accepted for the caller's
+  // bloom aim; the geometry always falls toward the world origin where the star sits.
+  const beginDive = (opts: DiveOptions): void => {
+    if (diveActive) return;
+    diveActive = true;
+    diveApexFired = false;
+    diveOnApex = opts.onApex;
+    diveOnProgress = opts.onDiveProgress ?? null;
+    diveStart = performance.now();
+    diveFromPos.copy(camera.position);
+    diveFromTarget.copy(frameLookTarget);
+  };
+
   // --- teardown ---
   // The returned value is the dispose function (same call contract as before) with
   // hitTestGiant bolted on (Object.assign), so HeroIsland can publish the cursor
@@ -1296,7 +1361,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
     },
-    { hitTestGiant },
+    { hitTestGiant, beginDive },
   );
   return dispose;
 }

@@ -340,3 +340,52 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
     opacity: 1 !important;
   }
 }
+
+/* ===========================================================================
+   Cinematic dive transition
+   ---------------------------------------------------------------------------
+   The marker-dive flow: clicking the black-hole 'end' marker flies the live
+   three.js camera INTO the star while this fixed white layer ramps to full
+   opacity (driven inline by HeroIsland's onDiveProgress); the page then SPA-
+   navigates UNDER the white, and the destination's astro:page-load handler
+   (in BaseLayout) eases the overlay back out and plays the content rise-up.
+   The overlay is persisted across ClientRouter swaps (transition:persist), so
+   it must START hidden via CSS — a fresh page that wasn't reached by a dive
+   never shows it.
+   =========================================================================== */
+.dive-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  /* Above the HUD boot layers (max z-index 25 in hud.css) + the corner chrome
+     (1000 in chrome.css); below the custom cursor (which is pointer-events:none
+     and only a thin dot, so the white reads cleanly beneath it). */
+  z-index: 9999;
+  /* No white/bloom token exists in tokens.css, so the bloom apex uses pure white
+     (the supernova whiteout the dive mimics is also full white). */
+  background: #fff;
+}
+
+/* The destination content "resurfaces" out of the receding bloom: it rises +
+   un-blurs as the overlay fades. Gated behind no-preference so reduced-motion
+   users just get the overlay fading away (no transform/blur), per the plan. The
+   --ease-out-quint token is the project's single eased curve; reused here. */
+@media (prefers-reduced-motion: no-preference) {
+  body[data-resurface] main {
+    animation: dive-resurface 0.7s var(--ease-out-quint) both;
+  }
+}
+
+@keyframes dive-resurface {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}

@@ -3,10 +3,28 @@ import type { HudTargetId } from '../HudNavigation';
 
 export type Uniforms = Record<string, { value: unknown }>;
 
+/** Options for the cinematic camera dive (beginDive). The caller owns navigation:
+ *  the scene fires onApex at the bloom apex and the caller routes the SPA there.
+ *  The scene drives only the geometry (camera plunge) + the overlay strength. */
+export interface DiveOptions {
+  /** Bloom aim in NDC. Defaults to the projected star origin when omitted — the
+   *  caller can pass the marker's screen point so the whiteout erupts from where
+   *  the visitor clicked rather than dead-centre. */
+  targetNdc?: { x: number; y: number };
+  /** Called every frame with the 0..1 overlay (bloom-to-white) strength so the
+   *  caller can drive a fullscreen white layer's opacity. Optional. */
+  onDiveProgress?: (strength: number) => void;
+  /** Fired EXACTLY ONCE at the bloom apex — the caller navigates here. The plunge
+   *  keeps running visually for the brief tail after the apex, hidden under the
+   *  white, while the destination page loads. */
+  onApex: () => void;
+}
+
 /** What createScene() returns: the teardown function, which ALSO carries a
  *  per-frame hit-test so callers (HeroIsland) can ask whether a screen point is
- *  over the live red giant's projected disk. Calling the value disposes the scene
- *  exactly as before — the method is bolted on via Object.assign for back-compat. */
+ *  over the live red giant's projected disk, plus the cinematic dive entry point.
+ *  Calling the value disposes the scene exactly as before — the methods are bolted
+ *  on via Object.assign for back-compat. */
 export interface SceneHandle {
   /** Tear down the scene (renderer, rigs, listeners). Same contract as before. */
   (): void;
@@ -14,6 +32,10 @@ export interface SceneHandle {
    *  the giant's projected surface (a sphere raycast at the world origin). Cheap
    *  no-op (returns false) outside the red-giant beat. */
   hitTestGiant(clientX: number, clientY: number): boolean;
+  /** Begin the cinematic dive into the star; no-op if a dive is already active.
+   *  Plunges the LIVE camera toward the world origin and ramps an overlay strength
+   *  to full white, firing onApex once at the apex for the caller to navigate. */
+  beginDive(opts: DiveOptions): void;
 }
 
 /** Per-frame marker data emitted by the scene, consumed by StarMarker without

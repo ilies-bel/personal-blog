@@ -34,7 +34,7 @@ import {
   type MarkerPlacement,
 } from '../HudNavigation';
 import type { MarkerFrame } from '../scene/types';
-import { useSceneState } from './SceneStateContext';
+import { useSceneState, useSceneActions } from './SceneStateContext';
 
 interface StarMarkerProps {
   /** This marker's placement (which state it belongs to, where it sits, its copy). */
@@ -108,6 +108,10 @@ const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number 
 
 export default function StarMarker({ placement, markerFrameRef }: StarMarkerProps) {
   const { reduced, base } = useSceneState();
+  // The dive action (published by HeroIsland). Present only on the home page; a
+  // `dive` marker uses it on a plain left click, every other marker / page leaves
+  // the <a> to navigate normally.
+  const actions = useSceneActions();
 
   // Static per placement: does this marker sit over a bright scene surface? Drives
   // the resting dot's colour (dark dot on bright states, light dot on dark states)
@@ -292,6 +296,13 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-bright={isBright}
       data-bg={placement.bg}
       data-side={cardSide}
+      onClick={(e) => {
+        if (!placement.dive || !actions.beginDive) return;  // non-dive markers / engine not ready → normal nav
+        // let modified clicks (new tab, etc.) and non-left clicks fall through to the <a>
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        actions.beginDive({ href: resolveHref(base, placement.href) });
+      }}
       onFocus={() => {
         focusedRef.current = true;
       }}

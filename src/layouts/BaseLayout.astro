@@ -4,6 +4,11 @@ import BaseHead from '../components/BaseHead.astro';
 // over interactive elements. Mounted once here so it covers every page (both the
 // `bare` home and the standard reading pages). Self-contained — see the file.
 import CustomCursor from '../components/CustomCursor.astro';
+// Astro SPA navigation. Mounted sitewide so the cinematic marker dive can swap to
+// the destination article with NO full-page reload flash (the dive bloom covers the
+// swap and the destination "resurfaces" from under the receding white). Nodes marked
+// transition:persist (the dive overlay, the custom cursor) survive each swap.
+import { ClientRouter } from 'astro:transitions';
 import { SITE_TITLE, SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
 // The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
 // (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
@@ -52,8 +57,16 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
 <html lang={SITE_LANG} class={bare ? 'is-bare' : undefined}>
   <head>
     <BaseHead {...props} />
+    <ClientRouter />
   </head>
   <body class={bodyClasses}>
+    {/* Cinematic dive overlay — a single full-viewport white layer present on EVERY
+        page, persisted across ClientRouter swaps (transition:persist) so the home
+        page's dive can ramp its opacity to full white, the navigation swaps the page
+        body UNDER it, and the destination's page-load handler eases it back out for
+        the "resurface". Starts hidden via CSS (opacity 0), so a normal page load /
+        navigation never sees it. */}
+    <div class="dive-overlay" data-dive-overlay transition:persist aria-hidden="true"></div>
     {/* Sitewide custom cursor — covers both layout branches below. */}
     <CustomCursor />
     {
@@ -244,8 +257,32 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               are spelled here and MUST be kept in sync with that file. Likewise
               BOOT_MS mirrors HUD_BOOT_DURATION_MS and is pushed into --hud-boot-dur so
               the CSS animation length can never drift from the JS timer. */}
-          <script is:inline>
-            (() => {
+          <script>
+            // NOTE: this is now a BUNDLED script (no `is:inline`) so it can re-run on
+            // every ClientRouter swap. ClientRouter replaces document.body (and with
+            // it the power button + boot-label nodes) on each navigation, so the FSM
+            // is wrapped in an idempotent initHudFsm() that RE-QUERIES those nodes each
+            // call and re-applies the persisted/current state to the fresh DOM. The
+            // machine state itself (state / forced / timers / the bound window listener)
+            // lives ONCE on window.__bhHudFsm so a re-init reuses it and only the window
+            // listener is bound a single time across swaps. Behaviour is otherwise
+            // identical to the former <script is:inline> island.
+            type HudState = 'idle' | 'booting' | 'ready';
+            // The machine state persisted on window across ClientRouter swaps. The
+            // control functions (requestPowerOn/Off, toggleForced) are re-pointed to the
+            // current DOM by each init, so the single window listener + the once-per-node
+            // button listener always drive the live page.
+            interface HudFsm {
+              state: HudState;
+              forced: boolean;
+              bootEndTimer: number;
+              lineTimers: number[];
+              windowBound: boolean;
+              requestPowerOn?: (skipBoot: boolean) => void;
+              requestPowerOff?: () => void;
+              toggleForced?: () => void;
+            }
+            function initHudFsm(): void {
               // --- Centralized literals (mirror src/hero/lib/constants.ts) ---------
               const ACTIVE_CLASS = 'hud-active'; // HUD_ACTIVE_BODY_CLASS  (ready)
               const BOOTING_CLASS = 'hud-booting'; // HUD_BOOTING_BODY_CLASS (booting)
@@ -254,10 +291,13 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               const POWER_EVENT = 'hud:power'; // HUD_POWER_EVENT (from HeroIsland)
               const BOOT_MS = 3600; // HUD_BOOT_DURATION_MS — keep in sync with --hud-boot-dur
 
+              // RE-QUERY the per-swap DOM each init. body / btn / bootLabel are all
+              // replaced when ClientRouter swaps the document, so capturing them once
+              // (the old behaviour) would leave the FSM pointing at detached nodes.
               const body = document.body;
               const root = document.documentElement;
-              const btn = document.querySelector('.overlay-blog-power');
-              const bootLabel = document.querySelector('.hud-boot-label');
+              const btn = document.querySelector<HTMLButtonElement>('.overlay-blog-power');
+              const bootLabel = document.querySelector<HTMLElement>('.hud-boot-label');
 
               // Honour the OS reduced-motion preference: under it the boot is a calm,
               // brief readout (no flicker/scan/stutter — those are dropped in CSS) and
@@ -277,7 +317,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               const BOOT_LINES = ['LOADING', 'CALIBRATING', 'ALIGNING ARRAY', 'SYSTEMS NOMINAL'];
 
               // --- Persistence (try/catch — private mode must never throw) ---------
-              const readState = () => {
+              const readState = (): { powered: boolean; forced: boolean } => {
                 try {
                   const raw = window.localStorage.getItem(STATE_KEY);
                   if (!raw) return { powered: false, forced: false };
@@ -290,7 +330,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
                   return { powered: false, forced: false };
                 }
               };
-              const writeState = (powered, forcedFlag) => {
+              const writeState = (powered: boolean, forcedFlag: boolean): void => {
                 try {
                   window.localStorage.setItem(
                     STATE_KEY,
@@ -301,16 +341,30 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
                 }
               };
 
-              // --- Machine state ---------------------------------------------------
-              let state = 'idle'; // 'idle' | 'booting' | 'ready'
-              let forced = false; // power-button override (orthogonal to state)
-              let bootEndTimer = 0;
-              const lineTimers = [];
+              // --- Persisted machine across swaps ----------------------------------
+              // The mutable state (current state, forced flag, live timers) lives ONCE
+              // on window so a re-init after a navigation continues the same machine
+              // rather than resetting it. `state`/`forced` here are LOCAL working copies
+              // seeded from the persisted machine; transition()/applyForced() write them
+              // straight back to fsm so the next init reads them.
+              // Typed accessor for the window-level machine (the project's idiom for
+              // __bh* globals in bundled scripts — see CustomCursor.astro).
+              const fsmWindow = window as unknown as { __bhHudFsm?: HudFsm };
+              const fsm: HudFsm = (fsmWindow.__bhHudFsm = fsmWindow.__bhHudFsm || {
+                state: 'idle', // 'idle' | 'booting' | 'ready'
+                forced: false, // power-button override (orthogonal to state)
+                bootEndTimer: 0,
+                lineTimers: [],
+                windowBound: false,
+              });
+              let state = fsm.state;
+              let forced = fsm.forced;
+              const lineTimers = fsm.lineTimers;
 
               const clearLineTimers = () => {
                 while (lineTimers.length) window.clearTimeout(lineTimers.pop());
               };
-              const setBootLine = (text) => {
+              const setBootLine = (text: string): void => {
                 if (bootLabel) bootLabel.textContent = text;
               };
 
@@ -319,6 +373,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               // is keyed off body.hud-active in CSS so it reads ON whenever the HUD is
               // up, however it got there.
               const applyForced = () => {
+                fsm.forced = forced;
                 body.classList.toggle(FORCED_CLASS, forced);
                 if (btn) btn.setAttribute('aria-pressed', forced ? 'true' : 'false');
               };
@@ -326,15 +381,16 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               // transition(next) — the ONLY place the state classes change. Each call
               // sets the body classes for `next`, schedules any timers that state
               // owns, and persists the resulting power state.
-              const transition = (next) => {
+              const transition = (next: HudState): void => {
                 if (next === state) return;
                 // Leaving booting: always clear its timers so a fast power-off press
                 // can cancel the loader cleanly.
                 if (state === 'booting') {
-                  window.clearTimeout(bootEndTimer);
+                  window.clearTimeout(fsm.bootEndTimer);
                   clearLineTimers();
                 }
                 state = next;
+                fsm.state = next;
 
                 if (next === 'idle') {
                   body.classList.remove(BOOTING_CLASS);
@@ -360,7 +416,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
                   }
                   // Boot completes → ignite. Non-interruptible by scroll; a power-off
                   // press calls transition('idle') which clears this timer.
-                  bootEndTimer = window.setTimeout(() => transition('ready'), bootMs);
+                  fsm.bootEndTimer = window.setTimeout(() => transition('ready'), bootMs);
                   writeState(true, forced); // intent: we are powering up to ready
                   return;
                 }
@@ -377,7 +433,7 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
 
               // requestPowerOn — go to ready via the loader, unless we are already on
               // the way (booting) or there (ready). Skips the boot when restoring.
-              const requestPowerOn = (skipBoot) => {
+              const requestPowerOn = (skipBoot: boolean): void => {
                 if (state === 'ready') return;
                 if (skipBoot) {
                   // Restore path: land straight in ready so a returning visitor isn't
@@ -397,43 +453,85 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               };
 
               // --- Inputs ----------------------------------------------------------
-              // 1) Scroll signal from HeroIsland (the black-hole edge). When forced is
-              //    engaged the scroll signal must NOT power the HUD off (sticky). A
-              //    scroll-ON powers up; once booted we STAY powered, so scroll-OFF is
-              //    ignored unless we were never forced AND never booted — i.e. the only
-              //    thing that powers down is the button (handled below). So here we only
-              //    act on the power-ON edge from scroll.
-              window.addEventListener(POWER_EVENT, (event) => {
-                const detail = event && event.detail ? event.detail : null;
-                if (!detail) return;
-                if (detail.on) requestPowerOn(false);
-                // detail.on === false (scroll left the black hole) is deliberately a
-                // no-op: once booted the HUD stays lit until the power button powers
-                // it off. (The forced override would suppress it anyway.)
-              });
+              // The forced-override toggle, factored out so BOTH the window listener
+              // and the once-per-node button listener invoke the SAME latest closure
+              // (each init rewrites fsm.* to point at the current DOM). This keeps the
+              // button correct even when its listener was bound on an earlier init.
+              const toggleForced = (): void => {
+                forced = !forced;
+                applyForced();
+                if (forced) requestPowerOn(false);
+                else requestPowerOff();
+              };
 
-              // 2) Power button — toggles the forced override. Engaging it powers the
-              //    HUD on (booting → ready); disengaging it powers OFF (the single way
-              //    back to idle). aria-pressed tracks `forced`.
-              if (btn) {
+              // Expose the current closure's controls on fsm BEFORE binding listeners,
+              // so they can always call the LATEST closure (re-pointed to the fresh DOM
+              // by each initHudFsm() on astro:page-load).
+              fsm.requestPowerOn = requestPowerOn;
+              fsm.requestPowerOff = requestPowerOff;
+              fsm.toggleForced = toggleForced;
+              if (!fsm.windowBound) {
+                fsm.windowBound = true;
+                window.addEventListener(POWER_EVENT, (event: Event) => {
+                  const detail = (event as CustomEvent<{ on?: boolean } | null>).detail;
+                  if (!detail) return;
+                  // Call the latest closure's power-on (fsm.requestPowerOn is rewritten
+                  // by each init, so it always targets the current page's nodes). We do
+                  // NOT re-run initHudFsm() here — that would re-add the per-init button
+                  // listener and stack duplicates on a non-swapped (home-page) button.
+                  if (detail.on && fsm.requestPowerOn) fsm.requestPowerOn(false);
+                  // detail.on === false (scroll left the black hole) is deliberately a
+                  // no-op: once booted the HUD stays lit until the power button powers
+                  // it off. (The forced override would suppress it anyway.)
+                });
+              }
+
+              // 2) Power button — toggles the forced override. The button node is
+              //    REPLACED on every swap (fresh node = no prior listener), but
+              //    initHudFsm() can also run twice against the SAME node on the very
+              //    first paint (the direct call + astro:page-load). A per-node dataset
+              //    flag makes the bind exactly-once per actual button element.
+              if (btn && !btn.dataset.hudPowerBound) {
+                btn.dataset.hudPowerBound = '1';
+                // Invoke the LATEST closure via fsm so a node bound on an earlier init
+                // still toggles the live machine (never the stale first-init locals).
                 btn.addEventListener('click', () => {
-                  forced = !forced;
-                  applyForced();
-                  if (forced) requestPowerOn(false);
-                  else requestPowerOff();
+                  if (fsmWindow.__bhHudFsm && fsmWindow.__bhHudFsm.toggleForced) {
+                    fsmWindow.__bhHudFsm.toggleForced();
+                  }
                 });
               }
 
               // --- Init: restore persisted power state (apply classes ASAP, no flash).
+              // On a swap this RE-APPLIES the live state to the fresh body/button: the
+              // localStorage restore lands us in ready/idle without replaying the boot,
+              // and applyForced() repaints the new button's ARIA + the body forced class.
               const persisted = readState();
               forced = persisted.forced;
               applyForced();
               if (persisted.powered) {
-                // Returning visitor who left the HUD on: restore ready directly (no
-                // replayed boot). If they had forced it on, forced is already applied.
-                requestPowerOn(true);
+                // Returning visitor / post-swap with the HUD on: restore ready directly
+                // (no replayed boot). If they had forced it on, forced is already set.
+                // On a swap this also re-paints the fresh body with the active class
+                // (transition() no-ops if state is already 'ready', so applyForced +
+                // the body class are re-set below for that case).
+                if (state === 'ready') {
+                  // Already ready in-memory (mid-session swap): repaint the fresh body.
+                  body.classList.remove(BOOTING_CLASS);
+                  body.classList.add(ACTIVE_CLASS);
+                } else {
+                  requestPowerOn(true);
+                }
               }
-            })();
+            }
+
+            // Re-run on every ClientRouter navigation (fires on the initial load too),
+            // so the FSM rebinds to each swapped-in body. Idempotent, so the extra
+            // direct call on first paint below is harmless — it just guarantees the
+            // classes are applied even if astro:page-load is missed on the very first
+            // render.
+            document.addEventListener('astro:page-load', initHudFsm);
+            initHudFsm();
           </script>
 
           <main id="main-content" class="bare-main">
@@ -505,5 +603,61 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
         </div>
       )
     }
+
+    {/* RESURFACE — runs on every ClientRouter navigation (and the initial load).
+        If we arrived via a dive (the sessionStorage flag set by HeroIsland), the
+        persisted overlay is sitting at full white over the freshly-swapped page, so
+        we ease it back out and play the content rise-up. Otherwise we make sure the
+        overlay is hidden instantly (a normal nav must never flash white). The flag is
+        single-use (removed on read), so a manual reload of the destination never
+        replays the resurface. Lives outside the bare/standard branches so it covers
+        both. Bundled (no is:inline) so it re-binds across swaps. */}
+    <script>
+      document.addEventListener('astro:page-load', () => {
+        const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
+        let dived = false;
+        try {
+          dived = sessionStorage.getItem('bh:dive') === '1';
+          sessionStorage.removeItem('bh:dive');
+        } catch (_) {
+          /* private mode — no flag, treat as a normal nav */
+        }
+        if (!overlay) return;
+        if (dived) {
+          // Arriving from a dive: overlay is full-white → ease it out + rise the
+          // content. The body[data-resurface] attribute gates the content keyframe
+          // in hero.css (and is auto-removed when that animation ends).
+          overlay.style.transition = 'opacity 0.6s ease-out';
+          requestAnimationFrame(() => {
+            overlay.style.opacity = '0';
+          });
+          document.body.setAttribute('data-resurface', '');
+          // Clear the attribute once the resurface animation finishes. animationend
+          // BUBBLES, and the hero/HUD subtree fires many unrelated animations, so we
+          // must filter to OUR keyframe (dive-resurface) — otherwise a stray child
+          // animationend would strip data-resurface mid-rise and snap the content in.
+          // Fallback timer id (assigned below): under reduced motion the resurface
+          // keyframe is gated off in CSS, so our animationend never fires — the timer
+          // clears the attribute and detaches so nothing lingers or leaks the listener.
+          let fallback = 0;
+          const onEnd = (e: AnimationEvent) => {
+            if (e.animationName !== 'dive-resurface') return;
+            document.body.removeAttribute('data-resurface');
+            document.body.removeEventListener('animationend', onEnd);
+            window.clearTimeout(fallback);
+          };
+          document.body.addEventListener('animationend', onEnd);
+          fallback = window.setTimeout(() => {
+            document.body.removeAttribute('data-resurface');
+            document.body.removeEventListener('animationend', onEnd);
+          }, 1200);
+        } else {
+          // Normal nav / fresh load: ensure the overlay is hidden with no fade so a
+          // page that wasn't reached via a dive never shows the white layer.
+          overlay.style.transition = 'none';
+          overlay.style.opacity = '0';
+        }
+      });
+    </script>
   </body>
 </html>

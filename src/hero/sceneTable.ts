@@ -41,7 +41,10 @@ const easeInOutCubic = (t: number): number => {
   const x = clamp01(t);
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 };
-const easeInQuart = (t: number): number => {
+// Exported so the scene engine (createScene.ts) can reuse the SAME accelerating
+// fall curve for the cinematic dive plunge — no second, drifting copy of the
+// easing. Still backs the END-collapse band's stage curve below (band 8).
+export const easeInQuart = (t: number): number => {
   const x = clamp01(t);
   return x * x * x * x;
 };
@@ -448,6 +451,10 @@ export interface MarkerPlacement {
   /** The CTA link text (e.g. 'Read about me'); the component appends the ' →'
    *  arrow. Falls back to the legacy '[ OPEN ]' affordance when absent. */
   cta?: string;
+  /** Prototype flag: this marker triggers the cinematic camera dive on click
+   *  instead of a plain navigation. Set on exactly one marker for now (the END
+   *  black-hole marker). Absent/false markers navigate normally. */
+  dive?: boolean;
 }
 
 export interface ManifestoBeat {
@@ -757,6 +764,10 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'The idea behind the black hole, and thanks for scrolling this far.',
         tags: ['Story', 'Colophon'],
         cta: 'Read the story',
+        // Prototype: clicking the black-hole marker flies the live camera INTO
+        // the star, blooms to white, then SPA-navigates at the apex. Only this
+        // one marker opts in for now.
+        dive: true,
       },
     ],
     // BLACK HOLE — the terminal hero. A light dwell so the final settle reads as
