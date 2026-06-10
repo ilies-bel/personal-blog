@@ -56,24 +56,71 @@ body.bare.hud-booting::after {
    bloom, not a broken page. It fades out (and stops catching pointer events) the
    moment the hero paints its first real frame: body.scene-ready, added by the inline
    listener in index.astro on the scene:ready event the scene dispatches. */
+/* The loader is now a THREE-STAGE sequence around the boot readout's glide, NOT a
+   single overlapping fade:
+     STAGE 1 (BEFORE the glide): the dot+name fade out FIRST (see .scene-loader-mark) —
+       an early 0→0.3s window that completes BEFORE the readout starts gliding — while
+       the dark --bg BACKGROUND (the ::before layer below) HOLDS fully solid.
+     STAGE 2 (the glide): with the dot+name already gone, the readout glides down to the
+       bottom HUD slot; the --bg background still HOLDS solid, so the scene stays hidden.
+     STAGE 3 (after the glide): ONLY THEN does the dark background fade, revealing the
+       first scene.
+   To decouple "dot+name fade" (earliest, before the glide) from "background fade" (last,
+   after the glide), the --bg fill lives on a dedicated full-bleed ::before layer that
+   carries its OWN delayed opacity transition; the .scene-loader element itself stays
+   opacity:1 throughout (its children fade on their own transitions) so nothing fades the
+   whole overlay as one block. The dot+name use their own early timing (start 0s, 0.3s);
+   the glide start + duration are single-sourced from tokens.css (--boot-glide-start /
+   --boot-glide-dur), so the background-fade delay below tracks the (now later) glide
+   automatically and still begins only at glide end. */
 .scene-loader {
   position: fixed;
   inset: 0;
   z-index: 60;                           /* above the corner chrome (21) + any HUD */
   display: grid;
   place-items: center;
-  background: var(--bg);                 /* the graphite room, matching the scene edges */
-  /* Fade only the overlay out once ready; the canvas underneath is already painting.
-     A touch slower than a UI tick so the hand-off to the live scene reads as a calm
-     dissolve, not a cut. */
+  /* No --bg fill here anymore — it lives on ::before so it can fade independently of
+     (and later than) the dot+name. The element itself stays opacity:1 the whole time. */
   opacity: 1;
-  transition: opacity 0.7s var(--ease-out-quint);
+}
+/* STAGE 1-2 — the solid dark cover. A full-bleed --bg layer that HOLDS solid through the
+   scene's heavy first paint AND the entire glide, so the scene is never visible behind the
+   readout mid-travel. STAGE 3 — it fades only AFTER the glide lands: its transition-delay
+   is computed as (glide start + glide duration), both single-sourced in tokens.css, so the
+   fade can never begin before the readout has arrived at the bottom. z-index:-1 keeps it
+   behind the dot+name (which fade earlier, during the glide). */
+.scene-loader::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg);                 /* the graphite room, matching the scene edges */
+  opacity: 1;
+  transition: opacity 0.7s var(--ease-out-quint)
+    calc(var(--boot-glide-start) + var(--boot-glide-dur));
 }
 .scene-loader-mark {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.1rem;
+  /* Push the dot+name just BELOW true centre so the boot readout — a fixed element that
+     LIFTS to just above viewport centre during loading (see .hud-compass--boot's --boot-lift
+     in hud.css) — sits above them and the trio (readout · dot · name) reads as one centred
+     group. The readout then GLIDES down to the bottom HUD slot as the loader fades; the
+     dot+name fade in place. Keep --boot-stack-drop in step with --boot-lift's trailing nudge
+     in hud.css so the group stays visually centred. */
+  --boot-stack-drop: 1.6rem;
+  transform: translateY(var(--boot-stack-drop));
+  /* STAGE 1 — the dot+name fade out FIRST, BEFORE the readout glides. They start
+     fading immediately on body.scene-ready (no start delay) and finish QUICKLY (0.3s),
+     so they are fully GONE by ~0.3s — before --boot-glide-start (0.32s) kicks the
+     readout into its downward travel. This is deliberately NOT tied to
+     --boot-glide-start (their own early window precedes it); the dark background still
+     holds solid throughout (see .scene-loader::before). The fade is triggered on
+     body.scene-ready below; this declares the transition shape. */
+  opacity: 1;
+  transition: opacity 0.3s var(--ease-out-quint) 0s;
 }
 /* The pale speck — the opening pale-blue dot, rendered as a small soft disc with a
    faint halo. It breathes (scale + glow) so the screen feels alive while we wait. */
@@ -97,15 +144,39 @@ body.bare.hud-booting::after {
   0%, 100% { transform: scale(0.82); opacity: 0.5; }
   50%      { transform: scale(1.12); opacity: 1; }
 }
-/* Ready: dissolve the overlay and let pointer events fall through to the live scene.
-   Kept in the DOM (no display:none) so the transition can run; it is inert after. */
+/* Ready: SEQUENCE the dissolve around the glide instead of fading the whole overlay at
+   once. The element itself stays opacity:1 (it must keep blocking the scene); pointer
+   events fall through to the live scene immediately. The two layers fade on their OWN
+   schedules: the dot+name (.scene-loader-mark) fade FIRST, before the glide starts; the
+   dark --bg background (.scene-loader::before) fades LAST, only after the glide lands.
+   Kept in the DOM (no display:none) so the transitions can run; inert after via
+   pointer-events. */
 body.scene-ready .scene-loader {
-  opacity: 0;
   pointer-events: none;
 }
-/* Reduced motion: drop the breathing pulse (a steady speck), keep the gentle fade. */
+/* STAGE 1 — dot+name fade out FIRST (0→0.3s), gone before the glide starts (0.32s). */
+body.scene-ready .scene-loader-mark {
+  opacity: 0;
+}
+/* STAGE 3 — the dark background fades only after the glide completes (the delay on the
+   ::before transition above = glide start + glide duration). This reveals the scene. */
+body.scene-ready .scene-loader::before {
+  opacity: 0;
+}
+/* Reduced motion: drop the breathing pulse (a steady speck). There is no glide to
+   sequence around, so the loader just fades calmly — the dot+name fade out first (no
+   delay) and the dark background fades alongside them (the background's post-glide delay
+   is removed here so it does not sit solid waiting for a glide that never happens). Both
+   start on scene-ready with no staging; the dot+name's slightly shorter fade simply
+   clears a hair before the background, keeping it calm rather than abrupt. */
 @media (prefers-reduced-motion: reduce) {
   .scene-loader-dot { animation: none; }
+  .scene-loader::before {
+    transition: opacity 0.7s var(--ease-out-quint) 0s;
+  }
+  .scene-loader-mark {
+    transition: opacity 0.5s var(--ease-out-quint) 0s;
+  }
 }
 
 /* The scroll track: N stages that exist only to give the page scrollable height.

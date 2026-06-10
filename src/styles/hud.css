@@ -403,10 +403,183 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
    throughout the cinematic scroll. Hidden ONLY until the scene's first frame paints
    (body.scene-ready, added by index.astro's loader script) so it never flashes over
    the loader, and during the black-hole power-on boot window. Mobile hides it via
-   display:none further down. */
-body:not(.scene-ready) .hud-compass,
+   display:none further down. The BOOT readout (.hud-compass--boot) is the exception:
+   it OWNS the slot during loading (it IS the loader's status line), so it must stay
+   lit while body:not(.scene-ready) — :not(.hud-compass--boot) exempts it here. */
+body:not(.scene-ready) .hud-compass:not(.hud-compass--boot),
 body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
 .hud-compass[data-visible='false'] { opacity: 0; transition-delay: 0s; }
+
+/* --- Boot-to-HUD intro readout ---------------------------------------------
+   The same bottom-centre slot + visual language as the live compass, driving the
+   branded LOADING STATE → READY STATE → standing scroll cue intro, then handing the
+   slot to the live aiming compass on first scroll. Markup + the boot phase machine
+   live in HudNavigation.tsx; this is purely the look. It reuses .hud-compass and the
+   .hud-compass-read / .hud-compass-dest typography wholesale (so the hand-off is
+   seamless), and ADDS only: (a) staying lit during loading (handled by the exemption
+   above), (b) a calm fade-in on each phase swap, (c) suppressing the live compass
+   while the boot readout owns the slot. */
+
+/* While the boot readout owns the slot (bootPhase !== 'live'), keep the LIVE compass
+   dark so the two never both occupy the bottom centre. The hand-off: bootPhase → live
+   unmounts the boot readout AND drops data-booting, letting the live compass fade up
+   through its own .hud-compass opacity transition (0.5s) — a calm cross of one slot. */
+.hud-compass[data-booting='true'] { opacity: 0; transition-delay: 0s; }
+
+/* The boot readout itself: it has no aiming gauge (no rose), so it is a pure two-line
+   mono readout. A soft fade as each phase swaps in keeps LOADING → READY → cue feeling
+   like a calm status line, not a flicker. The slot/centring/type all come from
+   .hud-compass above.
+
+   GLIDE seam: the readout is ONE continuous position:fixed element whose RESTING slot
+   is the bottom-centre compass position (inherited from .hud-compass: bottom + the
+   translateX(-50%) centring above). While data-glide='false' (the whole loading + the
+   brief ready beat) it is LIFTED up to the loader's vertical centre (above the dot+name)
+   via an extra translateY (the --boot-lift below). When HudNavigation flips data-glide to
+   'true' — a short beat after the scene's first paint, see GLIDE_START_MS — the lift is
+   REMOVED, so the transform transition GLIDES the readout DOWN from loader-centre to its
+   bottom slot as the loader dissolves around it.
+
+   Why a deferred React flip and not body.scene-ready directly: scene:ready is the scene's
+   heaviest frame (shader compile + buffer upload jank the main thread), and a CSS transition
+   started mid-jank is wall-clock driven, so it "completes" unseen during the block and the
+   travel SNAPS. Flipping data-glide a beat later (past the jank, still during the loader's
+   fade) puts the motion on clean frames. The loader's dot+name fade out across a matching
+   beat (--boot-glide-start, in tokens.css) while its dark background HOLDS solid through
+   the whole glide and only fades AFTER it lands (scene.css sequences the three stages).
+
+   The lift is keyed to an attribute ON THE ELEMENT (data-glide), NOT a descendant/body
+   selector: a var() holding a vh-calc resolves reliably inside transform() this way but is
+   dropped (the transform falls to none) under a descendant selector in Chromium — an
+   empirically-confirmed quirk, hence this exact shape.
+
+   The loader's dot+name are pushed just below true centre (see .scene-loader-mark in
+   scene.css) so the lifted readout sits above them and the trio reads as one centred
+   group. The glide duration is single-sourced as --boot-glide-dur in tokens.css (:root),
+   shared with scene.css's post-glide loader-background fade so the two can't drift. */
+.hud-compass--boot {
+  /* The lift the loader phase applies (negative = up), as a custom property so the value
+     lives in one place. The resting slot is y=0 (the bottom-centre compass position,
+     `bottom: env()+2rem`). To reach the LOADER's stack we move the box up ~half the
+     viewport, then a 2.4rem nudge UP so the readout's single visible line sits just ABOVE
+     viewport centre (the loader's dot+name are pushed ~1.6rem BELOW centre in scene.css's
+     --boot-stack-drop, so readout+dot+name read as one centred group). Tune the 2.4rem to
+     raise/lower the readout in the stack (keep it in step with --boot-stack-drop). */
+  --boot-lift: calc(-50vh + 2rem - 2.4rem);
+  /* Glide timing — single-sourced as --boot-glide-dur in tokens.css (:root), shared with
+     scene.css so the loader-background fade (which is now SEQUENCED to begin only AFTER
+     the glide lands) derives its delay from this same number and can never drift. The
+     glide transition below consumes it via the cascade — no local redefinition here. */
+  /* The GLIDE animates `transform` between the lifted and resting translate. Horizontal
+     centring (translateX(-50%)) is folded into both states so it never drifts. The lift is
+     applied by the [data-glide='false'] rule below (React flips data-glide to true a beat
+     after the jank to start the travel — see the gliding doc in HudNavigation). The
+     transition is declared on the GLIDE-IN target state ([data-glide='true'] below), NOT
+     here — so the element APPEARS already lifted (no upward slide on mount: a CSS transition
+     never runs for an initial style, and the lifted state carries no transition) and only
+     the DOWNWARD travel to the resting slot animates. */
+  transform: translate(-50%, 0);
+  animation: hud-boot-fade 0.5s var(--ease-out-quint) both;
+  /* Paint ABOVE the instant loader (.scene-loader is z-60 with an opaque --bg
+     background): while the readout is lifted INTO the loader stack it must sit over
+     that background, and stay above it as it glides down through the dissolving loader.
+     Once the slot hands to the live compass ('live'), the boot readout unmounts and the
+     live compass (z-18) owns it — by then the loader is gone, so this high z never
+     conflicts. aria-hidden + pointer-events:none (from .hud-compass) keep it inert. */
+  z-index: 61;
+}
+/* LIFTED into the loader stack: place the readout at the loader's vertical centre (above
+   the dot+name). Held while data-glide='false' (through 'loading' AND the brief 'ready'
+   beat) until React flips data-glide='true' a beat after the scene's first paint. Then this
+   stops matching, the transform drops to translate(-50%,0), and the transition above GLIDES
+   the readout down to its bottom slot as the loader dissolves. (The lift lives on a rule
+   whose subject is the element itself — [data-glide] on .hud-compass--boot — so var(--boot-
+   lift) resolves reliably inside the transform.) */
+.hud-compass--boot[data-glide='false'] {
+  transform: translate(-50%, var(--boot-lift));
+}
+/* The DOWNWARD glide: the transition lives on the target state so it runs ONLY for the
+   lifted→resting travel (false→true), never on the initial lifted appearance. */
+.hud-compass--boot[data-glide='true'] {
+  transition: transform var(--boot-glide-dur) var(--ease-out-quint);
+}
+/* Re-key the fade-in on the phases that APPEAR or swap text in place: 'loading' (the
+   initial appear, lifted in the loader) and 'cue' (the text swap once parked at the
+   bottom). The 'ready' phase is DELIBERATELY excluded — that is the GLIDE: the element
+   must stay solid (opacity:1, held by the 'loading' fade's `both` fill) and physically
+   travel down to the bottom slot, not fade out-and-in mid-flight. A re-fade there would
+   read as a cross-dissolve, exactly what this revision avoids. */
+.hud-compass--boot[data-boot='loading'],
+.hud-compass--boot[data-boot='cue'] {
+  animation-name: hud-boot-fade;
+}
+/* While gliding (the 'ready' beat), suppress the per-phase fade entirely so the only
+   motion is the transform glide; the READY STATE warm-up below is the sole change. */
+.hud-compass--boot[data-boot='ready'] {
+  animation: none;
+  opacity: 1;
+}
+@keyframes hud-boot-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+/* The READY STATE confirmation warms slightly toward the rail gold so it reads as
+   "systems online" rather than the drained LOADING scan (which keeps the faint
+   --idle treatment inherited from .hud-compass-read--idle). */
+.hud-compass--boot[data-boot='ready'] .hud-compass-label {
+  color: color-mix(in oklch, var(--fg) 80%, var(--hud-gold));
+  letter-spacing: 0.16em;
+}
+/* The standing scroll cue: REVERSE COLLAPSE reads as the active intro tagline (bone,
+   full presence), the ↓ scroll-down sub-line a quiet prompt below it. The ↓ arrow
+   gives a gentle vertical bob to draw the eye to scroll; dropped under reduced motion. */
+.hud-compass--boot[data-boot='cue'] .hud-compass-label {
+  color: var(--fg);
+  letter-spacing: 0.14em;
+}
+.hud-compass--boot[data-boot='cue'] .hud-compass-arrow {
+  display: inline-block;
+  color: color-mix(in oklch, var(--hud-gold) 60%, var(--hud-line));
+  animation: hud-boot-bob 1.8s var(--ease-out-quint) infinite;
+}
+@keyframes hud-boot-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(0.18rem); }
+}
+/* Reduced motion: drop the per-phase fade, the arrow bob AND the glide. The readout
+   does NOT lift into the loader and does NOT travel — it simply sits in its bottom slot
+   the whole time while the loader fades calmly over it (the loader's own opacity fade is
+   kept, but the boot readout itself stays put). The boot phase machine also skips the
+   timed READY beat under reduced motion, so the slot resolves straight to the standing
+   cue without a staged sequence. */
+.hud-compass--boot[data-reduced='true'] {
+  animation: none;
+  transition: none;
+}
+/* Cancel the lift under reduced motion: the readout sits in its bottom slot the whole time
+   (no travel) while the loader fades calmly over it. More specific than the
+   [data-glide='false'] lift rule above so it wins even in the brief loading frame. */
+.hud-compass--boot[data-reduced='true'][data-glide='false'],
+.hud-compass--boot[data-reduced='true'][data-glide='true'] {
+  transform: translate(-50%, 0);
+}
+.hud-compass--boot[data-reduced='true'] .hud-compass-arrow {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-compass--boot {
+    animation: none;
+  }
+  /* Cancel the lift AND the glide transition — more specific than the [data-glide] lift /
+     glide-target rules above so the readout stays in its bottom slot calmly while the loader
+     fades over it, even if React's data-reduced flag hasn't applied yet. */
+  .hud-compass--boot[data-glide='false'],
+  .hud-compass--boot[data-glide='true'] {
+    transform: translate(-50%, 0);
+    transition: none;
+  }
+  .hud-compass--boot .hud-compass-arrow { animation: none; }
+}
 /* The gauge rose — a fixed-size positioning context holding the faint static
    crosshair frame, the ▲ cursor anchor (dead-centre, never moved) and the ┼
    marker waypoint (centred then translated each rAF). The box is sized so the ┼'s
@@ -956,6 +1129,16 @@ body.hud-booting .hud-boot-scan {
   /* Fade IN (going to opacity:1 / showing): slower, eased. */
   transition:
     opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* EARLY-INTERACTION GATE — until the intro loader is FULLY gone (body.loader-gone,
+   set on the ::before background-fade transitionend; see index.astro), the markers
+   sit UNDER the loader but are live <a> links. Force pointer-events:none so a
+   "visible" marker can't be clicked or hover-locked through the loader. Keyboard
+   focusability is gated separately in StarMarker.tsx (tabIndex -1 until loader-gone),
+   since pointer-events does not remove an element from the tab order. After
+   loader-gone this rule no longer matches and the [data-visible] rule above governs. */
+body:not(.loader-gone) .star-marker {
+  pointer-events: none !important;
 }
 /* BRIGHT STATES (orange nebula, yellow star, red giant): flip the whole OFF-WHITE
    outer reticle to near-black so it reads against the bright surface. All three

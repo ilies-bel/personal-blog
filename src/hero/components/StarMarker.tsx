@@ -34,6 +34,7 @@ import {
   type HudTargetId,
   type MarkerPlacement,
 } from '../HudNavigation';
+import { LOADER_GONE_BODY_CLASS } from '../lib/constants';
 import type { MarkerFrame } from '../scene/types';
 import { useSceneState } from './SceneStateContext';
 
@@ -153,6 +154,32 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // Side the card tethers to ('right' default, 'left' when the marker is near the
   // right edge). Recomputed only when the lock engages so it stays stable while held.
   const [cardSide, setCardSide] = useState<'right' | 'left'>('right');
+
+  // Whether the intro loader is FULLY gone (body.loader-gone — set on the loader's
+  // dark-background fade-out; see index.astro). Until then the marker sits UNDER the
+  // loader, so it must be INERT: not clickable/hoverable (CSS pointer-events gate in
+  // hud.css) AND not Tab-focusable. pointer-events does NOT remove an <a> from the tab
+  // order, so we drive tabIndex from this flag (and short-circuit onFocus so a stray
+  // programmatic focus can't force-lock the card early). Initialised by reading the
+  // body class on mount (a returning visitor's loader may already be gone), then kept
+  // in sync via a MutationObserver on the body's class attribute. Mirrors a real flip
+  // the same way visible/locked do — re-renders only when it changes.
+  const [loaderGone, setLoaderGone] = useState(false);
+
+  useEffect(() => {
+    const sync = (): boolean => {
+      const gone = document.body.classList.contains(LOADER_GONE_BODY_CLASS);
+      setLoaderGone(gone);
+      return gone;
+    };
+    // Already gone before this marker mounted (returning visitor)? Stop here.
+    if (sync()) return;
+    const observer = new MutationObserver(() => {
+      if (sync()) observer.disconnect();
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const onMove = (event: MouseEvent): void => {
@@ -286,7 +313,15 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-locked={locked}
       data-bright={isBright}
       data-side={cardSide}
+      // Until the intro loader is fully gone the marker is INERT — remove it from
+      // the tab order (CSS pointer-events:none already blocks click/hover). Once
+      // loader-gone fires we restore default focusability (undefined → the <a>'s
+      // natural tab order). After that the behaviour is exactly as before.
+      tabIndex={loaderGone ? undefined : -1}
       onFocus={() => {
+        // Guard against a programmatic/stray focus forcing the card open before the
+        // loader is gone; once gone, this is the normal keyboard-focus lock.
+        if (!loaderGone) return;
         focusedRef.current = true;
       }}
       onBlur={() => {

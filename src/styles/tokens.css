@@ -45,5 +45,19 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Boot-to-HUD intro glide timing — the SINGLE source for the readout's downward
+     travel from loader-centre to the bottom HUD slot, shared by hud.css (the glide
+     transition itself) and scene.css (which sequences the loader fades around it).
+     --boot-glide-start: when the glide begins, measured from body.scene-ready (it
+     matches HudNavigation's GLIDE_START_MS + the double-rAF defer). The dot+name
+     fade out FIRST (an early 0→0.3s window on .scene-loader-mark, NOT tied to this
+     token) and are fully gone BEFORE the glide starts, so this value is pushed past
+     that fade window (0.32s) — the glide begins only after the dot+name have left.
+     --boot-glide-dur: how long the travel takes. Changing either here moves BOTH the
+     glide AND the loader-background fade that waits for it (the background fade's
+     delay is computed as start + dur in scene.css), so they can never drift. */
+  --boot-glide-start: 0.32s;
+  --boot-glide-dur: 0.7s;
+
   color-scheme: dark;
 }

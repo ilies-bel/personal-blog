@@ -35,6 +35,44 @@ export const HUD_BOOTING_BODY_CLASS = 'hud-booting';
  *  fades on first paint, the HUD boot FSM ignites later at the black hole — they
  *  never touch each other's class. */
 export const SCENE_READY_BODY_CLASS = 'scene-ready';
+/** Toggled on <body> once the intro loader is FULLY GONE — i.e. the dark
+ *  `.scene-loader::before` background-opacity fade has COMPLETED and the scene
+ *  is fully revealed. This is STRICTLY LATER than SCENE_READY_BODY_CLASS:
+ *  scene-ready merely STARTS the dissolve (dot+name fade during the glide, then
+ *  the dark layer fades out ~glide-start + glide-dur later). The in-scene star
+ *  markers gate their interactivity on this class — they must be non-clickable,
+ *  non-hoverable AND not Tab-focusable while the loader is still up (they sit
+ *  UNDER the loader at z-index 60 but are live <a> links). Wired by the inline
+ *  loader script in index.astro: it listens for the `transitionend` of the
+ *  ::before opacity fade (the LAST thing to finish) and also arms a timeout
+ *  backstop so the class is set even if that transitionend is missed
+ *  (interrupted / reduced-motion / no-WebGL safety reveal). Idempotent. The
+ *  inline script can't import this module (no bundler on an is:inline script)
+ *  so it spells the SAME literal via define:vars and MUST be kept in sync.
+ *  CSS gates pointer-events on `body:not(.loader-gone)` (hud.css); StarMarker
+ *  also reads this class to drive tabIndex/aria so the <a> leaves the tab order
+ *  until the loader is gone. */
+export const LOADER_GONE_BODY_CLASS = 'loader-gone';
+/** Minimum time (ms) the instant intro loader is held on the FIRST load of a
+ *  browser session, so the boot sequence (LOADING → READY → glide-to-HUD) reads
+ *  fully even when the scene paints fast. It is a FLOOR, never a cap: on first
+ *  load the loader lifts at `max(scene:ready, LOADER_MIN_MS)`; a slower scene
+ *  still waits for its real first frame. Kept comfortably under the 8s safety
+ *  backstop (see the inline script in index.astro) so the two compose cleanly —
+ *  the floor raises the early bound, the safety caps the late bound. Spelled here
+ *  once and passed into the inline loader script via define:vars so there is no
+ *  inline magic number. */
+export const LOADER_MIN_MS = 2500;
+/** sessionStorage key recording that the minimum-time loader has already played
+ *  once THIS browser session. On first load the key is absent → apply the
+ *  LOADER_MIN_MS floor, then set it; on subsequent loads in the same session
+ *  (reloads, navigations back home) the key is present → skip the floor and
+ *  reveal as soon as scene:ready fires. sessionStorage (NOT localStorage) is
+ *  deliberate: the full boot shows once per session and a fresh session (new tab
+ *  after close, next day) shows it again. Access is wrapped in try/catch (private
+ *  mode / disabled storage must never throw). Spelled here once and passed into
+ *  the inline loader script via define:vars. */
+export const LOADER_SEEN_STORAGE_KEY = 'loader-seen';
 /** localStorage key persisting the chosen exploration-HUD target. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM

@@ -191,6 +191,15 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   pointer-events: none;
   transition: opacity 0.5s var(--ease-out-quint);
 }
+/* Keep the manifesto OUT of the loading screen. The island renders BEATS[0] at full
+   opacity at scroll 0, so without this gate the first beat's big line would paint
+   over the loader the instant the island hydrates (before the scene's first frame).
+   Hold the whole overlay transparent until the scene paints its first frame
+   (body.scene-ready, added by index.astro's loader script on scene:ready), then let
+   the existing 0.5s opacity transition above fade it in — so the manifesto arrives
+   WITH the scene, never over the loader. The boot readout owns the bottom-centre
+   status line during the wait. */
+body:not(.scene-ready) .bh-overlay { opacity: 0; }
 .bh-overlay::before {
   content: '';
   position: absolute;
