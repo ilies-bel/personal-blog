@@ -55,8 +55,8 @@
 }
 .nav-pill a {
   font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 0.95rem;
+  font-weight: var(--weight-medium);
+  font-size: var(--text-hud);
   line-height: 1;
   color: var(--fg-dim);
   text-decoration: none;
@@ -82,7 +82,7 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  font-size: 0.9rem;
+  font-size: var(--text-body-sm);
   color: var(--fg-faint);
 }
 .site-footer a { color: var(--fg-dim); text-decoration: none; transition: color 0.16s ease; }
