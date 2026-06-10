@@ -536,7 +536,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // starts seamlessly from wherever the scroll pose currently is.
   const diveFromPos = new THREE.Vector3();
   const diveFromTarget = new THREE.Vector3();
-  const DIVE_TARGET_POS = new THREE.Vector3();
   const ORIGIN_VEC = new THREE.Vector3(0, 0, 0);
   // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
   let diveStrength = 0;
@@ -544,9 +543,41 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // leaving a short tail of camera travel hidden under the full-white overlay while
   // the destination page loads. Reduced motion skips the geometric plunge entirely
   // and just runs a brief white fade (DIVE_REDUCED_S).
-  const DIVE_DURATION_S = 1.2;
+  //
+  // ORDER OF SENSATION (the "no dive, just a white flash" fix): the CAMERA must lead
+  // and the WHITE must trail — otherwise the screen blooms before anything visibly
+  // moves and the plunge is invisible. So the position lerp uses a FRONT-LOADED ease
+  // (easeOut — most of the travel is spent in the first ~30% of the run, so the camera
+  // LEAPS toward the star immediately) while the white overlay holds near zero until
+  // DIVE_WHITE_START of the run and only THEN ramps hard (easeInQuart of the remaining
+  // window to the apex). The visitor sees a clear ~0.6-0.7s plunge with little white,
+  // then the bloom takes over and dominates at the apex.
+  //
+  // The run is lengthened to 1.5s (from 1.2) so the leading plunge reads as a real
+  // fall rather than a snap, and the white still has room to dominate before the apex.
+  const DIVE_DURATION_S = 1.5;
   const DIVE_APEX_FRAC = 0.82;
   const DIVE_REDUCED_S = 0.28;
+  // The white overlay stays ~dark until the plunge is this far along, then ramps to
+  // full over the rest of the run-to-apex. This is what keeps the camera move visible
+  // FIRST and the bloom LAST (the inverse of the original front-loaded white). Tuned to
+  // 0.40 so the bloom begins rising just as the camera reaches the core — covering the
+  // moment the bright accretion disk would otherwise recede behind the camera, so the
+  // sequence reads "disk rushing up → bloom swallows it" with no dark gap between.
+  const DIVE_WHITE_START = 0.40;
+  // The plunge falls toward (and just PAST) the world origin where the star sits, so the
+  // camera reads as falling THROUGH the event horizon, not braking on its face. From the
+  // new TOP-of-page black-hole pose the live camera sits ~z=22 (plus the autonomous
+  // black-hole dolly-back, so up to ~z=29) looking at the origin; driving it to z=-2 just
+  // past the core is a ~24-31 unit dolly straight down the view axis — an unmistakable
+  // plunge that still keeps the bright disk filling the frame deep into the fall (a
+  // larger overshoot flies out the far side into empty starfield before the bloom lands).
+  // The look target settles on the exact origin so the fall stays aimed down the throat.
+  const DIVE_THROUGH_POS = new THREE.Vector3(0, 0, -2);
+  // The FOV narrows from CFG.fovDeg (30) toward this during the plunge for a tunnel /
+  // "drawn-in" feel — a longer lens compresses depth as the core rushes up. Tasteful
+  // (~9° narrowing), not a fisheye. Reduced motion never touches FOV (no geometric dive).
+  const DIVE_FOV_MIN = 21;
 
   // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
   // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
@@ -1050,13 +1081,28 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     if (diveActive) {
       const raw = Math.min(1, (performance.now() - diveStart) / 1000 / (reduced ? DIVE_REDUCED_S : DIVE_DURATION_S));
       if (!reduced) {
-        const k = easeInQuart(raw);              // accelerating fall toward the star
-        DIVE_TARGET_POS.set(0, 0, -8);           // fall THROUGH the horizon, not onto its face
-        camera.position.lerpVectors(diveFromPos, DIVE_TARGET_POS, k);
+        // CAMERA LEADS — front-loaded ease (easeOut, the cubic pull-back curve owned by
+        // lifecycle.ts). easeOut(0.3) ≈ 0.66, so ~two-thirds of the dolly is spent in
+        // the first third of the run: the camera LEAPS toward the core immediately and
+        // eases into it, reading as a fall THROUGH the event horizon (DIVE_THROUGH_POS,
+        // just past the origin) while the white is still near zero. The look target
+        // settles on the exact origin so the plunge stays aimed down the throat all the
+        // way down.
+        const k = easeOut(raw);
+        camera.position.lerpVectors(diveFromPos, DIVE_THROUGH_POS, k);
         frameLookTarget.lerpVectors(diveFromTarget, ORIGIN_VEC, k);
         camera.lookAt(frameLookTarget);
+        // FOV narrows on the SAME front-loaded curve → the walls rush past early, a
+        // longer-lens "tunnel" compression that sells the plunge before the bloom lands.
+        camera.fov = CFG.fovDeg + (DIVE_FOV_MIN - CFG.fovDeg) * k;
+        camera.updateProjectionMatrix();
       }
-      diveStrength = easeOut(Math.min(1, raw / DIVE_APEX_FRAC));
+      // WHITE TRAILS — held near zero until the plunge is DIVE_WHITE_START through the
+      // run, then ramped HARD (easeInQuart, the accelerating curve, over the remaining
+      // window up to the apex). This is the inverse of the original front-loaded white:
+      // the camera move is fully visible first; the bloom only takes over near the apex.
+      const whiteRaw = Math.min(1, (raw - DIVE_WHITE_START) / (DIVE_APEX_FRAC - DIVE_WHITE_START));
+      diveStrength = whiteRaw <= 0 ? 0 : easeInQuart(whiteRaw);
       diveOnProgress?.(diveStrength);
       if (!diveApexFired && raw >= DIVE_APEX_FRAC) { diveApexFired = true; diveOnApex?.(); }
     } else {
@@ -1143,7 +1189,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       }
     }
 
-    if (camera.fov !== CFG.fovDeg) {
+    // Restore the resting FOV unless a geometric dive currently OWNS it (the dive
+    // narrows the lens for its tunnel feel; under reduced motion the dive never touches
+    // FOV, so this still resets there). Once the dive ends this fires once and restores.
+    if (!(diveActive && !reduced) && camera.fov !== CFG.fovDeg) {
       camera.fov = CFG.fovDeg;
       camera.updateProjectionMatrix();
     }
@@ -1327,6 +1376,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diveFromTarget.copy(frameLookTarget);
   };
 
+  // Stop the render loop WITHOUT disposing GL. Idempotent (the `stopped` flag also
+  // short-circuits the visibilitychange re-kick and the next frame() body). HeroIsland
+  // calls this on `astro:before-swap` so the heavy ~1.2M-point loop yields the main
+  // thread to ClientRouter the instant it begins the view-transition swap, instead of
+  // rendering against it — the root cause of the occasional SPA stall on this page.
+  // GL teardown still happens on React unmount (dispose, below); this only halts work.
+  const pauseRendering = (): void => {
+    stopped = true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+  };
+
   // --- teardown ---
   // The returned value is the dispose function (same call contract as before) with
   // hitTestGiant bolted on (Object.assign), so HeroIsland can publish the cursor
@@ -1361,7 +1422,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
     },
-    { hitTestGiant, beginDive },
+    { hitTestGiant, beginDive, pauseRendering },
   );
   return dispose;
 }

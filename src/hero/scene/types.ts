@@ -36,6 +36,12 @@ export interface SceneHandle {
    *  Plunges the LIVE camera toward the world origin and ramps an overlay strength
    *  to full white, firing onApex once at the apex for the caller to navigate. */
   beginDive(opts: DiveOptions): void;
+  /** Stop the per-frame render loop WITHOUT disposing the GL context. Idempotent.
+   *  HeroIsland calls this on `astro:before-swap` so the heavy ~1.2M-point render
+   *  loop is not competing with ClientRouter for the main thread while it prepares
+   *  and runs the view-transition swap — the cause of the occasional SPA stall on
+   *  this page. Disposal (the GL teardown) still happens later, on React unmount. */
+  pauseRendering(): void;
 }
 
 /** Per-frame marker data emitted by the scene, consumed by StarMarker without

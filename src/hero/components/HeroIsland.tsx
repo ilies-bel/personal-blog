@@ -283,8 +283,25 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // convention; deleted on unmount so other pages never see a stale closure.
       window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
     });
+
+    // ROOT-CAUSE FIX for the occasional ClientRouter SPA stall on this page. The hero
+    // runs a heavy ~1.2M-point GPU render loop; ClientRouter swaps the DOM on a
+    // navigation (the dive marker OR any plain nav-pill link), and the destination
+    // article immediately mounts a SECOND client:only WebGL backdrop scene. Left
+    // running, the home loop renders straight through the swap prep and starves the
+    // view-transition on the main thread — the swap can stall for seconds. Pausing the
+    // render loop the instant ClientRouter begins the swap (`astro:before-swap`, which
+    // fires before the DOM is replaced) hands the main thread to the transition, so it
+    // completes promptly. We pause (not dispose) here: GL teardown still happens on the
+    // React unmount the swap triggers. Registered for EVERY navigation away from the
+    // hero, so it fixes plain header nav too, not just the dive. Removed on unmount.
+    const onBeforeSwap = (): void => {
+      sceneHandleRef.current?.pauseRendering?.();
+    };
+    document.addEventListener('astro:before-swap', onBeforeSwap);
     return () => {
       cancelled = true;
+      document.removeEventListener('astro:before-swap', onBeforeSwap);
       unsub();
       tracker.stop();
       sceneHandleRef.current = null;
@@ -314,21 +331,17 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // doesn't churn the marker tree.
   const beginDive = useCallback((opts: { href: string; targetNdc?: { x: number; y: number } }) => {
     const handle = sceneHandleRef.current;
-    // Robust go-to-destination: try the SPA navigate() (no reload flash), but the
-    // hero page tears down a heavy three.js scene at the same moment ClientRouter
-    // prepares the swap, and the view-transition swap can occasionally stall. Because
-    // the bloom overlay is full white at the apex, a hard fallback load is visually
-    // seamless — so if the path hasn't changed shortly after the SPA call, force a
-    // hard navigation. The destination is reached either way; the bloom hides the
-    // difference. The fallback is also the path when the engine never mounted.
+    // PURE SPA navigation — no hard-reload fallback. The former 700ms
+    // `window.location.assign` band-aid papered over a real stall: the heavy ~1.2M-point
+    // render loop kept rendering while ClientRouter prepared the view-transition swap
+    // (and the destination immediately spins up a SECOND client:only WebGL backdrop),
+    // starving the swap on the main thread. That is now fixed at the ROOT — the mount
+    // effect pauses this scene's render loop on `astro:before-swap` (see the effect
+    // above) so the swap runs unobstructed — so navigation is a clean `navigate()` with
+    // NO full page reload and no white-flash gap. This is also the path when the engine
+    // never mounted (still SPA via navigate, just without the geometric plunge).
     const goTo = (href: string): void => {
       void navigate(href);
-      const targetPath = (() => {
-        try { return new URL(href, window.location.href).pathname; } catch { return href; }
-      })();
-      window.setTimeout(() => {
-        if (window.location.pathname !== targetPath) window.location.assign(href);
-      }, 700);
     };
     if (!handle || typeof handle.beginDive !== 'function') {
       goTo(opts.href);                          // engine not ready → straight nav
