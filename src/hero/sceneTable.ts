@@ -852,7 +852,14 @@ export const SCENES: readonly LifecycleScene[] = [
 // HeroIsland) resolves unchanged. The SSR <noscript> mirrors BEATS, so it can
 // no longer drift from the live copy.
 // --------------------------------------------------------------------------
-export const HUD_NAV_ITEMS: readonly HudNavItem[] = SCENES.map((s) => s.hud);
+// The HUD rail reads TOP→BOTTOM in physical SCROLL order — BLACK HOLE (scroll 0,
+// top of page) down to THE BEGINNING (scroll 1, bottom of page). That is the
+// REVERSE of the lifecycle-ordered SCENES array, so the projection is reversed
+// here. `.map()` returns a fresh array, so `.reverse()` does NOT mutate SCENES;
+// MARKER_PLACEMENTS and BEATS below keep lifecycle order (other systems key off
+// it). Every HUD_NAV_ITEMS consumer is id-keyed or re-sorts, so the reordering
+// only affects render order on the rail.
+export const HUD_NAV_ITEMS: readonly HudNavItem[] = SCENES.map((s) => s.hud).reverse();
 
 export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = SCENES.flatMap((s) => s.markers);
 
