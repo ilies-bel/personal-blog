@@ -126,11 +126,17 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // #E76418→#FF9E2C. The body stops (r1,r2) are pulled DOWN into burnt red-brown so the
     // average surface is dark; the sodium/hot stops (r3,r4) carry the few bright cells only.
     // Mirrors disk.glsl.ts' cloud red-giant ramp so the mesh and the particle cloud agree.
-    vec3 r0 = vec3(0.105,0.026,0.010); // #220803 core dark — burnt floor
-    vec3 r1 = vec3(0.271,0.063,0.024); // #451006 deep shadow mass
-    vec3 r2 = vec3(0.478,0.141,0.043); // #7A240B red-giant body (DOMINANT burnt-orange)
-    vec3 r3 = vec3(0.706,0.227,0.063); // #B43A10 ember orange (body→rim)
-    vec3 r4 = vec3(0.906,0.392,0.094); // #E76418 sodium orange crest (hottest cells)
+    // MOLTEN-RED PASS (GREEN-DOMINANT): the SHADOW + MIDTONE stops are pushed toward
+    // saturated ember red — red held ~steady, GREEN (and blue) pulled DOWN — so the body
+    // mass reads as deep molten red, not burnt amber. A hue/saturation move, NOT a
+    // brightening: R/G climbs sharply in every shadow+mid stop while LUMINANCE holds flat
+    // or DROPS (body/ember stops read slightly DARKER, never brighter). The rim (r4) and
+    // the pale-gold crest are UNTOUCHED.
+    vec3 r0 = vec3(0.115,0.017,0.008); // #1D0402 ember floor — deep red (was #220803)
+    vec3 r1 = vec3(0.282,0.044,0.018); // #480B05 deep ember shadow mass (was #451006)
+    vec3 r2 = vec3(0.470,0.100,0.028); // #781A07 molten red body (DOMINANT; was #7A240B)
+    vec3 r3 = vec3(0.690,0.166,0.046); // #B02A0C molten ember (body→rim; greener-down, was #B43A10)
+    vec3 r4 = vec3(0.906,0.392,0.094); // #E76418 sodium orange crest (hottest cells) — UNCHANGED rim
     // cross-fade each stop from gold → red as uRed rises (linear recolour)
     vec3 c0 = mix(g0, r0, uRed);
     vec3 c1 = mix(g1, r1, uRed);
@@ -149,13 +155,17 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // high-contrast molten texture, not a smooth gold wash.
     float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
     float chMask = smoothstep(0.16, -0.05, ch);
-    // red-giant network lanes read as DEEP BURNT BROWN-BLACK (#220803) — the dark
-    // intergranular veins that give the molten mass its internal depth.
-    col = mix(col, mix(vec3(0.14,0.018,0.0), vec3(0.038,0.010,0.004), uRed), chMask*0.88);
+    // red-giant network lanes read as DEEP EMBER RED (#0D0201) — the dark intergranular
+    // veins that give the molten mass its internal depth. Green pulled DOWN (red held) vs
+    // the old near-black #220803 so the veins read as deep molten red, not brown-black.
+    col = mix(col, mix(vec3(0.14,0.018,0.0), vec3(0.046,0.007,0.003), uRed), chMask*0.88);
 
     // sunspots: darker + slightly broader so they punch as the reference's dark pores.
+    // The yellow star keeps its exact neutral-dark pore (#0A0100); the RED GIANT's pores
+    // are pushed to a deep EMBER red (#0D0100 — green dropped, red held) so even the
+    // darkest shadows read molten red, not black. Gated by uRed → yellow star untouched.
     float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.48,0.2,m);
-    col = mix(col, vec3(0.04,0.006,0.0), spot*0.72);
+    col = mix(col, mix(vec3(0.04,0.006,0.0), vec3(0.046,0.004,0.0), uRed), spot*0.72);
 
     // granulation: crisp distinct mottling (lava-cell texture of the reference). Floor
     // raised (0.72 → 0.95) so the troughs stay LUMINOUS — the reference disc is a bright

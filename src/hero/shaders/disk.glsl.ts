@@ -1687,10 +1687,11 @@ export const diskFragmentShader = /* glsl */ `
           // gold-sun flare ramp
           vec3 gfc = mix(vec3(1.0, 0.40, 0.06), vec3(1.0, 0.72, 0.26), smoothstep(0.2, 0.6, ht));
           gfc = mix(gfc, vec3(1.0, 0.94, 0.78), smoothstep(0.6, 1.0, ht));
-          // red-giant flare ramp: burnt red-brown root → sodium orange → rare hot edge. The
-          // base is pulled into the burnt-mass band (#451006-ish) so flares read as molten
-          // surface activity, not glowing gold; only the hottest tip reaches sodium/hot-edge.
-          vec3 rfc = mix(vec3(0.271, 0.063, 0.024), vec3(0.706, 0.227, 0.063), smoothstep(0.2, 0.62, ht));
+          // red-giant flare ramp: molten ember root → sodium orange → rare hot edge. The
+          // base is pulled into the deep-ember shadow band (#4E0E05, matching the molten-red
+          // surface shadow stop) so flares read as molten surface activity, not glowing gold;
+          // only the hottest tip reaches sodium/hot-edge (those stops are UNCHANGED).
+          vec3 rfc = mix(vec3(0.282, 0.044, 0.018), vec3(0.690, 0.166, 0.046), smoothstep(0.2, 0.62, ht));
           rfc = mix(rfc, vec3(0.906, 0.392, 0.094), smoothstep(0.62, 0.88, ht));
           rfc = mix(rfc, vec3(1.000, 0.620, 0.173), smoothstep(0.88, 1.0, ht));
           pcol = mix(gfc, rfc, vSunRed);
@@ -1729,13 +1730,20 @@ export const diskFragmentShader = /* glsl */ `
           // at the extreme top of the value range. Surrounding space stays TRUE BLACK.
           // The smoothstep windows are shifted UP so the burnt-mass band owns the bulk of
           // the surface and only the noise tail reaches the hot stops.
-          vec3 rc = vec3(0.105, 0.026, 0.010);                  // #220803 core dark — burnt floor
-          rc = mix(rc, vec3(0.271, 0.063, 0.024), smoothstep(0.06, 0.30, mEff)); // #451006 deep shadow mass
-          rc = mix(rc, vec3(0.478, 0.141, 0.043), smoothstep(0.26, 0.56, mEff)); // #7A240B red-giant body (DOMINANT)
-          rc = mix(rc, vec3(0.706, 0.227, 0.063), smoothstep(0.58, 0.80, mEff)); // #B43A10 ember orange
-          rc = mix(rc, vec3(0.906, 0.392, 0.094), smoothstep(0.80, 0.93, mEff)); // #E76418 sodium orange (active cells)
-          rc = mix(rc, vec3(1.000, 0.620, 0.173), smoothstep(0.94, 1.0, mEff));  // #FF9E2C hot edge (RARE crest)
-          rc = mix(rc, vec3(0.060, 0.014, 0.006), vSunDark*vYrMix); // #220803-deeper umbrae/dark veins
+          // MOLTEN-RED PASS (GREEN-DOMINANT): the SHADOW + MIDTONE stops are pushed toward
+          // saturated ember red — red held ~steady, GREEN (and blue) pulled DOWN — so the body
+          // mass reads as deep molten red, not burnt amber. A hue/saturation move, NOT a
+          // brightening: R/G climbs sharply in every shadow+mid stop while LUMINANCE holds flat
+          // or DROPS (the body/ember stops read slightly DARKER, never brighter). The smoothstep
+          // windows are unchanged (body still ~70% of the surface). Rim (#E76418) and the
+          // pale-gold crest (#FF9E2C) and their windows are UNTOUCHED.
+          vec3 rc = vec3(0.115, 0.017, 0.008);                  // #1D0402 ember floor — deep red (was #220803)
+          rc = mix(rc, vec3(0.282, 0.044, 0.018), smoothstep(0.06, 0.30, mEff)); // #480B05 deep ember shadow mass (was #451006)
+          rc = mix(rc, vec3(0.470, 0.100, 0.028), smoothstep(0.26, 0.56, mEff)); // #781A07 molten red body (DOMINANT; was #7A240B)
+          rc = mix(rc, vec3(0.690, 0.166, 0.046), smoothstep(0.58, 0.80, mEff)); // #B02A0C molten ember (greener-down; was #B43A10)
+          rc = mix(rc, vec3(0.906, 0.392, 0.094), smoothstep(0.80, 0.93, mEff)); // #E76418 sodium orange (active cells) — UNCHANGED rim
+          rc = mix(rc, vec3(1.000, 0.620, 0.173), smoothstep(0.94, 1.0, mEff));  // #FF9E2C hot edge (RARE crest) — UNCHANGED
+          rc = mix(rc, vec3(0.068, 0.010, 0.005), vSunDark*vYrMix); // #110301 deep ember umbrae/dark veins (green down, red held)
           // sodium-orange limb (forward-scattered) — a HOT edge, not a creamy-white wash.
           // Pulled toward sodium orange (#E76418→#FF9E2C) and the wide-band weight cut so it
           // doesn't flood the outer body with bright rim.
@@ -1782,8 +1790,8 @@ export const diskFragmentShader = /* glsl */ `
           // NO pink — the hottest root only reaches a bright sodium orange. Gated by
           // vSunRed (red giant only). The grains carry these colours as they arc off the
           // limb, so the geyser particles themselves read sodium orange.
-          vec3 eRed  = vec3(0.706, 0.227, 0.063); // #B43A10 ember orange (giant surface, hotter than body)
-          vec3 eOrng = vec3(0.906, 0.392, 0.094); // #E76418 sodium orange (plume body)
+          vec3 eRed  = vec3(0.690, 0.166, 0.046); // #B02A0C molten ember (giant surface, hotter than body; greener-down to match the molten-red body stop)
+          vec3 eOrng = vec3(0.906, 0.392, 0.094); // #E76418 sodium orange (plume body) — UNCHANGED
           vec3 eRoot = vec3(1.000, 0.620, 0.173); // #FF9E2C hot edge at the root (active region, no white)
           pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume heats to sodium orange
           pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter sodium orange up the column
