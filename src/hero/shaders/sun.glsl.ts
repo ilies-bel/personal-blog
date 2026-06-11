@@ -120,15 +120,17 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     vec3 g2 = vec3(1.14,0.82,0.22);
     vec3 g3 = vec3(1.30,1.08,0.52);
     vec3 g4 = vec3(1.45,1.32,0.90);   // soft cream crest
-    // red-giant ramp: SODIUM ORANGE highlights / DEEP BROWN lows (red-giant spec).
-    // The green channel is raised across every stop so the orb reads distinctly more
-    // sodium-vapour ORANGE / less blood-red: the lows are warm DEEP BROWN (not maroon)
-    // and the crest climbs to a hot sodium orange (~1.0,0.62,0.16). Never gold/white.
-    vec3 r0 = vec3(0.13,0.045,0.012);  // deep brown (was maroon 0.10,0.008,0.003)
-    vec3 r1 = vec3(0.46,0.16,0.03);    // warm brown
-    vec3 r2 = vec3(0.74,0.30,0.05);    // brown-orange
-    vec3 r3 = vec3(0.91,0.46,0.07);    // sodium orange (~#E8820E)
-    vec3 r4 = vec3(1.00,0.58,0.13);    // hot sodium-orange crest
+    // red-giant ramp: BURNT-EMBER mass — a DARK, HEAVY, molten star, NOT a clean sodium-
+    // orange sun. PALETTE (red-giant ember spec): ~70% burnt red-brown shadow mass, ~20%
+    // sodium-orange body, ~10% rare hot accents. Anchors #220803→#451006→#7A240B→#B43A10→
+    // #E76418→#FF9E2C. The body stops (r1,r2) are pulled DOWN into burnt red-brown so the
+    // average surface is dark; the sodium/hot stops (r3,r4) carry the few bright cells only.
+    // Mirrors disk.glsl.ts' cloud red-giant ramp so the mesh and the particle cloud agree.
+    vec3 r0 = vec3(0.105,0.026,0.010); // #220803 core dark — burnt floor
+    vec3 r1 = vec3(0.271,0.063,0.024); // #451006 deep shadow mass
+    vec3 r2 = vec3(0.478,0.141,0.043); // #7A240B red-giant body (DOMINANT burnt-orange)
+    vec3 r3 = vec3(0.706,0.227,0.063); // #B43A10 ember orange (body→rim)
+    vec3 r4 = vec3(0.906,0.392,0.094); // #E76418 sodium orange crest (hottest cells)
     // cross-fade each stop from gold → red as uRed rises (linear recolour)
     vec3 c0 = mix(g0, r0, uRed);
     vec3 c1 = mix(g1, r1, uRed);
@@ -147,8 +149,9 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // high-contrast molten texture, not a smooth gold wash.
     float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
     float chMask = smoothstep(0.16, -0.05, ch);
-    // red-giant network lanes read as DEEP BROWN (green lifted off pure black-red).
-    col = mix(col, mix(vec3(0.14,0.018,0.0), vec3(0.06,0.020,0.004), uRed), chMask*0.80);
+    // red-giant network lanes read as DEEP BURNT BROWN-BLACK (#220803) — the dark
+    // intergranular veins that give the molten mass its internal depth.
+    col = mix(col, mix(vec3(0.14,0.018,0.0), vec3(0.038,0.010,0.004), uRed), chMask*0.88);
 
     // sunspots: darker + slightly broader so they punch as the reference's dark pores.
     float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.48,0.2,m);
@@ -174,8 +177,9 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // Tightened threshold (0.86 → 0.90) so the white-hot patches stay as discrete
     // flare points instead of flooding the whole crest white.
     float ar = smoothstep(0.90, 0.99, m) * (1.0 - 0.85*uRed);
-    // red-giant active regions glow sodium orange (green lifted 0.28 → 0.40).
-    col += ar * mix(vec3(1.15,0.92,0.46), vec3(0.62,0.40,0.10), uRed);
+    // red-giant active regions glow sodium orange (#E76418-ish) — the rare hot patches,
+    // confined to the brightest cells by the tight 0.90 threshold above.
+    col += ar * mix(vec3(1.15,0.92,0.46), vec3(0.70,0.30,0.07), uRed);
 
     vec3 vd = normalize(-vViewPos);
     float fres = 1.0 - max(dot(vd, vViewN), 0.0);
@@ -186,10 +190,13 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // rim, not a hard dark edge, while the disc centre keeps its lava detail.
     float limbWide = pow(fres, 1.8);
     float limbEdge = pow(fres, 5.0);
-    // red-giant limb glows sodium orange (green lifted) — a molten warm edge, not blood-red.
-    vec3 limbCol = mix(vec3(1.30,1.10,0.62), vec3(0.82,0.40,0.08), uRed);
-    col = mix(col, limbCol, limbWide*mix(0.55, 0.5, uRed));
-    col += limbEdge * mix(vec3(1.05,0.78,0.34), vec3(0.34,0.14,0.02), uRed);
+    // red-giant limb glows SODIUM ORANGE (#E76418) — a hot molten edge, not a creamy-gold
+    // wash. The wide-band weight is cut on the red side (0.5→0.38) so the rim is an EDGE,
+    // not a bright band lifting the outer third of the body toward gold; the tight edge
+    // reaches the hot-edge stop (#FF9E2C) at the silhouette only.
+    vec3 limbCol = mix(vec3(1.30,1.10,0.62), vec3(0.906,0.392,0.094), uRed);
+    col = mix(col, limbCol, limbWide*mix(0.55, 0.38, uRed));
+    col += limbEdge * mix(vec3(1.05,0.78,0.34), vec3(0.45,0.18,0.03), uRed);
 
     // overall luminance: bright gold sun → dim matte red giant (light leads size).
     // The yellow-star multiplier is pulled DOWN from the old blazing 1.42 to 1.18 so
@@ -222,7 +229,7 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // additive off-limb PLUME. Both read on the gold star AND the red giant, so they
     // are added AFTER the gold/red/blue recolour above. Hot eruption colour tilts
     // toward the surface palette so a tap looks like the surface flaring, not a decal.
-    vec3 eruptHot = mix(vec3(1.30,1.02,0.55), vec3(1.12,0.52,0.12), uRed); // gold→sodium-orange ember
+    vec3 eruptHot = mix(vec3(1.30,1.02,0.55), vec3(1.00,0.46,0.10), uRed); // gold→sodium-orange ember (#E76418, hottest active-region accent)
     // Recompute the (geyser-side) limb factor: a true off-limb plume should glow most
     // where the surface grazes the silhouette toward the viewer, so we bias the plume
     // additive by the wide fresnel limb already computed for the rim.

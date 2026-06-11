@@ -1464,21 +1464,28 @@ export const diskVertexShader = /* glsl */ `
           // the colour ramp carries the hue, brightness only modulates it. A
           // gentle limb-darkening keeps the disc edge from glaring.
           float m = vSunM;
-          // red giant: a big diffuse cool star. The parked comp frames the curved LIMB,
-          // so the old heavy limb-darkening (limbMu 0.30) + deep-red palette + low
-          // exposure crushed the surface to near-black. Lift the per-grain luminance
-          // substantially (floor 0.30→0.46, ceiling 0.60→0.82) AND cut the red limb
-          // darkening (limbMu 0.30→0.14) so the limb we're actually looking at reads as a
-          // lit, glowing edge rather than a black silhouette. Still below the yellow
-          // star's stack — the colour ramp stays deep red, so it brightens to a vivid red
-          // photosphere, not a white blowout.
-          float baseLo = mix(0.30, 0.80, vSunRed);
-          float baseHi = mix(0.62, 1.05, vSunRed);
-          float limbMu = mix(0.18, 0.12, vSunRed);
-          float lum = (baseLo + baseHi*m) * (1.0 - vSunDark*0.85) * ((1.0-limbMu) + limbMu*mu);
-          float arBright = smoothstep(0.86, 0.995, m) * mix(0.45, 0.40, vSunRed);
-          // light the fresnel limb warmly (was 0.22 for red) so the curved edge glows.
-          bright = (lum + arBright + limb*mix(0.30, 0.50, vSunRed));
+          // red giant: a big, DARK, molten ember star — NOT a clean lit gold sun. The
+          // previous floor/ceiling (0.80/1.05) lit the WHOLE surface bright and even, which
+          // is exactly what read as "yellow sun". Pull the red-giant floor DOWN hard
+          // (baseLo 0.80→0.34) so the burnt-mass body sits dark, and lower the ceiling a
+          // touch (baseHi 1.05→0.92) — but WIDEN the dynamic range (baseHi*m carries the hot
+          // cells) so the few bright cells still climb high enough to bloom while the bulk of
+          // the surface stays a heavy burnt-orange/red-brown mass. limbMu kept low (0.14) so
+          // the parked limb still reads as a lit, glowing edge, not a black silhouette.
+          float baseLo = mix(0.30, 0.34, vSunRed);
+          float baseHi = mix(0.62, 0.92, vSunRed);
+          float limbMu = mix(0.18, 0.14, vSunRed);
+          // contrast push (red giant only): square the mottle so the value distribution is
+          // bottom-heavy — most of the surface lands in the dark burnt band and only the
+          // bright cell tops carry the sodium/hot stops. mEffLum 0.55 mixes in the squared
+          // field so it deepens the shadows without killing the hot cell peaks.
+          float mLit = mix(m, m*m, mix(0.0, 0.55, vSunRed));
+          float lum = (baseLo + baseHi*mLit) * (1.0 - vSunDark*0.90) * ((1.0-limbMu) + limbMu*mu);
+          float arBright = smoothstep(0.90, 0.997, m) * mix(0.45, 0.28, vSunRed);
+          // light the fresnel limb warmly so the curved edge glows — but pulled DOWN for the
+          // red giant (0.50→0.34) so the sodium-orange rim is a hot EDGE, not a bright band
+          // washing the outer third of the body toward gold.
+          bright = (lum + arBright + limb*mix(0.30, 0.34, vSunRed));
           vHeat = m;
         }
       }
@@ -1680,10 +1687,12 @@ export const diskFragmentShader = /* glsl */ `
           // gold-sun flare ramp
           vec3 gfc = mix(vec3(1.0, 0.40, 0.06), vec3(1.0, 0.72, 0.26), smoothstep(0.2, 0.6, ht));
           gfc = mix(gfc, vec3(1.0, 0.94, 0.78), smoothstep(0.6, 1.0, ht));
-          // red-giant flare ramp: deep brown → sodium orange (never white-hot); green
-          // lifted across the ramp so the flare matches the sodium-orange photosphere.
-          vec3 rfc = mix(vec3(0.42, 0.13, 0.02), vec3(0.94, 0.42, 0.07), smoothstep(0.2, 0.65, ht));
-          rfc = mix(rfc, vec3(1.0, 0.56, 0.14), smoothstep(0.65, 1.0, ht));
+          // red-giant flare ramp: burnt red-brown root → sodium orange → rare hot edge. The
+          // base is pulled into the burnt-mass band (#451006-ish) so flares read as molten
+          // surface activity, not glowing gold; only the hottest tip reaches sodium/hot-edge.
+          vec3 rfc = mix(vec3(0.271, 0.063, 0.024), vec3(0.706, 0.227, 0.063), smoothstep(0.2, 0.62, ht));
+          rfc = mix(rfc, vec3(0.906, 0.392, 0.094), smoothstep(0.62, 0.88, ht));
+          rfc = mix(rfc, vec3(1.000, 0.620, 0.173), smoothstep(0.88, 1.0, ht));
           pcol = mix(gfc, rfc, vSunRed);
         } else {
           // PHOTOSPHERE: the warm field vSunM drives a 5-stop ramp. The gold ramp
@@ -1711,23 +1720,27 @@ export const diskFragmentShader = /* glsl */ `
           sc = mix(sc, vec3(1.0, 0.74, 0.30), vSunLimb*0.72);
           sc += vSunLimb * vec3(0.6, 0.32, 0.08);
           sc *= 1.15;
-          // red giant — SODIUM-VAPOUR orange photosphere with DEEP-BROWN lanes (built
-          // from mEff; dark veins/limb scaled by vYrMix so the gold ball has no lanes).
-          // PALETTE (red-giant spec): sodium orange / deep brown / black negative space.
-          // The whole orb is shifted distinctly MORE ORANGE / LESS blood-red — the green
-          // channel is raised across every stop so the lows read as warm DEEP BROWN (not
-          // maroon-red) and the highlights climb to a hot sodium ORANGE (~#E8820E ≈
-          // 0.91,0.51,0.06 up to ~1.0,0.62,0.16). Surrounding space stays TRUE BLACK.
-          vec3 rc = vec3(0.30, 0.11, 0.025);                    // deep-BROWN ember floor (green
-          //   lifted 0.15→0.11 over a darker red so it reads warm brown, not maroon).
-          rc = mix(rc, vec3(0.72, 0.29, 0.05),  smoothstep(0.08, 0.34, mEff)); // warm brown-orange
-          rc = mix(rc, vec3(0.91, 0.46, 0.07),  smoothstep(0.30, 0.58, mEff)); // sodium orange body
-          rc = mix(rc, vec3(0.98, 0.55, 0.11),  smoothstep(0.56, 0.80, mEff)); // bright sodium orange
-          rc = mix(rc, vec3(1.00, 0.62, 0.16),  smoothstep(0.84, 1.0, mEff));  // hot sodium-orange crest
-          rc = mix(rc, vec3(0.14, 0.050, 0.012), vSunDark*vYrMix); // deep-BROWN spots/veins (off black)
-          // warm sodium-orange limb (forward-scattered) — the curved edge fills the comp.
-          rc = mix(rc, vec3(1.00, 0.52, 0.12), vSunLimb*0.65*vYrMix);
-          rc += vSunLimb * vec3(0.55, 0.20, 0.03) * vYrMix;
+          // red giant — BURNT-EMBER photosphere: a DARK, HEAVY, molten mass, not a clean
+          // sodium-orange sun. PALETTE (red-giant ember spec): ~70% burnt red-brown shadow
+          // mass, ~20% sodium-orange body→rim, ~10% rare pale-gold hot accents. The body
+          // stops are pulled DOWN into burnt-orange / red-brown (anchors #220803→#451006→
+          // #7A240B→#B43A10) so the AVERAGE surface reads dark & molten; the sodium-orange
+          // (#E76418) only shows on the brighter cells, and the rare hot edge (#FF9E2C) sits
+          // at the extreme top of the value range. Surrounding space stays TRUE BLACK.
+          // The smoothstep windows are shifted UP so the burnt-mass band owns the bulk of
+          // the surface and only the noise tail reaches the hot stops.
+          vec3 rc = vec3(0.105, 0.026, 0.010);                  // #220803 core dark — burnt floor
+          rc = mix(rc, vec3(0.271, 0.063, 0.024), smoothstep(0.06, 0.30, mEff)); // #451006 deep shadow mass
+          rc = mix(rc, vec3(0.478, 0.141, 0.043), smoothstep(0.26, 0.56, mEff)); // #7A240B red-giant body (DOMINANT)
+          rc = mix(rc, vec3(0.706, 0.227, 0.063), smoothstep(0.58, 0.80, mEff)); // #B43A10 ember orange
+          rc = mix(rc, vec3(0.906, 0.392, 0.094), smoothstep(0.80, 0.93, mEff)); // #E76418 sodium orange (active cells)
+          rc = mix(rc, vec3(1.000, 0.620, 0.173), smoothstep(0.94, 1.0, mEff));  // #FF9E2C hot edge (RARE crest)
+          rc = mix(rc, vec3(0.060, 0.014, 0.006), vSunDark*vYrMix); // #220803-deeper umbrae/dark veins
+          // sodium-orange limb (forward-scattered) — a HOT edge, not a creamy-white wash.
+          // Pulled toward sodium orange (#E76418→#FF9E2C) and the wide-band weight cut so it
+          // doesn't flood the outer body with bright rim.
+          rc = mix(rc, vec3(0.906, 0.392, 0.094), vSunLimb*0.45*vYrMix);
+          rc += vSunLimb * vec3(0.40, 0.16, 0.03) * vYrMix;
 
           // gold swap-in target: a clean warm gold that matches the yellow mesh,
           // so the flash-masked mesh→cloud handoff is seamless. Lerp gold → red
@@ -1769,9 +1782,9 @@ export const diskFragmentShader = /* glsl */ `
           // NO pink — the hottest root only reaches a bright sodium orange. Gated by
           // vSunRed (red giant only). The grains carry these colours as they arc off the
           // limb, so the geyser particles themselves read sodium orange.
-          vec3 eRed  = vec3(0.86, 0.30, 0.04);   // warm brown-orange (giant surface, hotter than body)
-          vec3 eOrng = vec3(1.00, 0.46, 0.08);   // sodium orange (plume body)
-          vec3 eRoot = vec3(1.00, 0.56, 0.13);   // hottest bright SODIUM ORANGE at the root (no white)
+          vec3 eRed  = vec3(0.706, 0.227, 0.063); // #B43A10 ember orange (giant surface, hotter than body)
+          vec3 eOrng = vec3(0.906, 0.392, 0.094); // #E76418 sodium orange (plume body)
+          vec3 eRoot = vec3(1.000, 0.620, 0.173); // #FF9E2C hot edge at the root (active region, no white)
           pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume heats to sodium orange
           pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter sodium orange up the column
           pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // hot sodium-orange glow at the root (additive)
