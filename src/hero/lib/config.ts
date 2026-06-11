@@ -57,13 +57,14 @@ export const CFG: Config = {
   spinDir: -1.0,
   betaScale: 0.53,
   beamExp: 2.7,
-  doppler: 0.40, // softer relativistic beam — eased 0.46 → 0.40 so the bright (left)
-  //   lobe no longer overpowers the final black-hole composition (still beamed, just calmer)
+  doppler: 0.3, // ITEM 2: softer relativistic beam (0.40 → 0.30) so the bright LEFT lobe — which
+  //   sits right over the bottom-left manifesto text — no longer crowds the copy. More negative
+  //   space near the text → the opening reads as pressure + silence, not a busy warm space scene.
   lens: 1.72,
   secScale: 0.85,
   vertAsym: 1.0,
-  horizAsym: 0.34, // gentler L/R imbalance (0.40 → 0.34) → light spread more evenly, the left
-  //   beam reads as a hot lobe rather than a blown-out streak that pulls the eye off the hole
+  horizAsym: 0.28, // ITEM 2: gentler L/R imbalance (0.34 → 0.28) → the left beam (over the text)
+  //   calms further, spreading the light more evenly so the dark text region stays quiet/empty
 
   // --- camera (resting pose; the intro travels in to this) ---
   inclDeg: 5.0,
@@ -76,11 +77,15 @@ export const CFG: Config = {
   bloomStr: 0.78, // ref: 0.56
   bloomRad: 0.45,
   grain: 0, // film grain removed from all states
-  warmth: 0.01,
+  warmth: -0.05, // ITEM 2: COLD highlights at the black hole (blue-white, not warm). cfg.warmth
+  //   only reaches the grade at the black-hole fallthrough — every later state overrides warmth
+  //   in its own lifecycle branch — so this cools the BH highlights ONLY (no warm/cold bleed).
   saturation: 0.38,
-  olive: 1.3, // warm-graphite grade strength at the black hole (was olive-green 1.6)
+  olive: 1.3, // cold-silver grade strength at the black hole (ITEM 2: drives the cool cast)
   warp: 0.76,
-  starBright: 3.6, // ref: 3.0
+  starBright: 2.5, // ITEM 2: dropped ~30% (3.6 -> 2.5) so the black-hole opening reads as
+  //   pressure + silence, not a busy warm star scene. The lensed starfield is hidden during
+  //   nebula/dot and the star states use the sun-rig dome, so this mainly quiets the BH field.
   starDensity: 5.2,
 };
 

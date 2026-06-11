@@ -19,11 +19,15 @@ export const starVertexShader = /* glsl */ `
     // crisp near-white for the bright points, and a RARE cool accent so the scene
     // never goes fully beige. Brighter stars (high aSeed) bias toward near-white,
     // faint ones toward bone — bright = crisp, faint = warm (the reference look).
+    // ITEM 2: cool the star families toward COLD silver so the black-hole field reads
+    // cold + near-monochrome (the warm-bone majority was what made the opening read as a
+    // warm space scene). The 'warmGraphite' family is renamed in spirit to a cold silver
+    // (blue lifted above red), the near-white pushed faintly blue, the cool accent kept.
     float fam = starHash(aSeed*131.71 + 4.0);             // family roll 0..1
-    vec3 warmGraphite = mix(vec3(0.47,0.45,0.41),         // faint bone
-                            vec3(0.78,0.73,0.59), aSeed); // brighter warm
-    vec3 nearWhite    = vec3(0.97,0.96,0.92);             // crisp, slightly warm
-    vec3 coolAccent   = vec3(0.72,0.78,0.92);             // faint cobalt depth
+    vec3 warmGraphite = mix(vec3(0.42,0.45,0.50),         // faint cold silver
+                            vec3(0.62,0.67,0.74), aSeed); // brighter cold silver
+    vec3 nearWhite    = vec3(0.92,0.95,0.99);             // crisp, faintly blue-white
+    vec3 coolAccent   = vec3(0.70,0.78,0.94);             // faint cobalt depth
     float roll = clamp(fam*0.78 + aSeed*0.22, 0.0, 1.0);  // bright points bias white
     vec3 tint = warmGraphite;
     tint = mix(tint, nearWhite,  step(0.74, roll));       // ~18% near-white (the bright)

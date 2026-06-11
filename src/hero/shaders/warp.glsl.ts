@@ -53,6 +53,8 @@ export const warpFragmentShader = /* glsl */ `
   precision highp float; varying float vB; varying float vAbs;
   void main(){
     float fade = smoothstep(1.0, 0.05, vAbs);    // bright at centre, fades at the ends
-    gl_FragColor = vec4(vec3(0.95,0.96,0.99) * vB * fade * 0.9, 1.0);
+    // ITEM 2: the lensed warp arcs read COLD silver / faint blue-white (eased a touch
+    // cooler) so the bent light around the shadow stays in the cold black-hole palette.
+    gl_FragColor = vec4(vec3(0.90,0.94,1.00) * vB * fade * 0.9, 1.0);
   }
 `;

@@ -40,18 +40,18 @@ export const GradeShader = {
       col = mix(vec3(luma), col, uSat);
       // slight warm tint in the highlights
       col *= vec3(1.0 + uWarmth, 1.0, 1.0 - uWarmth*0.85);
-      // warm-GRAPHITE tint of the background + halo falloff. Red sits highest and
-      // blue is pulled DOWN (never green-above-red, which is what read as olive):
-      // the shadows go warm charcoal/bone, matching the engraving reference, not moss.
-      // (uOlive kept as the uniform name for back-compat; it now drives the warm grade.)
-      // PALETTE: the black hole spec is black / graphite / cold-white / bone — a
-      // cool-neutral room with only a FAINT warm bone. The tint is pulled toward
-      // neutral graphite (blue lifted 0.82 → 0.90 so the cast is a subtle bone, not
-      // an amber/olive wash) and the floor flattened toward neutral charcoal.
+      // COLD-SILVER tint of the background + halo falloff (ITEM 2). The black-hole
+      // spec is cold: bg #030405, dust #11151A, accent #9EA8B8 — a near-monochrome
+      // silver/black room, gravitational and EMPTY, with NO warm bone. uOlive (kept as
+      // the uniform name for back-compat) now drives a COOL grade: BLUE sits highest
+      // and red is pulled DOWN, so the shadows go cold silver-graphite, the eye-reset
+      // opposite of the warm red/yellow chapters. This is gated per-state by look.olive
+      // (≈0 in every later state, full only at the black hole), so the cold cast NEVER
+      // warm- or cold-bleeds into the other chapters.
       float shW = 1.0 - smoothstep(0.0, 0.5, luma);          // weight in the shadows
-      col *= mix(vec3(1.0), vec3(1.04, 1.00, 0.90), uOlive*shW);
-      col += vec3(0.018, 0.017, 0.015) * uOlive;             // neutral-graphite floor (faint bone)
-      col += vec3(0.005);                                     // slight neutral floor
+      col *= mix(vec3(1.0), vec3(0.92, 0.97, 1.04), uOlive*shW);  // cool silver-blue shadow cast
+      col += vec3(0.011, 0.013, 0.016) * uOlive;             // cold-graphite floor (faint blue-silver, #11151A family)
+      col += vec3(0.004, 0.0045, 0.005);                     // slight cool-neutral floor
       // fine grain
       float g = hash(vUv*uResolution + fract(uTime)*97.0);
       col += (g-0.5)*uGrain;

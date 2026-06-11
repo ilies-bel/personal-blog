@@ -1624,11 +1624,14 @@ export const diskFragmentShader = /* glsl */ `
       a = exp(-d*d*4.5);
     }
 
-    // --- ember / black-hole ramp (near-monochrome, warm highlights) ---
+    // --- black-hole accretion ramp (ITEM 2: COLD silver / bone / faint blue-white,
+    //     near-monochrome). The lensing line + disk read as a thin SILVER rim of light,
+    //     NOT a warm sunburst: the low end is a cold blue-silver (accent #9EA8B8 family),
+    //     the mid a cool bone, the hot a faint blue-white. Cold + gravitational. ---
     float t = vBright / (vBright + 1.6);
-    vec3 cLow = vec3(0.78, 0.80, 0.85);
-    vec3 cMid = vec3(0.93, 0.93, 0.94);
-    vec3 cHot = vec3(1.00, 1.00, 1.00);
+    vec3 cLow = vec3(0.66, 0.71, 0.80);   // cold blue-silver (the #9EA8B8 cold accent)
+    vec3 cMid = vec3(0.88, 0.91, 0.95);   // cool bone
+    vec3 cHot = vec3(0.97, 0.99, 1.00);   // faint blue-white hot edge
     vec3 emberCol = mix(cLow, cMid, smoothstep(0.0, 0.45, t));
     emberCol = mix(emberCol, cHot, smoothstep(0.45, 0.92, t));
     float luma = dot(emberCol, vec3(0.299,0.587,0.114));
