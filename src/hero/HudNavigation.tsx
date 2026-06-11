@@ -10,7 +10,7 @@ import {
 } from './sceneTable';
 import { hudIdForStage } from './lifecycleMachine';
 import type { MarkerFrame } from './scene/types';
-import { progressForLegacyStage } from './timeline';
+import { lifecycleProgress, progressForLegacyStage } from './timeline';
 import {
   SCROLL_HINT_DISMISS_AT,
   SCENE_READY_EVENT,
@@ -63,9 +63,14 @@ function resolveAsset(base: string, src: string): string {
  * navigating away to a page.
  */
 function scrollToStage(stage: number, reduced: boolean): void {
-  const progress = progressForLegacyStage(stage);
+  // progressForLegacyStage returns LIFECYCLE-space progress (the inverse of the
+  // progress->stage table). The page maps RAW scroll -> stage by first running raw
+  // scroll through lifecycleProgress() (the LIFECYCLE_DIRECTION seam, = 1 - p under
+  // 'reverse'). So to scroll to a stage we must undo that flip: convert lifecycle
+  // progress back to raw scroll progress via lifecycleProgress() (its own inverse).
+  const raw = lifecycleProgress(progressForLegacyStage(stage));
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  window.scrollTo({ top: progress * max, behavior: reduced ? 'auto' : 'smooth' });
+  window.scrollTo({ top: raw * max, behavior: reduced ? 'auto' : 'smooth' });
 }
 
 // --- Aiming-compass data source --------------------------------------------
