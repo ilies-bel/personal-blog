@@ -2,14 +2,33 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
 import { BEATS, SCROLL_SECTION_COUNT } from '../hero/beats';
-import { SCENE_READY_EVENT, SCENE_READY_BODY_CLASS } from '../hero/lib/constants';
-import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+import {
+  SCENE_READY_EVENT,
+  SCENE_READY_BODY_CLASS,
+  LOADER_GONE_BODY_CLASS,
+  LOADER_MIN_MS,
+  LOADER_SEEN_STORAGE_KEY,
+} from '../hero/lib/constants';
+import { SITE_TITLE, SITE_DESCRIPTION, BRAND_NAME, BRAND_ROLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 ---
 
 <BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} type="website" bare>
+  {/* The home page's live (JS-on) top-level heading. The cinematic hero carries
+      the identity VISUALLY (the corner wordmark lockup + the manifesto <h2> beats
+      that cross-fade per state), so there is no on-design element that should be
+      the page <h1> — every visible candidate is either a non-heading lockup or one
+      of several cross-fading beats (promoting one beat would fragment / duplicate
+      the h1). So the document's single top-level heading is this dedicated, visually
+      hidden line, naming the page/site exactly like the <noscript> fallback's
+      name + role (sourced from the same BRAND_* constants so the two can't drift).
+      It is server-rendered (present before hydration) and uses .sr-only — the clip
+      pattern keeps it in the accessibility tree (NOT aria-hidden, NOT display:none),
+      so screen readers and SEO get a real <h1> while the visuals are untouched. */}
+  <h1 class="sr-only">{BRAND_NAME} — {BRAND_ROLE}</h1>
+
   {/* Instant intro loader — pure server-rendered HTML + CSS, ZERO JavaScript
       dependency, so it paints the moment the document arrives (long before the
       ~200 KB-gzip three.js engine chunk downloads, parses, allocates its typed
@@ -26,27 +45,129 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   <div class="scene-loader" aria-hidden="true">
     <div class="scene-loader-mark">
       <span class="scene-loader-dot"></span>
-      <span class="scene-loader-name">ILIÈS BELDJILALI</span>
+      <span class="scene-loader-name">{BRAND_NAME}</span>
     </div>
   </div>
 
   {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout. A
       tiny zero-import <script is:inline> (mirrors the CustomCursor convention) runs
       the moment the body parses: it adds body.scene-ready when the scene dispatches
-      scene:ready (its first composited frame). A long safety timeout is the ONLY
-      fallback — it fires solely if that event never arrives (a failed WebGL context
-      / a browser with JS but no WebGL), so the loader can never get stuck over a
-      dead canvas. The event name + class literals mirror src/hero/lib/constants.ts
-      (SCENE_READY_EVENT / SCENE_READY_BODY_CLASS) — kept in sync via the values
-      interpolated below so the two can never drift. */}
-  <script is:inline define:vars={{ readyEvent: SCENE_READY_EVENT, readyClass: SCENE_READY_BODY_CLASS }}>
+      scene:ready (its first composited frame).
+
+      FIRST load of the SESSION only, the loader is held for a MINIMUM of
+      LOADER_MIN_MS so the boot sequence (LOADING → READY → glide-to-HUD) reads
+      fully even when the scene paints fast — the reveal lands at
+      max(scene:ready, LOADER_MIN_MS). The floor only RAISES the early bound; a
+      slower scene still waits for its real first frame. "First load of the
+      session" is tracked in sessionStorage (LOADER_SEEN_STORAGE_KEY): a fresh
+      session shows the full boot once, then reloads/returns within the session
+      reveal as soon as scene:ready fires (no floor).
+
+      A long safety timeout is the hard backstop in BOTH cases — it fires solely
+      if scene:ready never arrives (a failed WebGL context / a browser with JS but
+      no WebGL), so the loader can never get stuck over a dead canvas. It bypasses
+      the floor (the floor only fires once the scene is actually ready). 8s > the
+      2.5s floor, so they compose cleanly: floor raises the early bound, safety
+      caps the late bound.
+
+      Once the loader is REVEALED (scene-ready added) the dissolve runs in order:
+      the dot+name fade out FIRST (their own early 0→0.3s window), THEN the readout
+      glides down, and only AFTER it lands does the dark `.scene-loader::before`
+      background fade out (transition-delay = glide-start + glide-dur, then a
+      0.7s fade) to expose the scene. body.loader-gone is added when THAT last
+      fade finishes — listened for via the ::before opacity `transitionend` on
+      the `.scene-loader` element — so the in-scene star markers (live <a> links
+      sitting UNDER the loader) only become interactive once the loader is truly
+      gone. A transitionend can be MISSED (interrupted / element gone), so a
+      timeout backstop arms the moment we reveal: glide-start(0.32s) + glide-dur(0.7s)
+      + fade-dur(0.7s) + margin ≈ 1.72s + 0.38s = 2.1s after scene-ready, guaranteeing
+      loader-gone is eventually set (reduced-motion still fades → still fires;
+      the no-WebGL 8s safety reveal also chains the backstop). Idempotent.
+
+      The event name + class literals AND the floor/key constants mirror
+      src/hero/lib/constants.ts (SCENE_READY_EVENT / SCENE_READY_BODY_CLASS /
+      LOADER_GONE_BODY_CLASS / LOADER_MIN_MS / LOADER_SEEN_STORAGE_KEY) — passed
+      via define:vars below so the inline script and the module can never drift. */}
+  <script
+    is:inline
+    define:vars={{
+      readyEvent: SCENE_READY_EVENT,
+      readyClass: SCENE_READY_BODY_CLASS,
+      goneClass: LOADER_GONE_BODY_CLASS,
+      minMs: LOADER_MIN_MS,
+      seenKey: LOADER_SEEN_STORAGE_KEY,
+    }}
+  >
     (() => {
-      const reveal = () => document.body.classList.add(readyClass);
-      // Primary signal: the scene's first composited frame. Once is enough.
-      window.addEventListener(readyEvent, reveal, { once: true });
-      // Safety fallback ONLY — never the normal path. Long enough that the engine
-      // has surely painted on any real device; if it hasn't (no WebGL), we still
-      // lift the loader so the page isn't trapped behind it.
+      // Timestamp at script start so the floor measures wall time since the page
+      // began loading, not since scene:ready fired.
+      const t0 = performance.now();
+
+      // body.loader-gone — set ONCE the dark loader background has fully faded out
+      // (the LAST thing to finish), so the in-scene star markers (live <a> links
+      // sitting under the loader) only become interactive after the scene is truly
+      // revealed. Idempotent (adding twice is harmless).
+      let goneArmed = false;
+      const markGone = () => document.body.classList.add(goneClass);
+      // Arm the loader-gone signal at the moment we reveal (scene-ready added).
+      // Two paths race; whichever lands first wins (markGone is idempotent):
+      //   1. transitionend of the ::before opacity fade — the EXACT moment the
+      //      dark layer reaches opacity 0. transitionend on a ::before bubbles to
+      //      the host, with event.pseudoElement === '::before'.
+      //   2. a timeout backstop in case that transitionend is interrupted / never
+      //      fires (element removed, browser quirks). Sized to the worst-case
+      //      fade end: glide-start(0.32s) + glide-dur(0.7s) + fade-dur(0.7s) ≈ 1.72s
+      //      plus a margin ≈ 2.1s after reveal. (The dot+name fade out earlier, in
+      //      their own 0→0.3s window before the glide, so they never affect this end.)
+      const armGone = () => {
+        if (goneArmed) return;
+        goneArmed = true;
+        const loader = document.querySelector('.scene-loader');
+        if (loader) {
+          loader.addEventListener(
+            'transitionend',
+            (e) => {
+              if (e.propertyName === 'opacity' && e.pseudoElement === '::before') markGone();
+            },
+            { passive: true },
+          );
+        }
+        window.setTimeout(markGone, 2100);
+      };
+
+      // Idempotent: adding the class twice is harmless. Both the floored path and
+      // the safety backstop call this. Revealing also arms the loader-gone signal.
+      const reveal = () => {
+        document.body.classList.add(readyClass);
+        armGone();
+      };
+
+      // Is this the first load of the session? sessionStorage access is wrapped
+      // in try/catch — private mode / disabled storage must never throw and trap
+      // the loader. On ANY storage error we treat it as a first load and apply
+      // the floor: a 2.5s hold is harmless (it can't be remembered, so a reload
+      // would re-apply it, but it never traps the user — the safety still fires
+      // and the floor is a fixed short hold, not a flag-dependent gate).
+      let firstLoad = true;
+      try {
+        firstLoad = !window.sessionStorage.getItem(seenKey);
+        // Mark seen NOW so a fast reload within the session skips the floor.
+        if (firstLoad) window.sessionStorage.setItem(seenKey, '1');
+      } catch (_e) {
+        firstLoad = true;
+      }
+
+      // On first load, gate the reveal behind the floor: when the scene is ready
+      // (or already), wait out whatever remains of LOADER_MIN_MS. On later loads,
+      // reveal the instant the scene is ready.
+      const onReady = firstLoad
+        ? () => window.setTimeout(reveal, Math.max(0, minMs - (performance.now() - t0)))
+        : reveal;
+      window.addEventListener(readyEvent, onReady, { once: true });
+
+      // Safety backstop ONLY — never the normal path, and it bypasses the floor.
+      // Long enough that the engine has surely painted on any real device; if it
+      // hasn't (no WebGL), we still lift the loader so the page isn't trapped.
       window.setTimeout(reveal, 8000);
     })();
   </script>
@@ -83,16 +204,19 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       whisper for every beat, mapped over the same BEATS so the SSR copy can
       never drift from the live copy. The reverse arc plays black hole -> ... ->
       pale blue dot top-to-bottom, so the list is reversed (slice() first, never
-      mutating BEATS) to match that physical order — index 0 is now the black-hole
-      beat, which is the page <h1>; the dot beat lands last. */}
+      mutating BEATS) to match that physical order — index 0 is the black-hole
+      beat; the dot beat lands last. The page <h1> is the dedicated .sr-only line
+      above (always server-rendered, present with or without JS), so EVERY beat
+      here is an <h2>: with JS off the single top-level heading stays that one
+      brand <h1> and the beats sit under it — no duplicate / competing h1. */}
   <noscript>
     <div class="scene-fallback measure">
       <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
       <p class="scene-fallback-role">Software Engineer</p>
 
-      {BEATS.slice().reverse().map((beat, i) => (
+      {BEATS.slice().reverse().map((beat) => (
         <Fragment>
-          {i === 0 ? <h1>{beat.down}</h1> : <h2>{beat.down}</h2>}
+          <h2>{beat.down}</h2>
           <p>{beat.whisper}</p>
         </Fragment>
       ))}

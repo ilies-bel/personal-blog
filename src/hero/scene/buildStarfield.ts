@@ -1,6 +1,6 @@
 // Lensed starfield + plain distant-star rigs.
 import * as THREE from 'three';
-import { CFG } from '../lib/config';
+import { CFG, densityCompensation } from '../lib/config';
 import { starVertexShader, starFragmentShader, distantStarVertexShader, distantStarFragmentShader } from '../shaders/star.glsl';
 import type { Uniforms } from './types';
 
@@ -13,8 +13,15 @@ export interface StarRig {
   uniforms: Uniforms; // primary's shared block (matSec clones it)
   dispose: () => void;
 }
-export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelRatio: number): StarRig {
+export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false): StarRig {
   const starN = Math.max(2500, Math.floor(particleCount * 0.11 * CFG.starDensity));
+  // Low-tier density compensation, gated on the explicit lowTier flag (the tier
+  // signal) so the starfield brightens in lockstep with the disk on the low fallback
+  // and stays a no-op (1.0) on the high path + every high-tier width bucket → high
+  // path byte-identical. Only brightGain is used here (the lensed starfield reads as
+  // points; size is left to the shader). The boost is now LIGHTER (see config) since
+  // the low tier regained a cheap bloom and ~2× the grains.
+  const comp = densityCompensation(particleCount, CFG.diskParticles, lowTier);
   const starPos = new Float32Array(starN * 3);
   const starSeed = new Float32Array(starN);
   for (let i = 0; i < starN; i++) {
@@ -41,7 +48,9 @@ export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelR
     uThetaE: { value: 0.15 },
     uAspect: { value: 1.0 },
     uImageSign: { value: 1.0 },
-    uStarBright: { value: CFG.starBright },
+    uStarBright: { value: CFG.starBright * comp.brightGain }, // ×brightGain on the low
+    //   tier ONLY (1.0 at full count → stays exactly CFG.starBright): fewer, un-bloomed
+    //   star grains accumulate less additive light, so each emits harder to stay visible.
     uHole: { value: 0.12 },
     uRotSpeed: { value: STAR_ORBIT_SPEED },
   };

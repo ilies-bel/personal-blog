@@ -39,9 +39,15 @@ export interface SceneState {
 }
 
 export interface SceneActions {
-  // Reserved for future on-star marker wiring. No HUD callbacks remain
-  // after the hover/selection machinery was removed.
-  _placeholder?: never;
+  /** Begin the cinematic dive for a marker, then navigate at the bloom apex.
+   *  Falls back to a plain navigate if the scene engine hasn't mounted yet.
+   *  `targetNdc` is the marker's on-screen point (so the plunge aims at it, not
+   *  dead-centre); `state` selects the bloom's per-lifecycle-state tint. */
+  beginDive?: (opts: {
+    href: string;
+    targetNdc?: { x: number; y: number };
+    state?: HudTargetId;
+  }) => void;
 }
 
 const SceneStateCtx = createContext<SceneState | null>(null);

@@ -11,7 +11,11 @@ import {
 import { hudIdForStage } from './lifecycleMachine';
 import type { MarkerFrame } from './scene/types';
 import { progressForLegacyStage } from './timeline';
-import { SCROLL_HINT_DISMISS_AT } from './lib/constants';
+import {
+  SCROLL_HINT_DISMISS_AT,
+  SCENE_READY_EVENT,
+  SCENE_READY_BODY_CLASS,
+} from './lib/constants';
 
 // The HUD nav rows, on-screen markers, the settled-window gate and their shared
 // types now live in sceneTable.ts (the pure data layer); the scroll-spy
@@ -156,6 +160,54 @@ function markerLockWindow(): MarkerLockWindow {
   return window as unknown as MarkerLockWindow;
 }
 
+// --- Boot-to-HUD intro choreography ----------------------------------------
+// The bottom-centre slot is the SAME element across the whole intro: while the
+// engine chunk loads it is a boot readout (LOADING STATE → READY STATE → the
+// REVERSE COLLAPSE / scroll-down cue), then on first scroll it hands the slot to
+// the live aiming compass. One continuous element morphing — not a crossfade
+// between two — so the boot readout reuses the .hud-compass* classes verbatim.
+//
+//   'loading' — body:NOT(.scene-ready): the engine chunk is still downloading /
+//               compiling. Shows LOADING STATE. The pale pulsing loader dot stays.
+//   'ready'   — the scene dispatched scene:ready (first composited WebGL frame,
+//               body.scene-ready). Shows READY STATE. Held ~0.6s.
+//   'cue'     — the standing intro tagline: REVERSE COLLAPSE / scroll down. A
+//               FIXED cue (it does not track scroll) that holds until first scroll.
+//   'live'    — the visitor has scrolled off the top: the boot readout dismisses
+//               and the live compass (scene-named scroll readouts) owns the slot.
+type BootPhase = 'loading' | 'ready' | 'cue' | 'live';
+
+/** How long the READY STATE beat holds before the standing scroll cue swaps in.
+ *  Long enough to register as a deliberate "systems online" confirmation, short
+ *  enough not to stall the visitor. Skipped under reduced motion (straight to cue). */
+const READY_HOLD_MS = 600;
+
+/** Delay after READY before we ARM the glide. Three jobs: (1) hold the glide until AFTER the
+ *  dot+name have faded OUT — they fade on their own early 0→0.3s window (see
+ *  .scene-loader-mark in scene.css), so the readout must not start travelling until they are
+ *  gone (~0.3s). This value (320ms) sits just past that fade so the sequence reads dot+name
+ *  fade → glide → bg fade. (2) keep the data-glide flip in its OWN React commit DURING the
+ *  'ready' beat — comfortably before READY_HOLD_MS swaps the readout text to the 'cue' branch.
+ *  That separation matters: if data-glide flipped in the SAME commit as the cue children swap,
+ *  the browser coalesces the recalc and the transition never starts (it snaps). So
+ *  GLIDE_START_MS < READY_HOLD_MS (320 < 600 ✓). (3) Leave a beat after READY for the scene's
+ *  heavy first paint to begin clearing. The PRECISE start is then deferred onto a clean
+ *  compositor frame by the double-rAF below — the timer alone is not enough because its
+ *  callback can fire DURING the jank frame (the timer queue drains the instant the main thread
+ *  unblocks, while the heavy frame may still be in flight), and a transition started then is
+ *  wall-clock driven and snaps. The double-rAF guarantees the flip lands on a frame AFTER the
+ *  jank, where the promoted layer (will-change: transform) lets the travel run on the
+ *  compositor. Keep --boot-glide-start in tokens.css IN STEP with this (0.32s) so the
+ *  loader-background fade still begins exactly at glide end. */
+const GLIDE_START_MS = 320;
+
+/** True once the scene has dispatched scene:ready (body carries the ready class).
+ *  Read at mount so a scene that became ready BEFORE this island hydrated still
+ *  advances the boot phase (the event would already have fired and been missed). */
+function sceneIsReady(): boolean {
+  return typeof document !== 'undefined' && document.body.classList.contains(SCENE_READY_BODY_CLASS);
+}
+
 export default function HudNavigation({
   visible,
   reduced,
@@ -175,6 +227,40 @@ export default function HudNavigation({
   // of times as the cursor crosses a hexagon boundary — never per frame.
   const [locked, setLocked] = useState(false);
 
+  // The boot-to-HUD intro phase. Starts 'loading' (or 'ready' if the scene was
+  // already ready before this island hydrated) and advances LOADING → READY →
+  // cue (a standing scroll prompt) → live (hand the slot to the aiming compass).
+  // The slot is one continuous element: boot readout while !== 'live', compass at
+  // 'live'. See the BootPhase doc above for what drives each transition.
+  const [bootPhase, setBootPhase] = useState<BootPhase>(() =>
+    sceneIsReady() ? 'ready' : 'loading',
+  );
+
+  // Whether the boot readout has begun its GLIDE from the loader-centre stack down to the
+  // bottom HUD slot. data-glide='false' LIFTS it into the loader (above the dot+name) via a
+  // CSS transform; flipping it true removes the lift so the transform transition glides it
+  // down (the transition lives on the [data-glide='true'] target state, so the readout just
+  // APPEARS lifted on mount and only the downward travel animates). We DON'T flip it straight
+  // on scene:ready (the loader's fade trigger) because that instant is the scene's heaviest
+  // frame — shader compile + ~40 MB of buffer uploads jank the main thread, and a CSS
+  // transition started mid-jank is wall-clock driven, so it "completes" unseen during the
+  // block and the travel SNAPS. The effect below flips it a short beat after READY (past the
+  // jank) and only AFTER the dot+name have already faded out (their own early 0→0.3s window in
+  // scene.css), so the readout starts travelling into a stack the dot+name have already left —
+  // the sequence reads dot+name fade → glide → bg fade. The dark background still holds solid
+  // across the whole travel and fades only at glide end (--boot-glide-start + --boot-glide-dur).
+  // If the scene was already ready before this island hydrated (no loader to glide out of),
+  // start already-glided so the readout just appears in its bottom slot rather than flying
+  // down over the live scene. Idempotent.
+  const [gliding, setGliding] = useState(() => sceneIsReady());
+
+  // The boot readout element. Held so the glide effect can promote it to its OWN
+  // compositor layer (will-change: transform) BEFORE the travel starts — so the
+  // transform animates on the GPU/compositor thread, immune to the main-thread jank
+  // of the scene's first paint — then drop the hint once the glide has finished so
+  // we don't keep a wasted layer alive for the rest of the page.
+  const bootReadoutRef = useRef<HTMLDivElement>(null);
+
   // Live cursor position tracked via a ref (NOT state) so the rAF loop can place
   // the ┼ waypoint every frame without re-rendering — mirrors StarMarker.pointerRef.
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
@@ -189,6 +275,116 @@ export default function HudNavigation({
     document.addEventListener('mousemove', onMove, { passive: true });
     return () => document.removeEventListener('mousemove', onMove);
   }, []);
+
+  // LOADING → READY: advance off the scene's first composited frame. We listen for the
+  // SAME scene:ready event the loader script keys its fade to (so the boot readout swaps
+  // to READY STATE in lockstep with the loader dissolving), and we also check the body
+  // class up front in case the event already fired before this effect attached. A short
+  // interval backstop catches the narrow race where scene:ready fires in the gap BETWEEN
+  // that up-front check and addEventListener (the `once` listener would miss it, leaving
+  // the readout stuck on LOADING): it polls the reliable body.scene-ready class so the text
+  // always advances even on a missed event. Only meaningful while still 'loading'; later
+  // phases ignore it.
+  useEffect(() => {
+    if (bootPhase !== 'loading') return;
+    if (sceneIsReady()) {
+      setBootPhase('ready');
+      return;
+    }
+    const advance = (): void => setBootPhase((prev) => (prev === 'loading' ? 'ready' : prev));
+    window.addEventListener(SCENE_READY_EVENT, advance, { once: true });
+    const poll = window.setInterval(() => {
+      if (sceneIsReady()) {
+        advance();
+        window.clearInterval(poll);
+      }
+    }, 100);
+    return () => {
+      window.removeEventListener(SCENE_READY_EVENT, advance);
+      window.clearInterval(poll);
+    };
+  }, [bootPhase]);
+
+  // START THE GLIDE a short beat after READY, but commit the flip ON A CLEAN COMPOSITOR FRAME
+  // so the travel never starts mid-jank. The scene's first paint (shader compile + ~40 MB of
+  // buffer uploads) blocks the main thread; a transform transition started during that block is
+  // wall-clock driven, so it "completes" unseen during the block and the travel SNAPS. Even a
+  // bare setTimeout isn't enough — its callback can fire the instant the main thread unblocks,
+  // still inside/adjacent to the jank frame. So we (1) promote the readout to its OWN compositor
+  // layer up front (will-change: transform) so the eventual transform runs on the GPU thread,
+  // then (2) wait GLIDE_START_MS (keeps the flip in its own commit, well before the cue swap —
+  // see GLIDE_START_MS), then (3) defer the actual data-glide flip across a DOUBLE rAF: the
+  // first rAF runs after the heavy frame yields, the second lands on a genuinely clean frame
+  // where the compositor can pick up the transition start. The result animates on the
+  // compositor, past the jank. Under reduced motion we flip immediately (the CSS drops the
+  // transition there, so there's no travel to defer — the readout just sits at the bottom while
+  // the loader fades). Idempotent; fully torn down on cleanup.
+  useEffect(() => {
+    if (gliding) return;
+    if (bootPhase === 'loading') return; // still loading: stay lifted in the loader
+    if (reduced) {
+      setGliding(true);
+      return;
+    }
+    // Promote the layer BEFORE the travel so the compositor already owns it when the glide
+    // starts (asking for the layer at the same instant the transform changes can miss the
+    // first frame). The post-glide cleanup drops it again.
+    if (bootReadoutRef.current) bootReadoutRef.current.style.willChange = 'transform';
+
+    let innerRaf = 0;
+    const timer = window.setTimeout(() => {
+      // Double rAF: start the transition on a frame AFTER the jank has cleared.
+      const outerRaf = requestAnimationFrame(() => {
+        innerRaf = requestAnimationFrame(() => setGliding(true));
+      });
+      innerRaf = outerRaf;
+    }, GLIDE_START_MS);
+    return () => {
+      window.clearTimeout(timer);
+      cancelAnimationFrame(innerRaf);
+    };
+  }, [bootPhase, gliding, reduced]);
+
+  // Drop the compositor-layer hint once the glide has finished (will-change kept alive for the
+  // rest of the page would waste a layer). transitionend on `transform` fires when the travel
+  // lands; a timeout backstops it (transitionend can be missed if the element is interrupted).
+  // Only meaningful once gliding under non-reduced motion (the only path that promoted a layer).
+  useEffect(() => {
+    if (!gliding || reduced) return;
+    const el = bootReadoutRef.current;
+    if (!el) return;
+    const clear = (): void => {
+      el.style.willChange = '';
+    };
+    const onEnd = (event: TransitionEvent): void => {
+      if (event.propertyName === 'transform') clear();
+    };
+    el.addEventListener('transitionend', onEnd);
+    // Backstop slightly past the glide duration (--boot-glide-dur is 0.7s) in case the
+    // transitionend never lands (e.g. the element unmounts to 'live' first, or the value was
+    // already at rest so no transition ran).
+    const backstop = window.setTimeout(clear, 1000);
+    return () => {
+      el.removeEventListener('transitionend', onEnd);
+      window.clearTimeout(backstop);
+    };
+  }, [gliding, reduced]);
+
+  // READY → CUE: hold READY STATE briefly as a "systems online" confirmation, then
+  // swap in the standing scroll cue. Under reduced motion we skip the timed beat and
+  // settle straight onto the cue (no flashed READY STATE), mirroring how the loader's
+  // pulse is dropped under reduced motion — the intro stays calm, not staged.
+  useEffect(() => {
+    if (bootPhase !== 'ready') return;
+    if (reduced) {
+      setBootPhase('cue');
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setBootPhase((prev) => (prev === 'ready' ? 'cue' : prev));
+    }, READY_HOLD_MS);
+    return () => window.clearTimeout(id);
+  }, [bootPhase, reduced]);
 
   // The aiming rAF loop. Each frame: gather the markers currently interactive on
   // screen (frame.visible AND this scene is the settled one), compute each one's
@@ -309,6 +505,25 @@ export default function HudNavigation({
   const atTop = progress <= SCROLL_HINT_DISMISS_AT;
   const recovery = idle && phase === 'transition' && !atTop;
 
+  // CUE → LIVE: the standing scroll cue dismisses on the FIRST real scroll. It
+  // reuses the existing scroll-hint dismiss seam — once progress passes
+  // SCROLL_HINT_DISMISS_AT (the opening hold is over, !atTop), the boot readout
+  // hands the slot to the live aiming compass, which already owns the scene-named
+  // scroll readouts from here on. One-way: the slot never reverts to the cue.
+  useEffect(() => {
+    if (bootPhase === 'live') return;
+    // Only the standing cue is dismissable by scroll; while still loading/ready the
+    // visitor scrolling early should not skip the boot beats — but if the scene is
+    // already ready (cue is imminent) and they've scrolled, go live regardless.
+    if (!atTop && (bootPhase === 'cue' || sceneIsReady())) {
+      setBootPhase('live');
+    }
+  }, [atTop, bootPhase]);
+
+  // The boot readout owns the bottom-centre slot until 'live'. While it does, the
+  // live compass is suppressed (data-booting) so the two never both occupy the slot.
+  const booting = bootPhase !== 'live';
+
   return (
     <>
     <div className="hud-system" data-visible={visible}>
@@ -376,6 +591,62 @@ export default function HudNavigation({
           transform on an ancestor makes position:fixed resolve against that ancestor
           instead of the viewport — which trapped the compass mid-rail. As a sibling
           its position:fixed bottom-centre resolves against the viewport correctly. */}
+      {/* The boot readout — the SAME bottom-centre slot + visual language as the
+          live compass below, owning it through the LOADING → READY → cue intro and
+          then handing it over on first scroll (bootPhase reaches 'live'). It reuses
+          the .hud-compass* classes so the slot is one continuous element morphing,
+          not a crossfade between two instruments. data-boot keeps it visible while
+          body:not(.scene-ready) (where the live compass is gated dark), and the live
+          compass's data-booting (set from the same `booting` flag) keeps IT dark
+          until the hand-off so the two never both occupy the slot. aria-hidden: the
+          loader + manifesto already own the announced copy — this is decoration.
+
+          Phases:
+            loading → LOADING STATE (engine chunk still downloading / compiling)
+            ready   → READY STATE (scene:ready fired; held ~0.6s)
+            cue     → REVERSE COLLAPSE / scroll down (the standing intro tagline;
+                      FIXED — it does not change as the user scrolls). */}
+      {booting && (
+        <div
+          ref={bootReadoutRef}
+          className="hud-compass hud-compass--boot"
+          data-boot={bootPhase}
+          data-glide={gliding}
+          data-reduced={reduced}
+          aria-hidden="true"
+        >
+          {bootPhase === 'cue' ? (
+            <>
+              <p className="hud-compass-read">
+                <span className="hud-compass-prompt">[ </span>
+                <span className="hud-compass-label">REVERSE COLLAPSE</span>
+                <span className="hud-compass-prompt"> ]</span>
+              </p>
+              <p className="hud-compass-dest">
+                <span className="hud-compass-arrow">↓</span>
+                <span>scroll down</span>
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="hud-compass-read hud-compass-read--idle">
+                <span className="hud-compass-prompt">[ </span>
+                <span className="hud-compass-label">
+                  {bootPhase === 'ready' ? 'READY STATE' : 'LOADING STATE'}
+                </span>
+                <span className="hud-compass-prompt"> ]</span>
+              </p>
+              {/* Height-reserving twin of the destination line (same trick the live
+                  idle branch uses) so the slot is the SAME height across LOADING /
+                  READY / cue and the readout never shifts vertically on swap. */}
+              <p className="hud-compass-dest hud-compass-dest--spacer" aria-hidden="true">
+                &nbsp;
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       <div
         className="hud-compass"
         data-visible={visible}
@@ -384,6 +655,7 @@ export default function HudNavigation({
         data-idle={idle}
         data-recovery={recovery}
         data-reduced={reduced}
+        data-booting={booting}
         aria-hidden="true"
       >
         {/* The gauge rose. A faint static crosshair sits behind for the instrument

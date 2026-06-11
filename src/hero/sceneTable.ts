@@ -41,7 +41,10 @@ const easeInOutCubic = (t: number): number => {
   const x = clamp01(t);
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 };
-const easeInQuart = (t: number): number => {
+// Exported so the scene engine (createScene.ts) can reuse the SAME accelerating
+// fall curve for the cinematic dive plunge — no second, drifting copy of the
+// easing. Still backs the END-collapse band's stage curve below (band 8).
+export const easeInQuart = (t: number): number => {
   const x = clamp01(t);
   return x * x * x * x;
 };
@@ -99,26 +102,37 @@ export interface Segment {
 }
 
 // --------------------------------------------------------------------------
-// THE TABLE. Eleven spans, authored in LIFECYCLE order (pale-blue-dot first ->
+// THE TABLE. Twelve spans, authored in LIFECYCLE order (pale-blue-dot first ->
 // black hole last). Under the active REVERSE direction the visitor walks this from
 // the BACK as they scroll down, so it now reads bottom-of-page -> top-of-page
 // physically.
 //
 // RE-TIMED for the "one continuous cosmic mechanism" chapter grid. The weights
 // prefix-sum to breakpoints that place each scene's RAW-scroll band (raw = 1 -
-// lifecycle under the reverse flip) on the ART-DIRECTION target grid:
+// lifecycle under the reverse flip) on the ART-DIRECTION target grid. The marker
+// branch's 3a/3b nebula idle-hold split is folded in (one extra intermediate
+// breakpoint at lifecycle 0.31), so the table is now TWELVE spans while keeping the
+// art-direction chapter boundaries exactly:
 //   raw 0-15%   black hole        (lifecycle 0.85-1.00, segs 10-11)
 //   raw 15-23%  reverse collapse  (lifecycle 0.77-0.85, segs 8-9 — SHORTENED to a
 //               transition FLASH, not a chapter: collapse is ~8% of scroll, was 14%)
 //   raw 23-43%  red giant         (lifecycle 0.57-0.77, segs 6-7 — WIDENED to 20% so
 //               the reveal->limb-orbit->close-up staging has room)
 //   raw 43-57%  yellow star       (lifecycle 0.43-0.57, segs 4-5)
-//   raw 57-74%  nebula            (lifecycle 0.26-0.43, segs 2-3 collapse span)
+//   raw 57-74%  nebula            (lifecycle 0.26-0.43, segs 3a-3b: idle hold + collapse)
 //   raw 74-90%  pale dot          (lifecycle 0.10-0.26, seg 2 dot->nebula grow)
 //   raw 90-100% content/settled   (lifecycle 0.00-0.10, seg 1 the dot hold — the
 //               HUD arms across this band; see HeroIsland's at-end edge).
-// New STARTS prefix-sum (lifecycle):
-//   [0, 0.10, 0.26, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]
+// The nebula chapter's single collapse span (this branch's 0.17) is SPLIT into a
+// short idle held-frame (3a, 0.05, flat stage 3.42) + the remaining collapse
+// (3b, 0.12); 3a + 3b = 0.17, so the NEBULA chapter breakpoint (lifecycle 0.43) is
+// preserved exactly and only ONE new intermediate breakpoint (0.31) is added. That
+// idle hold is what the strict idle-only marker gate (settledIdForStage) anchors the
+// nebula markers to, so they never show across the collapse transition. The yellow
+// ignition span is the documented-grid 0.07 (an earlier draft shipped 0.08, which
+// pushed the prefix-sum to 1.01 and let the terminal band spill past p=1.0); it is
+// 0.07 here so STARTS lands on exactly 1.0. New STARTS prefix-sum (lifecycle):
+//   [0, 0.10, 0.26, 0.31, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]
 // The curve stays continuous + monotonic (stage falls 4.7 -> 0.0 as lifecycle
 // rises 0 -> 1); only WHICH scroll position maps to WHICH stage changed.
 // Two facts encoded honestly (both reproduce the curve; do NOT "tidy"):
@@ -136,7 +150,7 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 4.5,
     easing: 'smoothstep',
     phase: 'idle',
-    settledWindow: [4.5, 4.72],
+    settledWindow: [4.5, 4.7],
   },
   // 2 — NEBULA grow: dot blooms into the cloud, linear on purpose (4.5 -> 3.42).
   // The PALE-DOT chapter (raw 74-88%): the simple far dot loosening toward the cloud.
@@ -148,22 +162,42 @@ export const SEGMENTS: readonly Segment[] = [
     easing: 'linear',
     phase: 'transition',
   },
-  // 3 — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02). The
-  // NEBULA chapter proper (raw 58-74%). The nebula idle/settled window rides this
-  // span (placement among a scene's segments is free; settledIdForStage scans all).
+  // 3a — NEBULA held frame: a brief IDLE micro-hold at the fullest, most-settled
+  // cloud (stage 3.42, where bloom ends and collapse begins). This is the ONLY
+  // nebula idle hold, so it is where the nebula writing markers may appear — the
+  // strict idle-only gate (settledIdForStage) refuses to show them across the
+  // collapse transition below. Tight window around the pinch. Its weight (0.05)
+  // is carved out of main's re-timed single collapse span (0.16); 3a + 3b = 0.16,
+  // so the NEBULA-chapter breakpoint in the prefix-sum is preserved exactly.
   {
     sceneId: 'nebula',
-    weight: 0.17,
+    weight: 0.05,
+    stageStart: 3.42,
+    stageEnd: 3.42,
+    easing: 'linear',
+    phase: 'idle',
+    settledWindow: [3.39, 3.45],
+  },
+  // 3b — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02). The
+  // NEBULA chapter proper (raw 58-74%). Pure transition now (the held-frame idle
+  // window moved to 3a above), so NO marker shows while the gas is collapsing. Weight
+  // is 0.12 (this branch's nebula collapse span was 0.17; 0.05 went to 3a, 0.12 stays
+  // here) so the art-direction nebula chapter boundary (lifecycle 0.43) is preserved.
+  {
+    sceneId: 'nebula',
+    weight: 0.12,
     stageStart: 3.42,
     stageEnd: 3.02,
     easing: 'easeInOutCubic',
     phase: 'transition',
-    settledWindow: [3.38, 3.5],
   },
-  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88).
+  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88). Weight is the
+  // documented-grid 0.07 (an earlier art-direction draft shipped 0.08, which pushed the
+  // prefix-sum to 1.01 and let the terminal band spill past p=1.0; 0.07 lands STARTS on
+  // exactly 1.0 — see the table header).
   {
     sceneId: 'yellow',
-    weight: 0.08,
+    weight: 0.07,
     stageStart: 3.02,
     stageEnd: 2.88,
     easing: 'easeOutCubic',
@@ -177,7 +211,7 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 2.88,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [2.86, 2.9],
+    settledWindow: [2.875, 2.9],
   },
   // 6 — RED grow: the giant grows, one continuous move (2.88 -> 2.05). WIDENED
   // (0.07 -> 0.13) so the red-giant band owns raw 23-43%: this is the "reveal the
@@ -194,6 +228,8 @@ export const SEGMENTS: readonly Segment[] = [
   },
   // 7 — RED hold: the flat red-giant beat (flat 2.05). The settled close-up beat —
   // the camera has pushed in to the active region by here (ITEM 1's third beat).
+  // Weight is the art-direction grid's 0.07; the tight settledWindow [2.03, 2.07] is
+  // the marker branch's strict idle-only gate (this is where the red marker shows).
   {
     sceneId: 'red',
     weight: 0.07,
@@ -201,7 +237,7 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 2.05,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [2.0, 2.12],
+    settledWindow: [2.03, 2.07],
   },
   // 8 — END collapse: stage JUMPS to 1.05 here (band 7 ended 2.05) then falls
   // to 0.5 — the intentional discontinuity. easeInQuart. SHORTENED (0.07 -> 0.04):
@@ -245,14 +281,14 @@ export const SEGMENTS: readonly Segment[] = [
     stageEnd: 0.0,
     easing: 'smoothstep',
     phase: 'idle',
-    settledWindow: [0.0, 0.12],
+    settledWindow: [0.0, 0.08],
   },
 ];
 
 /** Prefix-sum of the segment weights — the progress breakpoints. Length is
  *  SEGMENTS.length + 1: STARTS[i] is span i's start progress, STARTS[i + 1] its
  *  end. Computed once at module load. Equals (to float precision)
- *  [0, 0.10, 0.26, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]. */
+ *  [0, 0.10, 0.26, 0.31, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]. */
 export const STARTS: readonly number[] = (() => {
   const out: number[] = [0];
   let acc = 0;
@@ -326,9 +362,16 @@ export function sceneForProgress(progress: number): SceneSelection {
  * the held scene's id for `stage`, or null mid-transition. This is the SINGLE
  * source of the windows that createScene.ts and HudNavigation.tsx both used to
  * hardcode (formerly required to stay byte-identical by hand).
+ *
+ * STRICT idle-only: the gate matches ONLY segments whose `phase === 'idle'`. A
+ * settledWindow that happens to sit on a transition span is IGNORED — a marker
+ * is structurally impossible to show during any morph. (Every scene that owns a
+ * marker therefore carries its settledWindow on a real idle hold; the nebula's
+ * fullest-cloud "held frame" is a dedicated idle micro-hold so it still shows.)
  */
 export function settledIdForStage(stage: number): HudTargetId | null {
   for (const seg of SEGMENTS) {
+    if (seg.phase !== 'idle') continue; // STRICT: never during a transition
     const win = seg.settledWindow;
     if (win && stage >= win[0] && stage <= win[1]) return seg.sceneId;
   }
@@ -408,6 +451,14 @@ export interface MarkerPlacement {
   title: string;
   /** Card subtitle line. Compass dest copy; the richer card's `body` fallback. */
   subtitle: string;
+  /** Background class under this marker — drives the adaptive 3-layer treatment
+   *  (stroke colour, halo direction, blurred backing plate). Static per placement
+   *  (authored, not sampled): the canvas is a separate stacking context so per-frame
+   *  luminance is not cheaply available. */
+  bg: 'dark' | 'bright' | 'noisy';
+  /** Per-destination-type inner glyph (public/glyphs path). Painted with the
+   *  marker's adaptive currentColor via CSS mask — same mechanism as the HUD rail. */
+  glyph: string;
   // --- Richer card copy (all optional; each falls back to title/subtitle) ----
   /** The mono uppercase, letter-spaced gold label at the top of the card (e.g.
    *  'ABOUT / 01'). Falls back to `title` when absent. */
@@ -423,6 +474,13 @@ export interface MarkerPlacement {
   /** The CTA link text (e.g. 'Read about me'); the component appends the ' →'
    *  arrow. Falls back to the legacy '[ OPEN ]' affordance when absent. */
   cta?: string;
+  /** When true, clicking this marker triggers the cinematic camera dive instead of
+   *  a plain navigation: the live camera plunges toward the marker's OWN on-screen
+   *  position (so an off-centre nebula speck is dived INTO, not lurched-to-centre)
+   *  while a soft, capped bloom in the marker's lifecycle-state tint washes over the
+   *  frame, then SPA-navigates at the apex. Set on ALL markers now (each scene's
+   *  state colours its own bloom). Absent/false markers would navigate normally. */
+  dive?: boolean;
 }
 
 export interface ManifestoBeat {
@@ -509,11 +567,14 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'about',
         title: 'ABOUT',
         subtitle: 'Who I am',
+        bg: 'dark',
+        glyph: 'glyphs/glyph-marker-about.svg',
         eyebrow: 'ABOUT / 01',
         headline: 'Hi, I’m Iliès.',
         body: 'Web software, technical writing, understandable systems.',
         tags: ['Fast', 'Readable', 'Usable'],
         cta: 'Read about me',
+        dive: true,
       },
     ],
     beat: {
@@ -554,11 +615,14 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 01',
         subtitle: 'Notes & essays',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-writing.svg',
         eyebrow: 'WRITING / 01',
         headline: 'Notes from the build.',
         body: 'Essays on software that stays readable as it grows.',
         tags: ['Essays', 'Craft'],
         cta: 'Read the writing',
+        dive: true,
       },
       {
         id: 'nebula-02',
@@ -568,11 +632,14 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 02',
         subtitle: 'Notes & essays',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-writing.svg',
         eyebrow: 'WRITING / 02',
         headline: 'Thinking in systems.',
         body: 'Boundaries, interfaces, and the cost of complexity over time.',
         tags: ['Systems', 'Design'],
         cta: 'Read the writing',
+        dive: true,
       },
       {
         id: 'nebula-03',
@@ -582,13 +649,19 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'writing',
         title: 'WRITING / 03',
         subtitle: 'Notes & essays',
+        bg: 'noisy',
+        glyph: 'glyphs/glyph-marker-writing.svg',
         eyebrow: 'WRITING / 03',
         headline: 'Working with the machine.',
         body: 'On AI-assisted code, and keeping the center understandable.',
         tags: ['AI', 'Practice'],
         cta: 'Read the writing',
+        dive: true,
       },
     ],
+    // NEBULA — a gentle dwell so the bloom/collapse around the held frame slow down
+    // and the visitor lingers on the fullest cloud rather than blinking past it.
+    dwell: { strength: 0.45 },
     beat: {
       // NEBULA — the cloud settles into its held frame around stage 3.42 (~0.26 now)
       // and dwells through the collapse band (raw 58-74%). The headline fades in as
@@ -623,11 +696,14 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'projects',
         title: 'PROJECTS',
         subtitle: 'Things I build',
+        bg: 'bright',
+        glyph: 'glyphs/glyph-marker-projects.svg',
         eyebrow: 'PROJECTS / 01',
         headline: 'Things I build.',
         body: 'Shipped software, side projects, and tools that earned their keep.',
         tags: ['Shipped', 'Tools'],
         cta: 'See the projects',
+        dive: true,
       },
     ],
     beat: {
@@ -653,20 +729,30 @@ export const SCENES: readonly LifecycleScene[] = [
       href: 'graveyard',
     },
     markers: [
-      // RED GIANT / graveyard — ONE marker, fixed spot over the red limb.
+      // RED GIANT / graveyard — ONE marker hugging the DARK side of the limb,
+      // just off the surface. During this beat the giant is camera-parked as a
+      // vast off-centre orb filling the right ~65% of the frame; sit the marker
+      // in the narrow dark gap immediately left of the photosphere edge (upper
+      // third, clear of the manifesto headline below and the HUD rail far left)
+      // so it reads against black yet still reads as the STAR's marker, not a
+      // stray hotspot pinned to the chrome. bg is 'dark', not 'bright': on black
+      // it needs the light-stroke + glow treatment to read.
       {
         id: 'red',
         state: 'red',
-        vx: 0.5,
-        vy: 0.46,
+        vx: 0.3,
+        vy: 0.28,
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
+        bg: 'dark',
+        glyph: 'glyphs/glyph-marker-graveyard.svg',
         eyebrow: 'GRAVEYARD / 01',
         headline: 'Things I abandoned.',
         body: 'Dead repos, false starts, and what each one was trying to teach.',
         tags: ['Dead repos', 'Lessons'],
         cta: 'Walk the graveyard',
+        dive: true,
       },
     ],
     // RED GIANT — the contemplative beat. A modest dwell so the morph lingers a
@@ -706,11 +792,17 @@ export const SCENES: readonly LifecycleScene[] = [
         href: 'posts/thanks-for-scrolling-to-the-bottom',
         title: 'INSPIRATION',
         subtitle: 'Why this site exists',
+        bg: 'dark',
+        glyph: 'glyphs/glyph-marker-story.svg',
         eyebrow: 'INSPIRATION / 01',
         headline: 'Why this site exists.',
         body: 'The idea behind the black hole, and thanks for scrolling this far.',
         tags: ['Story', 'Colophon'],
         cta: 'Read the story',
+        // Clicking the black-hole marker flies the live camera INTO it, blooms a
+        // soft capped veil (the black-hole/warm-bone tint), then SPA-navigates at
+        // the apex. The dive is now on EVERY marker (each in its own state tint).
+        dive: true,
       },
     ],
     // BLACK HOLE — the terminal hero. A light dwell so the final settle reads as

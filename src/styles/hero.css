@@ -376,6 +376,15 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   pointer-events: none;
   transition: opacity 0.5s var(--ease-out-quint);
 }
+/* Keep the manifesto OUT of the loading screen. The island renders BEATS[0] at full
+   opacity at scroll 0, so without this gate the first beat's big line would paint
+   over the loader the instant the island hydrates (before the scene's first frame).
+   Hold the whole overlay transparent until the scene paints its first frame
+   (body.scene-ready, added by index.astro's loader script on scene:ready), then let
+   the existing 0.5s opacity transition above fade it in — so the manifesto arrives
+   WITH the scene, never over the loader. The boot readout owns the bottom-centre
+   status line during the wait. */
+body:not(.scene-ready) .bh-overlay { opacity: 0; }
 .bh-overlay::before {
   content: '';
   position: absolute;
@@ -519,5 +528,85 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] {
     opacity: 1 !important;
+  }
+}
+
+/* ===========================================================================
+   Cinematic dive transition
+   ---------------------------------------------------------------------------
+   The marker-dive flow: clicking the black-hole 'end' marker flies the live
+   three.js camera INTO the star while this fixed bloom layer ramps to a SOFT,
+   CAPPED veil (a warm radial wash — never a full whiteout; driven inline by
+   HeroIsland's onDiveProgress, whose peak the scene caps via DIVE_WHITE_PEAK);
+   the page then SPA-navigates UNDER the veil, and the destination's
+   astro:page-load handler (in BaseLayout) eases the overlay back out and plays
+   the content rise-up.
+   The overlay is persisted across ClientRouter swaps (transition:persist), so
+   it must START hidden via CSS — a fresh page that wasn't reached by a dive
+   never shows it.
+   =========================================================================== */
+.dive-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  /* Above the HUD boot layers (max z-index 25 in hud.css) + the corner chrome
+     (1000 in chrome.css); below the custom cursor (which is pointer-events:none
+     and only a thin dot, so the bloom reads cleanly beneath it). */
+  z-index: 9999;
+  /* A SOFT VEIL, not a whiteout. Three things keep it gentle + on-palette against this
+     dark, moody site: (1) the colour is --bloom-active (defaults to the warm-bone
+     --bloom; the dive sets data-bloom-state below to switch it to the firing state's
+     hue — cool nebula, gold yellow, ember red, etc.) rather than a clinical #fff; (2)
+     it's a radial-gradient that glows BRIGHTEST at the bloom origin — --bloom-x/--bloom-y
+     (set by the dive to the clicked marker's on-screen point, defaulting to dead-centre)
+     — and falls off to transparent at the edges, so the veil radiates FROM the marker,
+     never a flat sheet blanketing the frame; (3) the overlay's own opacity is capped
+     well under 1 by the scene (DIVE_WHITE_PEAK), so even at the apex you still see the
+     plunge glowing through. Only the HUE changes per state — the softness/falloff is
+     identical for every state. */
+  --bloom-active: var(--bloom);
+  --bloom-x: 50%;
+  --bloom-y: 50%;
+  background: radial-gradient(
+    circle at var(--bloom-x) var(--bloom-y),
+    var(--bloom-active) 0%,
+    color-mix(in oklch, var(--bloom-active) 88%, transparent) 38%,
+    color-mix(in oklch, var(--bloom-active) 55%, transparent) 68%,
+    transparent 96%
+  );
+}
+
+/* PER-STATE bloom tint — the dive sets data-bloom-state to the marker's lifecycle
+   state, which swaps --bloom-active to that state's token (tokens.css). Keeping the
+   colour choice here (CSS) honours the single-source-of-colour convention: the scene
+   only passes the state NAME, never a colour. 'end' falls through to the default
+   warm-bone --bloom, so it needs no rule. */
+.dive-overlay[data-bloom-state='beginning'] { --bloom-active: var(--bloom-beginning); }
+.dive-overlay[data-bloom-state='nebula'] { --bloom-active: var(--bloom-nebula); }
+.dive-overlay[data-bloom-state='yellow'] { --bloom-active: var(--bloom-yellow); }
+.dive-overlay[data-bloom-state='red'] { --bloom-active: var(--bloom-red); }
+.dive-overlay[data-bloom-state='end'] { --bloom-active: var(--bloom-end); }
+
+/* The destination content "resurfaces" out of the receding bloom: it rises +
+   un-blurs as the overlay fades. Gated behind no-preference so reduced-motion
+   users just get the overlay fading away (no transform/blur), per the plan. The
+   --ease-out-quint token is the project's single eased curve; reused here. */
+@media (prefers-reduced-motion: no-preference) {
+  body[data-resurface] main {
+    animation: dive-resurface 0.7s var(--ease-out-quint) both;
+  }
+}
+
+@keyframes dive-resurface {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
   }
 }
