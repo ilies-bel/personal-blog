@@ -808,14 +808,21 @@ const NEBULA_GATHERED_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
 // the origin (no off-axis lean), steady z. Stillness vs the red orbit either side.
 const YELLOW_HOLD_POS: Vec3Tuple = [0.0, 0.0, 17.4];
 const YELLOW_HOLD_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
-// RED GIANT (raw 28-43%): a LATERAL ORBIT around the huge surface. The orb stays at
-// the world origin (radius ≈ 10.5); the camera ARCS from one side (ORBIT_A) to the
-// other (ORBIT_B), swinging x AND z and panning the look target across the limb, so
-// it reads as travelling AROUND the body — NOT a static corner. Camera move only.
-const RED_ORBIT_A_POS: Vec3Tuple = [-7.2, -4.2, 36.0];
-const RED_ORBIT_A_TGT: Vec3Tuple = [-8.4, -3.6, 6.5];
-const RED_ORBIT_B_POS: Vec3Tuple = [6.4, -3.0, 34.5];
-const RED_ORBIT_B_TGT: Vec3Tuple = [7.6, -2.4, 6.5];
+// RED GIANT (raw 23-43%, ITEM 1): a three-beat cinematic — REVEAL the full mass ->
+// LIMB ORBIT/drift along the surface -> PUSH IN to a surface/active-region close-up.
+// The orb stays at the world origin (radius ≈ 10.5) the whole time; only the camera
+// moves (no re-geometry). Three poses drive it:
+//   REVEAL  — pulled BACK + slightly off-centre so the WHOLE grown giant reads as it
+//             inflates out of the yellow swap (the "reveal the full mass" arrival).
+//   CLOSE   — PUSHED IN (z 39.5 -> 27.5) and panned across the limb to an active region
+//             (sunspot/plage cluster, upper-left): the close-on-surface beat. Aimed
+//             nearer the surface so the granulation/active region reads big.
+// The limb orbit + the push-in are ONE continuous move REVEAL -> CLOSE across the hold
+// (ITEM 1's beats 2+3): the camera arcs along the surface as it dives in.
+const RED_REVEAL_POS: Vec3Tuple = [4.6, -1.8, 41.5];
+const RED_REVEAL_TGT: Vec3Tuple = [2.6, -0.9, 4.5];
+const RED_CLOSE_POS: Vec3Tuple = [-5.6, -0.4, 24.5];
+const RED_CLOSE_TGT: Vec3Tuple = [-7.0, -1.6, 8.6];
 // REVERSE SUPERNOVA (raw 14-28%): compress inward — the camera eases toward the core
 // as the particles pull in. COLLAPSE_PULL (outer, p~0.72) -> SUPERNOVA_RECOIL (inner,
 // p~0.86), recentring on the implosion.
@@ -913,44 +920,46 @@ const CAMERA_BANDS: readonly CameraBand[] = [
     targetEnd: YELLOW_HOLD_TGT,
     parallax: 0.03,
   },
-  // 5 — YELLOW -> RED orbit entry (raw 36-43%): one continuous travel from the
-  // centred yellow hold out to the orbit's B side (the camera swings off-axis as the
-  // giant grows). easeInOutCubic so it eases into the arc without a snap.
+  // 5 — YELLOW -> RED GIANT REVEAL (raw 33-43%, ITEM 1 beat 1): one continuous travel
+  // from the centred yellow hold out to the REVEAL pose as the giant inflates — the
+  // camera pulls BACK (z 17.4 -> 39.5) and off-centre so the WHOLE grown red giant
+  // reads as it arrives. easeInOutCubic so it eases into the reveal without a snap.
   {
     endProgress: RED_HOLD_START,
     interp: [YELLOW_HOLD_END, RED_HOLD_START],
     easing: 'easeInOutCubic',
     posStart: YELLOW_HOLD_POS,
-    posEnd: RED_ORBIT_B_POS,
+    posEnd: RED_REVEAL_POS,
     targetStart: YELLOW_HOLD_TGT,
-    targetEnd: RED_ORBIT_B_TGT,
+    targetEnd: RED_REVEAL_TGT,
     parallax: 0.025,
   },
-  // 6 — RED GIANT lateral ORBIT (raw 28-36%): the camera ARCS around the huge body,
-  // ORBIT_B -> ORBIT_A (x swings +6.4 -> -7.2, z 34.5 -> 36, the look target pans
-  // across the limb), so it reads as moving AROUND the surface, not a static corner.
-  // The orb itself never leaves the origin — this is a pure camera move. easeInOutCubic
-  // for a smooth in/out sweep; the red-hold micro-drift rides subordinate on top.
+  // 6 — RED GIANT LIMB ORBIT + CLOSE-UP (raw 23-33%, ITEM 1 beats 2+3): from the
+  // pulled-back reveal the camera ARCS along the limb (x swings +4.6 -> -5.2, the look
+  // target pans across the surface) WHILE diving IN (z 39.5 -> 27.5) to a surface /
+  // active-region close-up — so it reads as travelling AROUND the body and then
+  // settling onto its surface, never a static corner. ONE continuous move; the orb
+  // never leaves the origin (pure camera move). The red-hold micro-drift rides on top.
   {
     endProgress: RED_HOLD_END,
     interp: [RED_HOLD_START, RED_HOLD_END],
     easing: 'easeInOutCubic',
-    posStart: RED_ORBIT_B_POS,
-    posEnd: RED_ORBIT_A_POS,
-    targetStart: RED_ORBIT_B_TGT,
-    targetEnd: RED_ORBIT_A_TGT,
+    posStart: RED_REVEAL_POS,
+    posEnd: RED_CLOSE_POS,
+    targetStart: RED_REVEAL_TGT,
+    targetEnd: RED_CLOSE_TGT,
     parallax: 0.015,
   },
-  // 7 — REVERSE COLLAPSE, outer (raw 19-23%): from the orbit's A side the camera
+  // 7 — REVERSE COLLAPSE, outer (raw 19-23%): from the red-giant CLOSE-UP the camera
   // compresses inward toward the collapse core as the particles pull in. SHORTENED
   // band (ITEM 3) — the inward compress is brief, the collapse is a flash not a beat.
   {
     endProgress: 0.81,
     interp: [RED_HOLD_END, 0.81],
     easing: 'easeInOutCubic',
-    posStart: RED_ORBIT_A_POS,
+    posStart: RED_CLOSE_POS,
     posEnd: COLLAPSE_PULL_POS,
-    targetStart: RED_ORBIT_A_TGT,
+    targetStart: RED_CLOSE_TGT,
     targetEnd: COLLAPSE_PULL_TGT,
     parallax: 0.0,
   },
