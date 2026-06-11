@@ -659,16 +659,21 @@ export const SCENES: readonly LifecycleScene[] = [
       href: 'graveyard',
     },
     markers: [
-      // RED GIANT / graveyard — ONE marker, fixed spot over the red limb.
+      // RED GIANT / graveyard — ONE marker, parked in the DARK left band. During
+      // this beat the giant is camera-parked as a vast off-centre orb filling the
+      // right ~65% of the frame, so the only true dark sky is the left edge; sit
+      // the marker there (above the manifesto headline, below the identity) rather
+      // than on the bright photosphere where it washed out. bg is 'dark', not
+      // 'bright': on black it needs the light-stroke + glow treatment to read.
       {
         id: 'red',
         state: 'red',
-        vx: 0.68,
-        vy: 0.4,
+        vx: 0.13,
+        vy: 0.3,
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
-        bg: 'bright',
+        bg: 'dark',
         glyph: 'glyphs/glyph-marker-graveyard.svg',
         eyebrow: 'GRAVEYARD / 01',
         headline: 'Things I abandoned.',
