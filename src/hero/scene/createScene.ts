@@ -713,7 +713,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // as a flat loading-screen bloom). Sigma 0.13 keeps the punch off the bulk below
     // and out of the black hole above.
     const NOVA_CENTER = 0.62;
-    const NOVA_SIGMA = 0.13;
+    // ITEM 3: NARROW the nova envelope (sigma 0.13 -> 0.09, ~30% shorter) so the
+    // collapse FLASH has a tighter hold/decay — a brief transition flash, not a held
+    // sunburst chapter. Paired with the shortened collapse SCROLL band (Item 9), the
+    // blast is in-and-out fast.
+    const NOVA_SIGMA = 0.09;
     let nova = reduced ? 0 : Math.exp(-Math.pow((stage - NOVA_CENTER) / NOVA_SIGMA, 2));
     // DEBUG: window.__bhFlash pins the envelope to a held value so capture scripts
     // can screenshot any point of the blast independent of scroll. Pairs with

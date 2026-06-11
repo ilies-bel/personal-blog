@@ -324,17 +324,21 @@ export const diskVertexShader = /* glsl */ `
 
     // -- finger-like plasma jets --------------------------------------------
     // A LOW-frequency field over the blast direction picks lanes that shoot
-    // much further than the bulk (Rayleigh–Taylor fingers); a finer octave adds
-    // sub-filaments. The contrast is pushed HARD so the explosion reads as
-    // distinct radial RAYS spiking out of a core, not a uniform fog ball.
-    // Everything that shapes the blast is sampled from CONTINUOUS fields over the
-    // (spatial) blastDir — no per-particle aSeed term — so neighbouring particles
-    // (nearby blastDir) get nearly-identical reach/velocity and travel together as
-    // coherent sheets & filaments rather than as independent grains.
+    // further than the bulk (Rayleigh–Taylor fingers); a finer octave adds
+    // sub-filaments. Everything that shapes the blast is sampled from CONTINUOUS
+    // fields over the (spatial) blastDir — no per-particle aSeed term — so
+    // neighbouring particles (nearby blastDir) get nearly-identical reach/velocity
+    // and travel together as coherent sheets & filaments rather than as independent
+    // grains.
+    // ITEM 3: REDUCE the symmetric radial-RAY look so the reverse-collapse doesn't
+    // read as a generic outward sunburst. The lane spikes are SOFTENED (smoothstep
+    // window widened 0.28-0.90 -> 0.40-0.95, exponent 2.2 -> 1.5 = less peaky) and the
+    // jet reach contrast pulled down (2.6 -> 1.4, void floor lifted 0.40 -> 0.55) so the
+    // ejecta reads as a brief compressed flash that gathers inward, not a spray of rays.
     float lane = fbm(blastDir*2.2 + 11.0);
-    lane = pow(smoothstep(0.28, 0.90, lane), 2.2);  // sharp finger spikes
+    lane = pow(smoothstep(0.40, 0.95, lane), 1.5);  // softer, less-spiky fingers
     float fil  = fbm(blastDir*6.0 + 4.0);
-    float jet  = 0.40 + 2.6*lane + 0.30*fil;        // ~0.40 (void) .. ~3.5 (spike)
+    float jet  = 0.55 + 1.4*lane + 0.30*fil;        // ~0.55 (void) .. ~2.25 (mild spike)
     // filament brightness from the STABLE lane field (no uTime / post-pos), so
     // bright wisps hold still as the remnant expands. High contrast: the rays
     // glow, the voids between them stay dark → the radial structure reads.
@@ -425,10 +429,15 @@ export const diskVertexShader = /* glsl */ `
     // exists. This is a small GEOMETRIC nudge — not a glow — so matter reads as
     // being aspirated into the point. Vanishes by the blast (toRay→1 → pull→0),
     // and is a no-op at the hero (pullWin≈0 at uMorph=0).
-    float pullWin   = exp(-pow((uMorph-0.49)/0.07, 2.0));            // seed window
-    float nearCore  = 1.0 - smoothstep(coreR, coreR + uRin*1.6, r);  // 1 near seed
-    float pullAmt   = pullWin * nearCore * (1.0 - toRay) * 0.22;     // subtle
-    float rPull     = r * (1.0 - 0.5*pullAmt);
+    // ITEM 3: STRONGER inward PULL so the reverse-collapse reads as matter being
+    // aspirated INTO the centre (we're rewinding a collapse), not an outward blast.
+    // The seed window is widened (0.07 -> 0.10) and the pull strength raised (0.22 ->
+    // 0.40) + the radius compression deepened (0.5 -> 0.7), so nearby debris visibly
+    // gathers toward the dark core through the flash. Vanishes by the blast (toRay->1).
+    float pullWin   = exp(-pow((uMorph-0.49)/0.10, 2.0));            // seed window (widened)
+    float nearCore  = 1.0 - smoothstep(coreR, coreR + uRin*2.0, r);  // 1 near seed (wider reach)
+    float pullAmt   = pullWin * nearCore * (1.0 - toRay) * 0.40;     // stronger inward tug
+    float rPull     = r * (1.0 - 0.7*pullAmt);
     float phiPull   = phi + uSpinDir * pullAmt * 1.4;               // tangential lead
     vec3 spiralPos  = vec3(rPull*cos(phiPull), thick*(1.0-0.4*pullAmt), rPull*sin(phiPull));
     pos = mix(pos, spiralPos, pullWin);
@@ -1661,13 +1670,20 @@ export const diskFragmentShader = /* glsl */ `
     //     peak), so the debris ramp stays in the warm white→amber→burnt family. The
     //     cooled outer filaments are a clear BURNT ORANGE (green lifted off pure red),
     //     and the mid is a clean amber. Sits between the ember ramp and the sun ramp. ---
+    // ITEM 3 collapse ramp: white #F3EFE2 -> amber #FF9A2E -> red #6A1608 -> dark #090302.
+    // The reverse-collapse is a brief TRANSITION FLASH (cold silver-line -> hot ember in
+    // under a second), so the ramp goes from a clean warm-white core down through a hot
+    // amber edge to a deep collapse-red and a near-black dark — handing straight into the
+    // red-giant surface. Tighter than the old burnt-orange debris ramp.
     float e = clamp(vExplode, 0.0, 1.2);
-    vec3 eRed   = vec3(0.46, 0.10, 0.02);   // burnt-orange cooled outer filaments/shadows
-    vec3 eAmbr  = vec3(1.00, 0.44, 0.11);   // clean amber mid/edge debris
-    vec3 eWhite = vec3(1.00, 0.95, 0.84);   // white-hot
-    vec3 eCore  = vec3(1.00, 0.99, 0.96);   // white-hot CENTER (was blue-white flash core)
-    vec3 exCol = mix(eRed,  eAmbr,  smoothstep(0.12, 0.45, e));
-    exCol = mix(exCol, eWhite, smoothstep(0.45, 0.80, e));
+    vec3 eDark  = vec3(0.035, 0.012, 0.008); // #090302 dark collapse shadow (deepest)
+    vec3 eRed   = vec3(0.415, 0.086, 0.031); // #6A1608 collapse red (cooled inner debris/shadows)
+    vec3 eAmbr  = vec3(1.000, 0.604, 0.180); // #FF9A2E hot amber mid/edge
+    vec3 eWhite = vec3(0.953, 0.937, 0.886); // #F3EFE2 warm-white shock front
+    vec3 eCore  = vec3(0.980, 0.972, 0.945); // warm-white CENTER (filmic, never pure white)
+    vec3 exCol = mix(eDark, eRed,  smoothstep(0.0, 0.18, e));
+    exCol = mix(exCol, eAmbr,  smoothstep(0.18, 0.46, e));
+    exCol = mix(exCol, eWhite, smoothstep(0.46, 0.80, e));
     exCol = mix(exCol, eCore,  smoothstep(0.92, 1.12, e));
     float exLuma = dot(exCol, vec3(0.299,0.587,0.114));
     exCol = mix(vec3(exLuma), exCol, uSat);  // respect global desaturation

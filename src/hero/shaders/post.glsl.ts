@@ -154,8 +154,9 @@ export const NovaShader = {
       // The hot peak stays a warm white; the cooling trailing edge is pushed toward a
       // clear BURNT ORANGE (green 0.82 → 0.74, blue 0.55 → 0.40) so the flash cools
       // into the same burnt-orange shadow family the debris ramp carries.
-      vec3 cold = vec3(1.0, 0.97, 0.90);   // warm-white shock front (white-hot center)
-      vec3 warm = vec3(1.0, 0.74, 0.40);   // ~#FFBC66 cooling burnt-orange edge
+      // ITEM 3 collapse palette: warm-white front #F3EFE2 -> hot amber edge #FF9A2E.
+      vec3 cold = vec3(0.953, 0.937, 0.886); // #F3EFE2 warm-white shock front
+      vec3 warm = vec3(1.0, 0.604, 0.180);   // #FF9A2E hot amber cooling edge
       vec3 tint = mix(warm, cold, smoothstep(0.35, 0.90, uNova));
       vec3 white = mix(vec3(1.0), tint, 0.42); // warm-tinted, never neutral white
       col = mix(col, white, clamp(bleach, 0.0, 1.0));
