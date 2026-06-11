@@ -2,7 +2,10 @@
    state is a glyph instrument rail; labels and destination expand on hover/focus
    so the animation stays the visual subject. */
 .hud-system {
-  --hud-line: color-mix(in oklch, var(--fg) 34%, transparent);
+  /* --hud-line now CASCADES from the per-scene tokens (tokens.css default + the
+     hero.css [data-scene] / [data-zone] overrides), so the rail line + connector ticks
+     pick up each chapter's HUD temperature. Only the -dim derivative + the gold accent
+     stay local. (ITEM 7) */
   --hud-line-dim: color-mix(in oklch, var(--fg) 16%, transparent);
   --hud-gold: color-mix(in oklch, var(--highlight) 86%, var(--fg));
 
@@ -346,20 +349,22 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   font-size: var(--text-hud);
   line-height: 1;
   letter-spacing: var(--tracking-label);
-  /* HUD title floats over the star — cool overlay bone (Task 3a) holds authority. */
-  color: var(--fg-overlay);
+  /* HUD title takes the per-scene HUD main token (ITEM 7) so it adapts per chapter
+     (cold bone / warm cream / blue-white / dark on the yellow star). The inner shadow
+     uses the per-scene --hud-shadow tint. */
+  color: var(--hud-main);
   text-shadow:
     0 0 18px rgba(0, 0, 0, 1),
-    0 0 4px rgba(0, 0, 0, 0.95);
+    0 0 4px var(--hud-shadow);
 }
 .hud-nav-destination {
   font-size: var(--text-hud);
   line-height: 1;
   letter-spacing: 0.1em;
-  color: color-mix(in oklch, var(--fg-dim) 88%, var(--fg));
+  color: var(--hud-muted);
   text-shadow:
     0 0 18px rgba(0, 0, 0, 1),
-    0 0 4px rgba(0, 0, 0, 0.95);
+    0 0 4px var(--hud-shadow);
 }
 .hud-nav-mobile-readout {
   display: none;
@@ -534,15 +539,16 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
 .hud-compass-read {
   font-size: var(--text-hud);
   letter-spacing: 0.12em;
-  /* The compass read floats over the star — cool overlay bone (Task 3a). */
-  color: var(--fg-overlay);
+  /* The compass read takes the per-scene HUD main token (ITEM 7) so the bottom readout
+     adapts per chapter with the rail. */
+  color: var(--hud-main);
   /* Smoothly warm to gold when the lock engages (data-locked) rather than snap. */
   transition: color 0.32s var(--ease-out-quint), text-shadow 0.32s var(--ease-out-quint);
 }
 .hud-compass-dest {
   font-size: var(--text-micro);
   letter-spacing: var(--tracking-label);
-  color: var(--fg-dim);
+  color: var(--hud-muted);
   transition: color 0.32s var(--ease-out-quint);
 }
 .hud-compass-label {

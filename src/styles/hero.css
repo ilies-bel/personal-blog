@@ -5,6 +5,47 @@
 
 .bh-root { position: relative; }
 
+/* PER-SCENE HUD COLOUR TOKENS (ITEM 7) -------------------------------------------
+   Each celestial chapter owns a DIFFERENT HUD temperature so the chrome reads as part
+   of that chapter, not one global tint. HeroIsland sets data-scene on .bh-root from the
+   live lifecycle scene (blackhole | red-giant | yellow-star | nebula | final); here we
+   tint the SAME token ramp the chrome already consumes (--fg-overlay drives the HUD/
+   manifesto floating text, --fg-dim the muted rung, --line the hairlines, --highlight
+   the gold signal). They set DEDICATED HUD tokens (--hud-main / --hud-muted / --hud-line)
+   that the HUD rail + bottom compass consume — kept SEPARATE from the manifesto's
+   --fg-overlay so retinting the HUD never disturbs the headline's cool-bone + scrim
+   treatment. These blocks come BEFORE the data-zone='bright' override below, so on the
+   BRIGHT zones (the supernova flash + the yellow-star hold) the adaptive DARK-stroke
+   override always WINS — i.e. the yellow-star's intentionally-dark HUD comes from
+   data-zone (they agree, never fight). On the DARK chapters (black hole settled / red
+   giant / nebula / final) data-zone is 'dark' so these per-scene HUD tints apply. Colours
+   map the art-direction spec (#E7E4D8 bone / #F4E8D2 cream / #E7ECFF blue-white / #E9EEFF). */
+.bh-root[data-scene='blackhole'] {
+  --hud-main: #e7e4d8;                            /* cold bone HUD main */
+  --hud-muted: rgba(231, 228, 216, 0.55);
+  --hud-line: rgba(231, 228, 216, 0.28);
+}
+.bh-root[data-scene='red-giant'] {
+  --hud-main: #f4e8d2;                            /* warm cream HUD main (ember chapter) */
+  --hud-muted: rgba(244, 232, 210, 0.58);
+  --hud-line: rgba(244, 232, 210, 0.32);
+  --hud-shadow: rgba(20, 5, 2, 0.75);             /* deep ember text shadow for legibility */
+}
+.bh-root[data-scene='nebula'] {
+  --hud-main: #e7ecff;                            /* cool blue-white HUD main (cold reset) */
+  --hud-muted: rgba(231, 236, 255, 0.55);
+  --hud-line: rgba(160, 180, 255, 0.32);
+}
+.bh-root[data-scene='final'] {
+  --hud-main: #e9eeff;                            /* signal blue-white HUD main (final dot) */
+  --hud-muted: rgba(233, 238, 255, 0.48);
+  --hud-line: rgba(160, 185, 255, 0.22);
+}
+/* yellow-star: the HUD is intentionally DARK on the bright star. That dark stroke is
+   already supplied by data-zone='bright' (active across the yellow hold) below, so we
+   do NOT also set a light per-scene tint here — the two would otherwise fight. The
+   data-zone override wins (it comes later), giving the adaptive dark HUD the brief wants. */
+
 /* ADAPTIVE DARK STROKE ON BRIGHT ZONES ------------------------------------------
    The hero chrome (identity, manifesto, HUD rail) defaults to the warm-bone token
    ramp (--fg / --fg-dim / --fg-faint + the aged-gold accents). Over the two BRIGHT
@@ -13,13 +54,22 @@
    sets data-zone="bright" on .bh-root across those beats (derived from the shader
    stage); here we OVERRIDE the token ramp to a dark graphite within that subtree, so
    every consumer that reads var(--fg) etc. flips to a legible dark stroke at once.
-   The room (canvas clear colour) is untouched; only the DOM chrome restyles.
+   The room (canvas clear colour) is untouched; only the DOM chrome restyles. This block
+   comes AFTER the per-scene tints above, so it WINS on the bright zones (the yellow-star
+   dark HUD + the flash) — reconciling the two adaptive systems (they agree, not fight).
 
    The swap is eased with a colour transition on the chrome wrappers so it never pops
    as the visitor scrolls into/out of the bright band. The override is scoped to the
    .bh-root subtree (a descendant of :root), so it cleanly reverts to warm bone the
    instant data-zone leaves "bright". */
 .bh-root[data-zone='bright'] {
+  /* the HUD's own main/muted/line tokens flip DARK here (the #19130A-family dark stroke
+     the yellow star + flash need); --hud-main also feeds the manifesto-independent HUD
+     title. The manifesto keeps its cool-bone --fg-overlay + scrim, so this no longer
+     darkens the headline — only the HUD chrome. */
+  --hud-main: oklch(0.26 0.012 78);
+  --hud-muted: oklch(0.34 0.012 78);
+  --hud-line: oklch(0.40 0.020 82);
   --fg: oklch(0.30 0.012 80);          /* dark graphite — legible on the bright canvas */
   --fg-dim: oklch(0.36 0.012 78);      /* dark graphite, secondary text */
   --fg-faint: oklch(0.44 0.012 78);    /* mid graphite, labels/dates */
@@ -38,7 +88,15 @@
 .bh-beat-line,
 .bh-beat-big,
 .bh-beat-whisper,
-.hud-system {
+.hud-system,
+/* ITEM 7: the per-scene HUD token swap (data-scene) also retints the rail's title /
+   destination / line + the bottom compass; ease those colour changes too so the chrome
+   never pops between chapters. */
+.hud-nav-title,
+.hud-nav-destination,
+.hud-compass-read,
+.hud-compass-dest,
+.hud-compass-label {
   transition: color 0.45s var(--ease-out-quint);
 }
 
@@ -386,9 +444,13 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
      so it stays crisp. Always fully opaque — never translucent over the starfield. */
   color: var(--fg-overlay);
   text-wrap: balance;
-  text-shadow: 0 0 18px rgba(0, 0, 0, 1), 0 0 4px rgba(0, 0, 0, 0.95);
+  /* the outer halo stays a hard black for legibility; the inner layer uses the per-scene
+     --hud-shadow tint (ITEM 7) so e.g. the red giant's headline sits on a deep ember
+     shadow that belongs to its temperature. Transitions with the colour swap below. */
+  text-shadow: 0 0 18px rgba(0, 0, 0, 1), 0 0 4px var(--hud-shadow);
   opacity: 1;
   transform: none;
+  transition: color 0.45s var(--ease-out-quint), text-shadow 0.45s var(--ease-out-quint);
 }
 
 /* Whisper: small, elaborating the big line. Shared; never swaps. */
