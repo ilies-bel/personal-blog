@@ -1750,7 +1750,7 @@ export const diskFragmentShader = /* glsl */ `
           // only the hottest tip reaches sodium/hot-edge (those stops are UNCHANGED).
           vec3 rfc = mix(vec3(0.282, 0.044, 0.018), vec3(0.690, 0.166, 0.046), smoothstep(0.2, 0.62, ht));
           rfc = mix(rfc, vec3(0.906, 0.392, 0.094), smoothstep(0.62, 0.88, ht));
-          rfc = mix(rfc, vec3(1.000, 0.620, 0.173), smoothstep(0.88, 1.0, ht));
+          rfc = mix(rfc, vec3(0.906, 0.392, 0.094), smoothstep(0.88, 1.0, ht)); // (gold crest killed → sodium orange #E76418 per grade)
           pcol = mix(gfc, rfc, vSunRed);
         } else {
           // PHOTOSPHERE: the warm field vSunM drives a 5-stop ramp. The gold ramp
@@ -1803,17 +1803,17 @@ export const diskFragmentShader = /* glsl */ `
           // or DROPS (the body/ember stops read slightly DARKER, never brighter). The smoothstep
           // windows are unchanged (body still ~70% of the surface). Rim (#E76418) and the
           // pale-gold crest (#FF9E2C) and their windows are UNTOUCHED.
-          vec3 rc = vec3(0.115, 0.017, 0.008);                  // #1D0402 ember floor — deep red (was #220803)
-          rc = mix(rc, vec3(0.282, 0.044, 0.018), smoothstep(0.06, 0.30, mEff)); // #480B05 deep ember shadow mass (was #451006)
+          vec3 rc = vec3(0.109, 0.016, 0.008);                  // #1D0402 ember floor — deep red (was #220803); shadows pulled −5% per grade
+          rc = mix(rc, vec3(0.268, 0.042, 0.017), smoothstep(0.06, 0.30, mEff)); // #480B05 deep ember shadow mass (was #451006); shadows pulled −5% per grade
           rc = mix(rc, vec3(0.470, 0.100, 0.028), smoothstep(0.26, 0.56, mEff)); // #781A07 molten red body (DOMINANT; was #7A240B)
           rc = mix(rc, vec3(0.690, 0.166, 0.046), smoothstep(0.58, 0.80, mEff)); // #B02A0C molten ember (greener-down; was #B43A10)
           rc = mix(rc, vec3(0.906, 0.392, 0.094), smoothstep(0.80, 0.93, mEff)); // #E76418 sodium orange (active cells) — UNCHANGED rim
-          rc = mix(rc, vec3(1.000, 0.620, 0.173), smoothstep(0.94, 1.0, mEff));  // #FF9E2C hot edge (RARE crest) — UNCHANGED
+          rc = mix(rc, vec3(0.906, 0.392, 0.094), smoothstep(0.94, 1.0, mEff));  // hot edge (RARE crest) — (gold crest #FF9E2C killed → sodium orange #E76418 per grade; window unchanged)
           // Dark ember umbrae / veins. veinAtten (declared with the gold ramp above, 1.0
           // on high) softens the vein depth on the LOW tier — few + fat grains (uPointGain>1)
           // would otherwise punch each dark-veined grain into a visible PIT instead of soft
           // mottling. Byte-identical on the high path; the ember colour is unchanged.
-          rc = mix(rc, vec3(0.068, 0.010, 0.005), vSunDark*vYrMix*veinAtten); // #110301 deep ember umbrae/dark veins (green down, red held)
+          rc = mix(rc, vec3(0.065, 0.010, 0.005), vSunDark*vYrMix*veinAtten); // #110301 deep ember umbrae/dark veins (green down, red held); shadows pulled −5% per grade
           // sodium-orange limb (forward-scattered) — a HOT edge, not a creamy-white wash.
           // Pulled toward sodium orange (#E76418→#FF9E2C) and the wide-band weight cut so it
           // doesn't flood the outer body with bright rim.
@@ -1862,7 +1862,7 @@ export const diskFragmentShader = /* glsl */ `
           // limb, so the geyser particles themselves read sodium orange.
           vec3 eRed  = vec3(0.690, 0.166, 0.046); // #B02A0C molten ember (giant surface, hotter than body; greener-down to match the molten-red body stop)
           vec3 eOrng = vec3(0.906, 0.392, 0.094); // #E76418 sodium orange (plume body) — UNCHANGED
-          vec3 eRoot = vec3(1.000, 0.620, 0.173); // #FF9E2C hot edge at the root (active region, no white)
+          vec3 eRoot = vec3(0.906, 0.392, 0.094); // hot edge at the root (active region, no white) — (gold crest #FF9E2C killed → sodium orange #E76418 per grade)
           pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume heats to sodium orange
           pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter sodium orange up the column
           pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // hot sodium-orange glow at the root (additive)

@@ -137,8 +137,8 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // brightening: R/G climbs sharply in every shadow+mid stop while LUMINANCE holds flat
     // or DROPS (body/ember stops read slightly DARKER, never brighter). The rim (r4) and
     // the pale-gold crest are UNTOUCHED.
-    vec3 r0 = vec3(0.115,0.017,0.008); // #1D0402 ember floor — deep red (was #220803)
-    vec3 r1 = vec3(0.282,0.044,0.018); // #480B05 deep ember shadow mass (was #451006)
+    vec3 r0 = vec3(0.109,0.016,0.008); // #1D0402 ember floor — deep red (was #220803); shadows pulled −5% per grade
+    vec3 r1 = vec3(0.268,0.042,0.017); // #480B05 deep ember shadow mass (was #451006); shadows pulled −5% per grade
     vec3 r2 = vec3(0.470,0.100,0.028); // #781A07 molten red body (DOMINANT; was #7A240B)
     vec3 r3 = vec3(0.690,0.166,0.046); // #B02A0C molten ember (body→rim; greener-down, was #B43A10)
     vec3 r4 = vec3(0.906,0.392,0.094); // #E76418 sodium orange crest (hottest cells) — UNCHANGED rim
@@ -164,14 +164,14 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // 0.07 off the old orange-red) so the intergranular veins don't pull the body average
     // toward orange — the surface stays pale gold. The RED-giant lane (#0D0201, deep ember
     // red) is UNCHANGED (gated by uRed) so the approved ember surface is untouched.
-    col = mix(col, mix(vec3(0.13,0.07,0.012), vec3(0.046,0.007,0.003), uRed), chMask*0.88);
+    col = mix(col, mix(vec3(0.13,0.07,0.012), vec3(0.044,0.007,0.003), uRed), chMask*0.88); // red-giant lane −5% deeper per grade
 
     // sunspots: darker + slightly broader so they punch as the reference's dark pores.
     // The yellow star keeps its exact neutral-dark pore (#0A0100); the RED GIANT's pores
     // are pushed to a deep EMBER red (#0D0100 — green dropped, red held) so even the
     // darkest shadows read molten red, not black. Gated by uRed → yellow star untouched.
     float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.48,0.2,m);
-    col = mix(col, mix(vec3(0.04,0.006,0.0), vec3(0.046,0.004,0.0), uRed), spot*0.72);
+    col = mix(col, mix(vec3(0.04,0.006,0.0), vec3(0.044,0.004,0.0), uRed), spot*0.72); // red-giant pore −5% deeper per grade
 
     // granulation: crisp distinct mottling (lava-cell texture of the reference). Floor
     // raised (0.72 → 0.95) so the troughs stay LUMINOUS — the reference disc is a bright
@@ -220,7 +220,8 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // dropping it lands the brightness on the textured disc (granulation/mottling reads)
     // rather than a glowing UI orb, while the star stays a bright pale-gold sun. The red
     // giant end (×0.5) is UNCHANGED so the approved ember surface is untouched.
-    col *= mix(1.62, 0.5, uRed);
+    // GRADE: yellow core exposure dialled DOWN a further −10% (1.62 → 1.458); red end held.
+    col *= mix(1.458, 0.5, uRed);
 
     // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
     // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
