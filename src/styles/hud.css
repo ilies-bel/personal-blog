@@ -1148,6 +1148,12 @@ body.hud-booting .hud-boot-scan {
   --marker-size: 4.5rem;
   /* Inner glyph box — sits centred inside the reticle (the per-type icon). */
   --marker-glyph-size: 1.5rem;
+  /* Whole-marker dim multiplier: markers ride at 60% (40% dimmer) until the HUD
+     powers up. Composed onto the VISIBLE opacity below so it stacks cleanly with
+     the data-visible fade and leaves the per-element opacities (reticle/hexes)
+     untouched. body.hud-active flips it to 1 (full brightness) once the boot FSM
+     lights the HUD up at the bottom of the scroll. */
+  --marker-hud-dim: 0.6;
 
   position: fixed;
   z-index: 20;
@@ -1167,7 +1173,10 @@ body.hud-booting .hud-boot-scan {
     opacity 0.14s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 .star-marker[data-visible='true'] {
-  opacity: 1;
+  /* Resting visible opacity = the HUD-dim multiplier (0.6 until the HUD is up,
+     1 once body.hud-active is set). Animates 0 → 0.6 on show, then 0.6 → 1 when
+     the HUD powers up, both via the transition below. */
+  opacity: var(--marker-hud-dim, 1);
   pointer-events: auto;
   /* Fade IN (going to opacity:1 / showing): slower, eased. */
   transition:
@@ -1182,6 +1191,11 @@ body.hud-booting .hud-boot-scan {
    loader-gone this rule no longer matches and the [data-visible] rule above governs. */
 body:not(.loader-gone) .star-marker {
   pointer-events: none !important;
+}
+/* Once the HUD has powered up (boot FSM sets body.hud-active at the bottom of the
+   scroll), bring the markers back to full 100% brightness. */
+body.hud-active .star-marker {
+  --marker-hud-dim: 1;
 }
 /* BRIGHT STATES (orange nebula, yellow star, red giant): flip the whole OFF-WHITE
    outer reticle to near-black so it reads against the bright surface. All three
