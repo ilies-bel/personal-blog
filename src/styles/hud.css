@@ -191,11 +191,12 @@
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
 /* Active readout value: the stage label of the lit (current) row — at the black
-   hole this is the readout the HUD shows. Lift it to ~12px and warm bone so the
-   live readout reads clearly without restyling the rest of the rail. */
+   hole this is the readout the HUD shows. It sits one HUD rung down so it reads as
+   the live readout, and uses the cool overlay bone so it holds on the bright star
+   (replacing the old hard-coded #eee5d8). */
 .hud-nav-button[data-current='true'] .hud-nav-title {
-  font-size: 0.75rem;
-  color: #eee5d8;
+  font-size: var(--text-label);
+  color: var(--fg-overlay);
 }
 /* Keyboard focus ring (#1): keep an accessible ring but make it QUIET and not a
    tight box hugging the glyph. We push it well clear of the rail with a generous
@@ -253,7 +254,9 @@ body.hud-active .hud-nav-copy {
   opacity: 1;
   transform: none;
 }
-body.hud-active .hud-nav-title,
+/* At the black hole the labels brighten to full presence — the title to the cool
+   overlay bone (it floats on the star), the destination to warm --fg below it. */
+body.hud-active .hud-nav-title { color: var(--fg-overlay); }
 body.hud-active .hud-nav-destination { color: var(--fg); }
 
 /* Per-row stagger: row N reveals at beat + (N-1)*step. The label (copy) follows
@@ -340,16 +343,17 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   text-transform: uppercase;
 }
 .hud-nav-title {
-  font-size: 0.95rem;
+  font-size: var(--text-hud);
   line-height: 1;
-  letter-spacing: 0.14em;
-  color: var(--fg);
+  letter-spacing: var(--tracking-label);
+  /* HUD title floats over the star — cool overlay bone (Task 3a) holds authority. */
+  color: var(--fg-overlay);
   text-shadow:
     0 0 18px rgba(0, 0, 0, 1),
     0 0 4px rgba(0, 0, 0, 0.95);
 }
 .hud-nav-destination {
-  font-size: 0.82rem;
+  font-size: var(--text-hud);
   line-height: 1;
   letter-spacing: 0.1em;
   color: color-mix(in oklch, var(--fg-dim) 88%, var(--fg));
@@ -399,14 +403,205 @@ body.hud-active .hud-nav-button .hud-nav-glyph {
   pointer-events: none;
   transition: opacity 0.5s var(--ease-out-quint) var(--rail-beat);
 }
+/* Local text scrim (Task 3b): a soft dark pool centred behind the bottom compass
+   so its readout keeps authority on the brightest orange-star frame, the same
+   restrained treatment as the manifesto block. Bleeds past the box and fades to
+   transparent at every edge so it never reads as a panel; sits behind the rose +
+   readout (z -1) and never catches pointer events. */
+.hud-compass::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -1.1rem -2.2rem;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 120% at 50% 60%,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(0, 0, 0, 0.24) 46%,
+      rgba(0, 0, 0, 0.08) 72%,
+      transparent 100%);
+}
 /* The compass is the page's single bottom-centre scroll-state instrument, visible
    throughout the cinematic scroll. Hidden ONLY until the scene's first frame paints
    (body.scene-ready, added by index.astro's loader script) so it never flashes over
    the loader, and during the black-hole power-on boot window. Mobile hides it via
-   display:none further down. */
-body:not(.scene-ready) .hud-compass,
+   display:none further down. The BOOT readout (.hud-compass--boot) is the exception:
+   it OWNS the slot during loading (it IS the loader's status line), so it must stay
+   lit while body:not(.scene-ready) — :not(.hud-compass--boot) exempts it here. */
+body:not(.scene-ready) .hud-compass:not(.hud-compass--boot),
 body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
 .hud-compass[data-visible='false'] { opacity: 0; transition-delay: 0s; }
+
+/* --- Boot-to-HUD intro readout ---------------------------------------------
+   The same bottom-centre slot + visual language as the live compass, driving the
+   branded LOADING STATE → READY STATE → standing scroll cue intro, then handing the
+   slot to the live aiming compass on first scroll. Markup + the boot phase machine
+   live in HudNavigation.tsx; this is purely the look. It reuses .hud-compass and the
+   .hud-compass-read / .hud-compass-dest typography wholesale (so the hand-off is
+   seamless), and ADDS only: (a) staying lit during loading (handled by the exemption
+   above), (b) a calm fade-in on each phase swap, (c) suppressing the live compass
+   while the boot readout owns the slot. */
+
+/* While the boot readout owns the slot (bootPhase !== 'live'), keep the LIVE compass
+   dark so the two never both occupy the bottom centre. The hand-off: bootPhase → live
+   unmounts the boot readout AND drops data-booting, letting the live compass fade up
+   through its own .hud-compass opacity transition (0.5s) — a calm cross of one slot. */
+.hud-compass[data-booting='true'] { opacity: 0; transition-delay: 0s; }
+
+/* The boot readout itself: it has no aiming gauge (no rose), so it is a pure two-line
+   mono readout. A soft fade as each phase swaps in keeps LOADING → READY → cue feeling
+   like a calm status line, not a flicker. The slot/centring/type all come from
+   .hud-compass above.
+
+   GLIDE seam: the readout is ONE continuous position:fixed element whose RESTING slot
+   is the bottom-centre compass position (inherited from .hud-compass: bottom + the
+   translateX(-50%) centring above). While data-glide='false' (the whole loading + the
+   brief ready beat) it is LIFTED up to the loader's vertical centre (above the dot+name)
+   via an extra translateY (the --boot-lift below). When HudNavigation flips data-glide to
+   'true' — a short beat after the scene's first paint, see GLIDE_START_MS — the lift is
+   REMOVED, so the transform transition GLIDES the readout DOWN from loader-centre to its
+   bottom slot as the loader dissolves around it.
+
+   Why a deferred React flip and not body.scene-ready directly: scene:ready is the scene's
+   heaviest frame (shader compile + buffer upload jank the main thread), and a CSS transition
+   started mid-jank is wall-clock driven, so it "completes" unseen during the block and the
+   travel SNAPS. Flipping data-glide a beat later (past the jank, still during the loader's
+   fade) puts the motion on clean frames. The loader's dot+name fade out across a matching
+   beat (--boot-glide-start, in tokens.css) while its dark background HOLDS solid through
+   the whole glide and only fades AFTER it lands (scene.css sequences the three stages).
+
+   The lift is keyed to an attribute ON THE ELEMENT (data-glide), NOT a descendant/body
+   selector: a var() holding a vh-calc resolves reliably inside transform() this way but is
+   dropped (the transform falls to none) under a descendant selector in Chromium — an
+   empirically-confirmed quirk, hence this exact shape.
+
+   The loader's dot+name are pushed just below true centre (see .scene-loader-mark in
+   scene.css) so the lifted readout sits above them and the trio reads as one centred
+   group. The glide duration is single-sourced as --boot-glide-dur in tokens.css (:root),
+   shared with scene.css's post-glide loader-background fade so the two can't drift. */
+.hud-compass--boot {
+  /* The lift the loader phase applies (negative = up), as a custom property so the value
+     lives in one place. The resting slot is y=0 (the bottom-centre compass position,
+     `bottom: env()+2rem`). To reach the LOADER's stack we move the box up ~half the
+     viewport, then a 2.4rem nudge UP so the readout's single visible line sits just ABOVE
+     viewport centre (the loader's dot+name are pushed ~1.6rem BELOW centre in scene.css's
+     --boot-stack-drop, so readout+dot+name read as one centred group). Tune the 2.4rem to
+     raise/lower the readout in the stack (keep it in step with --boot-stack-drop). */
+  --boot-lift: calc(-50vh + 2rem - 2.4rem);
+  /* Glide timing — single-sourced as --boot-glide-dur in tokens.css (:root), shared with
+     scene.css so the loader-background fade (which is now SEQUENCED to begin only AFTER
+     the glide lands) derives its delay from this same number and can never drift. The
+     glide transition below consumes it via the cascade — no local redefinition here. */
+  /* The GLIDE animates `transform` between the lifted and resting translate. Horizontal
+     centring (translateX(-50%)) is folded into both states so it never drifts. The lift is
+     applied by the [data-glide='false'] rule below (React flips data-glide to true a beat
+     after the jank to start the travel — see the gliding doc in HudNavigation). The
+     transition is declared on the GLIDE-IN target state ([data-glide='true'] below), NOT
+     here — so the element APPEARS already lifted (no upward slide on mount: a CSS transition
+     never runs for an initial style, and the lifted state carries no transition) and only
+     the DOWNWARD travel to the resting slot animates. */
+  transform: translate(-50%, 0);
+  animation: hud-boot-fade 0.5s var(--ease-out-quint) both;
+  /* Paint ABOVE the instant loader (.scene-loader is z-60 with an opaque --bg
+     background): while the readout is lifted INTO the loader stack it must sit over
+     that background, and stay above it as it glides down through the dissolving loader.
+     Once the slot hands to the live compass ('live'), the boot readout unmounts and the
+     live compass (z-18) owns it — by then the loader is gone, so this high z never
+     conflicts. aria-hidden + pointer-events:none (from .hud-compass) keep it inert. */
+  z-index: 61;
+}
+/* LIFTED into the loader stack: place the readout at the loader's vertical centre (above
+   the dot+name). Held while data-glide='false' (through 'loading' AND the brief 'ready'
+   beat) until React flips data-glide='true' a beat after the scene's first paint. Then this
+   stops matching, the transform drops to translate(-50%,0), and the transition above GLIDES
+   the readout down to its bottom slot as the loader dissolves. (The lift lives on a rule
+   whose subject is the element itself — [data-glide] on .hud-compass--boot — so var(--boot-
+   lift) resolves reliably inside the transform.) */
+.hud-compass--boot[data-glide='false'] {
+  transform: translate(-50%, var(--boot-lift));
+}
+/* The DOWNWARD glide: the transition lives on the target state so it runs ONLY for the
+   lifted→resting travel (false→true), never on the initial lifted appearance. */
+.hud-compass--boot[data-glide='true'] {
+  transition: transform var(--boot-glide-dur) var(--ease-out-quint);
+}
+/* Re-key the fade-in on the phases that APPEAR or swap text in place: 'loading' (the
+   initial appear, lifted in the loader) and 'cue' (the text swap once parked at the
+   bottom). The 'ready' phase is DELIBERATELY excluded — that is the GLIDE: the element
+   must stay solid (opacity:1, held by the 'loading' fade's `both` fill) and physically
+   travel down to the bottom slot, not fade out-and-in mid-flight. A re-fade there would
+   read as a cross-dissolve, exactly what this revision avoids. */
+.hud-compass--boot[data-boot='loading'],
+.hud-compass--boot[data-boot='cue'] {
+  animation-name: hud-boot-fade;
+}
+/* While gliding (the 'ready' beat), suppress the per-phase fade entirely so the only
+   motion is the transform glide; the READY STATE warm-up below is the sole change. */
+.hud-compass--boot[data-boot='ready'] {
+  animation: none;
+  opacity: 1;
+}
+@keyframes hud-boot-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+/* The READY STATE confirmation warms slightly toward the rail gold so it reads as
+   "systems online" rather than the drained LOADING scan (which keeps the faint
+   --idle treatment inherited from .hud-compass-read--idle). */
+.hud-compass--boot[data-boot='ready'] .hud-compass-label {
+  color: color-mix(in oklch, var(--fg) 80%, var(--hud-gold));
+  letter-spacing: 0.16em;
+}
+/* The standing scroll cue: REVERSE COLLAPSE reads as the active intro tagline (bone,
+   full presence), the ↓ scroll-down sub-line a quiet prompt below it. The ↓ arrow
+   gives a gentle vertical bob to draw the eye to scroll; dropped under reduced motion. */
+.hud-compass--boot[data-boot='cue'] .hud-compass-label {
+  color: var(--fg);
+  letter-spacing: 0.14em;
+}
+.hud-compass--boot[data-boot='cue'] .hud-compass-arrow {
+  display: inline-block;
+  color: color-mix(in oklch, var(--hud-gold) 60%, var(--hud-line));
+  animation: hud-boot-bob 1.8s var(--ease-out-quint) infinite;
+}
+@keyframes hud-boot-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(0.18rem); }
+}
+/* Reduced motion: drop the per-phase fade, the arrow bob AND the glide. The readout
+   does NOT lift into the loader and does NOT travel — it simply sits in its bottom slot
+   the whole time while the loader fades calmly over it (the loader's own opacity fade is
+   kept, but the boot readout itself stays put). The boot phase machine also skips the
+   timed READY beat under reduced motion, so the slot resolves straight to the standing
+   cue without a staged sequence. */
+.hud-compass--boot[data-reduced='true'] {
+  animation: none;
+  transition: none;
+}
+/* Cancel the lift under reduced motion: the readout sits in its bottom slot the whole time
+   (no travel) while the loader fades calmly over it. More specific than the
+   [data-glide='false'] lift rule above so it wins even in the brief loading frame. */
+.hud-compass--boot[data-reduced='true'][data-glide='false'],
+.hud-compass--boot[data-reduced='true'][data-glide='true'] {
+  transform: translate(-50%, 0);
+}
+.hud-compass--boot[data-reduced='true'] .hud-compass-arrow {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-compass--boot {
+    animation: none;
+  }
+  /* Cancel the lift AND the glide transition — more specific than the [data-glide] lift /
+     glide-target rules above so the readout stays in its bottom slot calmly while the loader
+     fades over it, even if React's data-reduced flag hasn't applied yet. */
+  .hud-compass--boot[data-glide='false'],
+  .hud-compass--boot[data-glide='true'] {
+    transform: translate(-50%, 0);
+    transition: none;
+  }
+  .hud-compass--boot .hud-compass-arrow { animation: none; }
+}
 /* The gauge rose — a fixed-size positioning context holding the faint static
    crosshair frame, the ▲ cursor anchor (dead-centre, never moved) and the ┼
    marker waypoint (centred then translated each rAF). The box is sized so the ┼'s
@@ -510,15 +705,16 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
 }
 .hud-compass-read {
-  font-size: 0.95rem;
+  font-size: var(--text-hud);
   letter-spacing: 0.12em;
-  color: var(--fg);
+  /* The compass read floats over the star — cool overlay bone (Task 3a). */
+  color: var(--fg-overlay);
   /* Smoothly warm to gold when the lock engages (data-locked) rather than snap. */
   transition: color 0.32s var(--ease-out-quint), text-shadow 0.32s var(--ease-out-quint);
 }
 .hud-compass-dest {
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
   color: var(--fg-dim);
   transition: color 0.32s var(--ease-out-quint);
 }
@@ -673,12 +869,14 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   .hud-nav-copy {
     gap: 0.18rem;
   }
+  /* On the compact mobile strip the title/destination/readout all collapse onto the
+     micro rung — they're glance-only labels at this size. */
   .hud-nav-title {
-    font-size: 0.66rem;
+    font-size: var(--text-micro);
     letter-spacing: 0.1em;
   }
   .hud-nav-destination {
-    font-size: 0.6rem;
+    font-size: var(--text-micro);
   }
   .hud-nav-mobile-readout {
     display: flex;
@@ -687,7 +885,7 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
     margin: -0.15rem 0 0;
     color: var(--fg-dim);
     font-family: var(--font-mono);
-    font-size: 0.62rem;
+    font-size: var(--text-micro);
     line-height: 1;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -770,7 +968,7 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   /* min-width so the readout box doesn't jump as the status text changes length. */
   min-width: 11rem;
   text-align: center;
-  font-size: 0.72rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.42em;
   /* optical: the big tracking pushes the text right; nudge it back to centre. */
   padding-left: 0.42em;
@@ -932,6 +1130,8 @@ body.hud-booting .hud-boot-scan {
   --marker-gold: var(--highlight);
   /* Reticle box — ~72px so the hexagon reads as a real target, not a speck. */
   --marker-size: 4.5rem;
+  /* Inner glyph box — sits centred inside the reticle (the per-type icon). */
+  --marker-glyph-size: 1.5rem;
 
   position: fixed;
   z-index: 20;
@@ -957,6 +1157,16 @@ body.hud-booting .hud-boot-scan {
   transition:
     opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
+/* EARLY-INTERACTION GATE — until the intro loader is FULLY gone (body.loader-gone,
+   set on the ::before background-fade transitionend; see index.astro), the markers
+   sit UNDER the loader but are live <a> links. Force pointer-events:none so a
+   "visible" marker can't be clicked or hover-locked through the loader. Keyboard
+   focusability is gated separately in StarMarker.tsx (tabIndex -1 until loader-gone),
+   since pointer-events does not remove an element from the tab order. After
+   loader-gone this rule no longer matches and the [data-visible] rule above governs. */
+body:not(.loader-gone) .star-marker {
+  pointer-events: none !important;
+}
 /* BRIGHT STATES (orange nebula, yellow star, red giant): flip the whole OFF-WHITE
    outer reticle to near-black so it reads against the bright surface. All three
    off-white parts — the resting dotted hex, the locked solid outer hex and the 3
@@ -968,6 +1178,21 @@ body.hud-booting .hud-boot-scan {
 .star-marker[data-bright='true'] {
   --marker-line: var(--bg);
   color: var(--bg);
+}
+/* Per-background RESTING opacity for the reticle group + glyph (NOT the anchor —
+   the anchor's opacity is the visibility-fade channel, see [data-visible]). On the
+   dark states the whole reticle reads a hair softer; on bright it sits at full; on
+   noisy it stays nearly solid so the icon survives the busy gas/limb behind it.
+   This MULTIPLIES with the inner hex/dotted opacities (group opacity), which is the
+   desired effect — the show/hide of the dotted vs solid hex still wins inside. */
+.star-marker[data-bg='dark'] {
+  --marker-rest-opacity: 0.85;
+}
+.star-marker[data-bg='bright'] {
+  --marker-rest-opacity: 1;
+}
+.star-marker[data-bg='noisy'] {
+  --marker-rest-opacity: 0.95;
 }
 /* Reduced motion: visible but no animation. Still clickable. */
 .star-marker[data-reduced='true'],
@@ -985,6 +1210,10 @@ body.hud-booting .hud-boot-scan {
   width: 100%;
   height: 100%;
   overflow: visible;
+  /* Group rest opacity (per data-bg above). MULTIPLIES with the inner hex
+     opacities, so the dotted/solid show-hide still wins; this just dims the whole
+     reticle a hair on the dark states. Defaults to 1 when no data-bg is set. */
+  opacity: var(--marker-rest-opacity, 1);
   filter:
     drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
     drop-shadow(0 0 1.2px color-mix(in oklch, var(--bg) 90%, transparent))
@@ -1002,6 +1231,27 @@ body.hud-booting .hud-boot-scan {
     drop-shadow(0 0 1.2px color-mix(in oklch, var(--fg) 90%, transparent))
     drop-shadow(0 0 2.5px color-mix(in oklch, var(--fg) 78%, transparent))
     drop-shadow(0 0 6px color-mix(in oklch, var(--fg) 55%, transparent));
+}
+/* DARK STATES (the 'beginning' speck + 'end' black hole): the strokes are the
+   off-white --marker-line, so a pure dark halo would vanish into the black canvas.
+   Keep a tight dark separating ring but ADD a faint LIGHT bloom (--fg) so the light
+   stroke actually reads on black. Scoped to data-bg='dark' so it never touches the
+   bright light-halo above (bright also carries data-bg='bright', which has no
+   reticle override here, so the [data-bright] light halo keeps winning for it). */
+.star-marker[data-bg='dark'] .star-marker-reticle {
+  filter:
+    drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
+    drop-shadow(0 0 1.2px color-mix(in oklch, var(--bg) 90%, transparent))
+    drop-shadow(0 0 3px color-mix(in oklch, var(--fg) 30%, transparent));
+}
+/* NOISY STATES (the nebula gas, the red-giant limb): the busy background needs a
+   TIGHT, strong dark outline to carve the reticle out of the texture — no light
+   bloom (it would smear into the gas), just denser dark drop-shadows. */
+.star-marker[data-bg='noisy'] .star-marker-reticle {
+  filter:
+    drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
+    drop-shadow(0 0 1.4px color-mix(in oklch, var(--bg) 92%, transparent))
+    drop-shadow(0 0 4px color-mix(in oklch, var(--bg) 60%, transparent));
 }
 
 /* RESTING: dotted hexagon — quiet, but legible. Hidden once locked. */
@@ -1089,7 +1339,12 @@ body.hud-booting .hud-boot-scan {
   box-shadow:
     0 0 0 1px color-mix(in oklch, var(--bg) 70%, transparent),
     0 0 5px 1px color-mix(in oklch, var(--marker-line) 45%, transparent);
-  transition: background 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+  /* The inner glyph now owns the resting centre, so the dot is HIDDEN at rest and
+     only appears on lock as the Voyager-gold accent (the locked rule below). */
+  opacity: 0;
+  transition:
+    background 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
+    opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 /* BRIGHT-STATE RESTING (orange nebula, yellow star, red giant): a near-black dot
    with a LIGHT separating ring + soft dark halo so it pops on the bright surface.
@@ -1102,11 +1357,125 @@ body.hud-booting .hud-boot-scan {
     0 0 5px 1px color-mix(in oklch, var(--bg) 55%, transparent);
 }
 .star-marker[data-locked='true'] .star-marker-dot {
-  /* Locked: literal Voyager-gold accent on EVERY state (wins over data-bright). */
+  /* Locked: the dot reappears as the literal Voyager-gold accent on EVERY state
+     (wins over data-bright) — this is the dot that docks with the cursor. */
+  opacity: 1;
   background: var(--marker-gold);
   box-shadow:
     0 0 6px 2px color-mix(in oklch, var(--marker-gold) 50%, transparent),
     0 0 2px 0 color-mix(in oklch, var(--marker-gold) 90%, transparent);
+}
+
+/* The per-type INNER GLYPH — owns the resting centre (the dot is hidden until
+   lock). An SVG (public/glyphs/) applied as a mask and painted with the marker's
+   adaptive currentColor (= --marker-line, which flips to near-black on bright
+   states via the data-bright rule above), exactly like .hud-nav-glyph on the rail.
+   Position:absolute + translate so it never grows the anchor box. The --glyph-mask
+   custom prop is set inline per-marker in the JSX. */
+.star-marker-glyph {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--marker-glyph-size);
+  height: var(--marker-glyph-size);
+  transform: translate(-50%, -50%);
+  background-color: currentColor;
+  -webkit-mask-image: var(--glyph-mask);
+  mask-image: var(--glyph-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  /* Rest opacity per data-bg (see the [data-bg] props above); falls back to 0.9. */
+  opacity: var(--marker-rest-opacity, 0.9);
+  transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* On lock the glyph dims so the gold dot + card take focus (the glyph stays as a
+   quiet anchor rather than competing with the gold accent). */
+.star-marker[data-locked='true'] .star-marker-glyph {
+  opacity: 0.55;
+}
+
+/* Adaptive backing PLATE — a restrained blurred disc behind everything (z-index:-1
+   inside the anchor) that lifts the marker off its surface. Off at rest by default,
+   then turned on per data-bg with a surface-appropriate radial wash + opacity. It
+   never grows the anchor box (absolute + translate). Decorative, no pointer. */
+.star-marker-plate {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--marker-size) * 1.15);
+  height: calc(var(--marker-size) * 1.15);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* DARK: a soft dark disc deepens the black under the light reticle so the strokes
+   read crisply against the canvas. */
+.star-marker[data-bg='dark'] .star-marker-plate {
+  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 60%, transparent) 0%, transparent 68%);
+  opacity: 0.5;
+}
+/* BRIGHT: a soft DARK halo that deepens local contrast behind the near-black
+   reticle so it reads on the bright photosphere / orange limb. Restrained — a
+   radial fade to transparent, never a hard disc. Applies to BOTH bright markers
+   (yellow star + red giant): both sit on bright surfaces and want a dark seat. */
+.star-marker[data-bg='bright'] .star-marker-plate {
+  background: radial-gradient(circle,
+    color-mix(in oklch, var(--bg) 42%, transparent) 0%,
+    color-mix(in oklch, var(--bg) 24%, transparent) 50%,
+    transparent 74%);
+  opacity: 0.62;
+}
+/* NOISY: a larger, denser dark disc to carve the marker out of the busy gas/limb —
+   the strongest plate of the three. */
+.star-marker[data-bg='noisy'] .star-marker-plate {
+  width: calc(var(--marker-size) * 1.35);
+  height: calc(var(--marker-size) * 1.35);
+  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 62%, transparent) 0%, color-mix(in oklch, var(--bg) 45%, transparent) 50%, transparent 78%);
+  opacity: 0.7;
+}
+
+/* Always-near MICRO-LABEL — a tiny mono caption just under the reticle so every
+   hotspot reads at rest (the marker is no longer a mystery hex). Fades in with the
+   marker's visibility and fades OUT on lock, when the full card takes over. */
+.star-marker-microlabel {
+  position: absolute;
+  top: calc(100% + 0.15rem);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--marker-line);
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+  /* Dark legibility halo for the off-white label on the dark/noisy canvas. */
+  text-shadow:
+    0 0 2px color-mix(in oklch, var(--bg) 85%, transparent),
+    0 0 5px color-mix(in oklch, var(--bg) 55%, transparent);
+}
+.star-marker[data-visible='true'] .star-marker-microlabel {
+  opacity: 0.82;
+}
+.star-marker[data-locked='true'] .star-marker-microlabel {
+  opacity: 0;
+}
+/* BRIGHT states: the label is near-black (currentColor), so its halo flips LIGHT
+   to stay readable on the bright surface (mirrors the reticle's halo flip). */
+.star-marker[data-bright='true'] .star-marker-microlabel {
+  text-shadow:
+    0 0 2px color-mix(in oklch, var(--fg) 85%, transparent),
+    0 0 5px color-mix(in oklch, var(--fg) 55%, transparent);
 }
 
 /* The tethered terminal-style card. Hidden until locked, then slides in beside
@@ -1182,29 +1551,28 @@ body.hud-booting .hud-boot-scan {
   text-align: right;
 }
 
-/* Eyebrow — mono, uppercase, letter-spaced, gold. */
+/* Eyebrow — mono, uppercase, letter-spaced, gold (chapter-label rung). */
 .star-marker-card-eyebrow {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-label);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-label);
   color: var(--marker-gold);
   text-transform: uppercase;
 }
-/* Headline — the dominant element: large, full bone, tight, monospaced to match
-   the reference. */
+/* Headline — the dominant element: card-title rung, full bone, tight, monospaced. */
 .star-marker-card-headline {
   font-family: var(--font-mono);
-  font-size: 1.5rem;
+  font-size: var(--text-title);
   font-weight: 600;
   line-height: 1.12;
   letter-spacing: -0.01em;
   color: var(--fg);
 }
-/* Desc / body — dim, comfortable line-height, wraps to ~2 lines. */
+/* Desc / body — dim, comfortable line-height, wraps to ~2 lines (small-body rung). */
 .star-marker-card-desc {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-body-sm);
   line-height: 1.45;
   letter-spacing: 0.01em;
   color: var(--fg-dim);
@@ -1213,7 +1581,7 @@ body.hud-booting .hud-boot-scan {
 .star-marker-card-tags {
   margin-top: 0.05rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-micro);
   letter-spacing: 0.04em;
   color: color-mix(in oklch, var(--fg-dim) 78%, var(--bg));
 }
@@ -1223,7 +1591,7 @@ body.hud-booting .hud-boot-scan {
 .star-marker-card-cta {
   margin-top: 0.2rem;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-body-sm);
   letter-spacing: 0.06em;
   color: var(--highlight);
   text-decoration: underline;
@@ -1264,6 +1632,9 @@ body.hud-booting .hud-boot-scan {
   .star-marker-hex-solid,
   .star-marker-ticks,
   .star-marker-dot,
+  .star-marker-plate,
+  .star-marker-glyph,
+  .star-marker-microlabel,
   .star-marker-card,
   .star-marker-card-cta {
     transition: none;
@@ -1278,6 +1649,9 @@ body.hud-booting .hud-boot-scan {
     transform: scale(0.6);
   }
 }
+.star-marker[data-reduced='true'] .star-marker-plate,
+.star-marker[data-reduced='true'] .star-marker-glyph,
+.star-marker[data-reduced='true'] .star-marker-microlabel,
 .star-marker[data-reduced='true'] .star-marker-card-cta {
   transition: none;
 }
@@ -1289,4 +1663,158 @@ body.hud-booting .hud-boot-scan {
   animation: none;
   opacity: 0.8;
   transform: scale(0.6);
+}
+
+/* ---------------------------------------------------------------------------
+   VIEWPORT-FITTED CARD (narrow viewport OR coarse pointer) ────────────────────
+   The side-tethered card (left/right of the reticle) only fits on a WIDE desktop
+   window: a ~23rem panel beside a marker near an edge runs off-screen. That clip
+   happens on ANY narrow viewport, not just a phone — a desktop user who narrows
+   their window hits it too. So the bottom-sheet re-anchor below is gated on the
+   shared 46rem mobile breakpoint (the same one the rest of the HUD uses, line 622)
+   AS WELL AS a coarse pointer, so it fires for a narrowed fine-pointer desktop
+   window, not only on touch devices. (The touch-ONLY affordances — the ≥44px hit
+   pad, the resting-hex opacity lift, the CTA tap padding — stay in the coarse-only
+   block further down; only the CARD POSITIONING/FIT lives here.) Desktop WIDE
+   (>46rem, fine pointer) keeps the side-tether + connector + flip untouched.
+
+   CONTAINING-BLOCK NOTE: the card is position:fixed, but the .star-marker <a>
+   has `translate: -50% -50%` (a transform), which makes the <a> the containing
+   block for this fixed child. So the card's inset:0 resolves against the 72px
+   MARKER BOX, not the viewport. We undo that by offsetting with the marker's
+   own viewport coordinates, published each frame as `--marker-x` / `--marker-y`
+   (StarMarker.tsx, UNCONDITIONALLY — desktop just never reads them): the marker
+   box's on-screen left edge is `var(--marker-x) - var(--marker-size)/2`, so
+   shifting `left` by the negative of that re-anchors the band to the viewport's
+   left edge; the same trick on the bottom axis pins the sheet to the viewport
+   bottom. This overrides the fine-pointer side-tether rules (`left/right: 100%` +
+   the side transforms), which we reset explicitly so the `data-side` the rAF loop
+   still computes has no effect here. The reticle/hexagon is untouched — only the
+   CARD moves. The vars are written in px each frame, so the calc cancels exactly;
+   the `50vw`/`50vh` fallbacks only apply on the very first frame before the rAF
+   writes them, and centre the band sensibly so there's no off-screen flash.
+   --------------------------------------------------------------------------- */
+@media (max-width: 46rem), (pointer: coarse) {
+  .star-marker-card,
+  .star-marker[data-side='right'] .star-marker-card,
+  .star-marker[data-side='left'] .star-marker-card {
+    position: fixed;
+    /* Re-anchor the fixed card (CB = the transformed marker box) to the viewport:
+       a full-width band whose left edge sits at viewport x=0. */
+    top: auto;
+    right: auto;
+    left: calc(0px - (var(--marker-x, 50vw) - var(--marker-size) / 2));
+    width: 100vw;
+    /* Pin the band's bottom to the viewport bottom (above the safe area),
+       INDEPENDENT of the marker's y. `bottom: 0` would place the card bottom at
+       the marker box's bottom edge (viewport y = var(--marker-y) + size/2); we
+       want it a gutter above the viewport bottom instead, so we shift by the
+       (negative) delta between those two — a NEGATIVE bottom pushes the card down
+       to the true viewport bottom no matter where the marker sits. */
+    bottom: calc(
+      (var(--marker-y, 50vh) + var(--marker-size) / 2) - 100dvh +
+        env(safe-area-inset-bottom, 0px) + 1rem
+    );
+    /* Centre the body in the band, honouring the side gutters via padding. */
+    justify-content: center;
+    align-items: flex-end;
+    padding-inline: 1rem;
+    flex-direction: row;
+    /* Hidden state: slid down a hair + faded (the base rule fades opacity). The
+       locked rule below brings it up. */
+    transform: translateY(0.75rem);
+  }
+  /* Locked reveal: slide the sheet up to rest. Overrides the side variants'
+     centred -50% Y translate (which would yank the sheet off the bottom). */
+  .star-marker[data-locked='true'] .star-marker-card,
+  .star-marker[data-locked='true'][data-side='right'] .star-marker-card,
+  .star-marker[data-locked='true'][data-side='left'] .star-marker-card {
+    transform: translateY(0);
+  }
+
+  /* A tether line to a viewport sheet looks wrong — hide the connector. */
+  .star-marker-connector {
+    display: none;
+  }
+
+  /* The sheet body: a comfortable reading measure, never wider than the viewport
+     minus the 1rem band gutters. The left-side variant's right-align/reverse is
+     irrelevant now — reset it so the copy always reads left-aligned in the sheet. */
+  .star-marker-card-body,
+  .star-marker[data-side='left'] .star-marker-card-body {
+    width: min(32rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+    flex-direction: row;
+    text-align: left;
+  }
+  /* The left-side nudge transform is meaningless in the sheet — keep it the
+     right-side nudge so the CTA still moves consistently on lock. */
+  .star-marker[data-side='left'][data-locked='true'] .star-marker-card-cta {
+    transform: translateX(0.18rem);
+  }
+}
+
+/* Reduced motion: the sheet appears instantly (no slide-up). Mirrors the desktop
+   reduced-motion blocks above — the card snaps in. Gated on the SAME narrow-OR-
+   coarse condition as the sheet itself so the snap applies in the width-gated path
+   too. Covers BOTH the OS media query and the JS-driven data-reduced flag. */
+@media (max-width: 46rem) and (prefers-reduced-motion: reduce),
+  (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  .star-marker-card,
+  .star-marker[data-side='right'] .star-marker-card,
+  .star-marker[data-side='left'] .star-marker-card,
+  .star-marker[data-locked='true'] .star-marker-card {
+    transform: none;
+  }
+}
+@media (max-width: 46rem), (pointer: coarse) {
+  .star-marker[data-reduced='true'] .star-marker-card,
+  .star-marker[data-reduced='true'][data-side='right'] .star-marker-card,
+  .star-marker[data-reduced='true'][data-side='left'] .star-marker-card,
+  .star-marker[data-reduced='true'][data-locked='true'] .star-marker-card {
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   TOUCH-ONLY affordances (coarse pointer): genuinely tied to actual touch input,
+   so they stay gated on the pointer type (NOT the width) — a narrowed fine-pointer
+   desktop window must not grow a finger hit pad or the touch CTA padding.
+     • the resting dotted hex is a touch more prominent (it's the only cue that the
+       marker is tappable — there's no cursor change to lean on), and
+     • an invisible hit pad enlarges the tap target past the visible reticle to
+       satisfy WCAG 2.5.5 (≥44px) without changing the on-screen hexagon size, and
+     • the CTA gets a comfortable tap line so the second tap is easy to land.
+   The JS tap-to-lock model (StarMarker.tsx) only runs on a coarse pointer too, so
+   the visual + behaviour stay in lockstep. Desktop (fine pointer) is untouched.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  /* Invisible, centred hit pad so the finger target is comfortably ≥44px even
+     though the visible reticle stays --marker-size. It has no background and sits
+     under the reticle/dot — it only catches the tap. Centred on the marker via
+     top/left + translate and sized to max(100%, 44px) so it never shrinks below the
+     WCAG floor, while still growing to cover the full reticle box (already 72px).
+     A forgiving pad around the hexagon's points makes the tap easy to land. */
+  .star-marker::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    translate: -50% -50%;
+  }
+  /* No hover on touch → make the RESTING marker read as a touchable affordance:
+     lift the dotted hex's opacity a little (0.62 → 0.78) so it invites a tap. Only
+     while resting (not locked) and only when its state is on screen. The locked
+     reveal still wins because the [data-locked] rule above zeroes this hex anyway. */
+  .star-marker[data-visible='true']:not([data-locked='true']) .star-marker-hex-dotted {
+    opacity: 0.78;
+  }
+  /* CTA is the explicit "OPEN" affordance on touch — give it a comfortable tap
+     line height so the second tap is easy to land. Visual size of the text is
+     unchanged; the padding just enlarges the hittable line. */
+  .star-marker-card-cta {
+    padding-block: 0.35rem;
+  }
 }

@@ -3,7 +3,7 @@
    lots of dark negative space, the panel held off-centre like a viewfinder
    readout, persistent brand top-left, a bracket Close top-right. */
 
-.about-lead { font-size: 1.3rem; color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
+.about-lead { font-size: var(--text-title); color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
 
 /* Close: a viewfinder-style bracketed label, fixed top-right, mirroring the
    hero's corner chrome. Returns to the home scene. */
@@ -17,7 +17,8 @@
   gap: 0.55rem;
   padding: 0.35rem 0.2rem;
   font-family: var(--font-mono);
-  font-size: clamp(0.78rem, 1.1vw, 0.92rem);
+  /* Quiet mono chrome label — the same label rung as the article-back affordance. */
+  font-size: var(--text-label);
   letter-spacing: 0.08em;
   color: var(--fg-dim);
   text-decoration: none;
@@ -101,8 +102,8 @@
 .about-kicker {
   margin: 0 0 1.75rem;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
-  letter-spacing: 0.18em;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--fg-faint);
 }
@@ -114,17 +115,17 @@
 .about-panel .about-lead {
   margin: 0 0 1.5rem;
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
-  font-weight: 700;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
   line-height: 1.28;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
   color: var(--fg);
   text-wrap: balance;
 }
 .about-body {
   margin: 0 0 1.2rem;
-  font-size: 1.075rem;
-  line-height: 1.75;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--fg-dim);
   text-wrap: pretty;
   text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
@@ -159,7 +160,7 @@
 .about-principles p {
   margin: 0;
   color: var(--fg-dim);
-  font-size: 0.92rem;
+  font-size: var(--text-body-sm);
   line-height: 1.55;
 }
 
@@ -170,9 +171,9 @@
 .about-contact-title {
   margin: 0 0 1rem;
   font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: var(--text-subtitle);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
   color: var(--fg);
 }
 .about-contact-list {
@@ -185,7 +186,7 @@
 }
 .about-contact-list a {
   font-family: var(--font-mono);
-  font-size: 0.92rem;
+  font-size: var(--text-body-sm);
   letter-spacing: 0.02em;
   color: var(--accent-strong);
   text-decoration: none;

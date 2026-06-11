@@ -121,7 +121,9 @@ export interface StarState {
   yellow: boolean;
   /** nebula slot active (stage ≥ 3.5). Gates the timeline/grade. */
   nebula: boolean;
-  /** the shader's nebula geometry is active (the real nebula OR the collapse window). uNebula. */
+  /** the shader's nebula geometry is active: the real nebula OR the collapse window AND its
+   *  floor crossfade (held via inWindowGeo so the cloud reads as converging gas through the
+   *  floor, never the shader's red-giant default). uNebula. */
   nebulaShader: boolean;
   /** pale-blue-dot slot active (stage ≥ 4.5). uDot. */
   dot: boolean;
@@ -306,7 +308,22 @@ export function lifecycle(input: LifecycleInput): StarState {
   // dispersed nebula (3.5) → 1 right at the window floor (3.0). Spanning the WHOLE
   // window (not a narrow sub-band) makes the transition fluid — the star grows
   // gradually and the gas thins gradually across the entire scroll, in lockstep.
-  const prog = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
+  // The collapse GEOMETRY scalars (prog/collapse/simBlend) use an EXTENDED gate that
+  // ALSO covers the floor CROSSFADE band (NEB_COLLAPSE_LO-0.05 -> NEB_COLLAPSE_LO, i.e.
+  // 2.95->3.0, where bodyOwnership dissolves the cloud into the formed yellow mesh). The
+  // unextended `inWindow` hard-snaps these to 0 at the floor, so the cloud reverted from
+  // sim-collapsed (converged) gas to the analytic DISPERSED nebula for the few eased
+  // frames it is still shown there. Worse, with the nebula geometry off (uNebula=0) the
+  // disk shader's red-giant DEFAULT engaged and a full red giant flashed BEHIND the
+  // forming yellow star. Holding the geometry gate across the crossfade keeps simBlend>0
+  // -> nebulaShader true (uNebula stays 1, red-giant default suppressed) and keeps the
+  // gas CONVERGED on the core (collapse~1) so it dissolves cleanly under the mesh. The
+  // DERIVED consumers (`collapsing`, the grade, the starfield gate) still key off the
+  // unextended `inWindow`, so their timing is byte-identical -- only the cloud's own
+  // geometry/density is held through the floor band.
+  const FLOOR_XFADE = 0.05; // mirrors transitions.ts' COLLAPSE_FLOOR_XFADE (the bodyOwnership band)
+  const inWindowGeo = stage > NEB_COLLAPSE_LO - FLOOR_XFADE && stage < NEB_COLLAPSE_HI ? 1 : 0;
+  const prog = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
   // `collapse` is the GPGPU drive. It LEADS the star growth (prog^0.85 still ramps
   // faster than the star's prog^1.8) so the gas falls inward and piles onto the core
   // BEFORE the star reaches full size — the inflow visibly FEEDS the star. The 0.85
@@ -323,7 +340,11 @@ export function lifecycle(input: LifecycleInput): StarState {
   // the accreting gas keeps reading right up to the floor (no bare-core frame). It
   // eases in over a wide edge band (/0.16) and only tapers in the final stretch
   // (1 - 0.45*prog, not 0.85) so the sim-driven infall doesn't thin out early.
-  const simBlend = inWindow * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
+  // simBlend uses the EXTENDED geo gate too, so the sim-collapsed (converged) gas is held
+  // through the floor crossfade instead of snapping back to the analytic dispersed nebula
+  // (and, via nebulaShader -> uNebula, suppresses the shader's red-giant default there).
+  // At the floor prog~1, so it sits at its window-floor value (~0.55) across the band.
+  const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
   // cloud DENSITY/brightness fades the gas as the star forms — but the OLD curve
   // ((1-prog)^1.6) crashed to ~0 by prog≈0.85 while the star (prog^1.8) was only ~0.7
   // formed, leaving a frame with the gas GONE and a bare bright core on black (the
@@ -352,23 +373,27 @@ export function lifecycle(input: LifecycleInput): StarState {
   // only ALMOST lined up — every mismatch was a gap (wrong fallthrough body
   // flashes) or a bleed (two bodies at once). This block is the ONE place that
   // decides ownership, as a TOTAL banded function of `stage`: every stage maps
-  // to a body, and the two bodies are mutually exclusive except in the two
-  // short, DECLARED crossfade bands (the collapse floor at 3.0, and the
-  // yellow<->red swap at SWAP_STAGE). cloudShown / sunRigVisible are projected
-  // from it, so they can never gap or bleed by construction.
+  // to a body, and the two bodies are mutually exclusive except in the ONE
+  // short, DECLARED crossfade band (the collapse floor at 3.0). The yellow<->red
+  // swap at SWAP_STAGE is a HARD FLIP — never a crossfade — so the ~1.2M-point
+  // red-giant cloud can never render BEHIND the still-opaque yellow mesh (that
+  // overlap used to flash reddish grain behind the small gold sun). The flip is
+  // masked by the existing yrFlash whiteout centred at SWAP_STAGE. cloudShown /
+  // sunRigVisible are projected from it, so they can never gap or bleed by
+  // construction.
   //
   // Bands (high stage = top of page):
   //   stage >= 3.5            CLOUD            nebula + dot
   //   3.0  <  stage < 3.5     CLOUD (+mesh fades in UNDER it near the floor)
   //   2.95 <  stage <= 3.0    CLOUD->MESH      collapse-floor crossfade
   //   SWAP <  stage <= 2.95   MESH             settled yellow star
-  //   SWAP-0.03 < stage <=SWAP MESH->CLOUD     flash-swap crossfade
-  //   stage <= SWAP-0.03      CLOUD            red giant / below
+  //   stage <= SWAP           CLOUD            red giant / below (HARD FLIP at SWAP)
   // Per-body presence weights, owned by transitions.ts. cloudW/meshW are
-  // booleans-as-weights; a body renders iff its weight > 0. The only places BOTH
-  // are > 0 are the two declared crossfade bands (handoffs that dissolve under
-  // bloom). The 6-branch ladder is identical — just relocated to its colocated
-  // home; `starFormed` (computed above) is passed in so the value is computed once.
+  // booleans-as-weights; a body renders iff its weight > 0. The only place BOTH
+  // are > 0 is the single declared collapse-floor crossfade band (a handoff that
+  // dissolves under bloom); the yellow<->red swap is a hard flip. The ladder is
+  // relocated to its colocated home; `starFormed` (computed above) is passed in
+  // so the value is computed once.
   const { cloudW, meshW } = bodyOwnership(stage, starFormed);
   // `collapsing` retained as a DERIVED alias for the grade/dome/starfield
   // consumers below (they ask "are we inside the gas-collapse window?"). It is
