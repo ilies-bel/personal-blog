@@ -48,7 +48,7 @@
     (one z-index step below), so its pixels are raw viewport coords fully
     decoupled from the ball's transform. Inert + invisible until the script wires
     it up and the first fine-pointer move reveals it. */}
-<canvas class="cursor-trail" data-cursor-trail aria-hidden="true"></canvas>
+<canvas class="cursor-trail" data-cursor-trail transition:persist aria-hidden="true"></canvas>
 
 {/*
   The cursor root (the ball). position:fixed + pointer-events:none so it floats
@@ -57,7 +57,7 @@
   dot and the hexagon both live inside, centred on the same point, so the swap
   keeps the dot perfectly put.
 */}
-<div class="cursor" data-custom-cursor aria-hidden="true">
+<div class="cursor" data-custom-cursor transition:persist aria-hidden="true">
   {/* The hexagon outline — hidden until .cursor--interactive. Flat-top regular
       hexagon (pointy sides), ~40px across, 1px-ish off-white stroke, no fill,
       low opacity. Drawn as an inline SVG <polygon> so it scales crisply. */}

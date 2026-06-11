@@ -6,6 +6,7 @@
 // sits at the world origin). Brightness-related values are lifted above the moody
 // reference still so the hero reads as clearly luminous (see exposure / bloomStr /
 // disk brightness).
+import { DEBUG_WINDOW_KEYS, readDebugString } from './constants';
 
 export interface Config {
   rIn: number;
@@ -93,24 +94,225 @@ export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-export function tuneRenderPixelRatio(reduced = false): number {
+// --- device tier ------------------------------------------------------------
+// A deliberately coarse 'high' | 'low' split, detected ONCE at mount from cheap
+// signals (cores / deviceMemory / mobile UA / a throwaway WebGL probe). 'high' is
+// the full hero exactly as it has always shipped; 'low' is the reduced fallback
+// (fewer particles, capped DPR, no bloom pass, no gravity bake) wired through the
+// scene. The tier is a single seam: every consumer either branches on `tier ===
+// 'low'` or takes a defaulted param, so the high path stays byte-identical.
+export type DeviceTier = 'high' | 'low';
+
+// Memoized so the probe (which creates + tears down a throwaway WebGL context)
+// runs at most once per page, no matter how many times the tier is requested.
+let cachedTier: DeviceTier | undefined;
+
+/**
+ * Resolve a forced tier override from any of three reload-surviving sources, in
+ * priority order: the `?tier=` URL query, sessionStorage, then the __bhTier window
+ * global. A bare window global is wiped by a reload (it races scene hydration), so
+ * `?tier=low` / `?tier=high` is the reliable way to test — when seen in the URL it
+ * is persisted to sessionStorage so it survives subsequent same-tab reloads and
+ * in-app navigations. Returns undefined when nothing valid is set (→ auto-detect).
+ */
+function readTierOverride(): DeviceTier | undefined {
+  const valid = (value: unknown): DeviceTier | undefined =>
+    value === 'high' || value === 'low' ? value : undefined;
+
+  // 1) URL query (?tier=low) — survives reloads; mirror it into sessionStorage.
+  try {
+    const fromUrl = valid(new URLSearchParams(window.location.search).get('tier'));
+    if (fromUrl) {
+      window.sessionStorage?.setItem(DEBUG_WINDOW_KEYS.tier, fromUrl);
+      return fromUrl;
+    }
+  } catch {
+    // URL/sessionStorage access can throw in locked-down contexts — ignore.
+  }
+
+  // 2) sessionStorage (set by a prior ?tier= visit) — also survives reloads.
+  try {
+    const fromStore = valid(window.sessionStorage?.getItem(DEBUG_WINDOW_KEYS.tier));
+    if (fromStore) return fromStore;
+  } catch {
+    // ignore — fall through to the window global.
+  }
+
+  // 3) window.__bhTier global (handy in the console; cleared by a full reload).
+  return valid(readDebugString(DEBUG_WINDOW_KEYS.tier));
+}
+
+/**
+ * Detect the device tier once and cache it. SSR-safe (returns 'high' with no
+ * window). A forced override (?tier= / sessionStorage / __bhTier) is honoured FIRST
+ * so the low-end path can be exercised on any machine; otherwise ANY weak signal
+ * trips the scene down to 'low'. Conservative by construction — only KNOWN-weak
+ * signals demote, so a capable desktop/modern-mobile GPU always stays on the full
+ * 'high' hero.
+ */
+export function detectDeviceTier(): DeviceTier {
+  if (typeof window === 'undefined') return 'high';
+  if (cachedTier !== undefined) return cachedTier;
+
+  // Override FIRST (testable on any machine): the tier can be pinned outright via
+  // the ?tier= URL query, sessionStorage, or the __bhTier window global.
+  const override = readTierOverride();
+  if (override === 'high' || override === 'low') {
+    cachedTier = override;
+    return cachedTier;
+  }
+
+  // Cheap signals, defensively typed (the optional ones are absent on some UAs).
+  const cores = navigator.hardwareConcurrency ?? 8;
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory; // GB | undefined
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 760;
+  const probe = probeWebGL();
+
+  // ANY of these demotes to 'low' — each independently sufficient.
+  const tier: DeviceTier =
+    isMobile // ALL mobile → low (confirmed product decision)
+    || cores <= 4 // few logical cores → low
+    || (mem !== undefined && mem <= 4) // ≤4 GB reported RAM → low (never trips when undefined)
+    || probe.weakGpu // a known-weak GPU family → low
+    || !probe.webgl2 // no WebGL2 at all → low
+      ? 'low'
+      : 'high';
+
+  cachedTier = tier;
+  return cachedTier;
+}
+
+/**
+ * One-time WebGL capability probe on a throwaway canvas (never attached to the
+ * DOM). Returns whether WebGL2 is available and whether the renderer string
+ * matches a CONSERVATIVE list of known-weak GPU families. Best-effort and fully
+ * guarded: any failure returns the neutral { webgl2: false, weakGpu: false } so a
+ * thrown probe never crashes detection (it just reads as "no WebGL2" → 'low').
+ */
+function probeWebGL(): { webgl2: boolean; weakGpu: boolean } {
+  try {
+    const canvas = document.createElement('canvas'); // throwaway, never in the DOM
+    const gl2 = canvas.getContext('webgl2'); // WebGL2RenderingContext | null
+    const webgl2 = gl2 !== null;
+    // Fall back to a WebGL1 context purely to read the renderer string.
+    const gl: WebGL2RenderingContext | WebGLRenderingContext | null = gl2 ?? canvas.getContext('webgl');
+    let weakGpu = false;
+    if (gl) {
+      // UNMASKED_RENDERER_WEBGL is gated behind this debug extension.
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const renderer = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      // KNOWN-weak families ONLY. Must NOT match modern Adreno 6xx/7xx, Apple GPUs,
+      // or desktop cards — so the Adreno pattern is pinned to the 1xx–3xx range.
+      weakGpu = /SwiftShader|Mali|Adreno [0-3]\d{2}\b|PowerVR/i.test(renderer);
+    }
+    // Best-effort: release the throwaway context immediately.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return { webgl2, weakGpu };
+  } catch {
+    return { webgl2: false, weakGpu: false };
+  }
+}
+
+export function tuneRenderPixelRatio(reduced = false, tier: DeviceTier = 'high'): number {
   if (typeof window === 'undefined') return 1;
   const dpr = window.devicePixelRatio || 1;
   const width = window.innerWidth;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
   if (reduced) return Math.min(dpr, 1.25);
+  // Low tier: cap at 1.0 (no super-sampling) so the fragment load stays minimal.
+  if (tier === 'low') return Math.min(dpr, 1.0);
   if (isMobile) return Math.min(dpr, 1.4);
   if (width < 1280) return Math.min(dpr, 1.6);
   return Math.min(dpr, 1.85);
 }
 
 // Particle count tuned down for smaller / mobile devices.
-export function tuneParticlesForDevice(): number {
+export function tuneParticlesForDevice(tier: DeviceTier = 'high'): number {
   if (typeof window === 'undefined') return CFG.diskParticles;
   const width = window.innerWidth;
+  // Low tier: a hard, small cap regardless of the width ladder below (the cloud is
+  // the dominant draw cost), with a tighter budget on the narrowest viewports. The
+  // benchmark showed LARGE headroom on low (pins 120 FPS where high dips to 35), so
+  // we spend some of it: the count is bumped ~2× from the old 45k/60k → 90k/140k.
+  // Denser coverage means the grains overlap more on their own, so the grain-fattening
+  // compensation below can be LIGHTER (less brightening/widening = less chunk).
+  if (tier === 'low') return width < 480 ? 90_000 : 140_000;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
   if (width < 480) return 95_000;
   if (isMobile) return 150_000;
   if (width < 1280) return 240_000;
   return CFG.diskParticles;
+}
+
+// --- low-tier density compensation ------------------------------------------
+// This hero's light is ADDITIVE: each grain emits, and overlapping grains
+// ACCUMULATE brightness. The low tier draws far fewer grains than the ~1.2M-grain
+// desktop cloud, so the object collects less light and the gaps between grains open
+// up. Historically the low tier ALSO skipped the UnrealBloom pass — the effect that
+// smooths discrete grains into a glow — which left the red giant reading as a
+// crusty sponge/golf-ball. That is now fixed at the source: the low tier runs a
+// CHEAP quarter-res bloom (buildPostChain 'cheap') AND ~2× the old particle count
+// (tuneParticlesForDevice: 90k/140k). With bloom smoothing the grains and twice the
+// coverage doing the rest, this per-grain compensation only has to do a MODEST top-up
+// — it is deliberately LIGHTER than the old "no-bloom, very-few-grains" tuning, which
+// over-boosted brightness/size and was itself the source of the chunky look. We still
+// boost each grain's EMISSION (so the thinned cloud accumulates enough additive light)
+// and its SIZE (so grains overlap into continuous gas), just by a smaller amount.
+//
+// Gated by COUNT *and* the explicit `lowTier` flag (threaded from createScene). The
+// count gate alone is no longer enough to separate the tiers: the bumped low buckets
+// (90k/140k) now OVERLAP the high width buckets (95k/150k/240k), so a pure count
+// ceiling would either miss 140k or catch 95k/150k. Threading the tier makes the
+// separation exact — the compensation applies ONLY on the low tier, so the desktop
+// full count AND every high-tier width bucket stay byte-identical (comp {1,1}).
+// LOW_TIER_MAX_PARTICLES is kept as a defensive upper sanity bound (just above the
+// top low bucket) so an unexpectedly large low count can't trigger a runaway boost.
+export const LOW_TIER_MAX_PARTICLES = 150_000;
+
+export interface DensityCompensation {
+  /** Multiplier for per-grain emission (uBright / uStarBright). 1.0 at full count. */
+  brightGain: number;
+  /** Multiplier for grain SIZE (uPointGain in the disk shader). 1.0 at full count. */
+  pointGain: number;
+}
+
+/**
+ * Density compensation for a rig built with `actualCount` grains out of the full
+ * `fullCount` baseline, on the given tier. Returns { brightGain: 1, pointGain: 1 }
+ * (a no-op) UNLESS the caller is the low tier (`lowTier === true`) — so the desktop
+ * full path AND every high-tier width bucket (95k/150k/240k) are byte-identical;
+ * only the low-tier fallback buckets are boosted. (LOW_TIER_MAX_PARTICLES is an extra
+ * sanity bound so even on low an unexpectedly large count can't trigger a boost.)
+ *
+ * Both gains are SUBLINEAR in the drop ratio `fullCount / actualCount` (≈8.6–13×
+ * at the new low buckets). A linear inverse would blow the additive cloud to flat
+ * white; a fractional power lifts the object back into the legible band without
+ * clipping. The exponents/caps are intentionally LIGHTER than the pre-bloom tuning
+ * (cheap bloom + 2× grains now carry most of the load). Clamped so it can't run away.
+ */
+export function densityCompensation(
+  actualCount: number,
+  fullCount: number = CFG.diskParticles,
+  lowTier = false,
+): DensityCompensation {
+  // OFF unless this is the low tier (and within the sanity bound) → high path and
+  // every high-tier width bucket untouched, byte-identical.
+  if (!lowTier || actualCount <= 0 || actualCount > LOW_TIER_MAX_PARTICLES) {
+    return { brightGain: 1, pointGain: 1 };
+  }
+  const ratio = fullCount / actualCount; // how many grains were dropped (≈8.6× at 140k, ≈13× at 90k)
+  // Brightness: ratio^0.30 (≈1.9× at 140k, ≈2.1× at 90k) gives the thinned cloud a
+  // MODEST additive top-up. Much gentler than the old ratio^0.48 (≈4.2×): now that the
+  // cheap bloom spreads each grain's light and there are 2× more grains, the cloud
+  // already accumulates most of the brightness on its own — over-boosting it (the old
+  // tuning) is what flat-whited the lit core and read as chunk. Capped at 2.4×.
+  const brightGain = Math.min(2.4, Math.pow(ratio, 0.30));
+  // Size: ratio^0.32 (≈2.0× at 140k, ≈2.2× at 90k) fattens each grain enough to overlap
+  // its neighbours into continuous gas, but only MODESTLY — the bloom now does the final
+  // smoothing, so we no longer need the old ratio^0.52 (≈4.5×) sprite-bloating that turned
+  // grains into big hard discs. The disk shader widens each grain's gaussian CORE in step
+  // (disk.glsl softP/softN, driven by uPointGain) so the fattened grains overlap smoothly.
+  // Capped at 2.6×.
+  const pointGain = Math.min(2.6, Math.pow(ratio, 0.32));
+  return { brightGain, pointGain };
 }

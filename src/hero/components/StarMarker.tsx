@@ -35,29 +35,22 @@
 // pointer the lock becomes EVENT-driven instead of proximity-driven:
 //   • First tap on an UNLOCKED marker → preventDefault (no navigation) and LOCK it
 //     (reveal the card). This is the touch analog of the desktop proximity lock.
-//   • Second tap on the SAME locked marker (or its CTA) → the <a> navigates natively.
+//   • Second tap on the SAME locked marker → on a `dive` marker fires the cinematic
+//     DIVE (the same plunge desktop gets); on any other marker the <a> navigates
+//     natively. So touch confirms with the full experience, not a lesser one.
 //   • A tap ELSEWHERE (another marker or empty space) → unlock (dismiss the card);
 //     tapping another marker locks that one. Only ONE marker is locked at a time.
 // The touch lock lives in `touchLockedRef`; the rAF loop RESPECTS it (it never
 // clears a touch-set lock from "no pointer is near") so the tap doesn't race the
 // next frame. Desktop's mouse-proximity + keyboard-focus path is untouched — the
 // touch branch only runs when `window.matchMedia('(pointer: coarse)')` matches.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   settledIdForStage,
-  type HudTargetId,
   type MarkerPlacement,
 } from '../HudNavigation';
 import type { MarkerFrame } from '../scene/types';
-import { useSceneState } from './SceneStateContext';
-
-// Which lifecycle states render on a BRIGHT surface (the yellow photosphere, the
-// red-giant limb). The resting centre dot + reticle flip to DARK on these so they
-// stay readable; on the other states ('beginning' speck, 'nebula' — whose markers
-// sit in the sparse/dark gas — and the 'end' black hole) they keep the off-white
-// line colour. Nebula is deliberately EXCLUDED so it keeps the white reticle.
-// Static per placement.
-const BRIGHT_STATES: ReadonlySet<HudTargetId> = new Set(['yellow', 'red']);
+import { useSceneState, useSceneActions } from './SceneStateContext';
 
 interface StarMarkerProps {
   /** This marker's placement (which state it belongs to, where it sits, its copy). */
@@ -140,11 +133,17 @@ const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number 
 
 export default function StarMarker({ placement, markerFrameRef }: StarMarkerProps) {
   const { reduced, base } = useSceneState();
+  // The dive action (published by HeroIsland). Present only on the home page; a
+  // `dive` marker uses it on a plain left click, every other marker / page leaves
+  // the <a> to navigate normally.
+  const actions = useSceneActions();
 
   // Static per placement: does this marker sit over a bright scene surface? Drives
   // the resting dot's colour (dark dot on bright states, light dot on dark states)
-  // via the data-bright attribute below — no canvas blend mode involved.
-  const isBright = BRIGHT_STATES.has(placement.state);
+  // via the data-bright attribute below — no canvas blend mode involved. Derived
+  // from the authored background class (bg === 'bright') so all legacy CSS keeps
+  // working while the new data-bg adds the third 'noisy' channel.
+  const isBright = placement.bg === 'bright';
 
   // Richer-card copy, with the documented fallbacks so a marker that only carries
   // the legacy title/subtitle still renders a complete-looking panel:
@@ -157,6 +156,13 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   const tags = placement.tags && placement.tags.length > 0 ? placement.tags : null;
   const cta = placement.cta ? `${placement.cta} →` : '[ OPEN ]';
 
+  // The per-destination-type inner glyph, painted with the marker's adaptive
+  // currentColor via CSS mask (same mechanism as the HUD rail's --glyph-mask).
+  // Resolved through the same BASE_URL helper the link href uses.
+  const glyphMask = `url(${resolveHref(base, placement.glyph)})`;
+  // The always-near micro-label: the eyebrow when present, else the title.
+  const microLabel = placement.eyebrow ?? placement.title;
+
   // The DOM element that receives inline left/top updates every rAF. Mutated
   // directly (no React state) to avoid per-frame re-renders.
   const elRef = useRef<HTMLAnchorElement>(null);
@@ -164,6 +170,11 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // Live pointer position, tracked via a ref (NOT state) so the rAF loop can
   // measure distance to the marker every frame without re-rendering.
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  // The marker's CURRENT screen position (CSS px), stashed by the rAF loop each frame
+  // (the SAME x/y written to el.style.left/top). The dive click reads it to aim the
+  // plunge at where the marker actually is — so an off-centre marker is dived INTO,
+  // not lurched-to-centre. Ref (not state) so the per-frame write never re-renders.
+  const screenRef = useRef<{ x: number; y: number } | null>(null);
   // Whether the link currently holds keyboard focus — also forces the lock so
   // non-mouse users get the card. Ref so the rAF loop reads it without a render.
   const focusedRef = useRef(false);
@@ -233,16 +244,25 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       const frame = markerFrameRef.current;
       if (!frame) return;
 
-      // Is THIS marker's state the settled one on screen? The scene's `visible`
-      // already encodes (on-screen AND some state is settled); the stage decides
-      // which state, so we additionally require it to be ours.
-      const nextVisible = frame.visible && settledIdForStage(frame.stage) === placement.state;
+      // Is THIS marker's state the settled one on screen? The stage decides which
+      // state is settled; we additionally require it to be ours. Anchored markers
+      // ride the star origin, so they use `visible` (which includes the origin's
+      // on-screen test). Fixed-spot markers sit at their own viewport fraction —
+      // always on-screen — so they use `gateOk` (settled + no-nova, WITHOUT the
+      // origin on-screen test) and stay visible even when the camera-parked star's
+      // centre projects off the narrow/mobile viewport.
+      const gate = anchored ? frame.visible : frame.gateOk;
+      const nextVisible = gate && settledIdForStage(frame.stage) === placement.state;
 
       // Screen position. Fixed-spot markers ignore the projected x/y and sit at a
       // viewport fraction (recomputed each frame so a resize tracks). The anchored
       // pale-blue-dot marker rides the projected star origin instead.
       const x = anchored ? frame.x : placement.vx * window.innerWidth;
       const y = anchored ? frame.y : placement.vy * window.innerHeight;
+
+      // Stash the live screen position so the dive click can aim at THIS marker (the
+      // onClick reads screenRef, converts to NDC, and passes it as the dive aim point).
+      screenRef.current = { x, y };
 
       // Update position directly on the DOM element (no setState, no re-render).
       const el = elRef.current;
@@ -368,35 +388,84 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-reduced={reduced}
       data-locked={locked}
       data-bright={isBright}
+      data-bg={placement.bg}
       data-side={cardSide}
+      onClick={(event) => {
+        // ONE handler composing BOTH interactions. Order matters: the TOUCH
+        // tap-to-lock two-step runs FIRST (coarse pointers can't hover, so they need
+        // the reveal step before any navigation), then the DESKTOP dive, then natural
+        // <a href> fall-through. There must be exactly one onClick on this element —
+        // two onClick props would silently keep only the last and kill the other.
+
+        // (1) TOUCH tap-to-lock (coarse pointer only). Mouse/keyboard activation is
+        // left entirely alone (the early return), so the desktop path below still
+        // runs for fine pointers. We branch on the COARSE-POINTER check, not on
+        // event.detail, so a hybrid device's mouse click never hits this path.
+        if (isCoarsePointer()) {
+          // First tap on an unlocked marker: reveal the card, do NOT navigate or
+          // dive yet. touchLockedRef is the source of truth (the rAF loop derives
+          // `locked` from it); checking the ref — not the possibly-one-frame-stale
+          // `locked` state — makes a double-tap deterministic. Setting it here, then
+          // letting the rAF loop hold it, is the race-proofing described on
+          // touchLockedRef.
+          if (!touchLockedRef.current) {
+            event.preventDefault();
+            touchLockedRef.current = true;
+            return;
+          }
+          // Second (confirming) tap on the already-locked marker. We want touch users
+          // to get the SAME cinematic dive desktop users get, so on a `dive` marker
+          // (with the dive action available) we fire the dive here rather than a plain
+          // href navigation. On any other marker we fall through WITHOUT
+          // preventDefault so the real <a href> navigates natively (the marker is
+          // unmounting on navigation, so there is no lock state left to clear).
+          if (placement.dive && actions.beginDive) {
+            event.preventDefault();
+            const screen = screenRef.current ?? { x: event.clientX, y: event.clientY };
+            const ndcX = (screen.x / window.innerWidth) * 2 - 1;
+            const ndcY = -((screen.y / window.innerHeight) * 2 - 1);
+            actions.beginDive({
+              href: resolveHref(base, placement.href),
+              targetNdc: { x: ndcX, y: ndcY },
+              state: placement.state,
+            });
+          }
+          return;
+        }
+
+        // (2) DESKTOP dive (fine pointer). main's behaviour, unchanged.
+        if (!placement.dive || !actions.beginDive) return;  // non-dive markers / engine not ready → normal nav
+        // let modified clicks (new tab, etc.) and non-left clicks fall through to the <a>
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        event.preventDefault();
+        // Aim the dive at THIS marker's current on-screen position (so an off-centre
+        // nebula speck is dived INTO, not lurched-to-centre). screenRef holds the same
+        // CSS-px x/y the rAF loop writes to the element; convert to NDC (x in [-1,1],
+        // y up). Fall back to the click coords, then dead-centre, if the loop hasn't
+        // run yet. `state` selects the bloom's per-lifecycle-state tint.
+        const screen = screenRef.current ?? { x: event.clientX, y: event.clientY };
+        const ndcX = (screen.x / window.innerWidth) * 2 - 1;
+        const ndcY = -((screen.y / window.innerHeight) * 2 - 1);
+        actions.beginDive({
+          href: resolveHref(base, placement.href),
+          targetNdc: { x: ndcX, y: ndcY },
+          state: placement.state,
+        });
+        // (3) Otherwise: no preventDefault — the <a href> navigates natively.
+      }}
       onFocus={() => {
         focusedRef.current = true;
       }}
       onBlur={() => {
         focusedRef.current = false;
       }}
-      onClick={(event) => {
-        // Touch tap-to-lock, two-step. Mouse/keyboard activation is left entirely
-        // alone (the early return), so desktop click-through to the href is
-        // unchanged. We branch on the COARSE-POINTER check, not on event.detail,
-        // so a hybrid device's mouse click never hits this path.
-        if (!isCoarsePointer()) return;
-        // First tap on an unlocked marker: reveal the card, do NOT navigate yet.
-        // touchLockedRef is the source of truth (the rAF loop derives `locked` from
-        // it); checking the ref — not the possibly-one-frame-stale `locked` state —
-        // makes a double-tap deterministic. Setting it here, then letting the rAF
-        // loop hold it, is exactly the race-proofing described on touchLockedRef.
-        if (!touchLockedRef.current) {
-          event.preventDefault();
-          touchLockedRef.current = true;
-          return;
-        }
-        // Second tap on the already-locked marker (or its CTA, which is inside the
-        // same <a>): fall through WITHOUT preventDefault so the real <a href>
-        // navigates natively. The marker is unmounting on navigation, so there is
-        // no lock state left to clear.
-      }}
     >
+      {/* Adaptive backing plate — a restrained blurred disc behind the reticle,
+          tuned per data-bg so the marker separates from black / bright / noisy
+          surfaces. Position:absolute + z-index:-1 in CSS so it never grows the
+          anchor box. Decorative. */}
+      <span className="star-marker-plate" aria-hidden="true" />
+
       {/* The target reticle: resting dotted hex + locked solid hex + ticks + the
           animated gold inner hex. All in one SVG so they scale crisply together. */}
       <svg
@@ -450,8 +519,23 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         />
       </svg>
 
-      {/* The constant centre dot — present in both states. */}
+      {/* The per-type inner glyph — owns the resting centre. Painted with the
+          marker's adaptive currentColor via CSS mask (the --glyph-mask custom prop
+          carries the resolved SVG url). Position:absolute in CSS. Decorative. */}
+      <span
+        className="star-marker-glyph"
+        aria-hidden="true"
+        style={{ '--glyph-mask': glyphMask } as CSSProperties}
+      />
+
+      {/* The gold centre dot — hidden at rest (the glyph owns the centre), shown
+          ONLY on lock as the Voyager-gold accent that docks with the cursor. */}
       <span className="star-marker-dot" aria-hidden="true" />
+
+      {/* Always-near micro-label — a tiny mono caption under the marker so each
+          hotspot reads even at rest; fades out on lock when the full card opens.
+          Decorative (the <a> carries the real accessible name). */}
+      <span className="star-marker-microlabel" aria-hidden="true">{microLabel}</span>
 
       {/* The tethered terminal-style card — revealed with the locked state. The
           richer panel: eyebrow → headline → desc → tags → CTA, with a reserved

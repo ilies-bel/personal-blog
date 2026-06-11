@@ -1,6 +1,6 @@
 // Accretion-disk GPU-particle rig (1.2M points; two lensed images share one geometry).
 import * as THREE from 'three';
-import { CFG } from '../lib/config';
+import { CFG, densityCompensation } from '../lib/config';
 import { simDimensions } from '../gravitySim';
 import { diskVertexShader, diskFragmentShader, DISK_ERUPT_SLOTS } from '../shaders/disk.glsl';
 import type { Uniforms } from './types';
@@ -20,8 +20,16 @@ export interface DiskRig {
   count: number;
   dispose: () => void;
 }
-export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number): DiskRig {
+export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false): DiskRig {
   const N = Math.floor(particleCount);
+  // Low-tier density compensation (no-op unless lowTier → high path + every high-tier
+  // width bucket stay byte-identical; only the low fallback buckets are boosted). The
+  // low tier draws ~2× fewer grains than the desktop cloud and runs only a CHEAP
+  // quarter-res bloom, so we still lift per-grain emission (brightGain) and grain size
+  // (pointGain) to keep the cloud legible — but only MODESTLY now that bloom + the 2×
+  // particle bump carry most of the load. See densityCompensation() in config.ts for
+  // the (lighter) sublinear formula and the tier gate.
+  const comp = densityCompensation(N, CFG.diskParticles, lowTier);
   const aU = new Float32Array(N);
   const aPhase = new Float32Array(N);
   const aThickN = new Float32Array(N);
@@ -82,7 +90,17 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     // shader gates it to uGiant==0, so the red giant / nebula / dot / sim seed are all
     // untouched. It makes the HOLE read as visibly smaller (not just farther away).
     uBlackHoleScale: { value: 1 },
-    uBright: { value: 1.25 }, // disk brightness multiplier (brightened)
+    uBright: { value: 1.25 * comp.brightGain }, // disk brightness multiplier (brightened).
+    //   ×comp.brightGain on the low tier ONLY (1.0 on high + every high-tier width bucket →
+    //   stays exactly 1.25): the thinned grain cloud accumulates less additive light, so each
+    //   grain emits a touch harder to keep the object from going dim/sparse. This is now a
+    //   MODEST lift (the cheap quarter-res bloom + ~2× grains restore most of the brightness);
+    //   see config's densityCompensation (lighter sublinear formula, capped, tier-gated).
+    uPointGain: { value: comp.pointGain }, // grain-SIZE multiplier, low tier ONLY (1.0 at full
+    //   count → byte-identical high path). Fattens each grain so the sparse low-tier cloud
+    //   overlaps back into continuous gas (e.g. the red-giant photosphere stops reading as a
+    //   dotted ring). Multiplied into baseSize in the vertex shader (propagates to every
+    //   point-size branch) and into the per-branch clamp ceilings so the gain isn't capped away.
     uMorph: { value: 0 }, // transition 1: reverse supernova (scroll-driven)
     uFlash: { value: 0 }, // central burst envelope (peaks mid-morph)
     uCollapse: { value: 0 }, // red-giant surface collapse (0 sphere → 1 point)
