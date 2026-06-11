@@ -1,12 +1,12 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
+import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
-import { settledIdForStage } from '../sceneTable';
+import { settledIdForStage, easeInQuart } from '../sceneTable';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
 import { buildStarfield, buildDistantStar } from './buildStarfield';
@@ -14,7 +14,7 @@ import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
-import type { SceneHandle, SceneHooks } from './types';
+import type { SceneHandle, SceneHooks, DiveOptions } from './types';
 
 /**
  * The few frame-local STATEFUL multipliers applyLook needs that are NOT pure
@@ -43,14 +43,14 @@ interface ApplyLookCtx {
   nebulaFlashBloom: number;
 }
 
-export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): SceneHandle {
-  const diskParticles = tuneParticlesForDevice();
+export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks, tier: DeviceTier = 'high'): SceneHandle {
+  const diskParticles = tuneParticlesForDevice(tier);
   const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
   void bCritShadow;
 
   // --- renderer / scene / camera ---
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
+  renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 1);
   renderer.toneMapping = THREE.NoToneMapping;
@@ -68,13 +68,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // and updateLensUniforms() stay byte-for-byte identical.
   const pixelRatio = renderer.getPixelRatio();
 
-  const diskRig = buildDisk(scene, diskParticles, pixelRatio);
+  const diskRig = buildDisk(scene, diskParticles, pixelRatio, tier === 'low');
   const diskMatPrimary = diskRig.primary;
   const diskMatSecondary = diskRig.secondary;
   const diskPrimary = diskRig.primaryPts;
   const diskSecondary = diskRig.secondaryPts;
 
-  const starRig = buildStarfield(scene, diskParticles, pixelRatio);
+  const starRig = buildStarfield(scene, diskParticles, pixelRatio, tier === 'low');
   const starUniforms = starRig.uniforms; // updateLensUniforms() writes through this
   const starMat = starRig.mat;
   const starMatSec = starRig.matSec;
@@ -104,7 +104,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
 
-  const postRig = buildPostChain(renderer, scene, camera);
+  // High builds the full RenderPass→Bloom→Grade→Nova. The low tier gets a CHEAP
+  // bloom — the SAME pass, but its mip pyramid renders at quarter resolution
+  // (bloomScale 0.5), which is far cheaper AND softer: the low-res blur spreads, so
+  // it smooths the sparse low-tier grains into a glow (the chunky/speckly red giant
+  // was caused by REMOVING bloom, the very effect that smooths grains). postRig.bloom
+  // is now NON-null on low too, so the guarded `if (bloom)` writes in applyLook run.
+  const postRig = buildPostChain(renderer, scene, camera, tier === 'low' ? 'cheap' : 'full');
   const bloom = postRig.bloom;
   const gradePass = postRig.gradePass;
   const novaPass = postRig.novaPass;
@@ -130,9 +136,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // bracketing the scroll position (gravitySim.sampleAt) — a pure function of scroll,
   // so it scrubs both directions with no state/replay/snap-back. Seeded from the SAME
   // analytic nebula placement the disk shader uses, so it starts pop-free. Skipped under
-  // reduced motion; {available:false} (no-op) if float targets are unsupported.
-  const gravitySim: GravitySim = reduced
-    ? { available: false, step: () => {}, bake: () => {}, isBaked: () => false, sampleAt: () => null, dispose: () => {} }
+  // reduced motion; {available:false} (no-op) if float targets are unsupported. The low
+  // tier also skips the bake (the GPGPU flipbook is a heavy load-time cost) and falls
+  // back to the same no-op — the collapse just plays its analytic path with no sim sample.
+  const noopGravitySim: GravitySim = { available: false, step: () => {}, bake: () => {}, isBaked: () => false, sampleAt: () => null, dispose: () => {} };
+  const gravitySim: GravitySim = reduced || tier === 'low'
+    ? noopGravitySim
     : buildGravitySim({
         renderer,
         count: diskRig.count,
@@ -195,7 +204,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   function onResize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
+    renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
     renderer.setSize(w, h);
     postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
     camera.aspect = w / h;
@@ -227,8 +236,26 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // These bands are used ONLY by the dev framing-nudge hooks (RedGiantDebugPanel): they
   // shape the in/out weight of a live tuning nudge so it matches the beat and never
   // snaps. Production applies no nudge (the hooks are unset).
-  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.46, 0.514];
-  const RED_GIANT_NUDGE_OUT: readonly [number, number] = [0.62, 0.70];
+  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.28, 0.36];
+  const RED_GIANT_NUDGE_OUT: readonly [number, number] = [0.36, 0.43];
+
+  // --- AUTONOMOUS-ACCELERATED DOLLY-BACK (black-hole load) --------------------
+  // A TIME-BASED backward dolly that runs on load while the black-hole chapter is on
+  // screen (raw scroll 0-14%): the camera pulls AWAY from the event horizon on its own
+  // over ~DOLLY_DUR seconds, asymptotes to a bounded MAX_BACK, then HOLDS (settles —
+  // it does not drift forever or loop). Scrolling DEEPER into the chapter ACCELERATES
+  // the retreat (a scroll-POSITION term that can push it faster/further within the
+  // same bound); the autonomous wall-clock drift is the FLOOR. NO scroll-velocity is
+  // read anywhere. Composed as a TRUE dolly (move along the view->target axis), faded
+  // out as the chapter is left so there is no pop, and fully disabled under reduced
+  // motion (snap to the held pose). See the application block in frame().
+  const DOLLY_MAX_BACK = 7.0;   // world units of backward travel at full retreat
+  const DOLLY_DUR = 4.0;        // seconds for the autonomous ease to reach MAX_BACK
+  const DOLLY_CHAPTER_END = 0.14; // raw progress: black-hole chapter upper edge
+  const DOLLY_FADE_END = 0.2;   // raw progress: offset fully faded out by here (no pop)
+  // Scratch vectors reused each frame so the dolly never allocates on the hot path.
+  const dollyDir = new THREE.Vector3();
+  const dollyTarget = new THREE.Vector3();
 
   let mouseX = 0;
   let mouseY = 0;
@@ -492,6 +519,87 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // sane dt so a backgrounded-tab time jump never teleports a ripple across the disc.
   let prevEruptT = 0;
 
+  // --- cinematic dive: plunge the LIVE camera INTO the clicked marker, soft bloom --
+  // A one-shot state machine driven entirely from frame(): once beginDive() arms
+  // it, the dive OVERRIDES the resolved scroll camera each frame — easing the live
+  // pose toward (and THROUGH) the world origin while turning the look target to FACE
+  // the clicked marker's on-screen point (so an off-centre marker centres + grows),
+  // and an overlay strength ramps to a soft cap. onApex fires once at DIVE_APEX_FRAC
+  // so the caller (HeroIsland) can SPA-navigate under the veil. A non-active dive is a
+  // perfect no-op: the override block only runs while diveActive is true, so the
+  // scroll camera is untouched.
+  let diveActive = false;
+  let diveStart = 0;
+  let diveApexFired = false;
+  let diveOnApex: (() => void) | null = null;
+  let diveOnProgress: ((s: number) => void) | null = null;
+  // Scratch vectors created ONCE (the dive must not allocate on the hot path). The
+  // FROM pose is snapshotted from the live camera at beginDive() so the plunge
+  // starts seamlessly from wherever the scroll pose currently is.
+  const diveFromPos = new THREE.Vector3();
+  const diveFromTarget = new THREE.Vector3();
+  // The world point the dive AIMS at — derived ONCE in beginDive() by unprojecting
+  // the caller's targetNdc onto the star's depth plane (so it sits directly under the
+  // clicked marker, at the same distance from camera as the world origin). The dive
+  // turns the look target toward it as it falls in, so an off-centre marker centres +
+  // grows. Defaults to the world origin (a centred plunge) when no targetNdc is given.
+  const diveTargetWorld = new THREE.Vector3();
+  // Scratch only for the unproject math in beginDive(); never read on the hot path.
+  const diveAimScratch = new THREE.Vector3();
+  // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
+  let diveStrength = 0;
+  // Plunge timing. The apex (bloom peak / navigate point) lands at 82% of the run,
+  // leaving a short tail of camera travel hidden under the full-white overlay while
+  // the destination page loads. Reduced motion skips the geometric plunge entirely
+  // and just runs a brief white fade (DIVE_REDUCED_S).
+  //
+  // ORDER OF SENSATION (the "no dive, just a white flash" fix): the CAMERA must lead
+  // and the WHITE must trail — otherwise the screen blooms before anything visibly
+  // moves and the plunge is invisible. So the position lerp uses a FRONT-LOADED ease
+  // (easeOut — most of the travel is spent in the first ~30% of the run, so the camera
+  // LEAPS toward the star immediately) while the white overlay holds near zero until
+  // DIVE_WHITE_START of the run and only THEN ramps hard (easeInQuart of the remaining
+  // window to the apex). The visitor sees a clear ~0.6-0.7s plunge with little white,
+  // then the bloom takes over and dominates at the apex.
+  //
+  // The run is lengthened to 1.5s (from 1.2) so the leading plunge reads as a real
+  // fall rather than a snap, and the white still has room to dominate before the apex.
+  const DIVE_DURATION_S = 1.5;
+  const DIVE_APEX_FRAC = 0.82;
+  const DIVE_REDUCED_S = 0.28;
+  // The white overlay stays ~dark until the plunge is this far along, then ramps to
+  // its capped peak over the rest of the run-to-apex. This is what keeps the camera
+  // move visible FIRST and the bloom LAST (the inverse of the original front-loaded
+  // white). Pushed LATER (0.55) so the camera plunge dominates and the wash is brief —
+  // the visitor sees a clear fall down the throat, and the veil only appears as a soft
+  // glow near the apex, matching the wanted "faint, brief wash rather than a full
+  // whiteout". The bloom still begins just as the camera reaches the core, covering the
+  // moment the bright accretion disk would recede behind the camera.
+  const DIVE_WHITE_START = 0.55;
+  // The bloom is a SOFT VEIL, not a whiteout. The published overlay strength is scaled
+  // by this peak cap so that even at the apex the overlay never reaches full opaque
+  // white — you can still faintly see the scene/plunge glowing through it. This is the
+  // single source of the cap (scaled here before onDiveProgress, not in HeroIsland), so
+  // both the geometric dive and the reduced-motion fade get the same gentle ceiling.
+  // The apex (navigate) trigger stays on the UNCAPPED `raw` below, so this only changes
+  // the visible whiteness, never the navigation timing. 0.62 reads as a soft luminous
+  // veil over a dark, moody site — present enough to feel like a deliberate bloom you
+  // can still see the plunge through, never the blinding #fff whiteout it replaced.
+  const DIVE_WHITE_PEAK = 0.62;
+  // The plunge falls toward (and just PAST) the world origin where the star sits, so the
+  // camera reads as falling THROUGH the event horizon, not braking on its face. From the
+  // new TOP-of-page black-hole pose the live camera sits ~z=22 (plus the autonomous
+  // black-hole dolly-back, so up to ~z=29) looking at the origin; driving it to z=-2 just
+  // past the core is a ~24-31 unit dolly straight down the view axis — an unmistakable
+  // plunge that still keeps the bright disk filling the frame deep into the fall (a
+  // larger overshoot flies out the far side into empty starfield before the bloom lands).
+  // The look target settles on the exact origin so the fall stays aimed down the throat.
+  const DIVE_THROUGH_POS = new THREE.Vector3(0, 0, -2);
+  // The FOV narrows from CFG.fovDeg (30) toward this during the plunge for a tunnel /
+  // "drawn-in" feel — a longer lens compresses depth as the core rushes up. Tasteful
+  // (~9° narrowing), not a fisheye. Reduced motion never touches FOV (no geometric dive).
+  const DIVE_FOV_MIN = 21;
+
   // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
   // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
   // breakout (stage 0.5 == morph 0.5), computed inline in frame(). It depends ONLY
@@ -558,7 +666,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     setDisk('uGiantScale', ctx.giantScale);
     // The point cloud is always the RED GIANT body, never the yellow star → uYellow 0.
     setDisk('uYellow', 0);
-    // uNebula spans the real nebula AND the collapse window (analytic placement held).
+    // uNebula spans the real nebula AND the whole collapse handoff: the window plus its
+    // FLOOR crossfade (lifecycle holds the collapse geometry simBlend>0 across the crossfade
+    // via inWindowGeo, so nebulaShader stays true there). This keeps the cloud reading as
+    // converging nebula gas through the floor — instead of the disk shader falling back to
+    // its red-giant default and flashing a full red giant behind the forming yellow star.
     setDisk('uNebula', look.nebulaShader ? 1 : 0);
     setDisk('uDot', look.dot ? 1 : 0);
     setDisk('uNebulaGrow', look.nebulaGrow);
@@ -610,8 +722,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     starSecPts.visible = false; // secondary lensed star image stays off
 
     // --- bloom + auto-exposure + grade + disk-saturation (all resolved finals) ---
-    bloom.strength = look.bloomStrength * ctx.focusBloom + ctx.nebulaFlashBloom;
-    bloom.radius = look.bloomRadius;
+    // Null on the low tier (the bloom pass was never built); skip the writes there.
+    if (bloom) {
+      bloom.strength = look.bloomStrength * ctx.focusBloom + ctx.nebulaFlashBloom;
+      bloom.radius = look.bloomRadius;
+    }
     gradePass.uniforms.uExposure.value = look.exposure;
     gradePass.uniforms.uOlive.value = look.olive;
     gradePass.uniforms.uWarmth.value = look.warmth;
@@ -931,6 +1046,34 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       frameLookTarget.x += mouseX * cameraPose.parallax * 0.35;
       frameLookTarget.y += -mouseY * cameraPose.parallax * 0.18;
     }
+    // --- AUTONOMOUS-ACCELERATED DOLLY-BACK (black-hole load) ------------------
+    // A bounded, time-based backward dolly that runs while the black-hole chapter is
+    // on screen (raw progress < DOLLY_CHAPTER_END). It is a PURE function of the
+    // wall-clock load time + scroll POSITION — never scroll velocity. Disabled under
+    // reduced motion (the held pose stands as-is).
+    if (!reduced) {
+      // Autonomous FLOOR: eases out to 1 over DOLLY_DUR seconds since mount, then HOLDS
+      // (settles — easeOut asymptotes, min() clamps, so no further drift, no loop).
+      const autonomousT = easeOut(Math.min(t / DOLLY_DUR, 1));
+      // Scroll ACCELERATION: how deep the visitor has scrolled INTO the 0-14% chapter
+      // (a scroll-POSITION term). Scrolling deeper advances the retreat faster/further.
+      const scrollT = smoothstep01(progress / DOLLY_CHAPTER_END);
+      // The autonomous drift is the floor; scroll can push it further within the bound.
+      const effectiveT = Math.max(autonomousT, scrollT);
+      // Fade the whole offset out smoothly as the chapter is left (no pop at the edge).
+      const chapterFade = 1 - smoothstep01((progress - DOLLY_CHAPTER_END) / (DOLLY_FADE_END - DOLLY_CHAPTER_END));
+      const dollyBack = DOLLY_MAX_BACK * effectiveT * chapterFade;
+      if (dollyBack > 0.0001) {
+        // TRUE dolly: move the camera AWAY from the look target along the view axis
+        // (so it reads as pulling off the hole), not just along world-z.
+        dollyTarget.set(frameLookTarget.x, frameLookTarget.y, frameLookTarget.z);
+        dollyDir.copy(camera.position).sub(dollyTarget); // target -> camera
+        if (dollyDir.lengthSq() > 1e-6) {
+          dollyDir.normalize();
+          camera.position.addScaledVector(dollyDir, dollyBack);
+        }
+      }
+    }
     // DEV-ONLY framing nudge. The red-giant off-centre composition now lives entirely
     // in the camera keyframes (timeline's RED_COMPOSITION/COLLAPSE_PULL — one continuous
     // travel, no separate park add). These hooks let the dev panel nudge that framing
@@ -951,6 +1094,55 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       frameLookTarget.y += nudgeY * beatWeight;
     }
     camera.lookAt(frameLookTarget);
+
+    // === DIVE OVERRIDE: plunge the live camera into the clicked marker ============
+    // Runs after the scroll camera is fully resolved, so a 0-strength dive is a no-op
+    // and the plunge starts seamlessly from the live pose. The dolly drives toward the
+    // through-point past the origin while the look target turns toward diveTargetWorld
+    // (the world point under the clicked marker), so the marker centres + grows. The
+    // bloom overlay strength is published via diveOnProgress — capped to a SOFT VEIL
+    // (DIVE_WHITE_PEAK), never a whiteout; onApex fires once (on uncapped raw) for the
+    // caller to navigate.
+    if (diveActive) {
+      const raw = Math.min(1, (performance.now() - diveStart) / 1000 / (reduced ? DIVE_REDUCED_S : DIVE_DURATION_S));
+      if (!reduced) {
+        // CAMERA LEADS — front-loaded ease (easeOut, the cubic pull-back curve owned by
+        // lifecycle.ts). easeOut(0.3) ≈ 0.66, so ~two-thirds of the dolly is spent in
+        // the first third of the run: the camera LEAPS toward the core immediately and
+        // eases into it, reading as a fall THROUGH the event horizon (DIVE_THROUGH_POS,
+        // just past the origin) while the white is still near zero.
+        //
+        // AIM AT THE MARKER, not dead-centre: the look target lerps from the live
+        // target toward diveTargetWorld — the world point UNDER the clicked marker
+        // (unprojected in beginDive). The camera TURNS to face the marker as it falls,
+        // so the clicked speck swings to screen-centre and grows — a dive INTO it. For
+        // a centred/anchored marker diveTargetWorld ≈ the origin, so this reproduces the
+        // original straight-down-the-throat plunge. The dolly destination stays
+        // DIVE_THROUGH_POS (just past the origin) so the fall depth/feel is unchanged.
+        const k = easeOut(raw);
+        camera.position.lerpVectors(diveFromPos, DIVE_THROUGH_POS, k);
+        frameLookTarget.lerpVectors(diveFromTarget, diveTargetWorld, k);
+        camera.lookAt(frameLookTarget);
+        // FOV narrows on the SAME front-loaded curve → the walls rush past early, a
+        // longer-lens "tunnel" compression that sells the plunge before the bloom lands.
+        camera.fov = CFG.fovDeg + (DIVE_FOV_MIN - CFG.fovDeg) * k;
+        camera.updateProjectionMatrix();
+      }
+      // WHITE TRAILS — held near zero until the plunge is DIVE_WHITE_START through the
+      // run, then ramped (easeInQuart, the accelerating curve, over the remaining window
+      // up to the apex) toward the DIVE_WHITE_PEAK ceiling — NOT full white. This is the
+      // inverse of the original front-loaded white: the camera move is fully visible
+      // first; the bloom only takes over near the apex, and even then only as a soft
+      // capped veil you can see the plunge through. The cap lives here (single source)
+      // so HeroIsland just mirrors `s` straight to overlay.style.opacity.
+      const whiteRaw = Math.min(1, (raw - DIVE_WHITE_START) / (DIVE_APEX_FRAC - DIVE_WHITE_START));
+      diveStrength = whiteRaw <= 0 ? 0 : easeInQuart(whiteRaw) * DIVE_WHITE_PEAK;
+      diveOnProgress?.(diveStrength);
+      // Apex/navigate fires on the UNCAPPED `raw` so the cap never shifts nav timing.
+      if (!diveApexFired && raw >= DIVE_APEX_FRAC) { diveApexFired = true; diveOnApex?.(); }
+    } else {
+      diveStrength = 0;
+    }
 
     // The supernova flash originates from the STAR, not the screen centre. The
     // star sits at world origin the whole time; projecting it through the current
@@ -988,14 +1180,30 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // gate and HudNavigation's both read the ONE table (no more byte-identical
       // duplication to keep in sync by hand).
       const settled = settledIdForStage(stage) !== null;
-      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled });
+      // STRICT: never publish a marker as visible while the supernova flash/morph
+      // envelope is active. `nova` (the clockless Gaussian flash envelope computed
+      // above) > ~0.01 means a blast is on screen — suppress the marker so it can
+      // never flash for a frame as a window edge is crossed during a fast scroll.
+      // gateOk drops the on-screen test: a fixed-spot marker sits at its own
+      // viewport fraction (always on-screen) so the star ORIGIN going off-screen
+      // (camera-parked red giant on a narrow viewport) must not hide it. Anchored
+      // markers ride the origin, so they keep the full `visible` (incl. onScreen).
+      const gateOk = settled && nova < 0.01;
+      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk });
     }
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
     // Tiny and time-based: it sells one shock event without turning the scroll into
     // a game-camera wobble.
     if (!reduced) {
-      const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016; // rad, ~0.09°
+      // PER-CHAPTER STILLNESS: the idle roll is REDUCED across the chapters that should
+      // read as calm/symmetric — the yellow star (raw 43-58%, stabilise) and the pale
+      // dot / content band (raw >= 74%, near-static). `idleRollScale` rides scroll
+      // POSITION (never velocity): full elsewhere, ~0.25 across yellow, ~0.08 on the dot.
+      const inYellow = progress >= 0.43 && progress <= 0.58;
+      const inDot = progress >= 0.74;
+      const idleRollScale = inDot ? 0.08 : inYellow ? 0.25 : 1.0;
+      const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016 * idleRollScale; // rad, ~0.09° at full
       const sh = cameraPose.shake;
       if (sh > 0.0001) {
         const f = t * 47.0; // fast carrier for the rumble
@@ -1016,7 +1224,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       }
     }
 
-    if (camera.fov !== CFG.fovDeg) {
+    // Restore the resting FOV unless a geometric dive currently OWNS it (the dive
+    // narrows the lens for its tunnel feel; under reduced motion the dive never touches
+    // FOV, so this still resets there). Once the dive ends this fires once and restores.
+    if (!(diveActive && !reduced) && camera.fov !== CFG.fovDeg) {
       camera.fov = CFG.fovDeg;
       camera.updateProjectionMatrix();
     }
@@ -1184,6 +1395,54 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   onResize();
   frame();
 
+  // Arm the cinematic dive. Snapshots the live camera pose so the plunge starts
+  // seamlessly from wherever the scroll camera currently sits, then lets frame()'s
+  // dive-override block drive the rest. No-op if a dive is already running (a second
+  // click can't restart or stack the plunge).
+  //
+  // targetNdc is now USED (it was formerly ignored, always aiming at the origin): the
+  // dive AIMS at the marker's own on-screen point so an off-centre nebula speck is
+  // dived INTO rather than lurched-to-centre. We derive diveTargetWorld ONCE here by
+  // unprojecting that NDC onto the STAR'S depth plane — i.e. the world point directly
+  // under the marker at the same camera distance as the origin. Method: project the
+  // origin to read its NDC z (its depth), then unproject (ndcX, ndcY, originNdcZ) back
+  // to world. That keeps the aim point at a sane, stable depth (the disk/scene plane)
+  // regardless of where on screen the marker sits. No targetNdc → fall back to the
+  // origin (a centred plunge, the original behaviour). One-shot math; the hot-path
+  // dive block only reads diveTargetWorld (no per-frame unproject).
+  const beginDive = (opts: DiveOptions): void => {
+    if (diveActive) return;
+    diveActive = true;
+    diveApexFired = false;
+    diveOnApex = opts.onApex;
+    diveOnProgress = opts.onDiveProgress ?? null;
+    diveStart = performance.now();
+    diveFromPos.copy(camera.position);
+    diveFromTarget.copy(frameLookTarget);
+    if (opts.targetNdc) {
+      // Origin's depth in NDC (perspective-correct), so the unprojected aim point
+      // lands on the same plane as the star instead of at the near clip.
+      const originNdcZ = diveAimScratch.set(0, 0, 0).project(camera).z;
+      diveTargetWorld
+        .set(opts.targetNdc.x, opts.targetNdc.y, originNdcZ)
+        .unproject(camera);
+    } else {
+      diveTargetWorld.set(0, 0, 0);
+    }
+  };
+
+  // Stop the render loop WITHOUT disposing GL. Idempotent (the `stopped` flag also
+  // short-circuits the visibilitychange re-kick and the next frame() body). HeroIsland
+  // calls this on `astro:before-swap` so the heavy ~1.2M-point loop yields the main
+  // thread to ClientRouter the instant it begins the view-transition swap, instead of
+  // rendering against it — the root cause of the occasional SPA stall on this page.
+  // GL teardown still happens on React unmount (dispose, below); this only halts work.
+  const pauseRendering = (): void => {
+    stopped = true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+  };
+
   // --- teardown ---
   // The returned value is the dispose function (same call contract as before) with
   // hitTestGiant bolted on (Object.assign), so HeroIsland can publish the cursor
@@ -1218,7 +1477,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
     },
-    { hitTestGiant },
+    { hitTestGiant, beginDive, pauseRendering },
   );
   return dispose;
 }

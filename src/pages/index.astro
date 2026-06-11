@@ -9,20 +9,35 @@ import {
   LOADER_MIN_MS,
   LOADER_SEEN_STORAGE_KEY,
 } from '../hero/lib/constants';
-import { SITE_TITLE, SITE_DESCRIPTION, BRAND_NAME } from '../consts';
+import { SITE_TITLE, SITE_DESCRIPTION, BRAND_NAME, BRAND_ROLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 ---
 
 <BaseLayout title={SITE_TITLE} description={SITE_DESCRIPTION} type="website" bare>
+  {/* The home page's live (JS-on) top-level heading. The cinematic hero carries
+      the identity VISUALLY (the corner wordmark lockup + the manifesto <h2> beats
+      that cross-fade per state), so there is no on-design element that should be
+      the page <h1> — every visible candidate is either a non-heading lockup or one
+      of several cross-fading beats (promoting one beat would fragment / duplicate
+      the h1). So the document's single top-level heading is this dedicated, visually
+      hidden line, naming the page/site exactly like the <noscript> fallback's
+      name + role (sourced from the same BRAND_* constants so the two can't drift).
+      It is server-rendered (present before hydration) and uses .sr-only — the clip
+      pattern keeps it in the accessibility tree (NOT aria-hidden, NOT display:none),
+      so screen readers and SEO get a real <h1> while the visuals are untouched. */}
+  <h1 class="sr-only">{BRAND_NAME} — {BRAND_ROLE}</h1>
+
   {/* Instant intro loader — pure server-rendered HTML + CSS, ZERO JavaScript
       dependency, so it paints the moment the document arrives (long before the
       ~200 KB-gzip three.js engine chunk downloads, parses, allocates its typed
       arrays and compiles the shader). It sits over the (black) canvas in the site's
-      own palette: a single quiet pale speck — the pale-blue-dot opening the scene
-      itself begins on — pulsing under a wordmark, so the wait reads as "the dot is
-      about to bloom", not "the page is broken". It fades out smoothly once the hero
+      own palette: a single quiet pale speck — a neutral wordmark-pulse placeholder,
+      NOT the scene itself (the scene now OPENS ON THE BLACK HOLE at the top and winds
+      down to the lonely pale blue dot at the bottom) — pulsing under a wordmark, so
+      the wait reads as "the hero is about to ignite", not "the page is broken". It
+      fades out smoothly once the hero
       paints its FIRST real frame (body.scene-ready, added by the inline listener
       below on the scene:ready event). aria-hidden — it is pure decoration over the
       same copy the manifesto/SSR fallback already announce. Styling lives in
@@ -158,10 +173,11 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   </script>
 
   {/* The signature object: a GPU-particle stellar lifecycle pinned to the center
-      of the viewport. As the visitor scrolls, one normalized timeline runs
-      forward: a lone pale blue dot blooms into a nebula, a yellow star forms, the
-      star grows into a red giant, collapses, detonates, and resolves into the black
-      hole that pulls the portfolio interface in.
+      of the viewport. As the visitor scrolls DOWN, one normalized timeline runs the
+      lifecycle in REVERSE: the page opens on the black hole (the big hero that pulls
+      the portfolio interface in), un-detonates through the supernova into a red
+      giant, settles back to a yellow star, dissolves into a nebula, and resolves to
+      the lonely pale blue dot — the quiet speck at the bottom of the page.
 
       client:visible (not client:only) so Astro ships + hydrates the page shell —
       including the instant loader above — FIRST, then mounts the hero. The hero is
@@ -186,15 +202,21 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       the page stays meaningful and indexable for crawlers / no-JS. */}
   {/* The static no-JS / crawler fallback mirrors the live overlay's big line +
       whisper for every beat, mapped over the same BEATS so the SSR copy can
-      never drift from the live copy. */}
+      never drift from the live copy. The reverse arc plays black hole -> ... ->
+      pale blue dot top-to-bottom, so the list is reversed (slice() first, never
+      mutating BEATS) to match that physical order — index 0 is the black-hole
+      beat; the dot beat lands last. The page <h1> is the dedicated .sr-only line
+      above (always server-rendered, present with or without JS), so EVERY beat
+      here is an <h2>: with JS off the single top-level heading stays that one
+      brand <h1> and the beats sit under it — no duplicate / competing h1. */}
   <noscript>
     <div class="scene-fallback measure">
       <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
       <p class="scene-fallback-role">Software Engineer</p>
 
-      {BEATS.map((beat, i) => (
+      {BEATS.slice().reverse().map((beat) => (
         <Fragment>
-          {i === 0 ? <h1>{beat.down}</h1> : <h2>{beat.down}</h2>}
+          <h2>{beat.down}</h2>
           <p>{beat.whisper}</p>
         </Fragment>
       ))}

@@ -10,14 +10,19 @@
 // The three.js scene (renderer, rigs, GLSL, the per-frame loop) lives in
 // ../scene/createScene; the timeline + copy live in ../beats (shared with
 // index.astro's SSR fallback).
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+// Astro's SPA navigation (ClientRouter). Used by the dive action to swap to the
+// destination article at the bloom apex with no reload flash. The import is from
+// the virtual 'astro:transitions/client' module — present because BaseLayout now
+// mounts <ClientRouter />.
+import { navigate } from 'astro:transitions/client';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
 import { hudIdForStage, resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
-import { sceneActivatesHud } from '../sceneTable';
-import { prefersReducedMotion } from '../lib/config';
+import { sceneForProgress } from '../sceneTable';
+import { prefersReducedMotion, detectDeviceTier } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
   HUD_BOOTING_BODY_CLASS,
@@ -85,6 +90,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
   // its own rAF loop. Never triggers React re-renders — that is the whole point.
   const markerFrameRef = useRef<MarkerFrame | null>(null);
+  // The live scene handle, stashed so the dive action can call beginDive() on it
+  // outside the mount effect. Null until the engine chunk resolves (and cleared on
+  // unmount) — the action falls back to a plain SPA nav while it is null.
+  const sceneHandleRef = useRef<SceneHandle | null>(null);
   // Exact scroll progress (0..1) drives the morph through a ref the render loop
   // reads. React receives a lower-frequency visual snapshot for DOM overlays.
   const progressRef = useRef(0);
@@ -125,6 +134,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     if (!host) return;
     const isReduced = prefersReducedMotion();
     setReduced(isReduced);
+    // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
+    // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,
+    // no bloom, no gravity bake) is chosen up front; 'high' is byte-identical to today.
+    const tier = detectDeviceTier();
 
     // The three.js engine is loaded lazily (dynamic import) so it never blocks first
     // paint. Because the import resolves on a later microtask, the effect can be torn
@@ -148,7 +161,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       };
       void import('../scene/createScene').then(({ createScene }) => {
         if (cancelled) return;
-        disposeRef = createScene(host, isReduced, { getStage: pinnedStage });
+        disposeRef = createScene(host, isReduced, { getStage: pinnedStage }, tier);
       });
       return () => {
         cancelled = true;
@@ -162,20 +175,22 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // menu pinned alongside it (no separate scroll threshold to drift). Tracked
     // through chromeVisibleRef so the DOM is only touched on an actual transition.
     const syncChrome = (): void => {
-      // HUD activation REQUEST: once the REAL scroll position reaches the bottom hero
-      // (the black hole / 'end' stage), the island asks the boot FSM to power the HUD
-      // on (and asks it to power off again when scroll leaves). It does NOT touch
-      // body.hud-active itself — the FSM owns that class so the loader → ignite
-      // sequence is sequenced in exactly one place. We dispatch only on the at-end
-      // EDGE (ref-tracked) so the request fires once per transition, never every
-      // scroll sample. The FSM decides what to honour: it suppresses the scroll
-      // power-off while the corner override (body.hud-forced) is engaged and keeps
-      // the HUD lit once booted, so the island can dispatch freely.
-      // Table-driven: ask the scene the scroll-spy maps to whether IT arms the HUD
-      // (its `activatesHud` flag), instead of hardcoding `=== 'end'`. Only the 'end'
-      // scene is flagged, so this fires on exactly the same edge as before — but the
-      // "which scene arms the HUD" decision now lives on the scene, not in this if.
-      const atEnd = sceneActivatesHud(hudIdForStage(resolve(progressRef.current).stage));
+      // HUD activation REQUEST: once the REAL scroll position reaches the PHYSICAL
+      // BOTTOM of the page (under the reverse arc that is the lonely pale-blue-dot /
+      // 'beginning' scene), the island asks the boot FSM to power the HUD on (and asks
+      // it to power off again when scroll leaves) — preserving the "you've reached the
+      // end, here's the menu" feel. It does NOT touch body.hud-active itself — the FSM
+      // owns that class so the loader → ignite sequence is sequenced in exactly one
+      // place. We dispatch only on the at-bottom EDGE (ref-tracked) so the request fires
+      // once per transition, never every scroll sample. The FSM decides what to honour:
+      // it suppresses the scroll power-off while the corner override (body.hud-forced)
+      // is engaged and keeps the HUD lit once booted, so the island can dispatch freely.
+      // CONTENT UNLOCK (raw 88-100%): arm the HUD across the whole pale-dot/content
+      // band, not just the last frame. The 'beginning' SCENE owns lifecycle 0.00-0.12
+      // = raw 88-100% exactly (segment 1 in the RE-TIMED table), so gate on the SCENE
+      // id rather than the stage>=4.7 threshold (which only fired at raw=1.0). The
+      // stage-threshold hudIdForStage stays the scroll-spy source for the rail below.
+      const atEnd = sceneForProgress(progressRef.current).sceneId === 'beginning';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         window.dispatchEvent(
@@ -258,17 +273,38 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         getFocusTarget: () => null,
         isExplorationMode: () => explorationModeRef.current,
         onMarkerFrame: (m) => { markerFrameRef.current = m; },
-      });
+      }, tier);
       disposeRef = dispose;
+      // Stash the handle so the dive action (beginDive, below) can reach the live
+      // scene outside this effect. Cleared on unmount in the cleanup return.
+      sceneHandleRef.current = dispose;
       // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
       // can't import scene/three code). Published on window under the __bh* hook
       // convention; deleted on unmount so other pages never see a stale closure.
       window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
     });
+
+    // ROOT-CAUSE FIX for the occasional ClientRouter SPA stall on this page. The hero
+    // runs a heavy ~1.2M-point GPU render loop; ClientRouter swaps the DOM on a
+    // navigation (the dive marker OR any plain nav-pill link), and the destination
+    // article immediately mounts a SECOND client:only WebGL backdrop scene. Left
+    // running, the home loop renders straight through the swap prep and starves the
+    // view-transition on the main thread — the swap can stall for seconds. Pausing the
+    // render loop the instant ClientRouter begins the swap (`astro:before-swap`, which
+    // fires before the DOM is replaced) hands the main thread to the transition, so it
+    // completes promptly. We pause (not dispose) here: GL teardown still happens on the
+    // React unmount the swap triggers. Registered for EVERY navigation away from the
+    // hero, so it fixes plain header nav too, not just the dive. Removed on unmount.
+    const onBeforeSwap = (): void => {
+      sceneHandleRef.current?.pauseRendering?.();
+    };
+    document.addEventListener('astro:before-swap', onBeforeSwap);
     return () => {
       cancelled = true;
+      document.removeEventListener('astro:before-swap', onBeforeSwap);
       unsub();
       tracker.stop();
+      sceneHandleRef.current = null;
       delete window[CURSOR_WINDOW_KEYS.hitGiant];
       // Dispose the scene if it has already been created; if the engine chunk is
       // still in flight, the `cancelled` guard above stops it from ever building.
@@ -286,6 +322,66 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       document.body.classList.remove(SCROLLED_BODY_CLASS, HUD_BOOTING_BODY_CLASS);
     };
   }, [backdrop, backdropStage, motionPreferenceVersion]);
+
+  // The dive action published to StarMarker via SceneStateProvider. Flies the live
+  // camera into the star (the scene owns the geometry + the white-overlay strength),
+  // then SPA-navigates to the destination at the bloom apex (onApex). If the engine
+  // chunk hasn't resolved yet, it degrades to a plain SPA navigation — the marker is
+  // never a dead link. Stable identity (useCallback, no deps) so the context value
+  // doesn't churn the marker tree.
+  const beginDive = useCallback((opts: { href: string; targetNdc?: { x: number; y: number }; state?: HudTargetId }) => {
+    const handle = sceneHandleRef.current;
+    // PURE SPA navigation — no hard-reload fallback. The former 700ms
+    // `window.location.assign` band-aid papered over a real stall: the heavy ~1.2M-point
+    // render loop kept rendering while ClientRouter prepared the view-transition swap
+    // (and the destination immediately spins up a SECOND client:only WebGL backdrop),
+    // starving the swap on the main thread. That is now fixed at the ROOT — the mount
+    // effect pauses this scene's render loop on `astro:before-swap` (see the effect
+    // above) so the swap runs unobstructed — so navigation is a clean `navigate()` with
+    // NO full page reload and no white-flash gap. This is also the path when the engine
+    // never mounted (still SPA via navigate, just without the geometric plunge).
+    const goTo = (href: string): void => {
+      void navigate(href);
+    };
+    if (!handle || typeof handle.beginDive !== 'function') {
+      goTo(opts.href);                          // engine not ready → straight nav
+      return;
+    }
+    // The persisted soft-veil bloom overlay (in BaseLayout — a radial bloom, not a
+    // full-white sheet). The scene ramps its opacity per frame via onDiveProgress (and
+    // caps the peak well under 1, so this is the single mirror — no extra scaling here);
+    // on the destination page a page-load handler eases it back out for the "resurface".
+    // A sessionStorage flag tells that handler we arrived via a dive (so a normal nav
+    // doesn't get the resurface animation).
+    const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
+    try { sessionStorage.setItem('bh:dive', '1'); } catch { /* private mode — skip */ }
+    if (overlay) {
+      // PER-STATE BLOOM TINT: the colour is owned by CSS — hero.css maps
+      // [data-bloom-state="…"] to a per-state --bloom-* token (nebula→cool, yellow→gold,
+      // red→ember, beginning→pale-cool, end→warm bone). Set it BEFORE the opacity ramps
+      // so the very first frame already wears the right hue (the overlay is
+      // transition:persist'ed, so the resurface handler clears it on arrival to keep a
+      // later normal nav from inheriting a stale tint). Absent state → default tint.
+      if (opts.state) overlay.dataset.bloomState = opts.state;
+      else delete overlay.dataset.bloomState;
+      // BLOOM ORIGIN: glow from where the marker WAS, not always screen-centre. Convert
+      // the marker NDC to viewport % for the radial-gradient centre (hero.css reads
+      // --bloom-x/--bloom-y, defaulting to 50% 50% when unset). Mirrors the camera aim
+      // so the veil radiates from the clicked speck.
+      if (opts.targetNdc) {
+        const px = (opts.targetNdc.x * 0.5 + 0.5) * 100;
+        const py = (1 - (opts.targetNdc.y * 0.5 + 0.5)) * 100;
+        overlay.style.setProperty('--bloom-x', `${px}%`);
+        overlay.style.setProperty('--bloom-y', `${py}%`);
+      }
+    }
+    handle.beginDive({
+      targetNdc: opts.targetNdc,
+      state: opts.state,
+      onDiveProgress: (s) => { if (overlay) overlay.style.opacity = String(s); },
+      onApex: () => { goTo(opts.href); },
+    });
+  }, []);
 
   const base = import.meta.env.BASE_URL ?? '/';
   // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
@@ -307,7 +403,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   return (
     <SceneStateProvider
       state={{ progress, direction, reduced, explorationMode, scrollHudId, base }}
-      actions={{}}
+      actions={{ beginDive }}
     >
       <div className="bh-root" data-exploring={explorationMode}>
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />

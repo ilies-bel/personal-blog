@@ -112,17 +112,20 @@ body.article-page .bh-backdrop::before {
 }
 .bh-identity-name {
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(1.05rem, 2.2vw, 1.6rem);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-subtitle);
   letter-spacing: 0.02em;
   line-height: 1;
-  color: var(--fg);
+  /* Cool-neutral overlay bone (Task 3a): holds authority over the orange star where
+     warm --fg washes out. Reading-page reuse (.site-header) overrides to warm --fg
+     just below; about's overlay keeps this cool bone over the live backdrop. */
+  color: var(--fg-overlay);
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.85), 0 0 5px rgba(0, 0, 0, 0.7);
 }
 .bh-identity-role {
   font-family: var(--font-mono);
-  font-size: clamp(0.66rem, 1vw, 0.8rem);
-  letter-spacing: 0.16em;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--fg-faint);
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
@@ -146,7 +149,10 @@ body.article-page .bh-backdrop::before {
 .bh-identity-lockup:hover .bh-identity-name { color: var(--accent-strong); }
 .bh-identity-lockup:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 /* On the reading-page header there is no canvas behind the mark, so drop the
-   heavy legibility text-shadow the hero/about need over the moving scene. */
+   heavy legibility text-shadow the hero/about need over the moving scene — and
+   restore the warm --fg bone (the cool --fg-overlay is only for text floating on
+   the orange star; against the graphite header the warm bone reads on-palette). */
+.site-header .bh-identity-lockup .bh-identity-name { color: var(--fg); }
 .site-header .bh-identity-lockup .bh-identity-name,
 .site-header .bh-identity-lockup .bh-identity-role { text-shadow: none; }
 
@@ -177,7 +183,9 @@ body.bare .bh-identity {
     opacity 0.5s var(--ease-out-quint);
 }
 body.bare.hud-active .bh-identity { transform: scale(1.18); opacity: 1; }
-body.bare.hud-active .bh-identity-name { color: var(--fg); }
+/* At the black hole the name brightens to full presence — but keep the cool overlay
+   bone (it still floats on the live scene), just at full strength. */
+body.bare.hud-active .bh-identity-name { color: var(--fg-overlay); }
 body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
 
 /* --- Manifesto beats (pinned, cross-faded by scroll) ----------------------- */
@@ -226,10 +234,32 @@ body:not(.scene-ready) .bh-overlay { opacity: 0; }
   max-width: min(40rem, 84vw);
   will-change: opacity, transform;
 }
+/* Local text scrim (Task 3b): a soft dark pool sitting BEHIND the manifesto text
+   column, giving the lines gravity on the brightest orange-star frame. It bleeds
+   past the text box (negative inset) and fades to transparent at every edge so it
+   never reads as a box — just a region where the background quietly deepens. The
+   .bh-overlay::before vignette already darkens the bottom-left corner; this is the
+   restrained, text-local layer on top of it. Sits below the text (z 0 vs the
+   line's z 1) and never catches pointer events. */
+.bh-beat::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: -1.5rem -2.5rem -2rem -2.5rem;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 130% at 18% 70%,
+      rgba(0, 0, 0, 0.46) 0%,
+      rgba(0, 0, 0, 0.28) 42%,
+      rgba(0, 0, 0, 0.10) 68%,
+      transparent 100%);
+}
 
-/* Big line: one line per beat, always shown at full bone (no direction swap). */
+/* Big line: one line per beat, always shown at full bone (no direction swap).
+   z-index lifts it (and the whisper) above the local .bh-beat::before scrim. */
 .bh-beat-big {
   position: relative;
+  z-index: 1;
   display: grid;
   margin: 0 0 1.1rem;
 }
@@ -237,14 +267,14 @@ body:not(.scene-ready) .bh-overlay { opacity: 0; }
   display: block;
   grid-area: 1 / 1;
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(2rem, 6vw, 4rem);
-  line-height: 1.04;
-  letter-spacing: 0;
-  /* Same bright bone as the identity name and the active HUD labels (var(--fg)),
-     with the active-HUD's opaque shadow so it stays crisp over the bright star.
-     Always fully opaque — never translucent over the starfield. */
-  color: var(--fg);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-normal);
+  /* Cool-neutral overlay bone (Task 3a) so the statement holds authority over the
+     orange star — paired with the local scrim + the active-HUD's opaque text-shadow
+     so it stays crisp. Always fully opaque — never translucent over the starfield. */
+  color: var(--fg-overlay);
   text-wrap: balance;
   text-shadow: 0 0 18px rgba(0, 0, 0, 1), 0 0 4px rgba(0, 0, 0, 0.95);
   opacity: 1;
@@ -253,19 +283,23 @@ body:not(.scene-ready) .bh-overlay { opacity: 0; }
 
 /* Whisper: small, elaborating the big line. Shared; never swaps. */
 .bh-beat-whisper {
+  position: relative;
+  z-index: 1;
   margin: 0;
   max-width: min(34rem, 80vw);
   font-family: var(--font-mono);
-  font-size: clamp(0.8rem, 1.3vw, 0.98rem);
-  line-height: 1.55;
-  color: var(--fg);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-body-sm);
+  line-height: var(--leading-snug);
+  color: var(--fg-overlay);
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
 @media (max-width: 34rem) {
+  /* Only the placement tightens on narrow widths now — the type tokens (--text-hero
+     for the line, --text-subtitle for the name) are fluid clamps that already scale
+     themselves, so no per-breakpoint font-size override is needed. */
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
-  .bh-beat-line { font-size: clamp(1.7rem, 9vw, 2.4rem); }
-  .bh-identity-name { font-size: 1.05rem; }
 }
 
 /* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
@@ -313,5 +347,85 @@ body:not(.scene-ready) .bh-overlay { opacity: 0; }
   .bh-root[data-exploring='true'] .bh-overlay,
   .bh-overlay[data-exploring='true'] {
     opacity: 1 !important;
+  }
+}
+
+/* ===========================================================================
+   Cinematic dive transition
+   ---------------------------------------------------------------------------
+   The marker-dive flow: clicking the black-hole 'end' marker flies the live
+   three.js camera INTO the star while this fixed bloom layer ramps to a SOFT,
+   CAPPED veil (a warm radial wash — never a full whiteout; driven inline by
+   HeroIsland's onDiveProgress, whose peak the scene caps via DIVE_WHITE_PEAK);
+   the page then SPA-navigates UNDER the veil, and the destination's
+   astro:page-load handler (in BaseLayout) eases the overlay back out and plays
+   the content rise-up.
+   The overlay is persisted across ClientRouter swaps (transition:persist), so
+   it must START hidden via CSS — a fresh page that wasn't reached by a dive
+   never shows it.
+   =========================================================================== */
+.dive-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  /* Above the HUD boot layers (max z-index 25 in hud.css) + the corner chrome
+     (1000 in chrome.css); below the custom cursor (which is pointer-events:none
+     and only a thin dot, so the bloom reads cleanly beneath it). */
+  z-index: 9999;
+  /* A SOFT VEIL, not a whiteout. Three things keep it gentle + on-palette against this
+     dark, moody site: (1) the colour is --bloom-active (defaults to the warm-bone
+     --bloom; the dive sets data-bloom-state below to switch it to the firing state's
+     hue — cool nebula, gold yellow, ember red, etc.) rather than a clinical #fff; (2)
+     it's a radial-gradient that glows BRIGHTEST at the bloom origin — --bloom-x/--bloom-y
+     (set by the dive to the clicked marker's on-screen point, defaulting to dead-centre)
+     — and falls off to transparent at the edges, so the veil radiates FROM the marker,
+     never a flat sheet blanketing the frame; (3) the overlay's own opacity is capped
+     well under 1 by the scene (DIVE_WHITE_PEAK), so even at the apex you still see the
+     plunge glowing through. Only the HUE changes per state — the softness/falloff is
+     identical for every state. */
+  --bloom-active: var(--bloom);
+  --bloom-x: 50%;
+  --bloom-y: 50%;
+  background: radial-gradient(
+    circle at var(--bloom-x) var(--bloom-y),
+    var(--bloom-active) 0%,
+    color-mix(in oklch, var(--bloom-active) 88%, transparent) 38%,
+    color-mix(in oklch, var(--bloom-active) 55%, transparent) 68%,
+    transparent 96%
+  );
+}
+
+/* PER-STATE bloom tint — the dive sets data-bloom-state to the marker's lifecycle
+   state, which swaps --bloom-active to that state's token (tokens.css). Keeping the
+   colour choice here (CSS) honours the single-source-of-colour convention: the scene
+   only passes the state NAME, never a colour. 'end' falls through to the default
+   warm-bone --bloom, so it needs no rule. */
+.dive-overlay[data-bloom-state='beginning'] { --bloom-active: var(--bloom-beginning); }
+.dive-overlay[data-bloom-state='nebula'] { --bloom-active: var(--bloom-nebula); }
+.dive-overlay[data-bloom-state='yellow'] { --bloom-active: var(--bloom-yellow); }
+.dive-overlay[data-bloom-state='red'] { --bloom-active: var(--bloom-red); }
+.dive-overlay[data-bloom-state='end'] { --bloom-active: var(--bloom-end); }
+
+/* The destination content "resurfaces" out of the receding bloom: it rises +
+   un-blurs as the overlay fades. Gated behind no-preference so reduced-motion
+   users just get the overlay fading away (no transform/blur), per the plan. The
+   --ease-out-quint token is the project's single eased curve; reused here. */
+@media (prefers-reduced-motion: no-preference) {
+  body[data-resurface] main {
+    animation: dive-resurface 0.7s var(--ease-out-quint) both;
+  }
+}
+
+@keyframes dive-resurface {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
   }
 }

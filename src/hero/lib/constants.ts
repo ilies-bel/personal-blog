@@ -166,6 +166,10 @@ export const DEBUG_WINDOW_KEYS = {
    *  PARTICLE red giant so its jet + surface ripple can be inspected without clicking
    *  (pair with __bhMorph at a red-giant stage, e.g. ≈2.3). */
   giantErupt: '__bhGiantErupt',
+  /** Force the device tier ('high' | 'low') so the low-end fallback can be tested on
+   *  any machine without spoofing hardware. Read as a STRING via readDebugString and
+   *  honoured FIRST by detectDeviceTier (overrides the cheap auto-detect signals). */
+  tier: '__bhTier',
 } as const;
 
 // --- cross-layer cursor bridge (window.__bh*) ------------------------------
@@ -184,4 +188,13 @@ export function readDebugNumber(key: string): number | undefined {
   if (typeof window === 'undefined') return undefined;
   const value = (window as unknown as Record<string, unknown>)[key];
   return typeof value === 'number' ? value : undefined;
+}
+
+/** Read a string debug-hook override off window, or undefined if unset. Mirrors
+ *  readDebugNumber's SSR guard + window access; used by detectDeviceTier to honour
+ *  the __bhTier ('high' | 'low') force-override before any auto-detect signal. */
+export function readDebugString(key: string): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const value = (window as unknown as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : undefined;
 }

@@ -3,6 +3,7 @@
 // Copy + timing live in ../beats (shared with index.astro's SSR fallback).
 import { BEATS } from '../beats';
 import { band } from '../scroll';
+import { lifecycleProgress } from '../timeline';
 import { useSceneState } from './SceneStateContext';
 
 export default function ManifestoOverlay() {
@@ -14,6 +15,13 @@ export default function ManifestoOverlay() {
       data-exploring={explorationMode}
     >
       {BEATS.map((beat, i) => {
+        // The fade bands are authored in LIFECYCLE space (each glued to its star
+        // state), so route the raw scroll value through lifecycleProgress() — the
+        // single direction seam — before reading them. This keeps every manifesto
+        // line pinned to its state ("Explore the projects." on the black hole, "I
+        // build software that stays understandable." on the dot) while it now
+        // appears at the correct PHYSICAL scroll position under the reverse arc.
+        const lifecycleP = lifecycleProgress(progress);
         // Under reduced motion every beat is shown (so all copy is reachable).
         // Otherwise each beat owns a non-overlapping band [inStart, outEnd]: the
         // line is shown at FULL opacity across its whole band (no fade) so the big
@@ -21,7 +29,7 @@ export default function ManifestoOverlay() {
         // the active HUD labels, then hard-cuts out when the next band begins.
         const opacity = reduced
           ? 1
-          : band(progress, beat.text.inStart, beat.text.outEnd);
+          : band(lifecycleP, beat.text.inStart, beat.text.outEnd);
         const visible = opacity > 0.05;
         return (
           <div
