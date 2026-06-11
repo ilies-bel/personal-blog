@@ -330,17 +330,21 @@ export const diskVertexShader = /* glsl */ `
 
     // -- finger-like plasma jets --------------------------------------------
     // A LOW-frequency field over the blast direction picks lanes that shoot
-    // much further than the bulk (Rayleigh–Taylor fingers); a finer octave adds
-    // sub-filaments. The contrast is pushed HARD so the explosion reads as
-    // distinct radial RAYS spiking out of a core, not a uniform fog ball.
-    // Everything that shapes the blast is sampled from CONTINUOUS fields over the
-    // (spatial) blastDir — no per-particle aSeed term — so neighbouring particles
-    // (nearby blastDir) get nearly-identical reach/velocity and travel together as
-    // coherent sheets & filaments rather than as independent grains.
+    // further than the bulk (Rayleigh–Taylor fingers); a finer octave adds
+    // sub-filaments. Everything that shapes the blast is sampled from CONTINUOUS
+    // fields over the (spatial) blastDir — no per-particle aSeed term — so
+    // neighbouring particles (nearby blastDir) get nearly-identical reach/velocity
+    // and travel together as coherent sheets & filaments rather than as independent
+    // grains.
+    // ITEM 3: REDUCE the symmetric radial-RAY look so the reverse-collapse doesn't
+    // read as a generic outward sunburst. The lane spikes are SOFTENED (smoothstep
+    // window widened 0.28-0.90 -> 0.40-0.95, exponent 2.2 -> 1.5 = less peaky) and the
+    // jet reach contrast pulled down (2.6 -> 1.4, void floor lifted 0.40 -> 0.55) so the
+    // ejecta reads as a brief compressed flash that gathers inward, not a spray of rays.
     float lane = fbm(blastDir*2.2 + 11.0);
-    lane = pow(smoothstep(0.28, 0.90, lane), 2.2);  // sharp finger spikes
+    lane = pow(smoothstep(0.40, 0.95, lane), 1.5);  // softer, less-spiky fingers
     float fil  = fbm(blastDir*6.0 + 4.0);
-    float jet  = 0.40 + 2.6*lane + 0.30*fil;        // ~0.40 (void) .. ~3.5 (spike)
+    float jet  = 0.55 + 1.4*lane + 0.30*fil;        // ~0.55 (void) .. ~2.25 (mild spike)
     // filament brightness from the STABLE lane field (no uTime / post-pos), so
     // bright wisps hold still as the remnant expands. High contrast: the rays
     // glow, the voids between them stay dark → the radial structure reads.
@@ -431,10 +435,15 @@ export const diskVertexShader = /* glsl */ `
     // exists. This is a small GEOMETRIC nudge — not a glow — so matter reads as
     // being aspirated into the point. Vanishes by the blast (toRay→1 → pull→0),
     // and is a no-op at the hero (pullWin≈0 at uMorph=0).
-    float pullWin   = exp(-pow((uMorph-0.49)/0.07, 2.0));            // seed window
-    float nearCore  = 1.0 - smoothstep(coreR, coreR + uRin*1.6, r);  // 1 near seed
-    float pullAmt   = pullWin * nearCore * (1.0 - toRay) * 0.22;     // subtle
-    float rPull     = r * (1.0 - 0.5*pullAmt);
+    // ITEM 3: STRONGER inward PULL so the reverse-collapse reads as matter being
+    // aspirated INTO the centre (we're rewinding a collapse), not an outward blast.
+    // The seed window is widened (0.07 -> 0.10) and the pull strength raised (0.22 ->
+    // 0.40) + the radius compression deepened (0.5 -> 0.7), so nearby debris visibly
+    // gathers toward the dark core through the flash. Vanishes by the blast (toRay->1).
+    float pullWin   = exp(-pow((uMorph-0.49)/0.10, 2.0));            // seed window (widened)
+    float nearCore  = 1.0 - smoothstep(coreR, coreR + uRin*2.0, r);  // 1 near seed (wider reach)
+    float pullAmt   = pullWin * nearCore * (1.0 - toRay) * 0.40;     // stronger inward tug
+    float rPull     = r * (1.0 - 0.7*pullAmt);
     float phiPull   = phi + uSpinDir * pullAmt * 1.4;               // tangential lead
     vec3 spiralPos  = vec3(rPull*cos(phiPull), thick*(1.0-0.4*pullAmt), rPull*sin(phiPull));
     pos = mix(pos, spiralPos, pullWin);
@@ -1470,21 +1479,28 @@ export const diskVertexShader = /* glsl */ `
           // the colour ramp carries the hue, brightness only modulates it. A
           // gentle limb-darkening keeps the disc edge from glaring.
           float m = vSunM;
-          // red giant: a big diffuse cool star. The parked comp frames the curved LIMB,
-          // so the old heavy limb-darkening (limbMu 0.30) + deep-red palette + low
-          // exposure crushed the surface to near-black. Lift the per-grain luminance
-          // substantially (floor 0.30→0.46, ceiling 0.60→0.82) AND cut the red limb
-          // darkening (limbMu 0.30→0.14) so the limb we're actually looking at reads as a
-          // lit, glowing edge rather than a black silhouette. Still below the yellow
-          // star's stack — the colour ramp stays deep red, so it brightens to a vivid red
-          // photosphere, not a white blowout.
-          float baseLo = mix(0.30, 0.80, vSunRed);
-          float baseHi = mix(0.62, 1.05, vSunRed);
-          float limbMu = mix(0.18, 0.12, vSunRed);
-          float lum = (baseLo + baseHi*m) * (1.0 - vSunDark*0.85) * ((1.0-limbMu) + limbMu*mu);
-          float arBright = smoothstep(0.86, 0.995, m) * mix(0.45, 0.40, vSunRed);
-          // light the fresnel limb warmly (was 0.22 for red) so the curved edge glows.
-          bright = (lum + arBright + limb*mix(0.30, 0.50, vSunRed));
+          // red giant: a big, DARK, molten ember star — NOT a clean lit gold sun. The
+          // previous floor/ceiling (0.80/1.05) lit the WHOLE surface bright and even, which
+          // is exactly what read as "yellow sun". Pull the red-giant floor DOWN hard
+          // (baseLo 0.80→0.34) so the burnt-mass body sits dark, and lower the ceiling a
+          // touch (baseHi 1.05→0.92) — but WIDEN the dynamic range (baseHi*m carries the hot
+          // cells) so the few bright cells still climb high enough to bloom while the bulk of
+          // the surface stays a heavy burnt-orange/red-brown mass. limbMu kept low (0.14) so
+          // the parked limb still reads as a lit, glowing edge, not a black silhouette.
+          float baseLo = mix(0.30, 0.34, vSunRed);
+          float baseHi = mix(0.62, 0.92, vSunRed);
+          float limbMu = mix(0.18, 0.14, vSunRed);
+          // contrast push (red giant only): square the mottle so the value distribution is
+          // bottom-heavy — most of the surface lands in the dark burnt band and only the
+          // bright cell tops carry the sodium/hot stops. mEffLum 0.55 mixes in the squared
+          // field so it deepens the shadows without killing the hot cell peaks.
+          float mLit = mix(m, m*m, mix(0.0, 0.55, vSunRed));
+          float lum = (baseLo + baseHi*mLit) * (1.0 - vSunDark*0.90) * ((1.0-limbMu) + limbMu*mu);
+          float arBright = smoothstep(0.90, 0.997, m) * mix(0.45, 0.28, vSunRed);
+          // light the fresnel limb warmly so the curved edge glows — but pulled DOWN for the
+          // red giant (0.50→0.34) so the sodium-orange rim is a hot EDGE, not a bright band
+          // washing the outer third of the body toward gold.
+          bright = (lum + arBright + limb*mix(0.30, 0.34, vSunRed));
           vHeat = m;
         }
       }
@@ -1655,42 +1671,58 @@ export const diskFragmentShader = /* glsl */ `
       a = exp(-d*d*(4.5/softN));
     }
 
-    // --- ember / black-hole ramp (near-monochrome, warm highlights) ---
+    // --- black-hole accretion ramp (ITEM 2: COLD silver / bone / faint blue-white,
+    //     near-monochrome). The lensing line + disk read as a thin SILVER rim of light,
+    //     NOT a warm sunburst: the low end is a cold blue-silver (accent #9EA8B8 family),
+    //     the mid a cool bone, the hot a faint blue-white. Cold + gravitational. ---
     float t = vBright / (vBright + 1.6);
-    vec3 cLow = vec3(0.78, 0.80, 0.85);
-    vec3 cMid = vec3(0.93, 0.93, 0.94);
-    vec3 cHot = vec3(1.00, 1.00, 1.00);
+    vec3 cLow = vec3(0.66, 0.71, 0.80);   // cold blue-silver (the #9EA8B8 cold accent)
+    vec3 cMid = vec3(0.88, 0.91, 0.95);   // cool bone
+    vec3 cHot = vec3(0.97, 0.99, 1.00);   // faint blue-white hot edge
     vec3 emberCol = mix(cLow, cMid, smoothstep(0.0, 0.45, t));
     emberCol = mix(emberCol, cHot, smoothstep(0.45, 0.92, t));
     float luma = dot(emberCol, vec3(0.299,0.587,0.114));
     emberCol = mix(vec3(luma), emberCol, uSat);
 
-    // --- sun ramp: deep maroon → blood red → orange → amber → white-hot,
-    //     driven by the temperature proxy. Base photosphere stays deep red;
-    //     only the brightest plage reaches the hot orange/amber end. ---
+    // --- sun ramp: deep brown → sodium orange → amber → white-hot, driven by the
+    //     temperature proxy. PALETTE (red-giant spec): sodium orange / deep brown.
+    //     The green channel is lifted across the ramp so the lows read as warm DEEP
+    //     BROWN (not maroon) and the body climbs to sodium orange. Base photosphere
+    //     stays sodium; only the brightest plage reaches the hot amber/white end. ---
     float h = clamp(vHeat, 0.0, 1.15);
-    vec3 gDark = vec3(0.16, 0.018, 0.004);  // cool intergranular lanes / umbrae
-    vec3 gRed  = vec3(0.62, 0.10, 0.015);   // base photosphere red
-    vec3 gOrng = vec3(0.96, 0.34, 0.04);    // bright granule / network
-    vec3 gAmbr = vec3(1.00, 0.62, 0.14);    // hot plage
-    vec3 gWhite= vec3(1.00, 0.93, 0.72);    // brightest plage highlight
+    vec3 gDark = vec3(0.13, 0.045, 0.010);  // deep-BROWN intergranular lanes / umbrae
+    vec3 gRed  = vec3(0.66, 0.24, 0.03);    // base photosphere brown-orange
+    vec3 gOrng = vec3(0.95, 0.46, 0.07);    // bright sodium-orange granule / network
+    vec3 gAmbr = vec3(1.00, 0.64, 0.16);    // hot amber plage
+    vec3 gWhite= vec3(1.00, 0.92, 0.74);    // brightest plage highlight
     vec3 sunCol = mix(gDark, gRed,  smoothstep(0.10, 0.40, h));
     sunCol = mix(sunCol, gOrng,  smoothstep(0.42, 0.66, h));
     sunCol = mix(sunCol, gAmbr,  smoothstep(0.66, 0.86, h));
     sunCol = mix(sunCol, gWhite, smoothstep(0.90, 1.08, h));
 
-    // --- explosion ramp: deep red → amber → white-hot → blue-white, driven by
-    //     the shock-breakout heat proxy. Cooled outer filaments sit deep red;
-    //     the shock front and flash core run white- and blue-hot. Sits between
-    //     the monochrome ember ramp and the sun ramp. ---
+    // --- explosion ramp: burnt-orange shadows → amber edge → white-hot center,
+    //     driven by the shock-breakout heat proxy. PALETTE (supernova spec):
+    //     white-hot center / amber edge / burnt-orange shadows — NO blue core. The
+    //     old blue-white flash stop is removed: the hottest end now resolves to a
+    //     white-hot core (the time-based NovaShader whiteout supplies the blinding
+    //     peak), so the debris ramp stays in the warm white→amber→burnt family. The
+    //     cooled outer filaments are a clear BURNT ORANGE (green lifted off pure red),
+    //     and the mid is a clean amber. Sits between the ember ramp and the sun ramp. ---
+    // ITEM 3 collapse ramp: white #F3EFE2 -> amber #FF9A2E -> red #6A1608 -> dark #090302.
+    // The reverse-collapse is a brief TRANSITION FLASH (cold silver-line -> hot ember in
+    // under a second), so the ramp goes from a clean warm-white core down through a hot
+    // amber edge to a deep collapse-red and a near-black dark — handing straight into the
+    // red-giant surface. Tighter than the old burnt-orange debris ramp.
     float e = clamp(vExplode, 0.0, 1.2);
-    vec3 eRed   = vec3(0.55, 0.06, 0.02);   // cooled outer filaments
-    vec3 eAmbr  = vec3(1.00, 0.42, 0.10);   // amber mid debris
-    vec3 eWhite = vec3(1.00, 0.95, 0.82);   // white-hot
-    vec3 eBlue  = vec3(0.82, 0.93, 1.00);   // blue-white flash core
-    vec3 exCol = mix(eRed,  eAmbr,  smoothstep(0.12, 0.45, e));
-    exCol = mix(exCol, eWhite, smoothstep(0.45, 0.80, e));
-    exCol = mix(exCol, eBlue,  smoothstep(0.92, 1.12, e));
+    vec3 eDark  = vec3(0.035, 0.012, 0.008); // #090302 dark collapse shadow (deepest)
+    vec3 eRed   = vec3(0.415, 0.086, 0.031); // #6A1608 collapse red (cooled inner debris/shadows)
+    vec3 eAmbr  = vec3(1.000, 0.604, 0.180); // #FF9A2E hot amber mid/edge
+    vec3 eWhite = vec3(0.953, 0.937, 0.886); // #F3EFE2 warm-white shock front
+    vec3 eCore  = vec3(0.980, 0.972, 0.945); // warm-white CENTER (filmic, never pure white)
+    vec3 exCol = mix(eDark, eRed,  smoothstep(0.0, 0.18, e));
+    exCol = mix(exCol, eAmbr,  smoothstep(0.18, 0.46, e));
+    exCol = mix(exCol, eWhite, smoothstep(0.46, 0.80, e));
+    exCol = mix(exCol, eCore,  smoothstep(0.92, 1.12, e));
     float exLuma = dot(exCol, vec3(0.299,0.587,0.114));
     exCol = mix(vec3(exLuma), exCol, uSat);  // respect global desaturation
 
@@ -1712,9 +1744,13 @@ export const diskFragmentShader = /* glsl */ `
           // gold-sun flare ramp
           vec3 gfc = mix(vec3(1.0, 0.40, 0.06), vec3(1.0, 0.72, 0.26), smoothstep(0.2, 0.6, ht));
           gfc = mix(gfc, vec3(1.0, 0.94, 0.78), smoothstep(0.6, 1.0, ht));
-          // red-giant flare ramp: dark blood-red → red-orange (never white-hot)
-          vec3 rfc = mix(vec3(0.55, 0.05, 0.01), vec3(0.95, 0.26, 0.04), smoothstep(0.2, 0.65, ht));
-          rfc = mix(rfc, vec3(1.0, 0.45, 0.12), smoothstep(0.65, 1.0, ht));
+          // red-giant flare ramp: molten ember root → sodium orange → rare hot edge. The
+          // base is pulled into the deep-ember shadow band (#4E0E05, matching the molten-red
+          // surface shadow stop) so flares read as molten surface activity, not glowing gold;
+          // only the hottest tip reaches sodium/hot-edge (those stops are UNCHANGED).
+          vec3 rfc = mix(vec3(0.282, 0.044, 0.018), vec3(0.690, 0.166, 0.046), smoothstep(0.2, 0.62, ht));
+          rfc = mix(rfc, vec3(0.906, 0.392, 0.094), smoothstep(0.62, 0.88, ht));
+          rfc = mix(rfc, vec3(1.000, 0.620, 0.173), smoothstep(0.88, 1.0, ht));
           pcol = mix(gfc, rfc, vSunRed);
         } else {
           // PHOTOSPHERE: the warm field vSunM drives a 5-stop ramp. The gold ramp
@@ -1729,47 +1765,60 @@ export const diskFragmentShader = /* glsl */ `
           float mEff = mix(0.62, m, vYrMix);
           // gold (yellow sun) — unchanged; only reached when vSunRed<1 (mesh's job),
           // so for the cloud (vSunRed=1) this term is mixed out below.
-          // Dark-vein attenuation for the LOW tier: fat grains (uPointGain>1) turn each
-          // dark-veined grain into a visible PIT instead of soft mottling, so we soften
-          // the network depth as grains fatten. With the lighter re-tune (uPointGain now
-          // ~2.0 not ~4.8) this lands around ~0.88 — a gentle touch that keeps convection
-          // visible while the cheap bloom blurs out any residual pitting. EXACTLY 1.0 at
-          // uPointGain==1.0 → both photosphere paths stay byte-identical on high.
+          // PALETTE (yellow-star spec): pale gold / soft cream. The crest is nudged
+          // toward a soft CREAM (green/blue lifted 0.84/0.40 → 0.90/0.62) so the bright
+          // photosphere reads pale-gold-into-cream, not a saturated orange-gold.
+          // Dark-vein attenuation for the LOW tier (preserved from the device-tier work):
+          // fat grains (uPointGain>1) turn each dark-veined grain into a visible PIT
+          // instead of soft mottling, so we soften the network depth as grains fatten.
+          // With the lighter re-tune (uPointGain ~2.0 not ~4.8) this lands around ~0.88 —
+          // a gentle touch that keeps convection visible while the cheap bloom blurs out
+          // any residual pitting. EXACTLY 1.0 at uPointGain==1.0 → byte-identical on high.
+          // The red-giant ramp below also reads this, so it MUST be declared here.
           float veinAtten = 1.0 / (1.0 + 0.13 * (uPointGain - 1.0)); // 1.0 high → ~0.88 low
           vec3 sc = vec3(0.20, 0.028, 0.0);
           sc = mix(sc, vec3(0.72, 0.17, 0.01), smoothstep(0.10, 0.34, m));
-          sc = mix(sc, vec3(1.00, 0.44, 0.06), smoothstep(0.28, 0.52, m));
-          sc = mix(sc, vec3(1.00, 0.64, 0.16), smoothstep(0.52, 0.76, m));
-          sc = mix(sc, vec3(1.00, 0.84, 0.40), smoothstep(0.84, 0.99, m));
+          sc = mix(sc, vec3(1.00, 0.46, 0.08), smoothstep(0.28, 0.52, m));
+          sc = mix(sc, vec3(1.00, 0.68, 0.24), smoothstep(0.52, 0.76, m));
+          sc = mix(sc, vec3(1.00, 0.90, 0.62), smoothstep(0.84, 0.99, m));  // soft cream crest
           sc = mix(sc, vec3(0.20, 0.030, 0.0), vSunDark*veinAtten);
+
           sc += smoothstep(0.88, 0.99, m) * vec3(0.5, 0.28, 0.07);
           sc = mix(sc, vec3(1.0, 0.74, 0.30), vSunLimb*0.72);
           sc += vSunLimb * vec3(0.6, 0.32, 0.08);
           sc *= 1.15;
-          // red giant — deep, saturated red photosphere (built from mEff; dark
-          // veins/limb scaled by vYrMix so the gold ball has no lanes). The whole ramp
-          // is lifted warmer/brighter: the old blood-red mid-tones sank to near-black at
-          // this exposure. The umbra is no longer near-black, the body reaches a vivid
-          // red-orange across most of mEff, and the limb glows so the parked curved edge
-          // reads as molten, not a silhouette.
-          vec3 rc = vec3(0.68, 0.15, 0.04);                     // ember floor, lifted (deeper
-          //   orange/red shadows brought UP a touch: 0.62,0.12,0.03 → 0.68,0.15,0.04).
-          rc = mix(rc, vec3(0.94, 0.20, 0.04),  smoothstep(0.08, 0.34, mEff)); // deep red, richer
-          rc = mix(rc, vec3(1.00, 0.26, 0.05),  smoothstep(0.30, 0.58, mEff)); // red
-          rc = mix(rc, vec3(1.00, 0.40, 0.09),  smoothstep(0.56, 0.80, mEff)); // red-orange
-          rc = mix(rc, vec3(0.96, 0.48, 0.14),  smoothstep(0.84, 1.0, mEff));  // hot orange, gold
-          //   highlight dialled DOWN slightly (1.00,0.54,0.18 → 0.96,0.48,0.14).
-          // Dark spots/veins (lifted off black). On the LOW tier the grains are
-          // few + fat (uPointGain>1), so each dark-veined grain punches a visible
-          // PIT into the sparse surface instead of averaging into soft mottling the
-          // way ~20× denser high-tier grains do — that is a big part of the residual
-          // "crusty" read. veinAtten (declared above, 1.0 on high) softens the vein
-          // depth as uPointGain rises so the low tier keeps gentle convection texture
-          // without hard dark pits — byte-identical on the high path.
-          rc = mix(rc, vec3(0.22, 0.020, 0.0), vSunDark*vYrMix*veinAtten);
-          // warm, glowing red limb (forward-scattered) — the curved edge fills the comp.
-          rc = mix(rc, vec3(1.00, 0.32, 0.08), vSunLimb*0.65*vYrMix);
-          rc += vSunLimb * vec3(0.55, 0.12, 0.02) * vYrMix;
+          // red giant — BURNT-EMBER photosphere: a DARK, HEAVY, molten mass, not a clean
+          // sodium-orange sun. PALETTE (red-giant ember spec): ~70% burnt red-brown shadow
+          // mass, ~20% sodium-orange body→rim, ~10% rare pale-gold hot accents. The body
+          // stops are pulled DOWN into burnt-orange / red-brown (anchors #220803→#451006→
+          // #7A240B→#B43A10) so the AVERAGE surface reads dark & molten; the sodium-orange
+          // (#E76418) only shows on the brighter cells, and the rare hot edge (#FF9E2C) sits
+          // at the extreme top of the value range. Surrounding space stays TRUE BLACK.
+          // The smoothstep windows are shifted UP so the burnt-mass band owns the bulk of
+          // the surface and only the noise tail reaches the hot stops.
+          // MOLTEN-RED PASS (GREEN-DOMINANT): the SHADOW + MIDTONE stops are pushed toward
+          // saturated ember red — red held ~steady, GREEN (and blue) pulled DOWN — so the body
+          // mass reads as deep molten red, not burnt amber. A hue/saturation move, NOT a
+          // brightening: R/G climbs sharply in every shadow+mid stop while LUMINANCE holds flat
+          // or DROPS (the body/ember stops read slightly DARKER, never brighter). The smoothstep
+          // windows are unchanged (body still ~70% of the surface). Rim (#E76418) and the
+          // pale-gold crest (#FF9E2C) and their windows are UNTOUCHED.
+          vec3 rc = vec3(0.115, 0.017, 0.008);                  // #1D0402 ember floor — deep red (was #220803)
+          rc = mix(rc, vec3(0.282, 0.044, 0.018), smoothstep(0.06, 0.30, mEff)); // #480B05 deep ember shadow mass (was #451006)
+          rc = mix(rc, vec3(0.470, 0.100, 0.028), smoothstep(0.26, 0.56, mEff)); // #781A07 molten red body (DOMINANT; was #7A240B)
+          rc = mix(rc, vec3(0.690, 0.166, 0.046), smoothstep(0.58, 0.80, mEff)); // #B02A0C molten ember (greener-down; was #B43A10)
+          rc = mix(rc, vec3(0.906, 0.392, 0.094), smoothstep(0.80, 0.93, mEff)); // #E76418 sodium orange (active cells) — UNCHANGED rim
+          rc = mix(rc, vec3(1.000, 0.620, 0.173), smoothstep(0.94, 1.0, mEff));  // #FF9E2C hot edge (RARE crest) — UNCHANGED
+          // Dark ember umbrae / veins. veinAtten (declared with the gold ramp above, 1.0
+          // on high) softens the vein depth on the LOW tier — few + fat grains (uPointGain>1)
+          // would otherwise punch each dark-veined grain into a visible PIT instead of soft
+          // mottling. Byte-identical on the high path; the ember colour is unchanged.
+          rc = mix(rc, vec3(0.068, 0.010, 0.005), vSunDark*vYrMix*veinAtten); // #110301 deep ember umbrae/dark veins (green down, red held)
+          // sodium-orange limb (forward-scattered) — a HOT edge, not a creamy-white wash.
+          // Pulled toward sodium orange (#E76418→#FF9E2C) and the wide-band weight cut so it
+          // doesn't flood the outer body with bright rim.
+          rc = mix(rc, vec3(0.906, 0.392, 0.094), vSunLimb*0.45*vYrMix);
+          rc += vSunLimb * vec3(0.40, 0.16, 0.03) * vYrMix;
 
           // gold swap-in target: a clean warm gold that matches the yellow mesh,
           // so the flash-masked mesh→cloud handoff is seamless. Lerp gold → red
@@ -1805,18 +1854,18 @@ export const diskFragmentShader = /* glsl */ `
           // giant only); additive + capped so it can't blow to white under bloom. No-op
           // when vEruptGlow=0. (Stops mirror the red-giant ramp r3..r4 in sun.glsl.ts.)
           float eg = clamp(vEruptGlow, 0.0, 2.0) * vSunRed;
-          // The plume must read as hot RED plasma, NOT orange: green & blue are dropped
-          // across all three stops so the hue sits firmly red. The old stops (0.18/0.34/0.45
-          // green, up to 0.12 blue) skewed orange; these sit at 0.12/0.22/0.30 green with
-          // ≤0.06 blue. NO white, NO bright orange — the hottest root only reaches a
-          // saturated red-orange. Gated by vSunRed (red giant only). The grains carry these
-          // colours as they arc off the limb, so the geyser particles themselves are red.
-          vec3 eRed  = vec3(0.85, 0.12, 0.02);   // blood red (giant surface, hotter than body)
-          vec3 eOrng = vec3(1.00, 0.22, 0.05);   // saturated RED (plume body) — low green, less orange
-          vec3 eRoot = vec3(1.00, 0.30, 0.06);   // hottest SATURATED RED-ORANGE at the root (no white, no bright orange)
-          pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume reddens hot
-          pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter saturated red up the column
-          pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // saturated red glow at the root (additive, NOT white)
+          // The plume reads as hot SODIUM-ORANGE plasma, in the SAME hue family as the
+          // (now sodium-orange) surface — the green channel is raised across all three
+          // stops so the geyser matches the body instead of skewing blood-red. NO white,
+          // NO pink — the hottest root only reaches a bright sodium orange. Gated by
+          // vSunRed (red giant only). The grains carry these colours as they arc off the
+          // limb, so the geyser particles themselves read sodium orange.
+          vec3 eRed  = vec3(0.690, 0.166, 0.046); // #B02A0C molten ember (giant surface, hotter than body; greener-down to match the molten-red body stop)
+          vec3 eOrng = vec3(0.906, 0.392, 0.094); // #E76418 sodium orange (plume body) — UNCHANGED
+          vec3 eRoot = vec3(1.000, 0.620, 0.173); // #FF9E2C hot edge at the root (active region, no white)
+          pcol = mix(pcol, eRed,  smoothstep(0.0, 0.6, eg));   // base of the plume heats to sodium orange
+          pcol = mix(pcol, eOrng, smoothstep(0.5, 1.2, eg));   // brighter sodium orange up the column
+          pcol += eRoot * smoothstep(0.9, 1.8, eg) * 0.5;      // hot sodium-orange glow at the root (additive)
         }
       } else if(vPlaceholder < 2.9){
         // nebula (smoky-blue, backlit-haze look): the eye should read SMOKE lit from
@@ -1825,21 +1874,38 @@ export const diskFragmentShader = /* glsl */ `
         // a near-monochrome BLUE cloud (the iStock/Hubble blue-nebula reference), not
         // the multi-hue SHO rainbow: hue barely shifts, BRIGHTNESS carries the form.
         // vNeb walks the cool ramp; the hottest gas (vHeat) pushes toward white.
+        // PALETTE (nebula spec): cold blue-white dominant / FAINT VIOLET / minimal
+        // amber accents. The navy + mid stops carry a faint VIOLET cast (red lifted a
+        // touch relative to green so the deep gas reads blue-violet, not pure navy);
+        // the dense-gas stop is pulled toward cold BLUE-WHITE (red lifted 0.34→0.55 so
+        // it no longer reads cyan/teal); the crest stays cold blue-white.
+        // ITEM 5 palette: the COLDEST scene after the black hole — push the OUTER gas
+        // toward BLUE-VIOLET and keep the mid cold-white/ice. cNavy -> violet #7D6AE8
+        // (the deep outer haze), cBlue -> blue #8EA8FF, cCyan -> cold-white #DDE7FF,
+        // cIce -> ice #BFD4FF. A small soft cream/gold core (#E8C46A) is mixed in only at
+        // the very centre below (it comes from the just-formed yellow star). The eye-reset
+        // after the warm red/yellow chapters: a cold violet-blue cloud, not a teal one.
         float rr = clamp(vNeb, 0.0, 1.0);
-        vec3 cNavy = vec3(0.04, 0.10, 0.30);  // 0.00 deep navy (thin outer haze)
-        vec3 cBlue = vec3(0.10, 0.34, 0.72);  // 0.35 mid blue
-        vec3 cCyan = vec3(0.34, 0.72, 0.96);  // 0.70 bright cyan (dense gas)
-        vec3 cIce  = vec3(0.78, 0.92, 1.00);  // 1.00 icy near-white (hot cores)
+        vec3 cNavy = vec3(0.49, 0.42, 0.91);  // 0.00 deep VIOLET #7D6AE8 (thin outer haze)
+        vec3 cBlue = vec3(0.56, 0.66, 1.00);  // 0.35 blue #8EA8FF (mid-outer gas)
+        vec3 cCyan = vec3(0.87, 0.91, 1.00);  // 0.70 cold-white #DDE7FF (denser gas)
+        vec3 cIce  = vec3(0.75, 0.83, 1.00);  // 1.00 ice #BFD4FF (hot cores, cold blue-white)
         vec3 ncol = mix(cNavy, cBlue, smoothstep(0.00, 0.40, rr));
         ncol = mix(ncol, cCyan, smoothstep(0.35, 0.78, rr));
         ncol = mix(ncol, cIce,  smoothstep(0.74, 1.00, rr));
-        // MASS → HEAT → COLOUR: the densest gas clusters carry the most mass, so
-        // they read HOTTER — pushed hard toward hot blue-white (the same heat
-        // language as the young forming star). vHeat already tracks local density
-        // (dens), so high vHeat = dense = hot. The bright cores bloom to blue-white.
+        // ITEM 5: MINIMAL warm accents — sparser + fainter than before so the cloud reads
+        // dominantly cold violet-blue (the eye-reset). Reduced to ~3% of grains at low tint.
+        float amberPick = step(0.97, fract(vSeed * 71.7));        // ~3% of grains (was ~6%)
+        vec3 cAmber = vec3(0.91, 0.77, 0.42);                     // faint soft-gold #E8C46A accent
+        ncol = mix(ncol, cAmber, amberPick * 0.40 * (0.4 + 0.6*rr));
+        // MASS → HEAT → COLOUR: the densest gas clusters carry the most mass. ITEM 5: the
+        // VERY-CENTRE dense core takes a small soft CREAM/GOLD tint (#E8C46A) — it comes
+        // from the just-formed yellow star at the centre — while the rest of the cores stay
+        // cold blue-white. The gold is gated to the densest gas (high vHeat) so it only
+        // shows in the very centre; the broad cloud stays cold violet-blue.
         float core = smoothstep(0.85, 1.70, vHeat);              // dense/hot cores
-        ncol = mix(ncol, vec3(0.62, 0.80, 1.00), core*0.55);     // hot azure
-        ncol = mix(ncol, vec3(0.92, 0.97, 1.00), smoothstep(1.25, 1.75, vHeat)*0.7); // white-hot peak
+        ncol = mix(ncol, vec3(0.62, 0.74, 1.00), core*0.45);     // cold azure cores (less green)
+        ncol = mix(ncol, vec3(0.91, 0.77, 0.42), smoothstep(1.45, 1.85, vHeat)*0.42); // small soft-gold CENTRE core (#E8C46A)
         // scattered young stars read crisp blue-white, off-ramp.
         ncol = mix(ncol, vec3(0.85, 0.92, 1.00), step(2.4, vPlaceholder));
         // GRAVITATIONAL COLLAPSE: as gas accretes onto the forming star (vSimLife
@@ -1850,8 +1916,10 @@ export const diskFragmentShader = /* glsl */ `
         ncol = mix(ncol, vec3(0.80, 0.90, 1.00), smoothstep(0.1, 0.85, accreteHeat));
         pcol = ncol;
       } else {
-        // pale blue dot: the famous faint blue point.
-        pcol = vec3(0.55, 0.72, 0.95);
+        // pale blue dot: the famous faint blue point. ITEM 6: the dot reads as a clean
+        // blue-WHITE speck #DDEBFF (lifted from the dusky 0.52,0.70,0.96) so the closing
+        // signal is crisp and human-scale against the near-black #020304 room.
+        pcol = vec3(0.87, 0.92, 1.0);
       }
       col = pcol;
     }
@@ -1915,8 +1983,11 @@ export const diskFragmentShader = /* glsl */ `
       } else {
         // diffuse smoke: thin haze stays DIM, but the dense pockets (high vHeat) bloom
         // into bright lit cores → the strong dim↔bright contrast of backlit smoke.
+        // ITEM 5: the CENTRAL bright cores are pulled DOWN ~20% (core boost 2.2 -> 1.75)
+        // so the bright centre — which sits behind the left text column — reads quieter,
+        // letting the headline keep authority. The dim haze is unchanged.
         float coreBoost = smoothstep(0.7, 1.4, vHeat);        // 0 in haze → 1 in dense cores
-        inten = a * (0.04 + 0.26*clamp(vBright, 0.0, 1.3)) * (1.0 + 2.2*coreBoost);
+        inten = a * (0.04 + 0.26*clamp(vBright, 0.0, 1.3)) * (1.0 + 1.75*coreBoost);
       }
       inten *= vNebLight;   // ambient+depth light model: dim far / self-occluded gas
     } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){

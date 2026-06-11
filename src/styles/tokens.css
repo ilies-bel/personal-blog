@@ -32,6 +32,21 @@
   --ember: oklch(0.58 0.08 48);         /* red-giant residue, surface wash only */
   --link: var(--accent);
 
+  /* HUD text-shadow tint — the inner legibility halo behind the floating HUD/manifesto
+     text. Defaults to neutral black; the per-scene blocks (hero.css [data-scene]) can
+     tint it (e.g. the red giant uses a deep ember shadow) so each chapter's chrome sits
+     on a shadow that belongs to its temperature. Consumed by .bh-beat-line / HUD title. */
+  --hud-shadow: rgba(0, 0, 0, 0.95);
+
+  /* PER-SCENE HUD TOKENS (ITEM 7) — the HUD rail + bottom compass consume these so each
+     celestial chapter can give the HUD its own temperature WITHOUT touching the
+     manifesto's --fg-overlay. The per-scene + data-zone blocks in hero.css override them
+     on .bh-root; these :root defaults are the warm-bone fallback (matching the old look)
+     for any surface outside a scened hero. */
+  --hud-main: var(--fg-overlay);        /* HUD title / readout main colour */
+  --hud-muted: var(--fg-dim);           /* HUD destination / secondary rung */
+  --hud-line: color-mix(in oklch, var(--fg) 34%, transparent); /* HUD hairlines / rail line */
+
   --max: 46rem;                          /* readable measure for prose / lists (.measure) */
   --gutter: clamp(1.5rem, 5vw, 5rem);    /* full-bleed edge gutters */
   /* Fixed-chrome edge inset — the single left/right rail for the hero's floating

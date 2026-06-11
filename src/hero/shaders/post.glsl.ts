@@ -40,14 +40,18 @@ export const GradeShader = {
       col = mix(vec3(luma), col, uSat);
       // slight warm tint in the highlights
       col *= vec3(1.0 + uWarmth, 1.0, 1.0 - uWarmth*0.85);
-      // warm-GRAPHITE tint of the background + halo falloff. Red sits highest and
-      // blue is pulled DOWN (never green-above-red, which is what read as olive):
-      // the shadows go warm charcoal/bone, matching the engraving reference, not moss.
-      // (uOlive kept as the uniform name for back-compat; it now drives the warm grade.)
+      // COLD-SILVER tint of the background + halo falloff (ITEM 2). The black-hole
+      // spec is cold: bg #030405, dust #11151A, accent #9EA8B8 — a near-monochrome
+      // silver/black room, gravitational and EMPTY, with NO warm bone. uOlive (kept as
+      // the uniform name for back-compat) now drives a COOL grade: BLUE sits highest
+      // and red is pulled DOWN, so the shadows go cold silver-graphite, the eye-reset
+      // opposite of the warm red/yellow chapters. This is gated per-state by look.olive
+      // (≈0 in every later state, full only at the black hole), so the cold cast NEVER
+      // warm- or cold-bleeds into the other chapters.
       float shW = 1.0 - smoothstep(0.0, 0.5, luma);          // weight in the shadows
-      col *= mix(vec3(1.0), vec3(1.06, 1.00, 0.82), uOlive*shW);
-      col += vec3(0.022, 0.018, 0.012) * uOlive;             // warm-graphite floor
-      col += vec3(0.005);                                     // slight neutral floor
+      col *= mix(vec3(1.0), vec3(0.92, 0.97, 1.04), uOlive*shW);  // cool silver-blue shadow cast
+      col += vec3(0.011, 0.013, 0.016) * uOlive;             // cold-graphite floor (faint blue-silver, #11151A family)
+      col += vec3(0.004, 0.0045, 0.005);                     // slight cool-neutral floor
       // fine grain
       float g = hash(vUv*uResolution + fract(uTime)*97.0);
       col += (g-0.5)*uGrain;
@@ -146,8 +150,13 @@ export const NovaShader = {
       // a cold grey/white screen wipe. The peak is a warm white-gold; it never goes
       // fully blue-white. The cast is stronger (0.42 white mix vs 0.6) so the warm
       // temperature survives the bleach instead of washing to neutral grey.
-      vec3 cold = vec3(1.0, 0.97, 0.90);   // warm-white shock front (was blue-white)
-      vec3 warm = vec3(1.0, 0.82, 0.55);   // ~#FFD18C cooling amber-gold
+      // PALETTE (supernova): white-hot center → amber edge → burnt-orange shadows.
+      // The hot peak stays a warm white; the cooling trailing edge is pushed toward a
+      // clear BURNT ORANGE (green 0.82 → 0.74, blue 0.55 → 0.40) so the flash cools
+      // into the same burnt-orange shadow family the debris ramp carries.
+      // ITEM 3 collapse palette: warm-white front #F3EFE2 -> hot amber edge #FF9A2E.
+      vec3 cold = vec3(0.953, 0.937, 0.886); // #F3EFE2 warm-white shock front
+      vec3 warm = vec3(1.0, 0.604, 0.180);   // #FF9A2E hot amber cooling edge
       vec3 tint = mix(warm, cold, smoothstep(0.35, 0.90, uNova));
       vec3 white = mix(vec3(1.0), tint, 0.42); // warm-tinted, never neutral white
       col = mix(col, white, clamp(bleach, 0.0, 1.0));

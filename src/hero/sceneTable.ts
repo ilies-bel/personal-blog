@@ -109,22 +109,30 @@ export interface Segment {
 //
 // RE-TIMED for the "one continuous cosmic mechanism" chapter grid. The weights
 // prefix-sum to breakpoints that place each scene's RAW-scroll band (raw = 1 -
-// lifecycle under the reverse flip) on the target grid:
-//   raw 0-14%   black hole        (lifecycle 0.86-1.00, segs 11-12)
-//   raw 14-28%  reverse supernova (lifecycle 0.72-0.86, segs 9-10)
-//   raw 28-43%  red giant         (lifecycle 0.57-0.72, segs 7-8)
-//   raw 43-58%  yellow star       (lifecycle 0.42-0.57, segs 5-6)
-//   raw 58-74%  nebula            (lifecycle 0.26-0.42, segs 3a-3b: idle hold + collapse)
-//   raw 74-88%  pale dot          (lifecycle 0.12-0.26, seg 2 dot->nebula grow)
-//   raw 88-100% content/settled   (lifecycle 0.00-0.12, seg 1 the dot hold — the
+// lifecycle under the reverse flip) on the ART-DIRECTION target grid. The marker
+// branch's 3a/3b nebula idle-hold split is folded in (one extra intermediate
+// breakpoint at lifecycle 0.31), so the table is now TWELVE spans while keeping the
+// art-direction chapter boundaries exactly:
+//   raw 0-15%   black hole        (lifecycle 0.85-1.00, segs 10-11)
+//   raw 15-23%  reverse collapse  (lifecycle 0.77-0.85, segs 8-9 — SHORTENED to a
+//               transition FLASH, not a chapter: collapse is ~8% of scroll, was 14%)
+//   raw 23-43%  red giant         (lifecycle 0.57-0.77, segs 6-7 — WIDENED to 20% so
+//               the reveal->limb-orbit->close-up staging has room)
+//   raw 43-57%  yellow star       (lifecycle 0.43-0.57, segs 4-5)
+//   raw 57-74%  nebula            (lifecycle 0.26-0.43, segs 3a-3b: idle hold + collapse)
+//   raw 74-90%  pale dot          (lifecycle 0.10-0.26, seg 2 dot->nebula grow)
+//   raw 90-100% content/settled   (lifecycle 0.00-0.10, seg 1 the dot hold — the
 //               HUD arms across this band; see HeroIsland's at-end edge).
-// The nebula chapter's single collapse span (0.16) is SPLIT into a short idle
-// held-frame (3a, 0.05, flat stage 3.42) + the remaining collapse (3b, 0.11);
-// 3a + 3b = 0.16, so the NEBULA chapter breakpoint is preserved exactly and only
-// ONE new intermediate breakpoint (0.31) is added. This idle hold is what the
-// strict idle-only marker gate (settledIdForStage) anchors the nebula markers to,
-// so they never show across the collapse transition. New STARTS prefix-sum:
-//   [0, 0.12, 0.26, 0.31, 0.42, 0.50, 0.57, 0.64, 0.72, 0.79, 0.86, 0.93, 1.0]
+// The nebula chapter's single collapse span (this branch's 0.17) is SPLIT into a
+// short idle held-frame (3a, 0.05, flat stage 3.42) + the remaining collapse
+// (3b, 0.12); 3a + 3b = 0.17, so the NEBULA chapter breakpoint (lifecycle 0.43) is
+// preserved exactly and only ONE new intermediate breakpoint (0.31) is added. That
+// idle hold is what the strict idle-only marker gate (settledIdForStage) anchors the
+// nebula markers to, so they never show across the collapse transition. The yellow
+// ignition span is the documented-grid 0.07 (an earlier draft shipped 0.08, which
+// pushed the prefix-sum to 1.01 and let the terminal band spill past p=1.0); it is
+// 0.07 here so STARTS lands on exactly 1.0. New STARTS prefix-sum (lifecycle):
+//   [0, 0.10, 0.26, 0.31, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]
 // The curve stays continuous + monotonic (stage falls 4.7 -> 0.0 as lifecycle
 // rises 0 -> 1); only WHICH scroll position maps to WHICH stage changed.
 // Two facts encoded honestly (both reproduce the curve; do NOT "tidy"):
@@ -137,7 +145,7 @@ export const SEGMENTS: readonly Segment[] = [
   // projects/articles read as primary.
   {
     sceneId: 'beginning',
-    weight: 0.12,
+    weight: 0.1,
     stageStart: 4.7,
     stageEnd: 4.5,
     easing: 'smoothstep',
@@ -148,7 +156,7 @@ export const SEGMENTS: readonly Segment[] = [
   // The PALE-DOT chapter (raw 74-88%): the simple far dot loosening toward the cloud.
   {
     sceneId: 'nebula',
-    weight: 0.14,
+    weight: 0.16,
     stageStart: 4.5,
     stageEnd: 3.42,
     easing: 'linear',
@@ -172,19 +180,24 @@ export const SEGMENTS: readonly Segment[] = [
   },
   // 3b — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02). The
   // NEBULA chapter proper (raw 58-74%). Pure transition now (the held-frame idle
-  // window moved to 3a above), so NO marker shows while the gas is collapsing.
+  // window moved to 3a above), so NO marker shows while the gas is collapsing. Weight
+  // is 0.12 (this branch's nebula collapse span was 0.17; 0.05 went to 3a, 0.12 stays
+  // here) so the art-direction nebula chapter boundary (lifecycle 0.43) is preserved.
   {
     sceneId: 'nebula',
-    weight: 0.11,
+    weight: 0.12,
     stageStart: 3.42,
     stageEnd: 3.02,
     easing: 'easeInOutCubic',
     phase: 'transition',
   },
-  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88).
+  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88). Weight is the
+  // documented-grid 0.07 (an earlier art-direction draft shipped 0.08, which pushed the
+  // prefix-sum to 1.01 and let the terminal band spill past p=1.0; 0.07 lands STARTS on
+  // exactly 1.0 — see the table header).
   {
     sceneId: 'yellow',
-    weight: 0.08,
+    weight: 0.07,
     stageStart: 3.02,
     stageEnd: 2.88,
     easing: 'easeOutCubic',
@@ -200,21 +213,26 @@ export const SEGMENTS: readonly Segment[] = [
     phase: 'idle',
     settledWindow: [2.875, 2.9],
   },
-  // 6 — RED grow: the giant grows, one continuous move (2.88 -> 2.05).
+  // 6 — RED grow: the giant grows, one continuous move (2.88 -> 2.05). WIDENED
+  // (0.07 -> 0.13) so the red-giant band owns raw 23-43%: this is the "reveal the
+  // full mass" + "limb orbit/drift along the surface" stretch (ITEM 1's first two
+  // beats), giving the camera room to arc around the body instead of snapping to the
+  // hold. The hold below then becomes the "close on the surface/active region" beat.
   {
     sceneId: 'red',
-    weight: 0.07,
+    weight: 0.13,
     stageStart: 2.88,
     stageEnd: 2.05,
     easing: 'easeInOutCubic',
     phase: 'transition',
   },
-  // 7 — RED hold: the flat red-giant beat (flat 2.05). Weight stays main's 0.08
-  // (the marker-branch's 0.104 borrowed from the nebula band under the OLD grid;
-  // the nebula idle split is now self-funded from main's 0.16, so red is unchanged).
+  // 7 — RED hold: the flat red-giant beat (flat 2.05). The settled close-up beat —
+  // the camera has pushed in to the active region by here (ITEM 1's third beat).
+  // Weight is the art-direction grid's 0.07; the tight settledWindow [2.03, 2.07] is
+  // the marker branch's strict idle-only gate (this is where the red marker shows).
   {
     sceneId: 'red',
-    weight: 0.08,
+    weight: 0.07,
     stageStart: 2.05,
     stageEnd: 2.05,
     easing: 'linear',
@@ -222,28 +240,33 @@ export const SEGMENTS: readonly Segment[] = [
     settledWindow: [2.03, 2.07],
   },
   // 8 — END collapse: stage JUMPS to 1.05 here (band 7 ended 2.05) then falls
-  // to 0.5 — the intentional discontinuity. easeInQuart.
+  // to 0.5 — the intentional discontinuity. easeInQuart. SHORTENED (0.07 -> 0.04):
+  // the reverse-collapse is a TRANSITION FLASH, not a chapter (ITEM 3) — it should
+  // read as the black-hole lensing line compressing inward into the red-giant surface
+  // in well under a second of scroll, not a held sunburst beat.
   {
     sceneId: 'end',
-    weight: 0.07,
+    weight: 0.04,
     stageStart: 1.05,
     stageEnd: 0.5,
     easing: 'easeInQuart',
     phase: 'transition',
   },
-  // 9 — END supernova: 0.5 -> 0.32, easeOutCubic.
+  // 9 — END supernova: 0.5 -> 0.32, easeOutCubic. SHORTENED (0.07 -> 0.04) — see seg 8.
   {
     sceneId: 'end',
-    weight: 0.07,
+    weight: 0.04,
     stageStart: 0.5,
     stageEnd: 0.32,
     easing: 'easeOutCubic',
     phase: 'transition',
   },
-  // 10 — END black-hole settle: 0.32 -> 0.08, easeOutExpo.
+  // 10 — END black-hole settle: 0.32 -> 0.08, easeOutExpo. WIDENED slightly
+  // (0.07 -> 0.08) to absorb the scroll the shortened collapse gave back, so the
+  // settle onto the centred hole stays smooth.
   {
     sceneId: 'end',
-    weight: 0.07,
+    weight: 0.08,
     stageStart: 0.32,
     stageEnd: 0.08,
     easing: 'easeOutExpo',
@@ -265,7 +288,7 @@ export const SEGMENTS: readonly Segment[] = [
 /** Prefix-sum of the segment weights — the progress breakpoints. Length is
  *  SEGMENTS.length + 1: STARTS[i] is span i's start progress, STARTS[i + 1] its
  *  end. Computed once at module load. Equals (to float precision)
- *  [0, 0.12, 0.26, 0.31, 0.42, 0.50, 0.57, 0.64, 0.72, 0.79, 0.86, 0.93, 1.0]. */
+ *  [0, 0.10, 0.26, 0.31, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]. */
 export const STARTS: readonly number[] = (() => {
   const out: number[] = [0];
   let acc = 0;
@@ -561,8 +584,8 @@ export const SCENES: readonly LifecycleScene[] = [
       // BOTTOM of the page. Copy is fully visible across the dot's hold (now widened
       // to 0.00 -> 0.12 = raw 88-100%, the content-unlock band), then fades as the
       // dot is left behind into the nebula grow.
-      at: 0.06,
-      text: { inStart: 0.0, inEnd: 0.02, outStart: 0.13, outEnd: 0.18 },
+      at: 0.05,
+      text: { inStart: 0.0, inEnd: 0.02, outStart: 0.12, outEnd: 0.17 },
       state: 'pale blue dot',
       down: 'I build software that stays understandable.',
       up: 'I build software that stays understandable.',
@@ -643,11 +666,12 @@ export const SCENES: readonly LifecycleScene[] = [
       // NEBULA — the cloud settles into its held frame around stage 3.42 (~0.26 now)
       // and dwells through the collapse band (raw 58-74%). The headline fades in as
       // the cloud settles (~0.27) and out before the yellow ignition (~0.42).
-      at: 0.34,
-      text: { inStart: 0.27, inEnd: 0.3, outStart: 0.4, outEnd: 0.42 },
+      at: 0.35,
+      text: { inStart: 0.28, inEnd: 0.31, outStart: 0.41, outEnd: 0.43 },
       state: 'nebula',
-      down: 'One boundary can outlive a thousand generated lines.',
-      up: 'One boundary can outlive a thousand generated lines.',
+      // ITEM 8: a clear boundary in the raw material saves a thousand future decisions.
+      down: 'One clear boundary can save a thousand future decisions.',
+      up: 'One clear boundary can save a thousand future decisions.',
       whisper: 'prompts, diffs, failing tests, half-ideas. raw material, not magic.',
     },
   },
@@ -735,13 +759,15 @@ export const SCENES: readonly LifecycleScene[] = [
     // touch longer here than the brighter nebula/yellow beats. Gentle by design.
     dwell: { strength: 0.5 },
     beat: {
-      // RED GIANT — the hold band (stage 2.05, progress ~0.64 -> 0.72, raw 28-36%).
-      // The headline sits in the orbit's settled stretch.
-      at: 0.68,
-      text: { inStart: 0.645, inEnd: 0.665, outStart: 0.705, outEnd: 0.72 },
+      // RED GIANT — the settled close-up hold band (stage 2.05, progress ~0.70 -> 0.77,
+      // raw 23-30%). The headline sits in the close-up stretch AFTER the reveal + limb
+      // orbit, so it reads on the surface/active-region beat (ITEM 1's third stage).
+      at: 0.735,
+      text: { inStart: 0.705, inEnd: 0.72, outStart: 0.76, outEnd: 0.77 },
       state: 'red giant',
-      down: 'My work is to keep the center readable.',
-      up: 'My work is to keep the center readable.',
+      // ITEM 8: complexity expands as the giant bloats — the work is to keep the centre readable.
+      down: 'Complexity expands. My work is to keep the center readable.',
+      up: 'Complexity expands. My work is to keep the center readable.',
       whisper: 'The AI keeps adding. Nobody is left who understands it.',
     },
   },
@@ -795,8 +821,11 @@ export const SCENES: readonly LifecycleScene[] = [
       at: 0.965,
       text: { inStart: 0.94, inEnd: 0.95, outStart: 1.02, outEnd: 1.02 },
       state: 'black hole',
-      down: 'Explore the projects.',
-      up: 'Explore the projects.',
+      // ITEM 8: the cinematic opening line — quiet, gravitational, not a direct CTA.
+      // ("Explore the projects." moves to the unlocked HUD/project state — see the
+      // black-hole HUD nav row's destination below.)
+      down: 'Under pressure, structure remains.',
+      up: 'Under pressure, structure remains.',
       whisper: 'Even the repo you were proud of can collapse.',
     },
   },
@@ -876,14 +905,21 @@ const NEBULA_GATHERED_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
 // the origin (no off-axis lean), steady z. Stillness vs the red orbit either side.
 const YELLOW_HOLD_POS: Vec3Tuple = [0.0, 0.0, 17.4];
 const YELLOW_HOLD_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
-// RED GIANT (raw 28-43%): a LATERAL ORBIT around the huge surface. The orb stays at
-// the world origin (radius ≈ 10.5); the camera ARCS from one side (ORBIT_A) to the
-// other (ORBIT_B), swinging x AND z and panning the look target across the limb, so
-// it reads as travelling AROUND the body — NOT a static corner. Camera move only.
-const RED_ORBIT_A_POS: Vec3Tuple = [-7.2, -4.2, 36.0];
-const RED_ORBIT_A_TGT: Vec3Tuple = [-8.4, -3.6, 6.5];
-const RED_ORBIT_B_POS: Vec3Tuple = [6.4, -3.0, 34.5];
-const RED_ORBIT_B_TGT: Vec3Tuple = [7.6, -2.4, 6.5];
+// RED GIANT (raw 23-43%, ITEM 1): a three-beat cinematic — REVEAL the full mass ->
+// LIMB ORBIT/drift along the surface -> PUSH IN to a surface/active-region close-up.
+// The orb stays at the world origin (radius ≈ 10.5) the whole time; only the camera
+// moves (no re-geometry). Three poses drive it:
+//   REVEAL  — pulled BACK + slightly off-centre so the WHOLE grown giant reads as it
+//             inflates out of the yellow swap (the "reveal the full mass" arrival).
+//   CLOSE   — PUSHED IN (z 39.5 -> 27.5) and panned across the limb to an active region
+//             (sunspot/plage cluster, upper-left): the close-on-surface beat. Aimed
+//             nearer the surface so the granulation/active region reads big.
+// The limb orbit + the push-in are ONE continuous move REVEAL -> CLOSE across the hold
+// (ITEM 1's beats 2+3): the camera arcs along the surface as it dives in.
+const RED_REVEAL_POS: Vec3Tuple = [4.6, -1.8, 41.5];
+const RED_REVEAL_TGT: Vec3Tuple = [2.6, -0.9, 4.5];
+const RED_CLOSE_POS: Vec3Tuple = [-5.6, -0.4, 24.5];
+const RED_CLOSE_TGT: Vec3Tuple = [-7.0, -1.6, 8.6];
 // REVERSE SUPERNOVA (raw 14-28%): compress inward — the camera eases toward the core
 // as the particles pull in. COLLAPSE_PULL (outer, p~0.72) -> SUPERNOVA_RECOIL (inner,
 // p~0.86), recentring on the implosion.
@@ -918,12 +954,12 @@ interface CameraBand {
 // Breakpoints reused by the camera bands (the same numbers as the RE-TIMED stage
 // table; the camera shares them so the pose moves in lockstep with the morph).
 const NEBULA_GROW_END = 0.26;
-const STAR_IGNITION_START = 0.42;
+const STAR_IGNITION_START = 0.43;
 const YELLOW_SETTLE_END = 0.5;
 const YELLOW_HOLD_END = 0.57;
-const RED_HOLD_START = 0.64;
-const RED_HOLD_END = 0.72;
-const DOT_HOLD_END = 0.12;
+const RED_HOLD_START = 0.7;
+const RED_HOLD_END = 0.77;
+const DOT_HOLD_END = 0.1;
 
 // CAMERA_BANDS are keyed to lifecycle p; scrolling DOWN, p decreases 1 -> 0, so the
 // visitor walks these bands 10 -> 1. Each band's chapter (raw-scroll band noted) and
@@ -981,51 +1017,54 @@ const CAMERA_BANDS: readonly CameraBand[] = [
     targetEnd: YELLOW_HOLD_TGT,
     parallax: 0.03,
   },
-  // 5 — YELLOW -> RED orbit entry (raw 36-43%): one continuous travel from the
-  // centred yellow hold out to the orbit's B side (the camera swings off-axis as the
-  // giant grows). easeInOutCubic so it eases into the arc without a snap.
+  // 5 — YELLOW -> RED GIANT REVEAL (raw 33-43%, ITEM 1 beat 1): one continuous travel
+  // from the centred yellow hold out to the REVEAL pose as the giant inflates — the
+  // camera pulls BACK (z 17.4 -> 39.5) and off-centre so the WHOLE grown red giant
+  // reads as it arrives. easeInOutCubic so it eases into the reveal without a snap.
   {
     endProgress: RED_HOLD_START,
     interp: [YELLOW_HOLD_END, RED_HOLD_START],
     easing: 'easeInOutCubic',
     posStart: YELLOW_HOLD_POS,
-    posEnd: RED_ORBIT_B_POS,
+    posEnd: RED_REVEAL_POS,
     targetStart: YELLOW_HOLD_TGT,
-    targetEnd: RED_ORBIT_B_TGT,
+    targetEnd: RED_REVEAL_TGT,
     parallax: 0.025,
   },
-  // 6 — RED GIANT lateral ORBIT (raw 28-36%): the camera ARCS around the huge body,
-  // ORBIT_B -> ORBIT_A (x swings +6.4 -> -7.2, z 34.5 -> 36, the look target pans
-  // across the limb), so it reads as moving AROUND the surface, not a static corner.
-  // The orb itself never leaves the origin — this is a pure camera move. easeInOutCubic
-  // for a smooth in/out sweep; the red-hold micro-drift rides subordinate on top.
+  // 6 — RED GIANT LIMB ORBIT + CLOSE-UP (raw 23-33%, ITEM 1 beats 2+3): from the
+  // pulled-back reveal the camera ARCS along the limb (x swings +4.6 -> -5.2, the look
+  // target pans across the surface) WHILE diving IN (z 39.5 -> 27.5) to a surface /
+  // active-region close-up — so it reads as travelling AROUND the body and then
+  // settling onto its surface, never a static corner. ONE continuous move; the orb
+  // never leaves the origin (pure camera move). The red-hold micro-drift rides on top.
   {
     endProgress: RED_HOLD_END,
     interp: [RED_HOLD_START, RED_HOLD_END],
     easing: 'easeInOutCubic',
-    posStart: RED_ORBIT_B_POS,
-    posEnd: RED_ORBIT_A_POS,
-    targetStart: RED_ORBIT_B_TGT,
-    targetEnd: RED_ORBIT_A_TGT,
+    posStart: RED_REVEAL_POS,
+    posEnd: RED_CLOSE_POS,
+    targetStart: RED_REVEAL_TGT,
+    targetEnd: RED_CLOSE_TGT,
     parallax: 0.015,
   },
-  // 7 — REVERSE SUPERNOVA, outer (raw 21-28%): from the orbit's A side the camera
-  // compresses inward toward the collapse core as the particles pull in.
+  // 7 — REVERSE COLLAPSE, outer (raw 19-23%): from the red-giant CLOSE-UP the camera
+  // compresses inward toward the collapse core as the particles pull in. SHORTENED
+  // band (ITEM 3) — the inward compress is brief, the collapse is a flash not a beat.
   {
-    endProgress: 0.79,
-    interp: [RED_HOLD_END, 0.79],
+    endProgress: 0.81,
+    interp: [RED_HOLD_END, 0.81],
     easing: 'easeInOutCubic',
-    posStart: RED_ORBIT_A_POS,
+    posStart: RED_CLOSE_POS,
     posEnd: COLLAPSE_PULL_POS,
-    targetStart: RED_ORBIT_A_TGT,
+    targetStart: RED_CLOSE_TGT,
     targetEnd: COLLAPSE_PULL_TGT,
     parallax: 0.0,
   },
-  // 8 — REVERSE SUPERNOVA, inner (raw 14-21%): continue the inward compress, recoiling
-  // toward the recentred implosion as the energy gathers in.
+  // 8 — REVERSE COLLAPSE, inner (raw 15-19%): continue the inward compress, recoiling
+  // toward the recentred implosion as the energy gathers in. SHORTENED band (ITEM 3).
   {
-    endProgress: 0.86,
-    interp: [0.79, 0.86],
+    endProgress: 0.85,
+    interp: [0.81, 0.85],
     easing: 'easeInOutCubic',
     posStart: COLLAPSE_PULL_POS,
     posEnd: SUPERNOVA_RECOIL_POS,
@@ -1033,10 +1072,10 @@ const CAMERA_BANDS: readonly CameraBand[] = [
     targetEnd: SUPERNOVA_RECOIL_TGT,
     parallax: 0.0,
   },
-  // 9 — BLACK HOLE settle (raw 7-14%): finish the recentre onto the now-centred hole.
+  // 9 — BLACK HOLE settle (raw 7-15%): finish the recentre onto the now-centred hole.
   {
     endProgress: 0.93,
-    interp: [0.86, 0.93],
+    interp: [0.85, 0.93],
     easing: 'easeOutExpo',
     posStart: SUPERNOVA_RECOIL_POS,
     posEnd: BLACK_HOLE_SETL_POS,

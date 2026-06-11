@@ -28,13 +28,17 @@ const NR = GIANT_R * 1.3;
 const ELL = new THREE.Vector3(1.55, 0.78, 1.15);
 
 export function buildStreak(scene: THREE.Scene, _particleCount: number, pixelRatio: number): StreakRig {
-  // Sparse: a few hundred distinct lanes. Independent of the particle budget — the
-  // look wants separated streaks, not density. Each streak is one line segment.
-  const STREAKS = 520;
+  // ITEM 6: REDUCE the line noise around the final dot. The lane count is cut ~30%
+  // (520 -> 360) and the field is split into TWO opacity tiers: most lanes are FAINT
+  // (rgba(160,185,255,0.18)) and only a few — ~7 — are STRONG structural rays
+  // (rgba(210,225,255,0.38)). Net: precision/clarity/signal, not a wireframe explosion.
+  const STREAKS = 360;
+  const STRONG_RAYS = 7; // the few strong structural rays; the rest are faint
   const V = STREAKS * 2;
   const anchor = new Float32Array(V * 3); // world-space gas anchor (shared by both verts)
   const seed = new Float32Array(V);
   const end = new Float32Array(V); // 0 = inner (at the gas point), 1 = outer (stretched out)
+  const strong = new Float32Array(V); // 1 = strong structural ray, 0 = faint lane
   for (let i = 0; i < STREAKS; i++) {
     // a hashed point inside the nebula ellipsoid volume (rim-biased a touch so the
     // lanes spread across the frame rather than clustering dead-centre).
@@ -46,17 +50,23 @@ export function buildStreak(scene: THREE.Scene, _particleCount: number, pixelRat
     const y = u * ELL.y * rad;
     const z = sp * Math.sin(phi) * ELL.z * rad;
     const sd = Math.random();
+    // The first STRONG_RAYS lanes are the strong structural rays (tier 1); the rest are
+    // faint (tier 0). Because the anchor points are randomised the strong rays are still
+    // spread across the frame, not clustered.
+    const isStrong = i < STRONG_RAYS ? 1 : 0;
     const i0 = i * 2;
     const i1 = i0 + 1;
     anchor[i0 * 3] = x; anchor[i0 * 3 + 1] = y; anchor[i0 * 3 + 2] = z;
     anchor[i1 * 3] = x; anchor[i1 * 3 + 1] = y; anchor[i1 * 3 + 2] = z;
     seed[i0] = sd; seed[i1] = sd;
     end[i0] = 0; end[i1] = 1;
+    strong[i0] = isStrong; strong[i1] = isStrong;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(anchor, 3));
   geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
   geo.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
+  geo.setAttribute('aStrong', new THREE.BufferAttribute(strong, 1));
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
   const uniforms: Uniforms = {

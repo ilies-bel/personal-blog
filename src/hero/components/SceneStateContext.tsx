@@ -20,6 +20,20 @@ export interface SceneState {
    *  scrolled past. Drives the quiet "you are here" marker so the rail tracks
    *  scroll position without expanding. */
   scrollHudId: HudTargetId | null;
+  /** The lifecycle scene the live scroll position is ON (from sceneForProgress).
+   *  Internal ids: beginning | nebula | yellow | red | end. Drives the per-scene HUD
+   *  colour tokens + the yellow-star designed-ring overlay. */
+  sceneId: HudTargetId;
+  /** The scene id mapped to the public art-direction data-scene name
+   *  (blackhole | red-giant | yellow-star | nebula | final), set as data-scene on the
+   *  hero root so the CSS per-scene HUD token blocks can key off it. */
+  dataScene: 'blackhole' | 'red-giant' | 'yellow-star' | 'nebula' | 'final';
+  /** True when the hero chrome currently overlaps a BRIGHT lifecycle zone — the
+   *  supernova whiteout flash and the bright yellow-star beat. Drives the adaptive
+   *  dark-stroke UI: when true the overlay flips chrome text/strokes to a dark
+   *  graphite for legibility against the bright canvas; false over the dark states
+   *  (black hole / red giant / nebula / dot), where warm bone reads cleanly. */
+  brightZone: boolean;
   /** import.meta.env.BASE_URL, resolved once. */
   base: string;
 }
