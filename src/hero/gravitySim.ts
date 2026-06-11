@@ -80,12 +80,12 @@ export const NOISE_GLSL = /* glsl */ `
  */
 export const NEBULA_PLACE_FN = /* glsl */ `
   vec3 nebulaPlace(float aSeed, float aU, float aPhase, float uTime, float uGiantR){
-    // a ROUND volume (near-spherical, kept slightly irregular so it still feels
-    // organic rather than a perfect CGI ball). MUST stay byte-identical to the
-    // ELL in disk.glsl.ts — the sim seed and analytic placement share it.
-    // ELL is pulled close to a unit sphere (was 1.12/0.95/1.06) so the cloud reads
-    // as a CIRCLE, not a boxy ellipsoid.
-    vec3 ELL = vec3(1.04, 1.0, 1.02);
+    // ITEM 5: a LESS-circular volume that reads as RAW MATERIAL / unfinished gas, not a
+    // decorative magic ball. The placement is the SINGLE source shared by the sim seed
+    // AND the analytic render (disk.glsl imports this fn), so both stay in lockstep.
+    // ELL is made ASYMMETRIC again (stretched on X/Z, squashed on Y) so the silhouette
+    // is an oblique cloud, not a circle.
+    vec3 ELL = vec3(1.22, 0.86, 1.10);
     float NR = uGiantR * 1.72;                          // overall nebula extent (bigger → fills the frame)
     vec3 nDrift = vec3(uTime*0.006, uTime*0.004, -uTime*0.005);
 
@@ -94,11 +94,8 @@ export const NEBULA_PLACE_FN = /* glsl */ `
       h31(vec3(aSeed*7.0,  aPhase*9.0, 23.0)),
       h31(vec3(aU*29.0,    aPhase*3.0, 41.0))
     );
-    // UNIFORM point in a BALL. The old normalize(cube) biased directions toward the 8
-    // cube corners → the cloud clumped along the diagonals and read as a rounded BOX.
-    // Instead pick a UNIFORM direction on the unit sphere (z = 1-2u, azimuth 2*pi*v)
-    // and a cube-root radius so density is even out to NR — a true round ball, no
-    // corner bias, no rectangular silhouette.
+    // UNIFORM point in a BALL: pick a uniform direction on the unit sphere (z = 1-2u,
+    // azimuth 2*pi*v) and a cube-root radius so density is even out to NR.
     float uz = hh.x * 2.0 - 1.0;                        // cos(theta), uniform in [-1,1]
     float az = hh.y * 6.2831853;                        // azimuth, uniform in [0,2pi)
     float rad = sqrt(max(0.0, 1.0 - uz*uz));
@@ -106,13 +103,28 @@ export const NEBULA_PLACE_FN = /* glsl */ `
     float rr = pow(hh.z, 0.3333);                        // even volumetric fill
     vec3 p0 = dir * rr * NR;
     p0 *= ELL;
+    // DIAGONAL SHEAR: shear X by Z (and a touch Y by X) so the cloud leans on a diagonal
+    // axis instead of sitting axis-aligned — reads as wind-blown raw gas, not a symmetric ball.
+    p0.x += p0.z * 0.34 + p0.y * 0.10;
+    p0.y += p0.x * 0.08;
 
     vec3 warp = vec3(
       fbm(p0*0.42 +  3.0 + nDrift),
       fbm(p0*0.42 + 17.0 + nDrift),
       fbm(p0*0.42 + 41.0 + nDrift)
     ) - 0.5;
-    vec3 wp = p0 + warp * (NR * 0.75);
+    vec3 wp = p0 + warp * (NR * 0.85);                   // a touch more warp → raggeder edges
+
+    // EMPTY HOLES (ITEM 5): carve voids through the cloud so it reads as fragments /
+    // unfinished paths, not a solid magic cloud. A low-frequency noise mask over the
+    // placement decides where the gas is thin: in the void pockets (mask below a
+    // threshold) particles are PUSHED radially outward (so the inner pocket empties and
+    // the gas piles into raggeder filaments around it). Deterministic in the seed, so it
+    // is identical every visit and the sim's home target carves the same holes.
+    float holeMask = fbm(wp*0.30 + 53.0);               // 0..1 lumpy field over the cloud
+    float voidAmt = smoothstep(0.52, 0.30, holeMask);   // 1 deep in a void pocket → 0 in the gas
+    wp += normalize(wp + 1e-4) * voidAmt * (NR * 0.42); // push void gas outward → hollow pockets
+
     return wp;
   }
 `;

@@ -49,6 +49,30 @@
   background: #000;
   overflow: hidden;
 }
+
+/* NEBULA left-edge text scrim (ITEM 5): a soft left→right darkening behind the left
+   text column so the headline reads premium against the (now rightward-shifted) cold
+   violet cloud. The pseudo is ALWAYS present (so the opacity transition can ease) but is
+   fully transparent except when data-scene='nebula'. Fixed full-viewport, behind the
+   manifesto overlay (z 10) but above the canvas (z 0); pointer-events:none. */
+.bh-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.72) 0%,
+    rgba(0, 0, 0, 0.35) 32%,
+    rgba(0, 0, 0, 0) 60%
+  );
+  opacity: 0;                /* invisible off the nebula beat */
+  transition: opacity 0.5s var(--ease-out-quint);
+}
+.bh-root[data-scene='nebula']::before {
+  opacity: 1;               /* the scrim fades in only during the nebula chapter */
+}
 .bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
 
 /* Backdrop mode (reading pages): the SAME pinned scene, pushed back so front copy

@@ -156,6 +156,19 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     position = [position[0] + breathe * 0.6, position[1] + breathe * 0.35, position[2] + breathe * 0.8];
   }
 
+  // NEBULA RIGHTWARD SHIFT (ITEM 5): pan the framing so the cloud sits RIGHT of centre,
+  // leaving the left column for the text (paired with the left-edge scrim in CSS). Moving
+  // the camera + look target by the SAME -x vector pans the view left → the cloud appears
+  // shifted RIGHT on screen (~6vw at this z). Windowed to the nebula band (the same
+  // nebulaBand weight as the breathing drift) so it eases in/out and never bleeds into the
+  // yellow hold or the dot. The offset rides nebulaBand (0 outside), so it is a no-op
+  // everywhere else; reduced motion keeps it (it's a static framing offset, not motion).
+  const NEBULA_SHIFT_X = -3.4; // world-x; with the cloud at origin and z~40 this reads ~6vw right
+  if (nebulaBand > 0) {
+    position = [position[0] + NEBULA_SHIFT_X * nebulaBand, position[1], position[2]];
+    target = [target[0] + NEBULA_SHIFT_X * nebulaBand, target[1], target[2]];
+  }
+
   // REVERSE-SUPERNOVA shudder — eased to BUILD INTO the implosion rather than a
   // symmetric burst. `nova` is the Gaussian envelope (peaks mid-blast); the implosion
   // GATHERS as the lifecycle runs toward the black hole (p increases through the

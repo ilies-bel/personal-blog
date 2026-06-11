@@ -1828,27 +1828,33 @@ export const diskFragmentShader = /* glsl */ `
         // touch relative to green so the deep gas reads blue-violet, not pure navy);
         // the dense-gas stop is pulled toward cold BLUE-WHITE (red lifted 0.34→0.55 so
         // it no longer reads cyan/teal); the crest stays cold blue-white.
+        // ITEM 5 palette: the COLDEST scene after the black hole — push the OUTER gas
+        // toward BLUE-VIOLET and keep the mid cold-white/ice. cNavy -> violet #7D6AE8
+        // (the deep outer haze), cBlue -> blue #8EA8FF, cCyan -> cold-white #DDE7FF,
+        // cIce -> ice #BFD4FF. A small soft cream/gold core (#E8C46A) is mixed in only at
+        // the very centre below (it comes from the just-formed yellow star). The eye-reset
+        // after the warm red/yellow chapters: a cold violet-blue cloud, not a teal one.
         float rr = clamp(vNeb, 0.0, 1.0);
-        vec3 cNavy = vec3(0.12, 0.08, 0.30);  // 0.00 deep blue-VIOLET (thin outer haze)
-        vec3 cBlue = vec3(0.26, 0.30, 0.70);  // 0.35 mid blue with a violet lean
-        vec3 cCyan = vec3(0.55, 0.74, 0.96);  // 0.70 cold blue-white (dense gas, less green)
-        vec3 cIce  = vec3(0.82, 0.93, 1.00);  // 1.00 icy cold blue-white (hot cores)
+        vec3 cNavy = vec3(0.49, 0.42, 0.91);  // 0.00 deep VIOLET #7D6AE8 (thin outer haze)
+        vec3 cBlue = vec3(0.56, 0.66, 1.00);  // 0.35 blue #8EA8FF (mid-outer gas)
+        vec3 cCyan = vec3(0.87, 0.91, 1.00);  // 0.70 cold-white #DDE7FF (denser gas)
+        vec3 cIce  = vec3(0.75, 0.83, 1.00);  // 1.00 ice #BFD4FF (hot cores, cold blue-white)
         vec3 ncol = mix(cNavy, cBlue, smoothstep(0.00, 0.40, rr));
         ncol = mix(ncol, cCyan, smoothstep(0.35, 0.78, rr));
         ncol = mix(ncol, cIce,  smoothstep(0.74, 1.00, rr));
-        // MINIMAL AMBER accents: a SPARSE fraction of grains (a per-particle hash gated
-        // to the top ~6%) take a faint amber tint — the "minimal amber accents" of the
-        // spec (scattered warm young-star embers in the cold cloud), never dominant.
-        float amberPick = step(0.94, fract(vSeed * 71.7));        // ~6% of grains
-        vec3 cAmber = vec3(1.00, 0.74, 0.42);                     // faint amber accent
-        ncol = mix(ncol, cAmber, amberPick * 0.55 * (0.4 + 0.6*rr));
-        // MASS → HEAT → COLOUR: the densest gas clusters carry the most mass, so
-        // they read HOTTER — pushed hard toward hot blue-white (the same heat
-        // language as the young forming star). vHeat already tracks local density
-        // (dens), so high vHeat = dense = hot. The bright cores bloom to blue-white.
+        // ITEM 5: MINIMAL warm accents — sparser + fainter than before so the cloud reads
+        // dominantly cold violet-blue (the eye-reset). Reduced to ~3% of grains at low tint.
+        float amberPick = step(0.97, fract(vSeed * 71.7));        // ~3% of grains (was ~6%)
+        vec3 cAmber = vec3(0.91, 0.77, 0.42);                     // faint soft-gold #E8C46A accent
+        ncol = mix(ncol, cAmber, amberPick * 0.40 * (0.4 + 0.6*rr));
+        // MASS → HEAT → COLOUR: the densest gas clusters carry the most mass. ITEM 5: the
+        // VERY-CENTRE dense core takes a small soft CREAM/GOLD tint (#E8C46A) — it comes
+        // from the just-formed yellow star at the centre — while the rest of the cores stay
+        // cold blue-white. The gold is gated to the densest gas (high vHeat) so it only
+        // shows in the very centre; the broad cloud stays cold violet-blue.
         float core = smoothstep(0.85, 1.70, vHeat);              // dense/hot cores
-        ncol = mix(ncol, vec3(0.62, 0.80, 1.00), core*0.55);     // hot azure
-        ncol = mix(ncol, vec3(0.92, 0.97, 1.00), smoothstep(1.25, 1.75, vHeat)*0.7); // white-hot peak
+        ncol = mix(ncol, vec3(0.62, 0.74, 1.00), core*0.45);     // cold azure cores (less green)
+        ncol = mix(ncol, vec3(0.91, 0.77, 0.42), smoothstep(1.45, 1.85, vHeat)*0.42); // small soft-gold CENTRE core (#E8C46A)
         // scattered young stars read crisp blue-white, off-ramp.
         ncol = mix(ncol, vec3(0.85, 0.92, 1.00), step(2.4, vPlaceholder));
         // GRAVITATIONAL COLLAPSE: as gas accretes onto the forming star (vSimLife
@@ -1925,8 +1931,11 @@ export const diskFragmentShader = /* glsl */ `
       } else {
         // diffuse smoke: thin haze stays DIM, but the dense pockets (high vHeat) bloom
         // into bright lit cores → the strong dim↔bright contrast of backlit smoke.
+        // ITEM 5: the CENTRAL bright cores are pulled DOWN ~20% (core boost 2.2 -> 1.75)
+        // so the bright centre — which sits behind the left text column — reads quieter,
+        // letting the headline keep authority. The dim haze is unchanged.
         float coreBoost = smoothstep(0.7, 1.4, vHeat);        // 0 in haze → 1 in dense cores
-        inten = a * (0.04 + 0.26*clamp(vBright, 0.0, 1.3)) * (1.0 + 2.2*coreBoost);
+        inten = a * (0.04 + 0.26*clamp(vBright, 0.0, 1.3)) * (1.0 + 1.75*coreBoost);
       }
       inten *= vNebLight;   // ambient+depth light model: dim far / self-occluded gas
     } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
