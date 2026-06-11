@@ -25,6 +25,7 @@ import { sceneForProgress } from '../sceneTable';
 import { prefersReducedMotion, detectDeviceTier } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
+  AT_OPENING_BODY_CLASS,
   HUD_BOOTING_BODY_CLASS,
   HUD_POWER_EVENT,
   type HudPowerEventDetail,
@@ -176,6 +177,9 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Whether the opening chrome (name + menu) is currently shown. Tracked in a ref
   // so the scroll callback only touches the DOM on an actual transition.
   const chromeVisibleRef = useRef(true);
+  // Whether scroll is still in the opening hold (progress <= SCROLL_HINT_DISMISS_AT).
+  // Ref-tracked so the body class only flips on an actual transition, not every sample.
+  const atOpeningRef = useRef(true);
   // Whether real scroll progress has reached the black hole (bottom hero). When
   // this flips, the island REQUESTS a HUD power change (dispatches HUD_POWER_EVENT)
   // rather than owning body.hud-active itself — the boot FSM in BaseLayout is the
@@ -274,6 +278,19 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         );
       }
 
+      // Opening hold: while scroll is still on the black-hole opening frame (at/under
+      // SCROLL_HINT_DISMISS_AT) the page shows only the three opening layers (brand,
+      // bottom-centre status, the central focus dot); the full section nav + left HUD
+      // rail are held hidden via body.at-opening and fade in once the visitor scrolls
+      // past. Ref-guarded so the DOM is only touched on the actual transition. Placed
+      // BEFORE the chrome-visibility block below (which early-returns) so this toggle
+      // always runs on every syncChrome call.
+      const atOpening = progressRef.current <= SCROLL_HINT_DISMISS_AT;
+      if (atOpening !== atOpeningRef.current) {
+        atOpeningRef.current = atOpening;
+        document.body.classList.toggle(AT_OPENING_BODY_CLASS, atOpening);
+      }
+
       const visible = progressRef.current < CHROME_HIDE_AT || explorationModeRef.current;
       if (visible === chromeVisibleRef.current) return;
       chromeVisibleRef.current = visible;
@@ -322,6 +339,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     publishedProgressRef.current = initial.progress;
     lastProgressRef.current = initial.progress;
     setProgress(initial.progress);
+    // Seed the opening-hold class from the initial scroll position so the page opens
+    // in the right state (only the three opening layers) before the first scroll
+    // sample — then syncChrome flips it on the transition out of the hold.
+    const initialAtOpening = initial.progress <= SCROLL_HINT_DISMISS_AT;
+    atOpeningRef.current = initialAtOpening;
+    document.body.classList.toggle(AT_OPENING_BODY_CLASS, initialAtOpening);
 
     // One normalized forward progress value owns the public choreography. The
     // shader stage is a legacy implementation coordinate derived from it.
@@ -414,12 +437,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // state is the source of truth across an SPA unmount/reload. Reset the
       // at-end edge tracker so a re-mount re-evaluates and re-requests from scratch.
       hudAtEndRef.current = false;
+      // Reset the opening-hold edge tracker too, so a re-mount re-seeds from the live
+      // scroll position rather than inheriting a stale "in the opening hold" flag.
+      atOpeningRef.current = false;
       // Also clear the no-WebGL fallback class so a fresh mount (e.g. a motion-preference
       // re-run, or an SPA return that re-creates the island) re-evaluates WebGL from a
       // clean slate instead of inheriting a stale "unavailable" note. If WebGL is still
       // unavailable the next mount simply re-adds it. (SCENE_READY stays owned by the
       // loader script — we never strip it here.)
-      document.body.classList.remove(SCROLLED_BODY_CLASS, HUD_BOOTING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS);
+      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, HUD_BOOTING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS);
     };
   }, [backdrop, backdropStage, motionPreferenceVersion]);
 
@@ -533,6 +559,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         <YellowStarRing />
         <HeroIdentity />
         <ManifestoOverlay />
+        {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
+            black hole. Shown only while body.at-opening (the opening hold); fades out
+            once the visitor scrolls past. aria-hidden — pure decoration. */}
+        <div className="bh-focus-dot" aria-hidden="true" />
         {/* One marker per placement, all mounted at once. Each instance gates its
             own visibility on its state being the settled one (the nebula owns three;
             the others one each) — no mount/unmount thrash, lock ownership is

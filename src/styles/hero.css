@@ -385,6 +385,41 @@ body.bare.hud-active .bh-identity-role { color: var(--fg-dim); }
    WITH the scene, never over the loader. The boot readout owns the bottom-centre
    status line during the wait. */
 body:not(.scene-ready) .bh-overlay { opacity: 0; }
+
+/* Central focus dot — one soft speck dead-centre on the black hole, shown ONLY on
+   the opening frame (body.at-opening). A quiet aiming point: no ring, no ticks, no
+   animation. Fixed-centre, low z so it sits over the manifesto vignette but under
+   the corner chrome, pointer-events:none (purely decorative). Fades on the
+   opening-hold seam. Uses --fg-overlay (the cool overlay bone the manifesto /
+   identity use over the live scene) so it stays on-palette against the black hole. */
+.bh-focus-dot {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 0.45rem;
+  height: 0.45rem;
+  transform: translate(-50%, -50%) scale(0.8);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--fg-overlay) 0%,
+    color-mix(in oklch, var(--fg-overlay) 40%, transparent) 55%, transparent 75%);
+  box-shadow: 0 0 10px 2px color-mix(in oklch, var(--fg-overlay) 28%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 11; /* above .bh-overlay (10), below the corner chrome (20/21) */
+  transition:
+    opacity 0.6s var(--ease-out-quint),
+    transform 0.6s var(--ease-out-quint);
+}
+/* Only on the opening frame — and only once the scene has actually painted, so the
+   dot never sits over the intro loader (mirrors the .bh-overlay scene-ready gate). */
+body.scene-ready.at-opening .bh-focus-dot {
+  opacity: 0.55;
+  transform: translate(-50%, -50%) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bh-focus-dot { transition: opacity 0.2s linear; }
+}
+
 .bh-overlay::before {
   content: '';
   position: absolute;

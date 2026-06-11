@@ -57,6 +57,16 @@
 }
 .hud-system[data-visible='true']::before { opacity: 0; }
 
+/* Opening hold: the left HUD rail is DELAYED — kept hidden on the opening frame
+   even though explorationMode (data-visible) is true from scroll 0, then revealed
+   once the visitor scrolls past the opening. Reuses the same eased opacity/
+   transform transition already on .hud-system. */
+body.at-opening .hud-system[data-visible='true'] {
+  opacity: 0;
+  transform: translateX(-0.75rem);
+  pointer-events: none;
+}
+
 /* Short desktop viewports: the EXPANDED (hud-active) rail widens its row pitch to
    5rem, making the band ~24.5rem tall — too tall to clear the bottom-left copy on
    short screens. Lift the band a little higher AND cap the expanded pitch so it
