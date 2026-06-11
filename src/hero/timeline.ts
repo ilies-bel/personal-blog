@@ -61,18 +61,19 @@ export { smoothstep };
 // RE-TIMED for the "one continuous mechanism" chapter grid (raw 0-14% black hole ...
 // 88-100% content). These lifecycle-progress breakpoints stay in lockstep with the
 // RE-TIMED SEGMENTS/CAMERA tables in sceneTable.ts (same numbers, same order).
-const DOT_HOLD_END = 0.12;        // dot hold (content-unlock band, raw 88-100%)
+const DOT_HOLD_END = 0.1;         // dot hold (content-unlock band, raw 90-100%)
 const NEBULA_GROW_END = 0.26;     // dot->nebula grow ends; nebula proper begins
-const STAR_IGNITION_START = 0.42; // nebula collapse ends; yellow ignites
+const STAR_IGNITION_START = 0.43; // nebula collapse ends; yellow ignites
 const YELLOW_SETTLE_END = 0.5;    // yellow ignition resolves into the centred hold
 // The yellow star HOLDS centred across YELLOW_SETTLE_END→YELLOW_HOLD_END so the dwell
 // resolves into a real, still beat (headline reads on the blazing sun). Only AFTER this
 // hold does the giant grow + the camera swing into the lateral orbit — so yellow→red
 // reads as ONE move (grow + arc around the body) instead of "dive in, then reverse out".
 const YELLOW_HOLD_END = 0.57;     // yellow hold ends; the red-giant grow/orbit begins
-// Red-giant hold band. Named so camera and stage use the same numbers.
-const RED_HOLD_START = 0.64;      // red grow ends; the settled red-giant orbit hold begins
-const RED_HOLD_END = 0.72;        // red-giant hold ends; the reverse-supernova collapse begins
+// Red-giant hold band. Named so camera and stage use the same numbers. WIDENED grow
+// band (RED_HOLD_START 0.64 -> 0.70) so the red giant owns raw 23-43% (ITEM 1/9).
+const RED_HOLD_START = 0.7;       // red grow ends; the settled red-giant close-up hold begins
+const RED_HOLD_END = 0.77;        // red-giant hold ends; the reverse-collapse FLASH begins
 
 // The public cinematic timeline. The existing shaders still understand the older
 // reverse "stage" coordinates, so this is the single handoff from the new story
@@ -85,12 +86,12 @@ const RED_HOLD_END = 0.72;        // red-giant hold ends; the reverse-supernova 
 // which reproduces the same progress->stage curve numerically identically. Edit
 // the table (one weight) to re-time a scene, not this function.
 //
-// Phase bands (in lifecycleProgress space), RE-TIMED to the chapter grid (the raw-
-// scroll band each occupies under the reverse flip is raw = 1 - lifecycle):
-//   0.00-0.12 dot hold / content-unlock (raw 88-100) | 0.12-0.26 dot->nebula grow |
-//   0.26-0.42 nebula (raw 58-74)        | 0.42-0.57 yellow ignite+hold (raw 43-58) |
-//   0.57-0.72 red giant grow+orbit hold (raw 28-43)  | 0.72-0.86 reverse supernova (raw 14-28) |
-//   0.86-1.00 black-hole settle + event-horizon hold / portfolio lure (raw 0-14).
+// Phase bands (in lifecycleProgress space), RE-TIMED to the ART-DIRECTION chapter
+// grid (the raw-scroll band each occupies under the reverse flip is raw = 1 - lifecycle):
+//   0.00-0.10 dot hold / content-unlock (raw 90-100) | 0.10-0.26 dot->nebula grow |
+//   0.26-0.43 nebula (raw 57-74)        | 0.43-0.57 yellow ignite+hold (raw 43-57) |
+//   0.57-0.77 red giant grow+orbit+close (raw 23-43) | 0.77-0.85 reverse collapse FLASH (raw 15-23) |
+//   0.85-1.00 black-hole settle + event-horizon hold / portfolio lure (raw 0-15).
 export function legacyStageForProgress(progress: number): number {
   return legacyStageForProgressFromTable(progress);
 }
@@ -110,9 +111,9 @@ export function progressForLegacyStage(stage: number): number {
   // then maps onto [YELLOW_HOLD_END, RED_HOLD_START] (in lockstep with legacyStageForProgress).
   if (stage >= 2.05) return lerp(YELLOW_HOLD_END, RED_HOLD_START, (2.88 - stage) / (2.88 - 2.05));
   if (stage >= 1.05) return (RED_HOLD_START + RED_HOLD_END) / 2; // mid-hold approx (used for HUD preview)
-  if (stage >= 0.5) return lerp(RED_HOLD_END, 0.79, (1.05 - stage) / (1.05 - 0.5));
-  if (stage >= 0.32) return lerp(0.79, 0.86, (0.5 - stage) / (0.5 - 0.32));
-  if (stage >= 0.08) return lerp(0.86, 0.93, (0.32 - stage) / (0.32 - 0.08));
+  if (stage >= 0.5) return lerp(RED_HOLD_END, 0.81, (1.05 - stage) / (1.05 - 0.5));
+  if (stage >= 0.32) return lerp(0.81, 0.85, (0.5 - stage) / (0.5 - 0.32));
+  if (stage >= 0.08) return lerp(0.85, 0.93, (0.32 - stage) / (0.32 - 0.08));
   return lerp(0.93, 1.0, (0.08 - Math.max(0, stage)) / 0.08);
 }
 
@@ -161,7 +162,7 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
   // supernova band 0.72 -> 0.86), so we bias the shake to ramp up on that gathering
   // side. implodeBias goes 0 at the red-giant edge -> 1 at the black-hole edge, so the
   // rumble swells inward (energy converging) instead of recoiling symmetrically out.
-  const implodeBias = smoothstep(segment(p, RED_HOLD_END, 0.86));
+  const implodeBias = smoothstep(segment(p, RED_HOLD_END, 0.85));
   const shock = reduced ? 0 : clamp01(nova) * (0.35 + 0.65 * implodeBias);
   return {
     position,

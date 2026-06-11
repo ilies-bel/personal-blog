@@ -227,7 +227,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // These bands are used ONLY by the dev framing-nudge hooks (RedGiantDebugPanel): they
   // shape the in/out weight of a live tuning nudge so it matches the beat and never
   // snaps. Production applies no nudge (the hooks are unset).
-  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.28, 0.36];
+  const RED_GIANT_NUDGE_IN: readonly [number, number] = [0.23, 0.33];
   const RED_GIANT_NUDGE_OUT: readonly [number, number] = [0.36, 0.43];
 
   // --- AUTONOMOUS-ACCELERATED DOLLY-BACK (black-hole load) --------------------
@@ -242,8 +242,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // motion (snap to the held pose). See the application block in frame().
   const DOLLY_MAX_BACK = 7.0;   // world units of backward travel at full retreat
   const DOLLY_DUR = 4.0;        // seconds for the autonomous ease to reach MAX_BACK
-  const DOLLY_CHAPTER_END = 0.14; // raw progress: black-hole chapter upper edge
-  const DOLLY_FADE_END = 0.2;   // raw progress: offset fully faded out by here (no pop)
+  const DOLLY_CHAPTER_END = 0.15; // raw progress: black-hole chapter upper edge (ITEM 9: 0-15%)
+  const DOLLY_FADE_END = 0.21;  // raw progress: offset fully faded out by here (no pop)
   // Scratch vectors reused each frame so the dolly never allocates on the hot path.
   const dollyDir = new THREE.Vector3();
   const dollyTarget = new THREE.Vector3();
