@@ -49,6 +49,28 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     })();
   </script>
 
+  {/* On-brand WebGL-unavailable note. Hidden by default; revealed (display:flex) by
+      body.webgl-unavailable, which HeroIsland adds when the hero's WebGL visual can't
+      run — no/blocked WebGL at mount, or a GPU context lost mid-session. It is REAL,
+      accessible text (not an image), in the site palette, that names the situation and
+      hands the visitor the conventional path: the scroll-driven manifesto copy + the
+      section nav links below keep working with no canvas, so this is a short framing
+      note, not an error wall. role="status" so assistive tech announces it when it
+      appears. The class literal mirrors WEBGL_UNAVAILABLE_BODY_CLASS in
+      src/hero/lib/constants.ts (CSS keys off the same 'webgl-unavailable' body class). */}
+  <div class="webgl-fallback" role="status">
+    <p class="webgl-fallback-kicker">This experience needs WebGL.</p>
+    <p class="webgl-fallback-lead">Your browser can't run the live stellar lifecycle — here's the short version:</p>
+    <p class="webgl-fallback-body">
+      I build software meant to <strong>last</strong>. Keep scrolling for the manifesto, or
+      use the section links to jump straight to the work and the <a href={href('about')}>about page</a>.
+    </p>
+    <p class="webgl-fallback-cta">
+      Make it last, or don't make it. Sounds interesting?
+      <a href={`${href('about')}#get-in-touch`}>Get in touch.</a>
+    </p>
+  </div>
+
   {/* The signature object: a GPU-particle stellar lifecycle pinned to the center
       of the viewport. As the visitor scrolls, one normalized timeline runs
       forward: a lone pale blue dot blooms into a nebula, a yellow star forms, the

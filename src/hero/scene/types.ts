@@ -3,6 +3,28 @@ import type { HudTargetId } from '../HudNavigation';
 
 export type Uniforms = Record<string, { value: unknown }>;
 
+/** Thrown by createScene() when the WebGL visual cannot be created — either no
+ *  WebGL context is obtainable (browser/device without WebGL, or it is blocked)
+ *  or THREE.WebGLRenderer construction itself throws. createScene FAILS GRACEFULLY:
+ *  it disposes anything partially built and throws THIS typed error (never a raw
+ *  GL string), so the caller can `.catch(isWebGLUnavailableError)` and show the
+ *  on-brand fallback instead of crashing on an unhandled rejection. A dedicated
+ *  class (not a bare Error) lets HeroIsland tell "no WebGL" apart from an unrelated
+ *  failure (e.g. the dynamic-import chunk failing to load) without string-matching. */
+export class WebGLUnavailableError extends Error {
+  constructor(message = 'WebGL is unavailable: the hero visual cannot be created.') {
+    super(message);
+    this.name = 'WebGLUnavailableError';
+  }
+}
+
+/** Narrow an unknown caught value to WebGLUnavailableError. Used in HeroIsland's
+ *  dynamic-import `.catch()` so the no-WebGL path is handled explicitly while any
+ *  OTHER rejection (chunk load error, programming bug) is left to surface normally. */
+export function isWebGLUnavailableError(error: unknown): error is WebGLUnavailableError {
+  return error instanceof WebGLUnavailableError;
+}
+
 /** What createScene() returns: the teardown function, which ALSO carries a
  *  per-frame hit-test so callers (HeroIsland) can ask whether a screen point is
  *  over the live red giant's projected disk. Calling the value disposes the scene
@@ -53,4 +75,15 @@ export interface SceneHooks {
    *  StarMarker to anchor HTML markers over the on-screen object without triggering
    *  React re-renders. Optional: backdrop mode does not provide this callback. */
   onMarkerFrame?: (m: MarkerFrame) => void;
+  /** Fired when the GPU drops the WebGL context (`webglcontextlost`). The scene has
+   *  already called preventDefault() (so the context CAN be restored) and PAUSED its
+   *  render loop by the time this runs. The caller (HeroIsland) shows the on-brand
+   *  fallback note + reveals the loader, mirroring the no-WebGL-at-mount path — a
+   *  frozen canvas is replaced by usable, scroll-driven DOM. Optional. */
+  onContextLost?: () => void;
+  /** Fired when the GPU restores the context (`webglcontextrestored`) and the scene
+   *  has best-effort resumed its render loop. The caller can clear the fallback note.
+   *  NOTE: only the standard rigs recover on the live context; a full GPGPU re-bake is
+   *  a documented follow-up, so callers may choose to keep the fallback up. Optional. */
+  onContextRestored?: () => void;
 }

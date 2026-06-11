@@ -407,3 +407,79 @@ body.bare.about-page .overlay-blog { display: none; }
   text-transform: uppercase;
   color: var(--fg-faint);
 }
+
+/* --- WebGL-unavailable fallback (index.astro .webgl-fallback) --------------- */
+/* Shown (display:flex) ONLY when body.webgl-unavailable is present — HeroIsland adds
+   that class when the hero's WebGL visual can't run (no/blocked WebGL at mount, or a
+   GPU context lost mid-session). It is an on-brand, accessible TEXT note in the site
+   palette, centred over the (blank) canvas, that hands the visitor the conventional
+   path: the scroll-driven manifesto copy + the section nav links keep working with no
+   canvas. It sits ABOVE the canvas + vignette but is pointer-events:none so it never
+   intercepts clicks meant for the HUD rail / nav (its own links re-enable pointer
+   events), and it does not cover the corners where the chrome + nav live. */
+.webgl-fallback {
+  display: none;                         /* revealed by body.webgl-unavailable below */
+  position: fixed;
+  inset: 0;
+  z-index: 11;                           /* above canvas (0) + vignette (9), below HUD chrome */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: clamp(1.5rem, 6vw, 4rem);
+  text-align: center;
+  pointer-events: none;                  /* never block the nav/HUD beneath */
+  color: var(--fg);
+  background: radial-gradient(
+    120% 90% at 50% 45%,
+    color-mix(in oklch, var(--bg) 72%, transparent) 0%,
+    color-mix(in oklch, var(--bg) 30%, transparent) 60%,
+    transparent 100%
+  );
+}
+body.webgl-unavailable .webgl-fallback {
+  display: flex;
+}
+.webgl-fallback-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+.webgl-fallback-lead {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+  line-height: 1.3;
+  color: var(--fg);
+  max-width: 36ch;
+}
+.webgl-fallback-body {
+  margin: 0.4rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(0.95rem, 1.6vw, 1.05rem);
+  line-height: 1.5;
+  color: var(--fg-dim);
+  max-width: 46ch;
+}
+.webgl-fallback-cta {
+  margin: 0.6rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  max-width: 46ch;
+}
+/* Links inside the note re-enable pointer events (the container suppresses them) so
+   the about / get-in-touch links are clickable, in the site's aged-gold link colour. */
+.webgl-fallback a {
+  pointer-events: auto;
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+.webgl-fallback a:hover,
+.webgl-fallback a:focus-visible {
+  color: var(--accent-strong);
+}

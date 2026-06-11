@@ -35,6 +35,18 @@ export const HUD_BOOTING_BODY_CLASS = 'hud-booting';
  *  fades on first paint, the HUD boot FSM ignites later at the black hole — they
  *  never touch each other's class. */
 export const SCENE_READY_BODY_CLASS = 'scene-ready';
+/** Toggled on <body> when the hero's WebGL visual cannot run — either WebGL is
+ *  unavailable at mount (no/blocked context, so createScene throws before building
+ *  the renderer) OR the GPU context was lost and could not be safely restored. It
+ *  is the on-brand graceful-degradation signal: CSS keys a themed "this experience
+ *  needs WebGL — here's the short version" note off it (the manifesto copy + the
+ *  section nav links remain real, scroll-driven DOM, so they stay usable with no
+ *  canvas). HeroIsland adds it from the dynamic-import `.catch()` (WebGL-at-mount
+ *  failure) and from the scene's context-lost hook; the same path also reveals the
+ *  loader (SCENE_READY_BODY_CLASS) immediately so the page is never trapped behind
+ *  the loader waiting out the 8s safety backstop. Spelled here once so the class
+ *  string is never inline. */
+export const WEBGL_UNAVAILABLE_BODY_CLASS = 'webgl-unavailable';
 /** localStorage key persisting the chosen exploration-HUD target. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM

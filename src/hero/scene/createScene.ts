@@ -14,7 +14,34 @@ import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
-import type { SceneHandle, SceneHooks } from './types';
+import { WebGLUnavailableError, type SceneHandle, type SceneHooks } from './types';
+
+/**
+ * Lightweight WebGL-availability probe, run BEFORE constructing THREE.WebGLRenderer.
+ * The renderer needs at least a WebGL1 context (the GPGPU collapse sim wants WebGL2
+ * but already degrades to a no-op when float targets are missing — see gravitySim),
+ * so we only require that SOME webgl context is obtainable. We make a throwaway
+ * <canvas> and ask for 'webgl2', then 'webgl', then the legacy 'experimental-webgl';
+ * if none answer, WebGL is unavailable/blocked and the caller goes straight to the
+ * fallback without ever allocating the real renderer. SSR-safe: it touches `document`
+ * only when called (createScene runs in a browser effect), never at module load. Any
+ * throw from getContext (some locked-down browsers throw rather than return null) is
+ * swallowed → treated as "unavailable". The probe canvas is not attached to the DOM,
+ * so it is collected with no teardown.
+ */
+function isWebGLAvailable(): boolean {
+  if (typeof document === 'undefined') return false;
+  try {
+    const probe = document.createElement('canvas');
+    return Boolean(
+      probe.getContext('webgl2') ||
+        probe.getContext('webgl') ||
+        probe.getContext('experimental-webgl'),
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The few frame-local STATEFUL multipliers applyLook needs that are NOT pure
@@ -49,7 +76,29 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   void bCritShadow;
 
   // --- renderer / scene / camera ---
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // GRACEFUL WebGL FAILURE. The renderer is the FIRST resource built, so nothing
+  // needs disposing if it fails — but we still fail cleanly: probe for a context up
+  // front (so a no-WebGL device never even constructs THREE.WebGLRenderer), and wrap
+  // the construction itself in try/catch (some environments pass the probe but still
+  // throw on the real renderer — context-creation race, lost GPU). Either way we
+  // throw a TYPED WebGLUnavailableError (never a raw GL string) so HeroIsland's
+  // dynamic-import `.catch()` can recognise it and show the on-brand fallback instead
+  // of letting an unhandled rejection crash the mount. The normal (WebGL-works) path
+  // is byte-for-byte identical: the probe returns true and the try block runs the
+  // exact same constructor as before.
+  if (!isWebGLAvailable()) {
+    throw new WebGLUnavailableError();
+  }
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  } catch (error: unknown) {
+    // Nothing else is built yet, so there is nothing to dispose; surface the typed
+    // error (preserving the original cause for diagnostics) for the caller to handle.
+    throw new WebGLUnavailableError(
+      error instanceof Error ? `WebGL renderer creation failed: ${error.message}` : undefined,
+    );
+  }
   renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 1);
@@ -509,6 +558,47 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     if (!document.hidden && !stopped && raf === 0) frame();
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
+
+  // --- WebGL context loss / restore ----------------------------------------
+  // A mid/low GPU under memory pressure can drop the WebGL context at any time
+  // (`webglcontextlost`). Two things are mandatory: (1) call preventDefault() —
+  // WITHOUT it the browser never fires `webglcontextrestored`, so the context is
+  // permanently dead; (2) STOP the render loop, because rendering against a lost
+  // context is a stream of GL errors. We park the loop the SAME way the hidden-tab
+  // pause and dispose do: set `stopped` and cancel the pending rAF (the frame() body
+  // also early-returns on `stopped`). We then notify the caller so it can swap the
+  // frozen canvas for the on-brand fallback DOM (mirroring the no-WebGL-at-mount path).
+  //
+  // IMPLEMENTED here: preventDefault + pause + onContextLost. On `webglcontextrestored`
+  // we best-effort RESUME the loop (clear `stopped`, re-kick frame()) and notify the
+  // caller — three.js re-initialises its own GL state for the standard rigs on the next
+  // render. FOLLOW-UP (not done here, deliberately): a full resource RE-UPLOAD of the
+  // baked GPGPU collapse flipbook (gravitySim) + the post-chain FBOs. Because that
+  // re-bake is non-trivial and a half-restore could show a corrupt scene, the caller
+  // (HeroIsland) keeps the fallback note up after a restore rather than trusting a
+  // partial recovery — a clean "paused + message" beats a broken restore.
+  const onContextLost = (event: Event): void => {
+    // REQUIRED: keep the context restorable. Without preventDefault the GPU discards
+    // it for good and `webglcontextrestored` never fires.
+    event.preventDefault();
+    // Park the loop exactly like the hidden-tab pause: stop scheduling + drop the
+    // pending frame so no render runs against the dead context.
+    stopped = true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    hooks.onContextLost?.();
+  };
+  const onContextRestored = (): void => {
+    // Best-effort resume of the STANDARD rigs: unpark and re-kick the loop. The GPGPU
+    // flipbook / FBOs are not re-baked here (the documented follow-up), so the caller
+    // decides whether to trust the resumed scene or keep the fallback up.
+    if (!stopped) return; // already running (defensive; shouldn't happen)
+    stopped = false;
+    if (raf === 0 && !document.hidden) frame();
+    hooks.onContextRestored?.();
+  };
+  renderer.domElement.addEventListener('webglcontextlost', onContextLost, false);
+  renderer.domElement.addEventListener('webglcontextrestored', onContextRestored, false);
 
   // --- look → uniforms/bloom/grade projection (the de-duplicated twin-write) ---
   // setDisk expresses the primary/secondary disk twin-write ONCE, so a uniform
@@ -1202,6 +1292,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       window.removeEventListener('pointerup', onPointerUpSun);
       window.removeEventListener('pointercancel', cancelHold);
       window.removeEventListener('pointerleave', cancelHold);
+      // WebGL context-loss listeners live on the canvas (renderer.domElement) — detach
+      // from the same target so they never leak across a mount/unmount remount.
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost, false);
+      renderer.domElement.removeEventListener('webglcontextrestored', onContextRestored, false);
 
       // Each rig disposes its own geos + materials (and, for post, the composer +
       // bloom + grade material) — construction and teardown are now co-located in
