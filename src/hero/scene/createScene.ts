@@ -519,13 +519,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // sane dt so a backgrounded-tab time jump never teleports a ripple across the disc.
   let prevEruptT = 0;
 
-  // --- cinematic dive: plunge the LIVE camera INTO the star, bloom to white ----
+  // --- cinematic dive: plunge the LIVE camera INTO the clicked marker, soft bloom --
   // A one-shot state machine driven entirely from frame(): once beginDive() arms
   // it, the dive OVERRIDES the resolved scroll camera each frame — easing the live
-  // pose toward (and THROUGH) the world origin while a white-overlay strength ramps
-  // to full. onApex fires once at DIVE_APEX_FRAC so the caller (HeroIsland) can SPA-
-  // navigate under the whiteout. A non-active dive is a perfect no-op: the override
-  // block only runs while diveActive is true, so the scroll camera is untouched.
+  // pose toward (and THROUGH) the world origin while turning the look target to FACE
+  // the clicked marker's on-screen point (so an off-centre marker centres + grows),
+  // and an overlay strength ramps to a soft cap. onApex fires once at DIVE_APEX_FRAC
+  // so the caller (HeroIsland) can SPA-navigate under the veil. A non-active dive is a
+  // perfect no-op: the override block only runs while diveActive is true, so the
+  // scroll camera is untouched.
   let diveActive = false;
   let diveStart = 0;
   let diveApexFired = false;
@@ -536,7 +538,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // starts seamlessly from wherever the scroll pose currently is.
   const diveFromPos = new THREE.Vector3();
   const diveFromTarget = new THREE.Vector3();
-  const ORIGIN_VEC = new THREE.Vector3(0, 0, 0);
+  // The world point the dive AIMS at — derived ONCE in beginDive() by unprojecting
+  // the caller's targetNdc onto the star's depth plane (so it sits directly under the
+  // clicked marker, at the same distance from camera as the world origin). The dive
+  // turns the look target toward it as it falls in, so an off-centre marker centres +
+  // grows. Defaults to the world origin (a centred plunge) when no targetNdc is given.
+  const diveTargetWorld = new THREE.Vector3();
+  // Scratch only for the unproject math in beginDive(); never read on the hot path.
+  const diveAimScratch = new THREE.Vector3();
   // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
   let diveStrength = 0;
   // Plunge timing. The apex (bloom peak / navigate point) lands at 82% of the run,
@@ -1086,11 +1095,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     }
     camera.lookAt(frameLookTarget);
 
-    // === DIVE OVERRIDE: plunge the live camera into the star (world origin) =======
+    // === DIVE OVERRIDE: plunge the live camera into the clicked marker ============
     // Runs after the scroll camera is fully resolved, so a 0-strength dive is a no-op
-    // and the plunge starts seamlessly from the live pose. The bloom overlay strength
-    // is published via diveOnProgress — capped to a SOFT VEIL (DIVE_WHITE_PEAK), never a
-    // whiteout; onApex fires once (on uncapped raw) for the caller to navigate.
+    // and the plunge starts seamlessly from the live pose. The dolly drives toward the
+    // through-point past the origin while the look target turns toward diveTargetWorld
+    // (the world point under the clicked marker), so the marker centres + grows. The
+    // bloom overlay strength is published via diveOnProgress — capped to a SOFT VEIL
+    // (DIVE_WHITE_PEAK), never a whiteout; onApex fires once (on uncapped raw) for the
+    // caller to navigate.
     if (diveActive) {
       const raw = Math.min(1, (performance.now() - diveStart) / 1000 / (reduced ? DIVE_REDUCED_S : DIVE_DURATION_S));
       if (!reduced) {
@@ -1098,12 +1110,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         // lifecycle.ts). easeOut(0.3) ≈ 0.66, so ~two-thirds of the dolly is spent in
         // the first third of the run: the camera LEAPS toward the core immediately and
         // eases into it, reading as a fall THROUGH the event horizon (DIVE_THROUGH_POS,
-        // just past the origin) while the white is still near zero. The look target
-        // settles on the exact origin so the plunge stays aimed down the throat all the
-        // way down.
+        // just past the origin) while the white is still near zero.
+        //
+        // AIM AT THE MARKER, not dead-centre: the look target lerps from the live
+        // target toward diveTargetWorld — the world point UNDER the clicked marker
+        // (unprojected in beginDive). The camera TURNS to face the marker as it falls,
+        // so the clicked speck swings to screen-centre and grows — a dive INTO it. For
+        // a centred/anchored marker diveTargetWorld ≈ the origin, so this reproduces the
+        // original straight-down-the-throat plunge. The dolly destination stays
+        // DIVE_THROUGH_POS (just past the origin) so the fall depth/feel is unchanged.
         const k = easeOut(raw);
         camera.position.lerpVectors(diveFromPos, DIVE_THROUGH_POS, k);
-        frameLookTarget.lerpVectors(diveFromTarget, ORIGIN_VEC, k);
+        frameLookTarget.lerpVectors(diveFromTarget, diveTargetWorld, k);
         camera.lookAt(frameLookTarget);
         // FOV narrows on the SAME front-loaded curve → the walls rush past early, a
         // longer-lens "tunnel" compression that sells the plunge before the bloom lands.
@@ -1380,8 +1398,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // Arm the cinematic dive. Snapshots the live camera pose so the plunge starts
   // seamlessly from wherever the scroll camera currently sits, then lets frame()'s
   // dive-override block drive the rest. No-op if a dive is already running (a second
-  // click can't restart or stack the plunge). targetNdc is accepted for the caller's
-  // bloom aim; the geometry always falls toward the world origin where the star sits.
+  // click can't restart or stack the plunge).
+  //
+  // targetNdc is now USED (it was formerly ignored, always aiming at the origin): the
+  // dive AIMS at the marker's own on-screen point so an off-centre nebula speck is
+  // dived INTO rather than lurched-to-centre. We derive diveTargetWorld ONCE here by
+  // unprojecting that NDC onto the STAR'S depth plane — i.e. the world point directly
+  // under the marker at the same camera distance as the origin. Method: project the
+  // origin to read its NDC z (its depth), then unproject (ndcX, ndcY, originNdcZ) back
+  // to world. That keeps the aim point at a sane, stable depth (the disk/scene plane)
+  // regardless of where on screen the marker sits. No targetNdc → fall back to the
+  // origin (a centred plunge, the original behaviour). One-shot math; the hot-path
+  // dive block only reads diveTargetWorld (no per-frame unproject).
   const beginDive = (opts: DiveOptions): void => {
     if (diveActive) return;
     diveActive = true;
@@ -1391,6 +1419,16 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diveStart = performance.now();
     diveFromPos.copy(camera.position);
     diveFromTarget.copy(frameLookTarget);
+    if (opts.targetNdc) {
+      // Origin's depth in NDC (perspective-correct), so the unprojected aim point
+      // lands on the same plane as the star instead of at the near clip.
+      const originNdcZ = diveAimScratch.set(0, 0, 0).project(camera).z;
+      diveTargetWorld
+        .set(opts.targetNdc.x, opts.targetNdc.y, originNdcZ)
+        .unproject(camera);
+    } else {
+      diveTargetWorld.set(0, 0, 0);
+    }
   };
 
   // Stop the render loop WITHOUT disposing GL. Idempotent (the `stopped` flag also

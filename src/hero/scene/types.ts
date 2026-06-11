@@ -7,10 +7,17 @@ export type Uniforms = Record<string, { value: unknown }>;
  *  the scene fires onApex at the bloom apex and the caller routes the SPA there.
  *  The scene drives only the geometry (camera plunge) + the overlay strength. */
 export interface DiveOptions {
-  /** Bloom aim in NDC. Defaults to the projected star origin when omitted — the
-   *  caller can pass the marker's screen point so the whiteout erupts from where
-   *  the visitor clicked rather than dead-centre. */
+  /** Bloom/plunge aim in NDC (x,y each in [-1,1], y up). When supplied the camera
+   *  turns to FACE this on-screen point as it dollies in — so the clicked marker
+   *  (even an off-centre nebula speck) grows + centres and the camera dives INTO it,
+   *  not toward dead-centre. Defaults to the star at the world origin when omitted
+   *  (a centred plunge, the original behaviour). */
   targetNdc?: { x: number; y: number };
+  /** Which lifecycle state fired the dive. The caller (HeroIsland) uses it ONLY to
+   *  pick the bloom's tint (a `data-bloom-state` attribute on the overlay → a
+   *  per-state colour in hero.css). The scene itself does not read it. Optional:
+   *  absent leaves the overlay's default (warm-bone) tint. */
+  state?: HudTargetId;
   /** Called every frame with the 0..1 overlay (bloom-to-white) strength so the
    *  caller can drive a fullscreen white layer's opacity. Optional. */
   onDiveProgress?: (strength: number) => void;
@@ -32,9 +39,11 @@ export interface SceneHandle {
    *  the giant's projected surface (a sphere raycast at the world origin). Cheap
    *  no-op (returns false) outside the red-giant beat. */
   hitTestGiant(clientX: number, clientY: number): boolean;
-  /** Begin the cinematic dive into the star; no-op if a dive is already active.
-   *  Plunges the LIVE camera toward the world origin and ramps an overlay strength
-   *  to full white, firing onApex once at the apex for the caller to navigate. */
+  /** Begin the cinematic dive into the clicked marker; no-op if a dive is already
+   *  active. Dollies the LIVE camera toward (and just past) the world origin while
+   *  turning to face opts.targetNdc (the marker's on-screen point — so an off-centre
+   *  marker is dived INTO, not lurched-to-centre), and ramps an overlay strength to a
+   *  soft cap, firing onApex once at the apex for the caller to navigate. */
   beginDive(opts: DiveOptions): void;
   /** Stop the per-frame render loop WITHOUT disposing the GL context. Idempotent.
    *  HeroIsland calls this on `astro:before-swap` so the heavy ~1.2M-point render

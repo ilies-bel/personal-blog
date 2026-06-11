@@ -329,7 +329,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // chunk hasn't resolved yet, it degrades to a plain SPA navigation — the marker is
   // never a dead link. Stable identity (useCallback, no deps) so the context value
   // doesn't churn the marker tree.
-  const beginDive = useCallback((opts: { href: string; targetNdc?: { x: number; y: number } }) => {
+  const beginDive = useCallback((opts: { href: string; targetNdc?: { x: number; y: number }; state?: HudTargetId }) => {
     const handle = sceneHandleRef.current;
     // PURE SPA navigation — no hard-reload fallback. The former 700ms
     // `window.location.assign` band-aid papered over a real stall: the heavy ~1.2M-point
@@ -347,7 +347,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       goTo(opts.href);                          // engine not ready → straight nav
       return;
     }
-    // The persisted soft-veil bloom overlay (in BaseLayout — a warm radial bloom, not a
+    // The persisted soft-veil bloom overlay (in BaseLayout — a radial bloom, not a
     // full-white sheet). The scene ramps its opacity per frame via onDiveProgress (and
     // caps the peak well under 1, so this is the single mirror — no extra scaling here);
     // on the destination page a page-load handler eases it back out for the "resurface".
@@ -355,8 +355,29 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // doesn't get the resurface animation).
     const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
     try { sessionStorage.setItem('bh:dive', '1'); } catch { /* private mode — skip */ }
+    if (overlay) {
+      // PER-STATE BLOOM TINT: the colour is owned by CSS — hero.css maps
+      // [data-bloom-state="…"] to a per-state --bloom-* token (nebula→cool, yellow→gold,
+      // red→ember, beginning→pale-cool, end→warm bone). Set it BEFORE the opacity ramps
+      // so the very first frame already wears the right hue (the overlay is
+      // transition:persist'ed, so the resurface handler clears it on arrival to keep a
+      // later normal nav from inheriting a stale tint). Absent state → default tint.
+      if (opts.state) overlay.dataset.bloomState = opts.state;
+      else delete overlay.dataset.bloomState;
+      // BLOOM ORIGIN: glow from where the marker WAS, not always screen-centre. Convert
+      // the marker NDC to viewport % for the radial-gradient centre (hero.css reads
+      // --bloom-x/--bloom-y, defaulting to 50% 50% when unset). Mirrors the camera aim
+      // so the veil radiates from the clicked speck.
+      if (opts.targetNdc) {
+        const px = (opts.targetNdc.x * 0.5 + 0.5) * 100;
+        const py = (1 - (opts.targetNdc.y * 0.5 + 0.5)) * 100;
+        overlay.style.setProperty('--bloom-x', `${px}%`);
+        overlay.style.setProperty('--bloom-y', `${py}%`);
+      }
+    }
     handle.beginDive({
       targetNdc: opts.targetNdc,
+      state: opts.state,
       onDiveProgress: (s) => { if (overlay) overlay.style.opacity = String(s); },
       onApex: () => { goTo(opts.href); },
     });

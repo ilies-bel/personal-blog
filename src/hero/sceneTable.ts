@@ -451,9 +451,12 @@ export interface MarkerPlacement {
   /** The CTA link text (e.g. 'Read about me'); the component appends the ' →'
    *  arrow. Falls back to the legacy '[ OPEN ]' affordance when absent. */
   cta?: string;
-  /** Prototype flag: this marker triggers the cinematic camera dive on click
-   *  instead of a plain navigation. Set on exactly one marker for now (the END
-   *  black-hole marker). Absent/false markers navigate normally. */
+  /** When true, clicking this marker triggers the cinematic camera dive instead of
+   *  a plain navigation: the live camera plunges toward the marker's OWN on-screen
+   *  position (so an off-centre nebula speck is dived INTO, not lurched-to-centre)
+   *  while a soft, capped bloom in the marker's lifecycle-state tint washes over the
+   *  frame, then SPA-navigates at the apex. Set on ALL markers now (each scene's
+   *  state colours its own bloom). Absent/false markers would navigate normally. */
   dive?: boolean;
 }
 
@@ -548,6 +551,7 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Web software, technical writing, understandable systems.',
         tags: ['Fast', 'Readable', 'Usable'],
         cta: 'Read about me',
+        dive: true,
       },
     ],
     beat: {
@@ -595,6 +599,7 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Essays on software that stays readable as it grows.',
         tags: ['Essays', 'Craft'],
         cta: 'Read the writing',
+        dive: true,
       },
       {
         id: 'nebula-02',
@@ -611,6 +616,7 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Boundaries, interfaces, and the cost of complexity over time.',
         tags: ['Systems', 'Design'],
         cta: 'Read the writing',
+        dive: true,
       },
       {
         id: 'nebula-03',
@@ -627,6 +633,7 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'On AI-assisted code, and keeping the center understandable.',
         tags: ['AI', 'Practice'],
         cta: 'Read the writing',
+        dive: true,
       },
     ],
     // NEBULA — a gentle dwell so the bloom/collapse around the held frame slow down
@@ -672,6 +679,7 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Shipped software, side projects, and tools that earned their keep.',
         tags: ['Shipped', 'Tools'],
         cta: 'See the projects',
+        dive: true,
       },
     ],
     beat: {
@@ -720,6 +728,7 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Dead repos, false starts, and what each one was trying to teach.',
         tags: ['Dead repos', 'Lessons'],
         cta: 'Walk the graveyard',
+        dive: true,
       },
     ],
     // RED GIANT — the contemplative beat. A modest dwell so the morph lingers a
@@ -764,9 +773,9 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'The idea behind the black hole, and thanks for scrolling this far.',
         tags: ['Story', 'Colophon'],
         cta: 'Read the story',
-        // Prototype: clicking the black-hole marker flies the live camera INTO
-        // the star, blooms to white, then SPA-navigates at the apex. Only this
-        // one marker opts in for now.
+        // Clicking the black-hole marker flies the live camera INTO it, blooms a
+        // soft capped veil (the black-hole/warm-bone tint), then SPA-navigates at
+        // the apex. The dive is now on EVERY marker (each in its own state tint).
         dive: true,
       },
     ],

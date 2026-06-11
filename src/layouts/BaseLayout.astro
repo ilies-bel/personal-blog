@@ -62,10 +62,12 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
   <body class={bodyClasses}>
     {/* Cinematic dive overlay — a single full-viewport bloom layer present on EVERY
         page, persisted across ClientRouter swaps (transition:persist) so the home
-        page's dive can ramp its opacity to a soft, capped warm veil (never full white),
-        the navigation swaps the page body UNDER it, and the destination's page-load
-        handler eases it back out for the "resurface". Starts hidden via CSS (opacity 0),
-        so a normal page load / navigation never sees it. */}
+        page's dive can ramp its opacity to a soft, capped veil (never full white) — in
+        the FIRING marker's lifecycle-state tint, set via data-bloom-state — the
+        navigation swaps the page body UNDER it, and the destination's page-load handler
+        eases it back out for the "resurface" (and clears the tint so the next nav starts
+        clean). Starts hidden via CSS (opacity 0), so a normal page load / navigation
+        never sees it. */}
     <div class="dive-overlay" data-dive-overlay transition:persist aria-hidden="true"></div>
     {/* Sitewide custom cursor — covers both layout branches below. */}
     <CustomCursor />
@@ -665,6 +667,14 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
           overlay.style.transition = 'none';
           overlay.style.opacity = '0';
         }
+        // Clear the per-state bloom tint + origin in BOTH branches. The overlay is
+        // transition:persist'ed across swaps, so a stale data-bloom-state / --bloom-x/y
+        // would otherwise carry the previous dive's hue + off-centre origin into the
+        // NEXT dive's opening frame (and any normal nav). Reset to the defaults: the
+        // warm-bone --bloom-active and a centred origin (the CSS fallbacks).
+        delete overlay.dataset.bloomState;
+        overlay.style.removeProperty('--bloom-x');
+        overlay.style.removeProperty('--bloom-y');
       });
     </script>
   </body>
