@@ -88,5 +88,32 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Dive bloom — the soft veil the marker-dive washes over the screen at the swap.
+     A warm, slightly-dimmed bone (NOT clinical pure white) so the glow belongs to the
+     dark/gold palette rather than blinding against it. Sits a touch above --fg
+     (#d8d0c3) in lightness so it still reads as a luminous bloom, but it is never the
+     #fff sheet it replaced. The overlay's own opacity is capped well under 1 in the
+     scene, so this colour only ever shows as a faint warm wash. */
+  --bloom: oklch(0.95 0.018 80);        /* warm bone bloom, dive veil only — default */
+
+  /* PER-STATE dive-bloom tints. Each marker's dive washes a soft veil whose HUE
+     matches the lifecycle state it fired from, so a nebula speck blooms cool and the
+     red giant blooms ember. Derived from / consistent with the existing palette (not a
+     parallel colour system): each is the state's signature hue lifted toward bloom
+     lightness (~0.92–0.95 L) with chroma kept modest so it stays LUMINOUS-but-not-
+     blinding (the scene also caps peak opacity at 0.62, so these only ever show as a
+     faint wash). The overlay's [data-bloom-state] picks one of these (hero.css). All
+     share the warm bone's softness; only the hue/chroma changes per state.
+       - beginning → the pale-blue-dot's cool (cool-neutral bone, near --fg-overlay 250)
+       - nebula    → smoky blue (the nebula's cool gas, a touch bluer than the dot)
+       - yellow    → warm gold (the yellow star / --accent family, lifted)
+       - red       → red ember (the red giant / --ember family, lifted)
+       - end       → the default warm bone (black-hole-appropriate — keep --bloom) */
+  --bloom-beginning: oklch(0.93 0.022 248);  /* pale-blue-dot cool */
+  --bloom-nebula: oklch(0.9 0.045 250);      /* smoky nebula blue */
+  --bloom-yellow: oklch(0.94 0.07 92);       /* warm gold star */
+  --bloom-red: oklch(0.88 0.075 47);         /* red-giant ember */
+  --bloom-end: var(--bloom);                 /* black hole → warm bone (default) */
+
   color-scheme: dark;
 }

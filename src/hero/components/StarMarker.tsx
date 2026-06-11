@@ -34,7 +34,7 @@ import {
   type MarkerPlacement,
 } from '../HudNavigation';
 import type { MarkerFrame } from '../scene/types';
-import { useSceneState } from './SceneStateContext';
+import { useSceneState, useSceneActions } from './SceneStateContext';
 
 interface StarMarkerProps {
   /** This marker's placement (which state it belongs to, where it sits, its copy). */
@@ -108,6 +108,10 @@ const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number 
 
 export default function StarMarker({ placement, markerFrameRef }: StarMarkerProps) {
   const { reduced, base } = useSceneState();
+  // The dive action (published by HeroIsland). Present only on the home page; a
+  // `dive` marker uses it on a plain left click, every other marker / page leaves
+  // the <a> to navigate normally.
+  const actions = useSceneActions();
 
   // Static per placement: does this marker sit over a bright scene surface? Drives
   // the resting dot's colour (dark dot on bright states, light dot on dark states)
@@ -141,6 +145,11 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // Live pointer position, tracked via a ref (NOT state) so the rAF loop can
   // measure distance to the marker every frame without re-rendering.
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  // The marker's CURRENT screen position (CSS px), stashed by the rAF loop each frame
+  // (the SAME x/y written to el.style.left/top). The dive click reads it to aim the
+  // plunge at where the marker actually is — so an off-centre marker is dived INTO,
+  // not lurched-to-centre. Ref (not state) so the per-frame write never re-renders.
+  const screenRef = useRef<{ x: number; y: number } | null>(null);
   // Whether the link currently holds keyboard focus — also forces the lock so
   // non-mouse users get the card. Ref so the rAF loop reads it without a render.
   const focusedRef = useRef(false);
@@ -193,6 +202,10 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // pale-blue-dot marker rides the projected star origin instead.
       const x = anchored ? frame.x : placement.vx * window.innerWidth;
       const y = anchored ? frame.y : placement.vy * window.innerHeight;
+
+      // Stash the live screen position so the dive click can aim at THIS marker (the
+      // onClick reads screenRef, converts to NDC, and passes it as the dive aim point).
+      screenRef.current = { x, y };
 
       // Update position directly on the DOM element (no setState, no re-render).
       const el = elRef.current;
@@ -292,6 +305,25 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-bright={isBright}
       data-bg={placement.bg}
       data-side={cardSide}
+      onClick={(e) => {
+        if (!placement.dive || !actions.beginDive) return;  // non-dive markers / engine not ready → normal nav
+        // let modified clicks (new tab, etc.) and non-left clicks fall through to the <a>
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        // Aim the dive at THIS marker's current on-screen position (so an off-centre
+        // nebula speck is dived INTO, not lurched-to-centre). screenRef holds the same
+        // CSS-px x/y the rAF loop writes to the element; convert to NDC (x in [-1,1],
+        // y up). Fall back to the click coords, then dead-centre, if the loop hasn't
+        // run yet. `state` selects the bloom's per-lifecycle-state tint.
+        const screen = screenRef.current ?? { x: e.clientX, y: e.clientY };
+        const ndcX = (screen.x / window.innerWidth) * 2 - 1;
+        const ndcY = -((screen.y / window.innerHeight) * 2 - 1);
+        actions.beginDive({
+          href: resolveHref(base, placement.href),
+          targetNdc: { x: ndcX, y: ndcY },
+          state: placement.state,
+        });
+      }}
       onFocus={() => {
         focusedRef.current = true;
       }}
