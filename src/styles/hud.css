@@ -248,16 +248,22 @@ body.hud-active .hud-system,
    reveals top→bottom. The width-expand LEADS each row and the label fade-in FOLLOWS
    (so a row "opens then writes"). Per-row delays are applied via :nth-child below;
    the base transitions get the beat delay here. */
+/* LAYOUT (all rows): every button widens so the menu opens fully — this is the
+   "menu opens" expansion the cascade animates. COLOUR is deliberately NOT set here
+   so the resting/dimmed default (--fg-faint, from .hud-nav-button) stands for every
+   NON-current row; only [data-current='true'], :hover and :focus-visible lift a row
+   to full brightness (rules below + the existing hover/current ones above). The
+   color transition is still declared so the brighten eases rather than snaps. */
 body.hud-active .hud-nav-button {
   width: var(--rail-expanded);
-  color: var(--fg);
   transition:
     width 0.4s var(--ease-out-quint) var(--rail-beat),
     color 0.3s ease var(--rail-beat);
 }
+/* The tick reveals its WIDTH (layout) for every row but holds its colour dim — only
+   the current row / hover gets the bright gold tick, never the whole menu. */
 body.hud-active .hud-nav-button::before {
   width: 0.5rem;
-  background: var(--hud-gold);
   transition:
     width 0.3s var(--ease-out-quint) var(--rail-beat),
     background-color 0.3s ease var(--rail-beat);
@@ -267,10 +273,46 @@ body.hud-active .hud-nav-copy {
   opacity: 1;
   transform: none;
 }
-/* At the black hole the labels brighten to full presence — the title to the cool
-   overlay bone (it floats on the star), the destination to warm --fg below it. */
-body.hud-active .hud-nav-title { color: var(--fg-overlay); }
-body.hud-active .hud-nav-destination { color: var(--fg); }
+/* RESTING / dimmed copy for NON-current rows in the open menu: the labels are now
+   revealed (layout above), so they must read at the faint level — NOT the bright
+   --hud-main / --hud-muted base — so exactly one row (the current) stands out. The
+   title sits at --fg-faint (matching the dimmed glyph, which follows the button's
+   --fg-faint via currentColor) and the destination at the dim --fg-dim tone. The
+   [data-current='true'] block below re-brightens the current row (higher specificity)
+   and the :hover / :focus-visible rules still lift any hovered row. */
+body.hud-active .hud-nav-title { color: var(--fg-faint); }
+body.hud-active .hud-nav-destination { color: var(--fg-dim); }
+/* The CURRENT row in the active menu is the ONLY one lifted to full brightness.
+   Adding [data-current] gives these higher specificity than the blanket
+   `body.hud-active .hud-nav-*` rules (so the non-current default dim holds) AND than
+   the plain `.hud-nav-button[data-current='true']` scroll-spy tint (so the active
+   current row reads clearly SELECTED). Button text/title to the bright tones,
+   destination to --fg, the ::before tick to gold. Hover/focus still brighten ANY
+   row via the :hover / :focus-visible rules above (unchanged). */
+body.hud-active .hud-nav-button[data-current='true'] {
+  color: var(--fg);
+}
+body.hud-active .hud-nav-button[data-current='true']::before {
+  background: var(--hud-gold);
+}
+body.hud-active .hud-nav-button[data-current='true'] .hud-nav-title {
+  color: var(--fg-overlay);
+}
+body.hud-active .hud-nav-button[data-current='true'] .hud-nav-destination {
+  color: var(--fg);
+}
+/* HOVER / focus-visible brightens ANY row's copy in BOTH states (it must still lift
+   a non-current row past the dimmed resting default). Higher specificity than the
+   `body.hud-active .hud-nav-title/destination` dim rules above, so hovering a
+   non-current row in the open menu reveals it bright too. */
+.hud-nav-button:hover .hud-nav-title,
+.hud-nav-button:focus-visible .hud-nav-title {
+  color: var(--fg-overlay);
+}
+.hud-nav-button:hover .hud-nav-destination,
+.hud-nav-button:focus-visible .hud-nav-destination {
+  color: var(--fg);
+}
 
 /* Per-row stagger: row N reveals at beat + (N-1)*step. The label (copy) follows
    the width slightly (its own +0.08s lead-out) so each row opens, then writes.
@@ -318,14 +360,17 @@ body.hud-active .hud-nav-row:nth-child(5) .hud-nav-copy { transition-delay: calc
   transition: filter 0.3s ease;
   transform-origin: 50% 50%;
 }
-/* Selected / current / active glyph (#1): NO box outline for mouse or scroll
-   selection — instead the glyph lifts to full --fg (via the button colour rules
-   above) AND gains a soft gold GLOW that follows the masked shape, so it reads
-   like the lit top-right icons. Covers scroll-spy current, hover, and hud-active.
-   The drop-shadow stacks on top of the base dark outline above. */
+/* Selected / current glyph (#1): NO box outline for mouse or scroll selection —
+   instead the glyph lifts to full --fg (via the button colour rules above) AND
+   gains a soft gold GLOW that follows the masked shape, so it reads like the lit
+   top-right icons. Covers ONLY the scroll-spy current row + hover/focus — NOT every
+   hud-active row: in the open menu exactly one row (the current) glows, the rest
+   keep just the base dark drop-shadow. Because [data-current] is unqualified it also
+   lights the current row inside the active menu. The drop-shadow stacks on top of
+   the base dark outline above. */
 .hud-nav-button[data-current='true'] .hud-nav-glyph,
 .hud-nav-button:hover .hud-nav-glyph,
-body.hud-active .hud-nav-button .hud-nav-glyph {
+.hud-nav-button:focus-visible .hud-nav-glyph {
   filter:
     drop-shadow(0 0 16px rgba(0, 0, 0, 1))
     drop-shadow(0 0 6px color-mix(in oklch, var(--hud-gold) 55%, transparent));
