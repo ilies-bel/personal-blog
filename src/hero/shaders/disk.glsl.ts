@@ -1865,9 +1865,10 @@ export const diskFragmentShader = /* glsl */ `
         ncol = mix(ncol, vec3(0.80, 0.90, 1.00), smoothstep(0.1, 0.85, accreteHeat));
         pcol = ncol;
       } else {
-        // pale blue dot: the famous faint blue point — nudged very slightly cooler
-        // (green eased 0.72 → 0.70) so the closing speck reads as a cold blue dot.
-        pcol = vec3(0.52, 0.70, 0.96);
+        // pale blue dot: the famous faint blue point. ITEM 6: the dot reads as a clean
+        // blue-WHITE speck #DDEBFF (lifted from the dusky 0.52,0.70,0.96) so the closing
+        // signal is crisp and human-scale against the near-black #020304 room.
+        pcol = vec3(0.87, 0.92, 1.0);
       }
       col = pcol;
     }
