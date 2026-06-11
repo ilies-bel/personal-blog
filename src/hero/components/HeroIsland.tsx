@@ -17,7 +17,7 @@ import { legacyStageForProgress } from '../timeline';
 import { hudIdForStage, resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { sceneForProgress } from '../sceneTable';
-import { prefersReducedMotion } from '../lib/config';
+import { prefersReducedMotion, detectDeviceTier } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
   HUD_BOOTING_BODY_CLASS,
@@ -125,6 +125,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     if (!host) return;
     const isReduced = prefersReducedMotion();
     setReduced(isReduced);
+    // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
+    // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,
+    // no bloom, no gravity bake) is chosen up front; 'high' is byte-identical to today.
+    const tier = detectDeviceTier();
 
     // The three.js engine is loaded lazily (dynamic import) so it never blocks first
     // paint. Because the import resolves on a later microtask, the effect can be torn
@@ -148,7 +152,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       };
       void import('../scene/createScene').then(({ createScene }) => {
         if (cancelled) return;
-        disposeRef = createScene(host, isReduced, { getStage: pinnedStage });
+        disposeRef = createScene(host, isReduced, { getStage: pinnedStage }, tier);
       });
       return () => {
         cancelled = true;
@@ -260,7 +264,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         getFocusTarget: () => null,
         isExplorationMode: () => explorationModeRef.current,
         onMarkerFrame: (m) => { markerFrameRef.current = m; },
-      });
+      }, tier);
       disposeRef = dispose;
       // Bridge the scene's red-giant hit-test to the standalone custom cursor (which
       // can't import scene/three code). Published on window under the __bh* hook

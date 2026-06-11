@@ -1,6 +1,6 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio } from '../lib/config';
+import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
@@ -43,14 +43,14 @@ interface ApplyLookCtx {
   nebulaFlashBloom: number;
 }
 
-export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks): SceneHandle {
-  const diskParticles = tuneParticlesForDevice();
+export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks, tier: DeviceTier = 'high'): SceneHandle {
+  const diskParticles = tuneParticlesForDevice(tier);
   const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
   void bCritShadow;
 
   // --- renderer / scene / camera ---
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
+  renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(0x000000, 1);
   renderer.toneMapping = THREE.NoToneMapping;
@@ -68,13 +68,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // and updateLensUniforms() stay byte-for-byte identical.
   const pixelRatio = renderer.getPixelRatio();
 
-  const diskRig = buildDisk(scene, diskParticles, pixelRatio);
+  const diskRig = buildDisk(scene, diskParticles, pixelRatio, tier === 'low');
   const diskMatPrimary = diskRig.primary;
   const diskMatSecondary = diskRig.secondary;
   const diskPrimary = diskRig.primaryPts;
   const diskSecondary = diskRig.secondaryPts;
 
-  const starRig = buildStarfield(scene, diskParticles, pixelRatio);
+  const starRig = buildStarfield(scene, diskParticles, pixelRatio, tier === 'low');
   const starUniforms = starRig.uniforms; // updateLensUniforms() writes through this
   const starMat = starRig.mat;
   const starMatSec = starRig.matSec;
@@ -104,7 +104,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
 
-  const postRig = buildPostChain(renderer, scene, camera);
+  // High builds the full RenderPass→Bloom→Grade→Nova. The low tier gets a CHEAP
+  // bloom — the SAME pass, but its mip pyramid renders at quarter resolution
+  // (bloomScale 0.5), which is far cheaper AND softer: the low-res blur spreads, so
+  // it smooths the sparse low-tier grains into a glow (the chunky/speckly red giant
+  // was caused by REMOVING bloom, the very effect that smooths grains). postRig.bloom
+  // is now NON-null on low too, so the guarded `if (bloom)` writes in applyLook run.
+  const postRig = buildPostChain(renderer, scene, camera, tier === 'low' ? 'cheap' : 'full');
   const bloom = postRig.bloom;
   const gradePass = postRig.gradePass;
   const novaPass = postRig.novaPass;
@@ -130,9 +136,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // bracketing the scroll position (gravitySim.sampleAt) — a pure function of scroll,
   // so it scrubs both directions with no state/replay/snap-back. Seeded from the SAME
   // analytic nebula placement the disk shader uses, so it starts pop-free. Skipped under
-  // reduced motion; {available:false} (no-op) if float targets are unsupported.
-  const gravitySim: GravitySim = reduced
-    ? { available: false, step: () => {}, bake: () => {}, isBaked: () => false, sampleAt: () => null, dispose: () => {} }
+  // reduced motion; {available:false} (no-op) if float targets are unsupported. The low
+  // tier also skips the bake (the GPGPU flipbook is a heavy load-time cost) and falls
+  // back to the same no-op — the collapse just plays its analytic path with no sim sample.
+  const noopGravitySim: GravitySim = { available: false, step: () => {}, bake: () => {}, isBaked: () => false, sampleAt: () => null, dispose: () => {} };
+  const gravitySim: GravitySim = reduced || tier === 'low'
+    ? noopGravitySim
     : buildGravitySim({
         renderer,
         count: diskRig.count,
@@ -195,7 +204,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   function onResize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    renderer.setPixelRatio(tuneRenderPixelRatio(reduced));
+    renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
     renderer.setSize(w, h);
     postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
     camera.aspect = w / h;
@@ -632,8 +641,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     starSecPts.visible = false; // secondary lensed star image stays off
 
     // --- bloom + auto-exposure + grade + disk-saturation (all resolved finals) ---
-    bloom.strength = look.bloomStrength * ctx.focusBloom + ctx.nebulaFlashBloom;
-    bloom.radius = look.bloomRadius;
+    // Null on the low tier (the bloom pass was never built); skip the writes there.
+    if (bloom) {
+      bloom.strength = look.bloomStrength * ctx.focusBloom + ctx.nebulaFlashBloom;
+      bloom.radius = look.bloomRadius;
+    }
     gradePass.uniforms.uExposure.value = look.exposure;
     gradePass.uniforms.uOlive.value = look.olive;
     gradePass.uniforms.uWarmth.value = look.warmth;

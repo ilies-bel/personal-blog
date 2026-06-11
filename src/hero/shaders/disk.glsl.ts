@@ -49,6 +49,12 @@ export const diskVertexShader = /* glsl */ `
   uniform float uTime, uOmega0, uSpinDir, uBetaScale, uBeamExp, uDoppler;
   uniform float uRin, uRout, uThick, uPixelRatio, uSec, uHole, uVertAsym, uHorizAsym, uDistrib;
   uniform float uBright;
+  // Low-tier grain-SIZE multiplier (1.0 = high/desktop-full → byte-identical; >1.0
+  // ONLY when the JS built the rig with the reduced low-tier grain budget). Fattens
+  // every grain so the thinned, un-bloomed low-tier cloud overlaps back into
+  // continuous gas instead of scattered dots. Folded into baseSize below so it reaches
+  // every point-size branch, and into the per-branch clamp ceilings so it isn't capped.
+  uniform float uPointGain;
   // Black-hole-only geometric shrink (1 = full disk, →small as the hole implodes).
   // Gated to uGiant==0 in the body so the red giant and later states are untouched.
   uniform float uBlackHoleScale;
@@ -1520,6 +1526,10 @@ export const diskVertexShader = /* glsl */ `
     float dist = -viewP.z;
     // photosphere grains sit larger so the surface reads as solid.
     float baseSize = uPixelRatio * (1.0 + 0.6*sqrt(min(bright,6.0))) * (16.0/dist);
+    // Low-tier grain fattening (uPointGain==1.0 on high → exact no-op). Folded into
+    // baseSize so every point-size branch below inherits it; the clamp ceilings are
+    // also scaled by uPointGain (below) so the boost survives the clamp.
+    baseSize *= uPointGain;
     // Black-hole shrink moves grains CLOSER to the origin (smaller dist), which would
     // balloon them via the 16/dist term and mush the disk. Scale the grain size with the
     // shrink so the contracting disk stays crisp and grainy. Gated to uGiant==0 (step is
@@ -1541,13 +1551,15 @@ export const diskVertexShader = /* glsl */ `
     size = mix(size, surfSize, vGiant);
     float maxSize = mix(mix(4.5, 6.0, morphFlare), 7.0, vGiant);
     maxSize = mix(maxSize, 13.0, yellowSurf);   // bigger grains may overlap solid
+    maxSize *= uPointGain;                       // low tier ONLY: raise the ceiling so the
+    //   fattened grains aren't clamped back down (no-op at uPointGain==1.0)
     gl_PointSize = clamp(size, 0.6, maxSize);
     // yellow-sun atmosphere: loop/jet threads are THIN; footpoint knots a bit
     // larger and bright. Overrides the generic surface sizing above.
     if(vSunFlare > 1.5){
-      gl_PointSize = clamp(baseSize * 0.9, 0.8, 2.8);    // footpoint grain (small)
+      gl_PointSize = clamp(baseSize * 0.9, 0.8, 2.8 * uPointGain);    // footpoint grain (small)
     } else if(vSunFlare > 0.5){
-      gl_PointSize = clamp(baseSize * 0.8, 0.6, 2.4);    // loop / jet thread
+      gl_PointSize = clamp(baseSize * 0.8, 0.6, 2.4 * uPointGain);    // loop / jet thread
     }
     // nebula: DIFFERENT sizing per lane. Filament wisps get fat soft grains that
     // overlap into glowing ropes; the surviving diffuse gas gets BIG soft puffs that
@@ -1558,13 +1570,13 @@ export const diskVertexShader = /* glsl */ `
       float sizeRand = 0.7 + 0.6*aSeed;                  // per-particle variety (tighter → smoother overlap)
       float growSize = max(vNebGrow, 0.05);
       if(vNebLane > 0.5){
-        gl_PointSize = clamp(baseSize * (1.3 + 1.8*vHeat) * sizeRand * growSize, 0.4, 8.0); // soft lit thread
+        gl_PointSize = clamp(baseSize * (1.3 + 1.8*vHeat) * sizeRand * growSize, 0.4, 8.0 * uPointGain); // soft lit thread
       } else {
         // BIG soft puffs so ~1M grains overlap into continuous smoke (not a grainy
         // starfield). Larger floor/cap than before → fewer hard gaps between grains.
-        gl_PointSize = clamp(baseSize * (3.0 + 3.2*vHeat) * sizeRand * growSize, 0.4, 16.0); // soft smoke puff
+        gl_PointSize = clamp(baseSize * (3.0 + 3.2*vHeat) * sizeRand * growSize, 0.4, 16.0 * uPointGain); // soft smoke puff
       }
-      if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize * 3.0 * growSize, 0.5, 9.0); // young-star knot (small bright point)
+      if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize * 3.0 * growSize, 0.5, 9.0 * uPointGain); // young-star knot (small bright point)
       if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
     }
     if(vPlaceholder > 2.9){
@@ -1579,6 +1591,9 @@ export const diskFragmentShader = /* glsl */ `
   uniform float uDotTime;   // dedicated always-live clock for the opening dot's breath (uTime is frozen across the nebula window, which includes the dot); 0 under reduced-motion → steady dot
   uniform float uSat;
   uniform float uYrFlash;   // yellow→red swap flash: whitens the gold cloud sphere
+  uniform float uPointGain; // low-tier grain-SIZE multiplier (1.0 on high). Shared with the
+  //   vertex shader: there it fattens gl_PointSize, here it WIDENS the gaussian core in step
+  //   (softP/softN below) so the fattened sparse grains overlap instead of speckling.
   varying float vBright;
   varying float vSeed;
   varying float vGiant;
@@ -1605,16 +1620,39 @@ export const diskFragmentShader = /* glsl */ `
     if(d > 0.5) discard;
     // soft round falloff that fills the photosphere.
     float a = smoothstep(0.5, 0.04, d);
-    // yellow photosphere: a smooth GAUSSIAN profile (no flat disc core) so the
-    // big overlapping grains average into a continuous surface instead of a
-    // field of hard little discs — this is what kills the sandy speckle.
+    // --- low-tier gaussian widening -------------------------------------------
+    // The low tier draws fewer grains and fattens each one via uPointGain (vertex:
+    // gl_PointSize *= uPointGain). A fatter SPRITE with a fixed-width gaussian core is
+    // just a small bright dot floating in a big transparent square: exp(-d²·7) has
+    // already fallen to ~0 well before the sprite edge, so the fattened grains DON'T
+    // touch → sandpaper / golf-ball speckle. The fix: widen the lit core IN STEP with
+    // the sprite. A wider gaussian = a SMALLER exponent, so we divide the exponent by
+    // a function of uPointGain (σ ∝ 1/√exponent, so dividing by g grows σ by √g).
+    // RE-TUNED LIGHTER: with the cheap quarter-res bloom now spreading every grain's
+    // light and ~2× more grains overlapping on their own, uPointGain itself is much
+    // smaller (~2.0 vs the old ~4.8) AND the per-(g-1) widening coefficients are
+    // pulled DOWN. The old aggressive widening (softP = 1 + 1.6·(g-1), reaching ~7×)
+    // was compensating for NO bloom and very few grains — it bloated each grain's core
+    // so far that the surface smeared into a flat molten wall with no convection. Now
+    // bloom does the final smoothing, so we widen the core only ENOUGH to close the
+    // intergranular gaps and let the bloom blend the rest, keeping visible convection.
+    // Both terms are written so they are EXACTLY 1.0 at uPointGain==1.0 (high tier),
+    // where every exponent reduces to its EXACT original constant (7.0 / 9.0 / 4.5)
+    // → the high path is byte-identical.
+    float softP = 1.0 + 1.0 * (uPointGain - 1.0);    // 1.0 high → ~2.0 at low (pointGain≈2.0) — gentle core, bloom finishes it
+    float softN = 1.0 + 0.95 * (uPointGain - 1.0);   // 1.0 high → ~1.95 low (gas widens enough that the 8.5×-sparser cloud melts the gaps shut)
+    // yellow photosphere / red giant: a smooth GAUSSIAN profile (no flat disc
+    // core) whose width tracks uPointGain so the big overlapping grains average
+    // into a continuous molten surface instead of a field of hard little discs —
+    // this is what kills the sandy speckle on the sparse low tier.
     if(vPlaceholder > 0.5 && vPlaceholder < 1.5){
-      a = (vSunFlare < 0.5) ? exp(-d*d*7.0) : exp(-d*d*9.0);
+      a = (vSunFlare < 0.5) ? exp(-d*d*(7.0/softP)) : exp(-d*d*(9.0/softP));
     }
-    // nebula: a soft wide gaussian so the big varied grains melt into continuous
-    // glowing gas with no hard edges (cloud, not confetti).
+    // nebula: a soft wide gaussian (widened more gently for gas, via softN) so the
+    // big varied grains melt into continuous glowing gas with no hard edges
+    // (cloud, not confetti) even when the low tier thins the cloud right out.
     if(vPlaceholder > 1.5 && vPlaceholder < 2.5){
-      a = exp(-d*d*4.5);
+      a = exp(-d*d*(4.5/softN));
     }
 
     // --- ember / black-hole ramp (near-monochrome, warm highlights) ---
@@ -1691,12 +1729,19 @@ export const diskFragmentShader = /* glsl */ `
           float mEff = mix(0.62, m, vYrMix);
           // gold (yellow sun) — unchanged; only reached when vSunRed<1 (mesh's job),
           // so for the cloud (vSunRed=1) this term is mixed out below.
+          // Dark-vein attenuation for the LOW tier: fat grains (uPointGain>1) turn each
+          // dark-veined grain into a visible PIT instead of soft mottling, so we soften
+          // the network depth as grains fatten. With the lighter re-tune (uPointGain now
+          // ~2.0 not ~4.8) this lands around ~0.88 — a gentle touch that keeps convection
+          // visible while the cheap bloom blurs out any residual pitting. EXACTLY 1.0 at
+          // uPointGain==1.0 → both photosphere paths stay byte-identical on high.
+          float veinAtten = 1.0 / (1.0 + 0.13 * (uPointGain - 1.0)); // 1.0 high → ~0.88 low
           vec3 sc = vec3(0.20, 0.028, 0.0);
           sc = mix(sc, vec3(0.72, 0.17, 0.01), smoothstep(0.10, 0.34, m));
           sc = mix(sc, vec3(1.00, 0.44, 0.06), smoothstep(0.28, 0.52, m));
           sc = mix(sc, vec3(1.00, 0.64, 0.16), smoothstep(0.52, 0.76, m));
           sc = mix(sc, vec3(1.00, 0.84, 0.40), smoothstep(0.84, 0.99, m));
-          sc = mix(sc, vec3(0.20, 0.030, 0.0), vSunDark);
+          sc = mix(sc, vec3(0.20, 0.030, 0.0), vSunDark*veinAtten);
           sc += smoothstep(0.88, 0.99, m) * vec3(0.5, 0.28, 0.07);
           sc = mix(sc, vec3(1.0, 0.74, 0.30), vSunLimb*0.72);
           sc += vSunLimb * vec3(0.6, 0.32, 0.08);
@@ -1714,7 +1759,14 @@ export const diskFragmentShader = /* glsl */ `
           rc = mix(rc, vec3(1.00, 0.40, 0.09),  smoothstep(0.56, 0.80, mEff)); // red-orange
           rc = mix(rc, vec3(0.96, 0.48, 0.14),  smoothstep(0.84, 1.0, mEff));  // hot orange, gold
           //   highlight dialled DOWN slightly (1.00,0.54,0.18 → 0.96,0.48,0.14).
-          rc = mix(rc, vec3(0.22, 0.020, 0.0), vSunDark*vYrMix); // dark spots/veins (lifted off black)
+          // Dark spots/veins (lifted off black). On the LOW tier the grains are
+          // few + fat (uPointGain>1), so each dark-veined grain punches a visible
+          // PIT into the sparse surface instead of averaging into soft mottling the
+          // way ~20× denser high-tier grains do — that is a big part of the residual
+          // "crusty" read. veinAtten (declared above, 1.0 on high) softens the vein
+          // depth as uPointGain rises so the low tier keeps gentle convection texture
+          // without hard dark pits — byte-identical on the high path.
+          rc = mix(rc, vec3(0.22, 0.020, 0.0), vSunDark*vYrMix*veinAtten);
           // warm, glowing red limb (forward-scattered) — the curved edge fills the comp.
           rc = mix(rc, vec3(1.00, 0.32, 0.08), vSunLimb*0.65*vYrMix);
           rc += vSunLimb * vec3(0.55, 0.12, 0.02) * vYrMix;
