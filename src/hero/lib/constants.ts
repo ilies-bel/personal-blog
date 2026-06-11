@@ -5,6 +5,16 @@
 // --- DOM / storage keys ----------------------------------------------------
 /** Toggled on <body> once scroll leaves the top, fading the opening chrome. */
 export const SCROLLED_BODY_CLASS = 'is-scrolled';
+/** Toggled on <body> while scroll is still in the OPENING hold (progress <=
+ *  SCROLL_HINT_DISMISS_AT, the black-hole opening frame). While present the page
+ *  shows only the three opening layers — brand (top-left), the bottom-centre
+ *  status readout, and the central focus dot — and the full section nav
+ *  (.overlay-blog) + left HUD rail (.hud-system) are held hidden. Removed once the
+ *  visitor scrolls past the opening hold, fading the nav/HUD in (and the dot out)
+ *  on their existing eased transitions. Reuses the SAME SCROLL_HINT_DISMISS_AT seam
+ *  the boot readout uses to hand the bottom-centre slot to the live compass, so
+ *  "the visitor has moved" is one consistent boundary. Spelled here once. */
+export const AT_OPENING_BODY_CLASS = 'at-opening';
 /** Toggled on <body> once real scroll progress reaches the black hole (bottom
  *  hero). Drives the HUD-activation chrome: the name grows, the top-right section
  *  icons open from icon → icon+label, and the HUD rail lifts to white +

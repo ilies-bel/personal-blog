@@ -209,6 +209,15 @@ body.scene-ready .scene-loader::before {
   gap: 0.6rem;
 }
 
+/* Opening hold: the full section nav is DELAYED — hidden on the quiet black-hole
+   opening frame, fading in once the visitor scrolls past SCROLL_HINT_DISMISS_AT
+   (body loses .at-opening). The existing body.bare .overlay-blog transition
+   (opacity/transform, hero.css) makes this glide rather than pop. */
+body.at-opening .overlay-blog {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* Section links as quiet glyph icons (currentColor flows from the link). The label
    is folded to zero width at rest and unfurls — icon → icon+label — only at the
    black hole (body.bare.hud-active), so the corner stays a whisper while scrolling
