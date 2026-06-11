@@ -333,8 +333,11 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     // 0 at the rim → 1 at the outer reach; the indigo mix is gated by (1-uRed) so the
     // red giant's haze is untouched.
     float outerFade = smoothstep(df+0.02, df+0.30, r);
-    vec3 indigo = vec3(0.30, 0.30, 0.60);
-    c = mix(c, indigo, outerFade * 0.70 * (1.0 - uRed));
+    // DARKENED: deeper, dimmer indigo (was vec3(0.30,0.30,0.60) @ 0.70). The human
+    // could see the surround and asked for it darker — so both the indigo colour and
+    // the outer-fade tint strength are pulled down to a deep, dim indigo.
+    vec3 indigo = vec3(0.24, 0.24, 0.50);
+    c = mix(c, indigo, outerFade * 0.58 * (1.0 - uRed));
     c = mix(c, vec3(0.92,0.40,0.07), uRed);          // gold/indigo corona → dim sodium-orange haze
     // base pulled DOWN (1.05 → 0.55) so the tight rim glow doesn't add up into a broad
     // bloom-feeding wash; the red giant still dims further to a faint haze (×0.35).
@@ -355,8 +358,11 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     float wash = washIn * washOut;
     // gentle azimuthal variation so it isn't a flat disc; keeps it reading as haze.
     float washMod = 0.80 + 0.20 * st;
-    vec3 indigoWash = vec3(0.16, 0.16, 0.40);                     // deep, dark indigo fill
-    outCol += indigoWash * wash * washMod * 0.42 * (1.0 - uRed) * uFade;
+    // DARKENED: deeper, dimmer wash (was vec3(0.16,0.16,0.40) @ 0.42). The human asked
+    // to take the now-visible indigo surround darker — so both the fill colour and its
+    // strength multiplier are pulled down to a deep, dim indigo halo (present, not bright).
+    vec3 indigoWash = vec3(0.10, 0.10, 0.30);                     // deeper, dimmer indigo fill
+    outCol += indigoWash * wash * washMod * 0.28 * (1.0 - uRed) * uFade;
 
     gl_FragColor = vec4(outCol, 1.0);
   }`;
@@ -408,8 +414,11 @@ export const sunStarFrag = /* glsl */ `
     // room reads dark-indigo while the star body stays pale gold / cream and the clear
     // colour stays true black. The cool end is a deep indigo (~0.34,0.34,0.62) and the
     // warm end is muted so few stars read warm — the field is dominantly indigo.
-    vec3 cool = vec3(0.34, 0.34, 0.62);   // deep indigo (was cool blue-white)
-    vec3 warm = vec3(0.72, 0.68, 0.74);   // muted neutral-violet (was warm gold)
+    // DARKENED a touch so the backdrop reads as a DEEP, dim indigo field, matching the
+    // darker corona/wash above — the cool end is pulled down toward a deeper indigo and
+    // the warm end muted further, so the star points stay present but never read bright.
+    vec3 cool = vec3(0.28, 0.28, 0.54);   // deeper indigo (was 0.34,0.34,0.62)
+    vec3 warm = vec3(0.64, 0.60, 0.66);   // muted neutral-violet, dimmed (was 0.72,0.68,0.74)
     vec3 col = mix(cool, warm, smoothstep(0.35, 0.85, vTint));
     gl_FragColor = vec4(col * vB * a, a);
   }
