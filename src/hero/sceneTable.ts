@@ -401,13 +401,27 @@ export const YELLOW_ACTIVE_STAGE = 2.5;
 export const NEB_COLLAPSE_HI = 3.5;
 export const NEB_COLLAPSE_LO = 3.0;
 
-/** yellow <-> red mesh/cloud crossover stage (the flash-swap point). */
+/** yellow <-> red mesh/cloud crossover stage (the cross-dissolve centre). */
 export const SWAP_STAGE = 2.88;
+/** Width of the cloud→mesh CROSS-DISSOLVE band, in stage units. The handoff is no
+ *  longer a hard flip masked by a whiteout: across [SWAP_STAGE - SWAP_XFADE, SWAP_STAGE]
+ *  the cloud fades out (cloudW 1→0) and the mesh fades in (meshW 0→1) so the two gold
+ *  bodies trade places continuously. Kept DELIBERATELY TIGHT (0.02 stage units, ≈ the
+ *  sliver stage 2.86→2.88) to MINIMISE the window in which the ~1.2M-point cloud and the
+ *  opaque mesh coexist — the smaller the overlap, the lower the residual reddish-grain
+ *  risk. The band sits ENTIRELY at/below SWAP_STAGE and starts at 2.86, which is ABOVE
+ *  RED_SHRINK_END (2.85): so by the time any overlap begins the cloud is ALREADY fully
+ *  shrunk to yellow size (yrGrow→0) AND fully cooled to gold (yrColor→0), i.e. a small
+ *  gold ball the same size/position as the mesh. Above the band: pure mesh. Below it:
+ *  pure cloud. */
+export const SWAP_XFADE = 0.02;
 /** red giant -> yellow size contraction window (the cloud shrinks to gold size). */
 export const RED_EXIT_START = 2.5;
 /** red giant -> yellow colour cool window (just behind the size contraction). */
 export const RED_COLOR_EXIT_START = 2.52;
-/** red giant fully shrunk to yellow size before the SWAP_STAGE handoff. */
+/** red giant fully shrunk to yellow size before the SWAP_STAGE handoff. The cross-
+ *  dissolve band (SWAP_XFADE) starts at 2.86, just ABOVE this, so the cloud is fully
+ *  size-matched + gold BEFORE any overlap with the mesh begins. */
 export const RED_SHRINK_END = 2.85;
 
 // ===========================================================================

@@ -32,6 +32,7 @@ import {
   RED_EXIT_START,
   RED_SHRINK_END,
   SWAP_STAGE,
+  SWAP_XFADE,
 } from './sceneTable';
 
 // ---------------------------------------------------------------------------
@@ -108,10 +109,16 @@ export function yellowRedSwap(stage: number, nebula: boolean): YellowRedSwap {
   const meshSide = inYRWindow && stage > SWAP_STAGE; // 2.88 .. 3.5 → yellow mesh
   const cloudSide = inYRWindow && stage <= SWAP_STAGE; // 2.05 .. 2.88 → particle body (owns the shrink)
 
-  // subtle flash envelope (its own stage-space gaussian, separate from the
-  // supernova flash which lives in morph space and is tied to stage 0→1).
-  const YR_FLASH_SIGMA = 0.04; // tighter than before — a brief, faint cross-dissolve cue only
-  const yrFlash = inYRWindow ? Math.exp(-Math.pow((stage - SWAP_STAGE) / YR_FLASH_SIGMA, 2.0)) : 0;
+  // SWAP FLASH — REMOVED. The cloud→mesh handoff used to be a HARD FLIP at SWAP_STAGE
+  // masked by a stage-space gaussian whiteout (this field). The flip is now a real,
+  // tight CROSS-DISSOLVE (see bodyOwnership): across a narrow band the cloud (by now a
+  // small gold ball, size-matched + co-located with the mesh) fades out as the mesh
+  // fades in, so there is no longer a hard pop to mask. We pin the flash to 0 so the
+  // dissolve is NOT accompanied by a whiteout. The field is KEPT (uYrFlash still reads
+  // it, and the grade's `yrPunch` term still multiplies it) so the wiring stays intact
+  // and re-enabling a faint cue is a one-line change — it is simply 0 now, which makes
+  // every `yrPunch`/`uYrFlash` consumer a clean no-op.
+  const yrFlash = 0;
 
   // grow + colour curves. The red giant holds full size while parked, then — once the
   // recompose orbit + unzoom have centred it (stage ~2.5) — SMOOTHLY CONTRACTS from full
@@ -157,21 +164,29 @@ export interface BodyOwnership {
  * to be decided by several overlapping predicates whose boundaries only ALMOST
  * lined up — every mismatch was a gap (wrong fallthrough body flashes) or a bleed
  * (two bodies at once). This is the ONE place that decides ownership: every stage
- * maps to a body, and the two bodies are mutually exclusive except in the ONE
- * short, DECLARED crossfade band (the collapse floor at 3.0). The yellow↔red swap
- * at SWAP_STAGE is a HARD FLIP — never a crossfade — so the ~1.2M-point red-giant
- * cloud can never render BEHIND the still-opaque yellow mesh (that overlap used to
- * flash reddish grain behind the small gold sun). The flip is masked by the
- * existing yrFlash whiteout (a stage-space gaussian centred at SWAP_STAGE, computed
- * in yellowRedSwap()). lifecycle()'s cloudShown / sunRigVisible are projected from
- * the returned weights, so they can never gap or bleed by construction.
+ * maps to a body, and the two bodies are mutually exclusive except in the TWO
+ * short, DECLARED crossfade bands (the collapse floor at 3.0, and the yellow↔red
+ * swap at SWAP_STAGE).
+ *
+ * The yellow↔red swap used to be a HARD FLIP masked by a yrFlash whiteout, because
+ * the ~1.2M-point red-giant cloud rendering BEHIND the still-opaque yellow mesh
+ * flashed reddish grain behind the small gold sun. It is now a real but VERY TIGHT
+ * CROSS-DISSOLVE over [SWAP_STAGE - SWAP_XFADE, SWAP_STAGE] (≈ stage 2.86→2.88). The
+ * grain risk is contained because the overlap band sits ABOVE RED_SHRINK_END (2.85):
+ * by the time the two bodies coexist the cloud is ALREADY fully shrunk to yellow size
+ * (yrGrow→0) and fully cooled to gold (yrColor→0), co-located with the mesh at the
+ * origin — so the dissolve just trades one small gold ball for another, never a big
+ * red cloud behind the sun. lifecycle()'s cloudShown / sunRigVisible (booleans) and
+ * the sun-rig opacity / cloud brightness are projected from these weights, so the two
+ * bodies render PARTIALLY TRANSPARENT in the overlap (a true dissolve, not on/off).
  *
  * Bands (high stage = top of page):
- *   stage >= 3.5            CLOUD            nebula + dot
- *   3.0  <  stage < 3.5     CLOUD (+mesh fades in UNDER it near the floor)
- *   2.95 <  stage <= 3.0    CLOUD->MESH      collapse-floor crossfade
- *   SWAP <  stage <= 2.95   MESH             settled yellow star
- *   stage <= SWAP           CLOUD            red giant / below (HARD FLIP at SWAP)
+ *   stage >= 3.5                       CLOUD       nebula + dot
+ *   3.0  <  stage < 3.5                 CLOUD (+mesh fades in UNDER it near the floor)
+ *   2.95 <  stage <= 3.0                CLOUD->MESH collapse-floor crossfade
+ *   SWAP        <  stage <= 2.95        MESH        settled yellow star
+ *   SWAP-XFADE  <  stage <= SWAP        CLOUD<->MESH yellow↔red CROSS-DISSOLVE
+ *   stage <= SWAP-XFADE                 CLOUD       red giant / below
  *
  * @param starFormed the mesh-star reveal ramp (lifecycle's `starFormed`); used to
  *   reveal the forming mesh under the dense gas only as the star nears completion.
@@ -183,9 +198,10 @@ export function bodyOwnership(stage: number, starFormed: number): BodyOwnership 
   // i.e. ~stage 3.08->3.00) — AFTER the nebula text has faded (~stage 3.05) — so
   // it reveals as a clean cross-fade, never a warm body under the nebula copy.
   const meshFormIn = smoothstep01((starFormed - 0.85) / 0.15);
-  // Per-body presence weights. cloudW/meshW are booleans-as-weights here; a body
-  // renders iff its weight > 0. The only places BOTH are > 0 are the two declared
-  // crossfade bands (handoffs that dissolve under bloom).
+  // Per-body presence weights. A body renders iff its weight > 0; both are > 0 only
+  // in the two declared crossfade bands (handoffs that dissolve under bloom). Across
+  // those bands the weights are now true OPACITIES (0..1), not just booleans — the
+  // sun-rig opacity rides meshW and the cloud brightness rides cloudW.
   let cloudW: number;
   let meshW: number;
   if (stage >= NEBULA_ACTIVE_STAGE) {
@@ -204,11 +220,19 @@ export function bodyOwnership(stage: number, starFormed: number): BodyOwnership 
     // settled yellow star: pure mesh
     cloudW = 0;
     meshW = 1;
+  } else if (stage > SWAP_STAGE - SWAP_XFADE) {
+    // yellow↔red CROSS-DISSOLVE band (≈ 2.86→2.88). As stage RISES toward SWAP_STAGE
+    // the mesh fades IN and the cloud fades OUT, so scrolling DOWN (stage rising here)
+    // the small gold cloud ball dissolves into the gold mesh. `m` is 0 at the band's
+    // low edge (pure cloud) → 1 at SWAP_STAGE (pure mesh); smoothstep for a soft S-curve.
+    // Mirrors the collapse-floor crossfade pattern above. Both bodies are gold + yellow
+    // size + co-located here (the cloud finished shrinking at RED_SHRINK_END=2.85, below
+    // this band), so the overlap is a clean gold-on-gold dissolve with minimal grain.
+    const m = smoothstep01((stage - (SWAP_STAGE - SWAP_XFADE)) / SWAP_XFADE);
+    cloudW = 1 - m;
+    meshW = m;
   } else {
-    // HARD FLIP at SWAP_STAGE → red giant / below: pure cloud. No crossfade band:
-    // the mesh and the cloud are mutually exclusive across the swap so the
-    // ~1.2M-point cloud never renders behind the still-opaque yellow mesh. The
-    // instantaneous swap is masked by the yrFlash whiteout centred at SWAP_STAGE.
+    // red giant / below: pure cloud (the cloud owns the whole shrink down to 2.86).
     cloudW = 1;
     meshW = 0;
   }

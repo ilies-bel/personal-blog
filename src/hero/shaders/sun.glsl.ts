@@ -79,6 +79,12 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   // fade out by here; the render loop frees the slot (intensity→0) at the same age.
   #define ERUPT_LIFE 2.4
   uniform float uTime;
+  // uMeshFade ∈ [0,1]: the yellow-mesh CROSS-DISSOLVE opacity. 1 = fully present (the
+  // normal opaque star); <1 ONLY during the tight yellow↔red swap band, where the mesh
+  // fades IN over the dissolving gold cloud. Multiplies BOTH the emitted colour and the
+  // output alpha so the opaque photosphere reads as a partially-transparent body that
+  // dissolves cleanly over black (no hard on/off pop). Default 1 → no-op everywhere else.
+  uniform float uMeshFade;
   // uRed ∈ [0,1]: 0 = yellow star (gold, bright), 1 = red giant (deep red, dim).
   // Drives the photosphere from a hot gold palette toward a cool, matte, deep-red
   // one and pulls overall brightness down — the COOLING half of the inflation.
@@ -299,7 +305,10 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
       float plume  = core * height * (0.45 + 0.85 * limbWide);
       col += eruptHot * plume * 1.4;
     }
-    gl_FragColor = vec4(col, 1.0);
+    // uMeshFade cross-dissolves the (normally opaque) photosphere in over the gold
+    // cloud at the yellow↔red swap: premultiplied colour × alpha so it dissolves
+    // cleanly over black. 1.0 everywhere outside the swap band → byte-identical output.
+    gl_FragColor = vec4(col * uMeshFade, uMeshFade);
   }`;
 
 // --- inner chromosphere glow (BackSide additive shell) ---
@@ -312,13 +321,18 @@ export const sunGlowVert = /* glsl */ `
 
 export const sunGlowFrag = /* glsl */ `
   uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
+  // uFade ∈ [0,1]: yellow↔red swap cross-dissolve presence (1 = full glow; <1 ONLY across
+  // the swap band, so the chromosphere rim fades in WITH the photosphere). Additive layer,
+  // so a brightness scale IS the fade. Default 1 → no-op outside the swap. Mirrors the
+  // loop/corona uFade lever so the whole atmosphere dissolves together.
+  uniform float uFade;
   void main(){ vec3 vd=normalize(-vP);
     // ITEM 4: SOFTER + WIDER glow with LESS pure white. Falloff eased 2.3 -> 2.0 so the
     // rim ring is a touch wider/softer (a gentle wrapping glow, not a tight white line),
     // and the lift pulled 1.5 -> 1.25 so the rim no longer bleaches toward white — it
     // reads as a soft pale-gold corona, keeping the silhouette clean.
     float i=pow(1.0-max(dot(vd,vN),0.0), 2.0);
-    gl_FragColor=vec4(uColor*i*1.25, 1.0); }`;
+    gl_FragColor=vec4(uColor*i*1.25*uFade, 1.0); }`;
 
 // --- soft corona haze (camera-facing additive billboard) ---
 

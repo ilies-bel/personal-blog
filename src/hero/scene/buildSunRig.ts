@@ -54,6 +54,10 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
   const surfaceMat = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
+      // uMeshFade: yellow↔red swap cross-dissolve opacity (1 = fully present; <1 ONLY
+      // across the tight swap band, where the mesh fades in over the gold cloud). The
+      // render loop drives it from meshW. Default 1 → identical to the old opaque body.
+      uMeshFade: { value: 1 },
       uRed: { value: 0 },
       uBlue: { value: 0 },
       uErupt: { value: uEruptInit },
@@ -61,6 +65,15 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     },
     vertexShader: sunSurfaceVert,
     fragmentShader: sunSurfaceFrag,
+    // Transparent + premultiplied so uMeshFade can dissolve the (convex) photosphere
+    // over the gold cloud at the swap. depthWrite stays ON: the sphere is convex, so
+    // the depth test alone draws front faces over back faces correctly without a sort,
+    // and keeping the depth write lets the additive atmosphere layers occlude properly.
+    // At uMeshFade=1 (everywhere outside the swap) this composites identically to the
+    // former opaque body (alpha 1 over the cleared/non-cloud background).
+    transparent: true,
+    depthWrite: true,
+    premultipliedAlpha: true,
   });
   const surface = new THREE.Mesh(new THREE.IcosahedronGeometry(R, 24), surfaceMat);
   group.add(surface);
@@ -68,7 +81,9 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
   // --- (B) inner chromosphere glow (BackSide additive) ---
   // uColor is driven per frame (gold → dim red) so the glow cools with the star.
   const glowMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(1.0, 0.55, 0.16) } },
+    // uFade: swap cross-dissolve presence (1 = full glow; the render loop drives it from
+    // meshW so the chromosphere rim dissolves in with the photosphere). Default 1 → no-op.
+    uniforms: { uColor: { value: new THREE.Color(1.0, 0.55, 0.16) }, uFade: { value: 1 } },
     vertexShader: sunGlowVert,
     fragmentShader: sunGlowFrag,
     side: THREE.BackSide,

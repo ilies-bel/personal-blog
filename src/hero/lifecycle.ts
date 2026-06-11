@@ -164,6 +164,12 @@ export interface StarState {
   sunRigVisible: boolean;
   /** the particle-cloud body is shown this frame. */
   cloudShown: boolean;
+  /** MESH presence weight (0..1) — a true OPACITY across the yellow↔red cross-dissolve
+   *  band, 0/1 everywhere else. Drives the sun-rig fade-in at the swap. */
+  meshW: number;
+  /** CLOUD presence weight (0..1) — a true brightness multiplier across the yellow↔red
+   *  cross-dissolve band, 0/1 everywhere else. Drives the cloud fade-out at the swap. */
+  cloudW: number;
   /** the lensed background starfield is shown this frame. */
   starPtsVisible: boolean;
   /** the plain twinkling star backdrop (sun-rig dome) is shown this frame. It sits
@@ -697,6 +703,8 @@ export function lifecycle(input: LifecycleInput): StarState {
     yrColor,
     sunRigVisible,
     cloudShown,
+    meshW,
+    cloudW,
     starPtsVisible,
     starBackVisible,
     starBackBright,
