@@ -27,6 +27,13 @@ export interface MarkerFrame {
   y: number;
   stage: number;
   visible: boolean;
+  /** Settled-window + no-nova gate WITHOUT the on-screen test. Fixed-spot markers
+   *  (authored at a viewport fraction, always on-screen by construction) read this
+   *  instead of `visible`, so they aren't suppressed when the star's WORLD-ORIGIN
+   *  projects off-screen — e.g. the camera-parked red giant on a narrow/mobile
+   *  viewport, where the orb fills the frame but its centre projects past the NDC
+   *  edge, making the origin-based `onScreen` false. */
+  gateOk: boolean;
 }
 
 export interface SceneHooks {

@@ -992,7 +992,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // envelope is active. `nova` (the clockless Gaussian flash envelope computed
       // above) > ~0.01 means a blast is on screen — suppress the marker so it can
       // never flash for a frame as a window edge is crossed during a fast scroll.
-      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && settled && nova < 0.01 });
+      // gateOk drops the on-screen test: a fixed-spot marker sits at its own
+      // viewport fraction (always on-screen) so the star ORIGIN going off-screen
+      // (camera-parked red giant on a narrow viewport) must not hide it. Anchored
+      // markers ride the origin, so they keep the full `visible` (incl. onScreen).
+      const gateOk = settled && nova < 0.01;
+      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk });
     }
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------

@@ -178,10 +178,15 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       const frame = markerFrameRef.current;
       if (!frame) return;
 
-      // Is THIS marker's state the settled one on screen? The scene's `visible`
-      // already encodes (on-screen AND some state is settled); the stage decides
-      // which state, so we additionally require it to be ours.
-      const nextVisible = frame.visible && settledIdForStage(frame.stage) === placement.state;
+      // Is THIS marker's state the settled one on screen? The stage decides which
+      // state is settled; we additionally require it to be ours. Anchored markers
+      // ride the star origin, so they use `visible` (which includes the origin's
+      // on-screen test). Fixed-spot markers sit at their own viewport fraction —
+      // always on-screen — so they use `gateOk` (settled + no-nova, WITHOUT the
+      // origin on-screen test) and stay visible even when the camera-parked star's
+      // centre projects off the narrow/mobile viewport.
+      const gate = anchored ? frame.visible : frame.gateOk;
+      const nextVisible = gate && settledIdForStage(frame.stage) === placement.state;
 
       // Screen position. Fixed-spot markers ignore the projected x/y and sit at a
       // viewport fraction (recomputed each frame so a resize tracks). The anchored
