@@ -115,11 +115,16 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // plasma, not a dusky ember.
     // PALETTE (yellow-star spec): pale gold → soft cream. Crest pushed toward a soft
     // CREAM (g4 blue 0.82 → 0.90) so the brightest plasma reads cream, not greenish.
-    vec3 g0 = vec3(0.58,0.22,0.02);
-    vec3 g1 = vec3(0.98,0.52,0.08);
-    vec3 g2 = vec3(1.14,0.82,0.22);
-    vec3 g3 = vec3(1.30,1.08,0.52);
-    vec3 g4 = vec3(1.45,1.32,0.90);   // soft cream crest
+    // ITEM 4: shift the whole gold ramp toward PALE GOLD (#E7B84D body / #FFE7A6 core),
+    // away from the saturated ORANGE it read as once the white wash came down. The green
+    // channel is lifted on the body/mid stops (g1/g2) so the surface reads gold-yellow,
+    // not amber-orange; the crest (g4) is a pale gold with solar material inside, not the
+    // old near-white cream that read as a glowing UI orb. Lower stops keep warmth for depth.
+    vec3 g0 = vec3(0.58,0.32,0.08);   // warm gold shadow (greener than the old orange)
+    vec3 g1 = vec3(0.92,0.66,0.22);   // gold trough (G/R ~0.72 — clearly gold, not orange)
+    vec3 g2 = vec3(1.08,0.88,0.40);   // pale gold body (#E7B84D family, G/R ~0.81)
+    vec3 g3 = vec3(1.24,1.08,0.60);   // bright pale gold
+    vec3 g4 = vec3(1.34,1.22,0.82);   // pale-gold crest (#FFE7A6 family; was near-white cream)
     // red-giant ramp: BURNT-EMBER mass — a DARK, HEAVY, molten star, NOT a clean sodium-
     // orange sun. PALETTE (red-giant ember spec): ~70% burnt red-brown shadow mass, ~20%
     // sodium-orange body, ~10% rare hot accents. Anchors #220803→#451006→#7A240B→#B43A10→
@@ -155,10 +160,11 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // high-contrast molten texture, not a smooth gold wash.
     float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
     float chMask = smoothstep(0.16, -0.05, ch);
-    // red-giant network lanes read as DEEP EMBER RED (#0D0201) — the dark intergranular
-    // veins that give the molten mass its internal depth. Green pulled DOWN (red held) vs
-    // the old near-black #220803 so the veins read as deep molten red, not brown-black.
-    col = mix(col, mix(vec3(0.14,0.018,0.0), vec3(0.046,0.007,0.003), uRed), chMask*0.88);
+    // ITEM 4: the YELLOW-star network lanes read as a dark GOLD (green lifted 0.018 ->
+    // 0.07 off the old orange-red) so the intergranular veins don't pull the body average
+    // toward orange — the surface stays pale gold. The RED-giant lane (#0D0201, deep ember
+    // red) is UNCHANGED (gated by uRed) so the approved ember surface is untouched.
+    col = mix(col, mix(vec3(0.13,0.07,0.012), vec3(0.046,0.007,0.003), uRed), chMask*0.88);
 
     // sunspots: darker + slightly broader so they punch as the reference's dark pores.
     // The yellow star keeps its exact neutral-dark pore (#0A0100); the RED GIANT's pores
@@ -209,12 +215,12 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     col += limbEdge * mix(vec3(1.05,0.78,0.34), vec3(0.45,0.18,0.03), uRed);
 
     // overall luminance: bright gold sun → dim matte red giant (light leads size).
-    // The yellow-star multiplier is pulled DOWN from the old blazing 1.42 to 1.18 so
-    // the photosphere sits just below the tone-map clip point: the granulation/
-    // mottling/sunspots all read with detail like the reference, instead of the crests
-    // blowing out to a featureless white ball under exposure + bloom — while staying a
-    // bright, saturated gold sun (1.06 read too dusky/brown).
-    col *= mix(1.85, 0.5, uRed);
+    // ITEM 4: the yellow-star multiplier is pulled DOWN ~12% (1.85 -> 1.62) to REDUCE
+    // the centre exposure — the pure-white blown core had no solar material inside, so
+    // dropping it lands the brightness on the textured disc (granulation/mottling reads)
+    // rather than a glowing UI orb, while the star stays a bright pale-gold sun. The red
+    // giant end (×0.5) is UNCHANGED so the approved ember surface is untouched.
+    col *= mix(1.62, 0.5, uRed);
 
     // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
     // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
@@ -306,12 +312,12 @@ export const sunGlowVert = /* glsl */ `
 export const sunGlowFrag = /* glsl */ `
   uniform vec3 uColor; varying vec3 vN; varying vec3 vP;
   void main(){ vec3 vd=normalize(-vP);
-    // Falloff 2.3 (between the old broad 1.7 and the too-tight 3.0): a THICK bright rim
-    // ring wrapping the photosphere like the reference's luminous edge, but still
-    // anchored to the disc — not a screen-wide halo. Lift 1.5 so the rim genuinely
-    // glows yellow-white without bleaching the silhouette to a featureless ball.
-    float i=pow(1.0-max(dot(vd,vN),0.0), 2.3);
-    gl_FragColor=vec4(uColor*i*1.5, 1.0); }`;
+    // ITEM 4: SOFTER + WIDER glow with LESS pure white. Falloff eased 2.3 -> 2.0 so the
+    // rim ring is a touch wider/softer (a gentle wrapping glow, not a tight white line),
+    // and the lift pulled 1.5 -> 1.25 so the rim no longer bleaches toward white — it
+    // reads as a soft pale-gold corona, keeping the silhouette clean.
+    float i=pow(1.0-max(dot(vd,vN),0.0), 2.0);
+    gl_FragColor=vec4(uColor*i*1.25, 1.0); }`;
 
 // --- soft corona haze (camera-facing additive billboard) ---
 
@@ -333,12 +339,14 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     float r = length(pp);
     float a = atan(pp.y, pp.x);
     float df = uDiskFrac;
-    // STEEPER halo falloff (7.0 → 16.0) and SHORTER streamer reach (2.0 → 6.0) so the
-    // corona is a tight warm glow clinging to the rim, not a screen-wide soft wash.
-    float halo = exp(-max(r-df,0.0)*16.0);
+    // ITEM 4: SOFTER + WIDER corona for the yellow star. The halo falloff is eased
+    // 16.0 -> 11.0 and the streamer reach 6.0 -> 4.5 so the glow is a soft, wider warm
+    // halo around the pale-gold star (a calmer atmosphere), not the tight clipped ring —
+    // while still anchored to the disc, not a screen-wide wash.
+    float halo = exp(-max(r-df,0.0)*11.0);
     float st = fbm(vec3(cos(a)*0.8, sin(a)*0.8, uTime*0.02));
     st = st*0.5+0.5;
-    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*6.0);
+    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*4.5);
     float corona = halo*0.50 + streamer*0.18;
     corona *= smoothstep(df-0.02, df+0.04, r);
     corona *= smoothstep(1.0, df+0.05, r);

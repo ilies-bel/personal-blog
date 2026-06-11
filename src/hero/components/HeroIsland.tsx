@@ -46,6 +46,7 @@ import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
 import StarMarker from './StarMarker';
+import YellowStarRing from './YellowStarRing';
 
 declare global {
   interface Window {
@@ -96,6 +97,17 @@ const BRIGHT_STAGE_BANDS: ReadonlyArray<readonly [number, number]> = [
 function isBrightZoneStage(stage: number): boolean {
   return BRIGHT_STAGE_BANDS.some(([lo, hi]) => stage >= lo && stage <= hi);
 }
+
+// Internal lifecycle scene id -> the public art-direction data-scene name. The CSS
+// per-scene HUD token blocks + the yellow-star designed-ring overlay key off these
+// public names so the celestial chapters read clearly in the markup.
+const DATA_SCENE_BY_ID: Record<HudTargetId, 'blackhole' | 'red-giant' | 'yellow-star' | 'nebula' | 'final'> = {
+  end: 'blackhole',
+  red: 'red-giant',
+  yellow: 'yellow-star',
+  nebula: 'nebula',
+  beginning: 'final',
+};
 
 export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -321,6 +333,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // scroll read). Over the dark states (black hole / red giant / nebula / dot) this is
   // false → warm bone. The provider hands it down; the CSS [data-zone] flips the tokens.
   const brightZone = isBrightZoneStage(lifecycleStage);
+  // The lifecycle scene the live scroll position is ON (same pure resolver the HUD /
+  // beats use). Drives the per-scene HUD colour tokens (data-scene below) and the
+  // yellow-star designed-ring overlay.
+  const sceneId = sceneForProgress(progress).sceneId;
+  const dataScene = DATA_SCENE_BY_ID[sceneId];
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own
   // chrome and copy, and dims this layer via CSS (.bh-backdrop).
@@ -334,14 +351,22 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   return (
     <SceneStateProvider
-      state={{ progress, direction, reduced, explorationMode, scrollHudId, brightZone, base }}
+      state={{ progress, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base }}
       actions={{}}
     >
       {/* data-zone="bright" over the supernova flash + yellow-star beat flips the
           chrome tokens to a dark graphite stroke (see hud.css [data-zone]); warm bone
-          everywhere else. The swap is CSS-transitioned so it eases, never pops. */}
-      <div className="bh-root" data-exploring={explorationMode} data-zone={brightZone ? 'bright' : 'dark'}>
+          everywhere else. data-scene names the active celestial chapter so the per-scene
+          HUD colour tokens (hero.css [data-scene]) give each chapter its own emotional
+          temperature. Both swaps are CSS-transitioned so they ease, never pop. */}
+      <div
+        className="bh-root"
+        data-exploring={explorationMode}
+        data-zone={brightZone ? 'bright' : 'dark'}
+        data-scene={dataScene}
+      >
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
+        <YellowStarRing />
         <HeroIdentity />
         <ManifestoOverlay />
         {/* One marker per placement, all mounted at once. Each instance gates its
