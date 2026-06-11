@@ -28,6 +28,20 @@
 // the live pointer position (tracked via a ref, not state) to the marker's current
 // screen x/y. React only re-renders when the visible/locked/side state flips —
 // never per frame (mirrors how lastVisible/lastLocked are handled).
+//
+// TOUCH (coarse pointer) — a tap-to-reveal analog of desktop hover-lock. On a phone
+// `mousemove` never fires, so the proximity path above can never engage; a touch
+// user would only ever NAVIGATE the <a> and never see the info card. So on a coarse
+// pointer the lock becomes EVENT-driven instead of proximity-driven:
+//   • First tap on an UNLOCKED marker → preventDefault (no navigation) and LOCK it
+//     (reveal the card). This is the touch analog of the desktop proximity lock.
+//   • Second tap on the SAME locked marker (or its CTA) → the <a> navigates natively.
+//   • A tap ELSEWHERE (another marker or empty space) → unlock (dismiss the card);
+//     tapping another marker locks that one. Only ONE marker is locked at a time.
+// The touch lock lives in `touchLockedRef`; the rAF loop RESPECTS it (it never
+// clears a touch-set lock from "no pointer is near") so the tap doesn't race the
+// next frame. Desktop's mouse-proximity + keyboard-focus path is untouched — the
+// touch branch only runs when `window.matchMedia('(pointer: coarse)')` matches.
 import { useEffect, useRef, useState } from 'react';
 import {
   settledIdForStage,
@@ -93,6 +107,15 @@ const LOCK_RELEASE_MARGIN = 14; // px past the peak before the lock drops
 // card + connector flip to the LEFT so the card stays on-screen.
 const CARD_FLIP_FRACTION = 0.7;
 
+// Touch detection. A coarse pointer (finger/stylus) has no hover, so the marker
+// switches to the tap-to-lock model. Evaluated lazily inside event handlers (not
+// cached at module load) so it stays correct if a device's primary pointer changes
+// — e.g. a 2-in-1 toggling between trackpad and touchscreen. Guarded for SSR.
+function isCoarsePointer(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 function resolveHref(base: string, href: string): string {
   return `${base}/${href}`.replace(/\/+/g, '/');
 }
@@ -144,6 +167,13 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // Whether the link currently holds keyboard focus — also forces the lock so
   // non-mouse users get the card. Ref so the rAF loop reads it without a render.
   const focusedRef = useRef(false);
+  // TOUCH lock: set true by a first tap on a coarse pointer, cleared by a tap
+  // elsewhere (or navigation). Like focusedRef it FORCES the lock, but it is set
+  // by an event rather than by per-frame proximity. The rAF loop respects it: when
+  // true it holds the lock (so the tap doesn't lose to the next "no pointer near"
+  // frame) and SKIPS the proximity branch entirely. A ref so toggling it never
+  // re-renders — the rAF loop reads it and drives the visible `locked` state.
+  const touchLockedRef = useRef(false);
 
   // Whether the marker is currently in the visible window (gates opacity CSS class).
   const [visible, setVisible] = useState(false);
@@ -160,6 +190,31 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     };
     document.addEventListener('mousemove', onMove, { passive: true });
     return () => document.removeEventListener('mousemove', onMove);
+  }, []);
+
+  // TOUCH: outside-tap dismissal + cross-marker single-lock. A document-level
+  // pointerdown listener (touch only) clears THIS marker's touch lock whenever the
+  // tap lands outside its element. That single rule gives us both behaviours for
+  // free: tapping empty space dismisses the open card, and tapping ANOTHER marker
+  // fires this listener (the tap is outside us) so we release while the other
+  // marker's own click handler locks itself — only one marker is ever locked.
+  // Listen in the CAPTURE phase so we settle before the target marker's own click
+  // handler runs (pointerdown precedes click), avoiding a release-then-relock race
+  // on the marker being tapped: the tapped marker is INSIDE itself, so its own
+  // listener's `el.contains(target)` check leaves it alone. The rAF loop reads
+  // touchLockedRef next frame and drops the `locked` state, so no setState here.
+  useEffect(() => {
+    const onDocPointerDown = (event: PointerEvent): void => {
+      if (event.pointerType !== 'touch') return;
+      if (!touchLockedRef.current) return;
+      const el = elRef.current;
+      const target = event.target;
+      // Keep the lock only if the tap is within this marker (its <a> or its card).
+      if (el && target instanceof Node && el.contains(target)) return;
+      touchLockedRef.current = false;
+    };
+    document.addEventListener('pointerdown', onDocPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onDocPointerDown, true);
   }, []);
 
   useEffect(() => {
@@ -194,14 +249,39 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       if (el) {
         el.style.left = `${x.toFixed(1)}px`;
         el.style.top = `${y.toFixed(1)}px`;
+        // Publish the marker's viewport x in px as a CSS var so the TOUCH card can
+        // anchor itself to the VIEWPORT (centre it horizontally) instead of to the
+        // marker's side. The card is position:fixed but its containing block is this
+        // transformed <a> (translate -50% -50% makes it the fixed CB), so its left:0
+        // maps to the marker box's on-screen left edge, NOT the viewport's. Knowing
+        // x lets the coarse-pointer CSS offset the card back to the viewport origin
+        // (see hud.css `--marker-x`). Desktop never reads this var. Written every
+        // frame alongside left/top (no setState). `--marker-y` is the twin for the
+        // vertical axis so the touch sheet can pin to the viewport BOTTOM (not the
+        // marker's mid-line) the same way.
+        el.style.setProperty('--marker-x', `${x.toFixed(1)}px`);
+        el.style.setProperty('--marker-y', `${y.toFixed(1)}px`);
       }
 
-      // Proximity / focus lock. Computed against this marker's CURRENT x/y, with
-      // hysteresis so it doesn't chatter at the boundary. Keyboard focus forces the
-      // lock so non-pointer users still get the card.
+      // Proximity / focus / touch lock. Computed against this marker's CURRENT
+      // x/y, with hysteresis so it doesn't chatter at the boundary. Keyboard focus
+      // OR a touch tap forces the lock so non-pointer users still get the card.
+      //
+      // Touch precedence matters for the race: a coarse-pointer tap sets
+      // touchLockedRef synchronously in the click handler, but the next rAF frame
+      // has no nearby pointer (touch fires no mousemove), so the proximity branch
+      // below would compute nextLocked=false and instantly drop the just-set lock.
+      // We prevent that by checking touchLockedRef BEFORE the proximity branch and
+      // skipping proximity entirely while it holds — the touch lock is purely
+      // event-driven (set by tap, cleared by an outside tap / navigation). The only
+      // thing that still overrides it is `!nextVisible` (the marker scrolled away),
+      // which also resets touchLockedRef so a re-entry starts clean.
       let nextLocked = lastLocked;
       if (!nextVisible) {
         nextLocked = false;
+        touchLockedRef.current = false;
+      } else if (touchLockedRef.current) {
+        nextLocked = true;
       } else if (focusedRef.current) {
         nextLocked = true;
       } else {
@@ -268,6 +348,9 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
+      // Drop any held touch lock so a re-mount (Strict-Mode double-invoke, route
+      // change) starts unlocked rather than inheriting a stale tap.
+      touchLockedRef.current = false;
       // Undock the cursor if this marker unmounts while it owns the lock.
       const w = markerLockWindow();
       const current = w.__bhMarkerLock;
@@ -291,6 +374,27 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       }}
       onBlur={() => {
         focusedRef.current = false;
+      }}
+      onClick={(event) => {
+        // Touch tap-to-lock, two-step. Mouse/keyboard activation is left entirely
+        // alone (the early return), so desktop click-through to the href is
+        // unchanged. We branch on the COARSE-POINTER check, not on event.detail,
+        // so a hybrid device's mouse click never hits this path.
+        if (!isCoarsePointer()) return;
+        // First tap on an unlocked marker: reveal the card, do NOT navigate yet.
+        // touchLockedRef is the source of truth (the rAF loop derives `locked` from
+        // it); checking the ref — not the possibly-one-frame-stale `locked` state —
+        // makes a double-tap deterministic. Setting it here, then letting the rAF
+        // loop hold it, is exactly the race-proofing described on touchLockedRef.
+        if (!touchLockedRef.current) {
+          event.preventDefault();
+          touchLockedRef.current = true;
+          return;
+        }
+        // Second tap on the already-locked marker (or its CTA, which is inside the
+        // same <a>): fall through WITHOUT preventDefault so the real <a href>
+        // navigates natively. The marker is unmounting on navigation, so there is
+        // no lock state left to clear.
       }}
     >
       {/* The target reticle: resting dotted hex + locked solid hex + ticks + the

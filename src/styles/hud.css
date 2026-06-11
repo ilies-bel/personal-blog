@@ -1314,3 +1314,157 @@ body.hud-booting .hud-boot-scan {
   opacity: 0.8;
   transform: scale(0.6);
 }
+
+/* ---------------------------------------------------------------------------
+   VIEWPORT-FITTED CARD (narrow viewport OR coarse pointer) ────────────────────
+   The side-tethered card (left/right of the reticle) only fits on a WIDE desktop
+   window: a ~23rem panel beside a marker near an edge runs off-screen. That clip
+   happens on ANY narrow viewport, not just a phone — a desktop user who narrows
+   their window hits it too. So the bottom-sheet re-anchor below is gated on the
+   shared 46rem mobile breakpoint (the same one the rest of the HUD uses, line 622)
+   AS WELL AS a coarse pointer, so it fires for a narrowed fine-pointer desktop
+   window, not only on touch devices. (The touch-ONLY affordances — the ≥44px hit
+   pad, the resting-hex opacity lift, the CTA tap padding — stay in the coarse-only
+   block further down; only the CARD POSITIONING/FIT lives here.) Desktop WIDE
+   (>46rem, fine pointer) keeps the side-tether + connector + flip untouched.
+
+   CONTAINING-BLOCK NOTE: the card is position:fixed, but the .star-marker <a>
+   has `translate: -50% -50%` (a transform), which makes the <a> the containing
+   block for this fixed child. So the card's inset:0 resolves against the 72px
+   MARKER BOX, not the viewport. We undo that by offsetting with the marker's
+   own viewport coordinates, published each frame as `--marker-x` / `--marker-y`
+   (StarMarker.tsx, UNCONDITIONALLY — desktop just never reads them): the marker
+   box's on-screen left edge is `var(--marker-x) - var(--marker-size)/2`, so
+   shifting `left` by the negative of that re-anchors the band to the viewport's
+   left edge; the same trick on the bottom axis pins the sheet to the viewport
+   bottom. This overrides the fine-pointer side-tether rules (`left/right: 100%` +
+   the side transforms), which we reset explicitly so the `data-side` the rAF loop
+   still computes has no effect here. The reticle/hexagon is untouched — only the
+   CARD moves. The vars are written in px each frame, so the calc cancels exactly;
+   the `50vw`/`50vh` fallbacks only apply on the very first frame before the rAF
+   writes them, and centre the band sensibly so there's no off-screen flash.
+   --------------------------------------------------------------------------- */
+@media (max-width: 46rem), (pointer: coarse) {
+  .star-marker-card,
+  .star-marker[data-side='right'] .star-marker-card,
+  .star-marker[data-side='left'] .star-marker-card {
+    position: fixed;
+    /* Re-anchor the fixed card (CB = the transformed marker box) to the viewport:
+       a full-width band whose left edge sits at viewport x=0. */
+    top: auto;
+    right: auto;
+    left: calc(0px - (var(--marker-x, 50vw) - var(--marker-size) / 2));
+    width: 100vw;
+    /* Pin the band's bottom to the viewport bottom (above the safe area),
+       INDEPENDENT of the marker's y. `bottom: 0` would place the card bottom at
+       the marker box's bottom edge (viewport y = var(--marker-y) + size/2); we
+       want it a gutter above the viewport bottom instead, so we shift by the
+       (negative) delta between those two — a NEGATIVE bottom pushes the card down
+       to the true viewport bottom no matter where the marker sits. */
+    bottom: calc(
+      (var(--marker-y, 50vh) + var(--marker-size) / 2) - 100dvh +
+        env(safe-area-inset-bottom, 0px) + 1rem
+    );
+    /* Centre the body in the band, honouring the side gutters via padding. */
+    justify-content: center;
+    align-items: flex-end;
+    padding-inline: 1rem;
+    flex-direction: row;
+    /* Hidden state: slid down a hair + faded (the base rule fades opacity). The
+       locked rule below brings it up. */
+    transform: translateY(0.75rem);
+  }
+  /* Locked reveal: slide the sheet up to rest. Overrides the side variants'
+     centred -50% Y translate (which would yank the sheet off the bottom). */
+  .star-marker[data-locked='true'] .star-marker-card,
+  .star-marker[data-locked='true'][data-side='right'] .star-marker-card,
+  .star-marker[data-locked='true'][data-side='left'] .star-marker-card {
+    transform: translateY(0);
+  }
+
+  /* A tether line to a viewport sheet looks wrong — hide the connector. */
+  .star-marker-connector {
+    display: none;
+  }
+
+  /* The sheet body: a comfortable reading measure, never wider than the viewport
+     minus the 1rem band gutters. The left-side variant's right-align/reverse is
+     irrelevant now — reset it so the copy always reads left-aligned in the sheet. */
+  .star-marker-card-body,
+  .star-marker[data-side='left'] .star-marker-card-body {
+    width: min(32rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+    flex-direction: row;
+    text-align: left;
+  }
+  /* The left-side nudge transform is meaningless in the sheet — keep it the
+     right-side nudge so the CTA still moves consistently on lock. */
+  .star-marker[data-side='left'][data-locked='true'] .star-marker-card-cta {
+    transform: translateX(0.18rem);
+  }
+}
+
+/* Reduced motion: the sheet appears instantly (no slide-up). Mirrors the desktop
+   reduced-motion blocks above — the card snaps in. Gated on the SAME narrow-OR-
+   coarse condition as the sheet itself so the snap applies in the width-gated path
+   too. Covers BOTH the OS media query and the JS-driven data-reduced flag. */
+@media (max-width: 46rem) and (prefers-reduced-motion: reduce),
+  (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  .star-marker-card,
+  .star-marker[data-side='right'] .star-marker-card,
+  .star-marker[data-side='left'] .star-marker-card,
+  .star-marker[data-locked='true'] .star-marker-card {
+    transform: none;
+  }
+}
+@media (max-width: 46rem), (pointer: coarse) {
+  .star-marker[data-reduced='true'] .star-marker-card,
+  .star-marker[data-reduced='true'][data-side='right'] .star-marker-card,
+  .star-marker[data-reduced='true'][data-side='left'] .star-marker-card,
+  .star-marker[data-reduced='true'][data-locked='true'] .star-marker-card {
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   TOUCH-ONLY affordances (coarse pointer): genuinely tied to actual touch input,
+   so they stay gated on the pointer type (NOT the width) — a narrowed fine-pointer
+   desktop window must not grow a finger hit pad or the touch CTA padding.
+     • the resting dotted hex is a touch more prominent (it's the only cue that the
+       marker is tappable — there's no cursor change to lean on), and
+     • an invisible hit pad enlarges the tap target past the visible reticle to
+       satisfy WCAG 2.5.5 (≥44px) without changing the on-screen hexagon size, and
+     • the CTA gets a comfortable tap line so the second tap is easy to land.
+   The JS tap-to-lock model (StarMarker.tsx) only runs on a coarse pointer too, so
+   the visual + behaviour stay in lockstep. Desktop (fine pointer) is untouched.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  /* Invisible, centred hit pad so the finger target is comfortably ≥44px even
+     though the visible reticle stays --marker-size. It has no background and sits
+     under the reticle/dot — it only catches the tap. Centred on the marker via
+     top/left + translate and sized to max(100%, 44px) so it never shrinks below the
+     WCAG floor, while still growing to cover the full reticle box (already 72px).
+     A forgiving pad around the hexagon's points makes the tap easy to land. */
+  .star-marker::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    translate: -50% -50%;
+  }
+  /* No hover on touch → make the RESTING marker read as a touchable affordance:
+     lift the dotted hex's opacity a little (0.62 → 0.78) so it invites a tap. Only
+     while resting (not locked) and only when its state is on screen. The locked
+     reveal still wins because the [data-locked] rule above zeroes this hex anyway. */
+  .star-marker[data-visible='true']:not([data-locked='true']) .star-marker-hex-dotted {
+    opacity: 0.78;
+  }
+  /* CTA is the explicit "OPEN" affordance on touch — give it a comfortable tap
+     line height so the second tap is easy to land. Visual size of the text is
+     unchanged; the padding just enlarges the hittable line. */
+  .star-marker-card-cta {
+    padding-block: 0.35rem;
+  }
+}
