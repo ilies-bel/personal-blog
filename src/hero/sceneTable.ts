@@ -596,8 +596,9 @@ export const SCENES: readonly LifecycleScene[] = [
       at: 0.35,
       text: { inStart: 0.28, inEnd: 0.31, outStart: 0.41, outEnd: 0.43 },
       state: 'nebula',
-      down: 'One boundary can outlive a thousand generated lines.',
-      up: 'One boundary can outlive a thousand generated lines.',
+      // ITEM 8: a clear boundary in the raw material saves a thousand future decisions.
+      down: 'One clear boundary can save a thousand future decisions.',
+      up: 'One clear boundary can save a thousand future decisions.',
       whisper: 'prompts, diffs, failing tests, half-ideas. raw material, not magic.',
     },
   },
@@ -678,8 +679,9 @@ export const SCENES: readonly LifecycleScene[] = [
       at: 0.735,
       text: { inStart: 0.705, inEnd: 0.72, outStart: 0.76, outEnd: 0.77 },
       state: 'red giant',
-      down: 'My work is to keep the center readable.',
-      up: 'My work is to keep the center readable.',
+      // ITEM 8: complexity expands as the giant bloats — the work is to keep the centre readable.
+      down: 'Complexity expands. My work is to keep the center readable.',
+      up: 'Complexity expands. My work is to keep the center readable.',
       whisper: 'The AI keeps adding. Nobody is left who understands it.',
     },
   },
@@ -727,8 +729,11 @@ export const SCENES: readonly LifecycleScene[] = [
       at: 0.965,
       text: { inStart: 0.94, inEnd: 0.95, outStart: 1.02, outEnd: 1.02 },
       state: 'black hole',
-      down: 'Explore the projects.',
-      up: 'Explore the projects.',
+      // ITEM 8: the cinematic opening line — quiet, gravitational, not a direct CTA.
+      // ("Explore the projects." moves to the unlocked HUD/project state — see the
+      // black-hole HUD nav row's destination below.)
+      down: 'Under pressure, structure remains.',
+      up: 'Under pressure, structure remains.',
       whisper: 'Even the repo you were proud of can collapse.',
     },
   },
