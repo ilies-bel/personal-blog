@@ -305,6 +305,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // Scratch vectors reused each frame so the dolly never allocates on the hot path.
   const dollyDir = new THREE.Vector3();
   const dollyTarget = new THREE.Vector3();
+  // Reused each frame for the red-giant→yellow uGiantCenter shrink drift (set in place,
+  // never re-allocated) so the hot-path stays allocation-free. Defaults to origin → no-op.
+  const giantCenter = new THREE.Vector3(0, 0, 0);
 
   let mouseX = 0;
   let mouseY = 0;
@@ -775,7 +778,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     setDisk('uYrMix', look.cloudSide ? look.yrColor : 1);
 
     // disk base emission (folds the stateful focus/streak multipliers via ctx).
-    setDisk('uBright', look.baseBright * look.cloudBright * ctx.focusEmission * ctx.streakGasDim);
+    // CROSS-DISSOLVE: cloudW (1 outside the swap band, 1→0 across it) fades the cloud's
+    // emission OUT as the mesh fades in, so the gold cloud ball dissolves into the gold
+    // mesh with no hard flip. It is 1 everywhere except the tight swap band, so this is a
+    // no-op outside it (and the body is hidden entirely once cloudW→0 via cloudShown).
+    setDisk('uBright', look.baseBright * look.cloudBright * look.cloudW * ctx.focusEmission * ctx.streakGasDim);
     // disk in-shader saturation (after the sun/nebula overrides resolved in lifecycle).
     setDisk('uSat', look.diskSat);
 
@@ -786,12 +793,21 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     sunRig.surfaceMat.uniforms.uBlue.value = look.starFormed > 0 ? 1 - look.starFormed * look.starFormed : 0;
     sunRig.surfaceMat.uniforms.uRed.value = 0;
     sunRig.coronaMat.uniforms.uRed.value = 0;
-    // FLARES (coronal loops + corona haze) only AFTER the star is fully sized.
-    const flarePresence = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.97) / 0.03) : 1;
+    // CROSS-DISSOLVE: meshW (0 outside the swap band, 0→1 across it) fades the WHOLE mesh
+    // IN as the cloud fades out — the photosphere via its premultiplied uMeshFade, and the
+    // additive atmosphere (loops/corona, and the glow below) by multiplying their presence.
+    // meshW is 1 everywhere the mesh is the settled body, so this is a no-op there.
+    sunRig.surfaceMat.uniforms.uMeshFade.value = look.meshW;
+    // FLARES (coronal loops + corona haze) only AFTER the star is fully sized — AND scaled
+    // by meshW so they dissolve in together with the photosphere at the swap.
+    const flarePresence = (look.starFormed > 0 ? smoothstep01((look.starFormed - 0.97) / 0.03) : 1) * look.meshW;
     sunRig.loopMat.uniforms.uFade.value = flarePresence;
     sunRig.coronaMat.uniforms.uFade.value = flarePresence;
+    // inner chromosphere glow rides meshW directly (it has no starFormed flare gate — it
+    // is the rim glow present at all star sizes), so it dissolves in/out with the body.
+    sunRig.glowMat.uniforms.uFade.value = look.meshW;
     sunRig.starMat.uniforms.uOpacity.value = 1;
-    // Mesh visible across its side (cross-dissolves under the bloom at the swap).
+    // Mesh visible across its side (cross-dissolves with the cloud at the swap).
     sunRig.group.visible = look.sunRigVisible;
     // shared star backdrop dome behind BOTH star states (hidden for BH/nebula/dot/collapse).
     sunRig.starBack.visible = look.starBackVisible;
@@ -989,6 +1005,32 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const giantSpin = reduced ? 0 : t * RED_GIANT_SPIN_RATE;
     diskMatPrimary.uniforms.uGiantSpin.value = giantSpin;
     diskMatSecondary.uniforms.uGiantSpin.value = giantSpin;
+
+    // --- red giant → yellow: a SUBTLE world-space drift during the shrink ---------
+    // ITEM 1: the shrinking red giant should read as ONE gesture — size + colour + POSITION
+    // changing together — gliding into where the yellow mesh ignites. The camera ALREADY
+    // recentres from the off-centre red-giant framing to the centred yellow framing across
+    // exactly the shrink window (band 5's tail reaches YELLOW_HOLD by stage ~2.86), so the
+    // body's on-screen position glides to centre as it shrinks with no retiming needed. On
+    // top of that we add a TINY uGiantCenter world-space arc so the body visibly TRAVELS as
+    // its own move (a gentle parallax swing), not merely shrink-in-place under a moving cam.
+    //
+    // The drift is gated to the cloud-side shrink and shaped as a PARABOLIC BUMP off
+    // look.yrGrow (the shrink curve: 1 at the full red giant / stage 2.5, 0 at the
+    // yellow-size gold ball / stage 2.85). 4·g·(1−g) is exactly 0 at BOTH ends and peaks
+    // mid-shrink, so the offset is 0 at the red-giant hold (yrGrow=1, stage≤2.5, that beat
+    // is untouched) AND EXACTLY 0 by RED_SHRINK_END (yrGrow=0, stage≥2.85) — i.e. the body
+    // is back at the world origin, co-located with the origin-centred mesh, BEFORE the
+    // cross-dissolve band (2.86→2.88) begins, so there is no pop at the swap. The shader
+    // gates uGiantCenter on the red-giant state, so it can never touch the nebula/dot/sun.
+    // Kept deliberately small (peak ≈0.45 world units on a ~1.9-unit-radius body in a
+    // ~20-unit frame): enough to read as a swing, far too small to overshoot the centre.
+    const RED_DRIFT_X = 0.45; // peak lateral world offset (+x: trails the camera's pan, a soft swing)
+    const RED_DRIFT_Y = -0.18; // a touch of downward arc so the swing reads as a settle, not a slide
+    const driftBump = look.cloudSide ? 4 * look.yrGrow * (1 - look.yrGrow) : 0; // 0 at both shrink edges
+    giantCenter.set(RED_DRIFT_X * driftBump, RED_DRIFT_Y * driftBump, 0);
+    diskMatPrimary.uniforms.uGiantCenter.value = giantCenter;
+    diskMatSecondary.uniforms.uGiantCenter.value = giantCenter;
 
     // --- nebula → star collapse: BAKED gravity-sim flipbook ---------------------
     // The real chaotic collapse sim is run ONCE and snapshotted into a flipbook at
