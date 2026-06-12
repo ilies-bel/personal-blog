@@ -402,7 +402,7 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
     uAspect: { value: 1 },
     uCoreColor: { value: new THREE.Color(1.0, 0.82, 0.54) },
     uDim: { value: dim },
-    uGlow: { value: 0.6 }, // a warm luminous vanishing point that pulls the eye in
+    uGlow: { value: 0.9 }, // a warm luminous vanishing point that pulls the eye in (soft ember, not bright)
   };
   const glowMat = new THREE.ShaderMaterial({
     uniforms: glowUniforms,

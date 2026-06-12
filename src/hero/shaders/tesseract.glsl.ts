@@ -154,7 +154,7 @@ export const tesseractBeamFrag = /* glsl */ `
     float fog = 1.0 - exp(-uFogDensity * viewDepth);
     fog = clamp(fog * 0.45 + vDepth * 0.35, 0.0, 1.0);
     vec3 hazed = mix(col, uFogColor, fog * 0.8);
-    hazed += uCoreColor * pow(vDepth, 5.0) * 0.7; // hot centre only at the deep core
+    hazed += uCoreColor * pow(vDepth, 5.0) * 0.95; // hot centre only at the deep core (soft glow, falloff keeps near beams dark)
 
     // master exposure / dim, then a gentle knee so the core doesn't clip flat-white early.
     vec3 outc = hazed * uDim;
