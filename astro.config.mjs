@@ -15,7 +15,7 @@ import sitemap from '@astrojs/sitemap';
 // Change SITE / BASE here and everything (links, sitemap, canonical URLs)
 // follows automatically.
 // ---------------------------------------------------------------------------
-const SITE = 'https://your-username.github.io';
+const SITE = 'https://ilies-bel.github.io';
 const BASE = '/personal-blog';
 
 // https://astro.build/config
