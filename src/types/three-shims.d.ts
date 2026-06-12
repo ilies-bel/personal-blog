@@ -7,17 +7,24 @@ declare module 'three' {
   export class RGBAFormat {}
   export class SRGBColorSpace {}
 
+  export class BoxGeometry { constructor(...args: any[]); [key: string]: any; }
   export class BufferAttribute { constructor(...args: any[]); [key: string]: any; }
   export class BufferGeometry { constructor(...args: any[]); [key: string]: any; }
   export class Color { constructor(...args: any[]); [key: string]: any; }
   export class DataTexture { constructor(...args: any[]); [key: string]: any; }
+  export class Euler { constructor(...args: any[]); [key: string]: any; }
   export class Group { constructor(...args: any[]); [key: string]: any; }
   export class IcosahedronGeometry { constructor(...args: any[]); [key: string]: any; }
+  export class InstancedBufferAttribute { constructor(...args: any[]); [key: string]: any; }
+  export class InstancedMesh { constructor(...args: any[]); [key: string]: any; }
   export class LineSegments { constructor(...args: any[]); [key: string]: any; }
+  export class Matrix4 { constructor(...args: any[]); [key: string]: any; }
   export class Mesh { constructor(...args: any[]); [key: string]: any; }
+  export class OrthographicCamera { constructor(...args: any[]); [key: string]: any; }
   export class PerspectiveCamera { constructor(...args: any[]); [key: string]: any; }
   export class PlaneGeometry { constructor(...args: any[]); [key: string]: any; }
   export class Points { constructor(...args: any[]); [key: string]: any; }
+  export class Quaternion { constructor(...args: any[]); [key: string]: any; }
   export class Raycaster { constructor(...args: any[]); [key: string]: any; }
   export class Scene { constructor(...args: any[]); [key: string]: any; }
   export class ShaderMaterial { constructor(...args: any[]); [key: string]: any; }

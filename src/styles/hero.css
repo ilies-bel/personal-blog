@@ -353,10 +353,10 @@ body.article-page .bh-backdrop::before {
    A bespoke backdrop scoped to a single post (frontmatter backdrop: 'tesseract',
    the INSPIRATION / 01 page). It REPLACES the dimmed live <BlackHole backdrop>
    photon-ring scene for that one post; every other post keeps the live scene
-   above. The Interstellar bookcase corridor is a REAL-TIME WebGL scene (a raymarched
-   fullscreen <canvas>, see TesseractBackdrop.astro / buildTesseract.ts), read as
-   cinematic ATMOSPHERE: full-bleed, vignetted to near-black at the edges so the
-   reading column floats, dimmed, with a soft scrim behind the centred copy.
+   above. The Interstellar bookcase corridor is a REAL-TIME WebGL scene (a solid-beam
+   lattice of real 3D geometry on a <canvas>, see TesseractBackdrop.astro /
+   buildTesseract.ts), read as cinematic ATMOSPHERE: full-bleed, vignetted to near-black
+   at the edges so the reading column floats, dimmed, with a soft scrim behind the copy.
 
    It mirrors .bh-stage's depth exactly: position:fixed; inset:0; z-index:0, so it
    sits BEHIND the reading column (.prose is lifted to z-index:1) and UNDER the
@@ -365,12 +365,12 @@ body.article-page .bh-backdrop::before {
    body[data-resurface] keyframe while this fixed layer stays put behind it.
    aria-hidden — it carries no information, it's mood.
 
-   Motion = pointer "look-around" + ambient push-in, BOTH owned by the WebGL rig:
-     • ambient: the rig's rAF loop advances time + a slow push-in along Z;
+   Motion = pointer "look-around" + ambient drift, BOTH owned by the WebGL rig:
+     • ambient: the rig's rAF loop advances time + a slow bounded breathe along Z;
      • pointer: the mount script in TesseractBackdrop.astro feeds the cursor (-1..1)
-       to the shader's uLook, which shears the ray so the vanishing point slides and
-       you peer down different axes of the tunnel (the "look around inside the
-       tesseract" move).
+       to the rig's setLook(), which eases the CAMERA pan + look target so the vanishing
+       point slides and you peer down different axes of the lattice (the "look around
+       inside the tesseract" move).
    Under prefers-reduced-motion the script renders ONE static frame (no rAF, no look,
    no push-in) and the drift keyframe is gated off below — a frozen corridor. */
 .tesseract-backdrop {

@@ -6,16 +6,17 @@
  * INSPIRATION / 01 page). It REPLACES the default dimmed live `<BlackHole backdrop>`
  * photon-ring scene for that one post; every other post keeps the live scene.
  *
- * The Interstellar bookcase corridor is now a REAL-TIME WebGL scene: a self-contained
- * raymarched fragment shader (`buildTesseract` → `tesseract.glsl.ts`) drawing an
- * infinite tunnel of nested rectangular frames diving to a luminous vanishing point —
- * NOT a static photo. It reads as cinematic ATMOSPHERE: vignetted to near-black at the
- * edges so the reading column floats, dimmed to a deep-room level, with a soft scrim
- * behind the centred copy and a light film grain on top. The WebGL canvas sits UNDER
- * those CSS overlays (vignette + scrim + grain), which are unchanged from the image
- * version. The corridor look lives in the shader; the framing/dimming lives in
- * hero.css under `.tesseract-backdrop*`; this component owns the markup + the mount
- * script.
+ * The Interstellar bookcase corridor is a REAL-TIME WebGL scene built from REAL 3D
+ * geometry: `buildTesseract` (→ `tesseract.glsl.ts` beam material) draws a dense lattice
+ * of solid extruded BEAMS (one InstancedMesh of unit boxes) — the backs of bookshelves
+ * stacked as a square shaft of streak-walls + cross-frames receding to a luminous
+ * vanishing point — NOT a raymarch and NOT a static photo. It reads as cinematic
+ * ATMOSPHERE: vignetted to near-black at the edges so the reading column floats, dimmed
+ * to a deep-room level, with a soft scrim behind the centred copy and a light film grain
+ * on top. The WebGL canvas sits UNDER those CSS overlays (vignette + scrim + grain),
+ * which are unchanged from the image version. The lattice look lives in the rig + beam
+ * shader; the framing/dimming lives in hero.css under `.tesseract-backdrop*`; this
+ * component owns the markup + the mount script.
  *
  * Depth: position:fixed; inset:0; z-index:0 (mirrors `.bh-stage`), so it sits BEHIND
  * the reading column (`.prose` is z-index:1) and UNDER the `.dive-overlay` (z 9999).
@@ -23,10 +24,10 @@
  * the destination `<main>` rises via `body[data-resurface] main` while this fixed
  * layer stays put behind it.
  *
- * Interaction = pointer "look-around". The mount script lerps a -1..1 pointer offset
- * into the shader's `uLook` uniform so the view direction shears toward the cursor and
- * you peer down different axes of the tunnel (the vanishing point slides), like the
- * film. Ambient: the rig's own rAF loop advances time + a slow push-in along Z. Under
+ * Interaction = pointer "look-around". The mount script hands a -1..1 pointer offset to
+ * the rig's `setLook`, which eases the CAMERA pan + look target toward the cursor so you
+ * peer down different axes of the lattice (the vanishing point slides), like the film.
+ * Ambient: the rig's own rAF loop advances time + a slow bounded breathe along Z. Under
  * `prefers-reduced-motion` the script renders ONE static frame (no rAF, no look-around,
  * no push-in) — still the corridor, just frozen. `aria-hidden` — it's mood.
  */
@@ -34,7 +35,7 @@
 
 <div class="tesseract-backdrop" data-tesseract-backdrop aria-hidden="true">
   {/* The live corridor. The mount script (below) attaches a WebGL renderer to this
-      canvas and raymarches the infinite nested-frame tunnel each frame. Sits UNDER
+      canvas and renders the solid-beam lattice (InstancedMesh) each frame. Sits UNDER
       the vignette + grain. */}
   <canvas class="tesseract-backdrop-canvas" data-tesseract-canvas></canvas>
   {/* Near layer: vignette + reading-column scrim. Pure CSS gradients (unchanged). */}
@@ -70,7 +71,7 @@
 
     let rig: TesseractRig;
     try {
-      rig = buildTesseract({ canvas, maxPixelRatio: 2, dim: 0.92 });
+      rig = buildTesseract({ canvas, maxPixelRatio: 2, dim: 0.62 });
     } catch {
       // No WebGL (or context creation failed): leave the dimmed CSS layers; the
       // reading column still floats in near-black. Release the guard so a later
