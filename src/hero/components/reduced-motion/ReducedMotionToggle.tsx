@@ -1,32 +1,30 @@
 // Reduced-motion toggle — a corner glyph button that joins the top-right opening
 // chrome (the .overlay-blog power/section row). It reads the RESOLVED reduced-motion
-// preference from the scene context (the single source of truth that ALSO drives the
-// hero's mount decision) and flips it via the context action, so one click swaps the
-// live WebGL hero for the still poster slideshow (and back) with no reload.
+// preference from the scene context (the single source of truth that also drives the
+// hero's mount decision) and asks the context to change it.
 //
-// PLACEMENT (BUG 4 fix): the .overlay-blog row is RIGHT-anchored and grows LEFTWARD as
-// its labels unfurl under hud-active (its left edge swings hundreds of px between the
-// resting + hud-active states). A single fixed `right:` offset therefore cannot clear
-// the row in BOTH states at once — the earlier `position: fixed; right: <power+gap>`
-// landed the toggle ON TOP of the socials/links. So instead of a brittle fixed offset,
-// the button is PORTALED into the .overlay-blog flex row as its LEFTMOST child: it now
-// flows in the same flex line as the section icons / socials / power button, so it can
-// never overlap them at any width or breakpoint, and it reads as one set by
-// construction. It still lives in the React island (keeping its scene-context wiring) —
-// only its DOM node is relocated into the existing nav. On pages without that nav (or
-// before it exists) it falls back to rendering in place.
+// Asymmetric flow (the modal feature): clicking to ENTER reduced motion does NOT flip
+// directly — it requests a change and HeroIsland raises a confirmation modal first;
+// clicking to leave reduced motion (back to the live hero) flips instantly. Either
+// way the single context action `requestReducedMotion` owns the decision, so the
+// button stays a dumb trigger.
 //
-// Visually it reuses the sibling power button's class (.overlay-blog-power) so it
-// reads as one set; the .overlay-blog-motion modifier only carries the (now flow-based)
-// placement tweaks. The glyph swaps to mirror the resolved state: a "waves" motion mark
-// when motion is ON, a paused/still bars mark when motion is reduced.
+// PLACEMENT: the .overlay-blog row is right-anchored and grows leftward as its labels
+// unfurl under hud-active, so a single fixed `right:` offset cannot clear it in both
+// states. Instead the button is PORTALED into the .overlay-blog flex row as a child:
+// it flows in the same line as the section icons / socials / power button, so it can
+// never overlap them at any width. On pages without that nav it falls back to
+// rendering in place (fixed-position via .overlay-blog-motion in scene.css).
+//
+// The glyph mirrors the resolved state: a "waves" mark when motion is ON, paused bars
+// when motion is reduced.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSceneActions, useSceneState } from './SceneStateContext';
+import { useSceneActions, useSceneState } from '../SceneStateContext';
 
 export default function ReducedMotionToggle() {
   const { reduced } = useSceneState();
-  const { toggleReducedMotion } = useSceneActions();
+  const { requestReducedMotion } = useSceneActions();
 
   // The .overlay-blog nav is server-rendered by BaseLayout, so it is in the DOM by the
   // time this island hydrates — but resolve it in an effect (after mount) so the lookup
@@ -38,15 +36,12 @@ export default function ReducedMotionToggle() {
       setNavHost(document.querySelector<HTMLElement>('.overlay-blog'));
     };
     resolveHost();
-    // ClientRouter swaps the DOM on navigation; re-resolve the host after a swap so the
-    // portal target is never a detached, stale node.
     document.addEventListener('astro:page-load', resolveHost);
     return () => document.removeEventListener('astro:page-load', resolveHost);
   }, []);
 
-  // The aria-label names what the CLICK does (the opposite of the current state),
-  // so a screen reader announces the action, not the status. aria-pressed carries
-  // the current reduced state for assistive tech that reads toggle buttons.
+  // The aria-label names what the CLICK does (the opposite of the current state), so a
+  // screen reader announces the action. aria-pressed carries the current reduced state.
   const label = reduced ? 'Enable motion' : 'Reduce motion';
 
   const button = (
@@ -55,7 +50,7 @@ export default function ReducedMotionToggle() {
       className="overlay-blog-power overlay-blog-motion"
       aria-label={label}
       aria-pressed={reduced}
-      onClick={toggleReducedMotion}
+      onClick={() => requestReducedMotion?.(!reduced)}
     >
       {reduced ? (
         // STILL: two paused vertical bars (motion reduced). Matched to the
@@ -85,7 +80,6 @@ export default function ReducedMotionToggle() {
     </button>
   );
 
-  // Portal into the nav row as its leftmost child when the host exists; otherwise
-  // render in place (fixed-position fallback via .overlay-blog-motion in scene.css).
+  // Portal into the nav row when the host exists; otherwise render in place.
   return navHost ? createPortal(button, navHost) : button;
 }

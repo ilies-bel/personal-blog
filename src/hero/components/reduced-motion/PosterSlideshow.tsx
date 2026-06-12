@@ -2,21 +2,15 @@
 //
 // Under the resolved reduced-motion preference HeroIsland renders this instead of
 // mounting the GPU engine (no createScene, no rAF loop). It stacks the four
-// pre-captured lifecycle posters and cross-fades between adjacent ones from the
-// same 0..1 scroll progress the live hero reads, so the manifesto copy still scrubs
-// over a matching backdrop:
+// pre-captured lifecycle posters and HARD-CUTS between them from the same 0..1
+// scroll progress the live hero reads, so the manifesto copy still scrubs over a
+// matching backdrop:
 //
 //   progress 0 (top) → blackhole → red-giant → nebula → dot (progress 1, bottom)
 //
-// OPACITY IS THE ONLY THING THAT ANIMATES. No transform / scale / translate /
-// parallax / zoom — that restraint is the whole point of the reduced-motion path.
-
-/** Join the site base (import.meta.env.BASE_URL) with a base-relative asset path,
- *  collapsing any double slashes — mirrors StarMarker's local helper of the same
- *  shape so the poster URLs resolve under the site's base path. */
-function resolveHref(base: string, href: string): string {
-  return `${base}/${href}`.replace(/\/+/g, '/');
-}
+// OPACITY IS THE ONLY THING THAT ANIMATES — no transform / scale / translate /
+// parallax. That restraint is the whole point of the reduced-motion path.
+import { resolveHref } from '../../lib/url';
 
 /** The four lifecycle posters, in top-of-page → bottom-of-page (reverse-arc)
  *  order. Paths are relative to the site base; resolveHref prefixes BASE_URL. */
@@ -37,21 +31,20 @@ export interface PosterSlideshowProps {
 /**
  * Per-poster opacity for a position across the four stops — a HARD CUT, no fade.
  * `progress` maps to a position in [0, 3]; whichever stop is nearest is shown solid
- * (opacity 1) and all others are off (0). Exactly one poster is ever visible.
+ * and all others are off. Exactly one poster is ever visible.
  *
  * Why a hard cut, not a cross-fade: these are STILL photographs of very different
- * objects (a black hole vs a red giant). ANY opacity blend between two such stills
+ * objects (a black hole vs a red giant). Any opacity blend between two such stills
  * muds into a double-exposure at the 50/50 midpoint — the black hole's photon ring
- * ghosts THROUGH the red giant's surface, reading as a render glitch, and the scroll
- * can park right on it. A snap avoids that entirely; it's also the honest reduced-
- * motion behaviour (swap states, don't animate the swap). The visible jump is small
- * because each adjacent pair shares the dark space background, and the manifesto line
- * changes at the same boundary, so the cut reads as turning a page, not a flicker.
+ * ghosts through the red giant's surface, reading as a render glitch. A snap avoids
+ * that and is the honest reduced-motion behaviour (swap states, don't animate the
+ * swap). The jump is small because adjacent pairs share the dark-space background
+ * and the manifesto line changes at the same boundary, so it reads as a page turn.
  */
 function opacityFor(index: number, progress: number): number {
   const clamped = Math.min(1, Math.max(0, progress));
   const position = clamped * (POSTERS.length - 1); // 0..3
-  const nearest = Math.round(position); // the stop this scroll position belongs to
+  const nearest = Math.round(position);
   return index === nearest ? 1 : 0;
 }
 
@@ -64,12 +57,11 @@ export default function PosterSlideshow({ progress, base }: PosterSlideshowProps
           className="bh-poster"
           src={resolveHref(base, poster.src)}
           alt={poster.alt}
-          // OPACITY ONLY — no transform of any kind on this layer.
           style={{ opacity: opacityFor(index, progress) }}
           draggable={false}
           decoding="async"
-          // The first poster is the opening frame, so let it load eagerly; the
-          // rest are below the initial fold of the fade and can defer.
+          // The first poster is the opening frame, so load it eagerly; the rest are
+          // below the initial fold of the cut and can defer.
           loading={index === 0 ? 'eager' : 'lazy'}
         />
       ))}
