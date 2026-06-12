@@ -50,6 +50,7 @@ import {
   type MarkerPlacement,
 } from '../HudNavigation';
 import { LOADER_GONE_BODY_CLASS } from '../lib/constants';
+import { resolveHref } from '../lib/url';
 import type { MarkerFrame } from '../scene/types';
 import { useSceneState, useSceneActions } from './SceneStateContext';
 
@@ -108,10 +109,6 @@ const CARD_FLIP_FRACTION = 0.7;
 function isCoarsePointer(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
   return window.matchMedia('(pointer: coarse)').matches;
-}
-
-function resolveHref(base: string, href: string): string {
-  return `${base}/${href}`.replace(/\/+/g, '/');
 }
 
 // Flat-top regular hexagon points for a 100x100 viewBox (the SVG scales to the
