@@ -1,0 +1,127 @@
+---
+/**
+ * TesseractBackdrop — a bespoke, per-post backdrop layer.
+ *
+ * Scoped to the single post whose frontmatter sets `backdrop: 'tesseract'` (the
+ * INSPIRATION / 01 page). It REPLACES the default dimmed live `<BlackHole backdrop>`
+ * photon-ring scene for that one post; every other post keeps the live scene.
+ *
+ * The Interstellar bookcase corridor reads as cinematic ATMOSPHERE, not a literal
+ * photo: full-bleed, vignetted to near-black at the edges so the reading column
+ * floats, desaturated + dimmed, with a soft scrim behind the centred copy and a
+ * light film grain on top. All structural look lives in hero.css (the partial that
+ * owns the backdrop) under `.tesseract-backdrop*`; this component owns the markup +
+ * the tiny pointer-parallax script.
+ *
+ * Depth: position:fixed; inset:0; z-index:0 (mirrors `.bh-stage`), so it sits BEHIND
+ * the reading column (`.prose` is z-index:1) and UNDER the `.dive-overlay` (z 9999).
+ * Falling through the home-page black hole therefore resolves INTO this corridor:
+ * the destination `<main>` rises via `body[data-resurface] main` while this fixed
+ * layer stays put behind it.
+ *
+ * Motion = "pointer + ambient drift" parallax. Ambient: a slow continuous push-in
+ * (CSS `@keyframes tesseract-drift`). Pointer: the inline script writes lerped
+ * `--tx`/`--ty` (-1..1) on the root layer once per `requestAnimationFrame`; the
+ * image + vignette translate a few px, depth-scaled. Both are disabled under
+ * `prefers-reduced-motion` (the script early-returns; the keyframe + magnitudes are
+ * gated off in CSS), leaving a static, treated image. `aria-hidden` — it's mood.
+ */
+const base = import.meta.env.BASE_URL;
+// Match the slash-normalising pattern used in [...slug].astro and the mdx figures.
+const href = (p: string): string => `${base}/${p}`.replace(/\/+/g, '/');
+const webp = href('inspirations/tesseract-bookcase.webp');
+const jpg = href('inspirations/tesseract-bookcase.jpg');
+---
+
+<div class="tesseract-backdrop" data-tesseract-backdrop aria-hidden="true">
+  {/* Far layer: the corridor itself. <picture> serves the optimized WebP with a
+      JPEG fallback. Decorative, so empty alt. The ambient push-in + the smaller
+      (far) parallax offset are applied to .tesseract-backdrop-image in hero.css. */}
+  <picture>
+    <source srcset={webp} type="image/webp" />
+    <img class="tesseract-backdrop-image" src={jpg} alt="" decoding="async" />
+  </picture>
+  {/* Near layer: vignette + reading-column scrim. Translates MORE than the image
+      (depth). Pure CSS gradients. */}
+  <div class="tesseract-backdrop-vignette"></div>
+  {/* Film grain on top — static, low opacity, overlay-blended texture. */}
+  <div class="tesseract-backdrop-grain"></div>
+</div>
+
+{/* Pointer-parallax driver. Bundled (no is:inline) so it re-runs across ClientRouter
+    swaps. Idempotent + SSR-guarded. Stores the latest pointer event and applies a
+    single lerped write per animation frame (throttled), so the corridor eases toward
+    the cursor instead of snapping. Early-returns under prefers-reduced-motion. */}
+<script>
+  function initTesseractParallax(): void {
+    if (typeof window === 'undefined') return;
+    const layer = document.querySelector<HTMLElement>('[data-tesseract-backdrop]');
+    if (!layer) return;
+
+    // Respect the OS reduced-motion preference: no pointer translate at all (the
+    // CSS also zeroes the ambient keyframe + parallax magnitudes).
+    const reduceMotion =
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+
+    // Re-init guard: ClientRouter can swap the body and re-run this. Bind the
+    // window pointer listener exactly once; the RAF loop also runs once.
+    const flagged = layer as HTMLElement & { dataset: DOMStringMap };
+    if (flagged.dataset.parallaxBound === '1') return;
+    flagged.dataset.parallaxBound = '1';
+
+    // Target (latest pointer, normalised -1..1) and the current lerped value.
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let rafId = 0;
+    let queued = false;
+
+    const apply = (): void => {
+      queued = false;
+      // Ease current toward target (smooth, never snaps).
+      currentX += (targetX - currentX) * 0.08;
+      currentY += (targetY - currentY) * 0.08;
+      layer.style.setProperty('--tx', currentX.toFixed(4));
+      layer.style.setProperty('--ty', currentY.toFixed(4));
+      // Keep stepping while we're still meaningfully far from the target so the
+      // ease completes; otherwise idle until the next pointer move.
+      const settled =
+        Math.abs(targetX - currentX) < 0.001 && Math.abs(targetY - currentY) < 0.001;
+      if (!settled) {
+        rafId = window.requestAnimationFrame(apply);
+      } else {
+        queued = false;
+      }
+    };
+
+    const requestFrame = (): void => {
+      if (queued) return;
+      queued = true;
+      rafId = window.requestAnimationFrame(apply);
+    };
+
+    const onPointerMove = (event: PointerEvent): void => {
+      // Normalise cursor to -1..1 across the viewport (centre = 0,0).
+      targetX = (event.clientX / window.innerWidth) * 2 - 1;
+      targetY = (event.clientY / window.innerHeight) * 2 - 1;
+      requestFrame();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+
+    // If the page is swapped away, stop the RAF loop (cheap hygiene).
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        if (rafId) window.cancelAnimationFrame(rafId);
+      },
+      { once: true },
+    );
+  }
+
+  document.addEventListener('astro:page-load', initTesseractParallax);
+  initTesseractParallax();
+</script>

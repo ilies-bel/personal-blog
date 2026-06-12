@@ -349,6 +349,128 @@ body.article-page .bh-backdrop::before {
   z-index: 0;
 }
 
+/* --- TESSERACT backdrop (per-post override) ---------------------------------
+   A bespoke backdrop scoped to a single post (frontmatter backdrop: 'tesseract',
+   the INSPIRATION / 01 page). It REPLACES the dimmed live <BlackHole backdrop>
+   photon-ring scene for that one post; every other post keeps the live scene
+   above. The Interstellar bookcase corridor reads as cinematic ATMOSPHERE, not a
+   literal photo: full-bleed, vignetted to near-black at the edges so the reading
+   column floats, desaturated + dimmed, with a soft scrim behind the centred copy.
+
+   It mirrors .bh-stage's depth exactly: position:fixed; inset:0; z-index:0, so it
+   sits BEHIND the reading column (.prose is lifted to z-index:1) and UNDER the
+   .dive-overlay (z 9999). Falling through the home-page black hole therefore
+   resolves INTO this corridor: the destination's <main> rises via the
+   body[data-resurface] keyframe while this fixed layer stays put behind it.
+   aria-hidden — it carries no information, it's mood.
+
+   Motion = "pointer + ambient drift" parallax (premium, restrained):
+     • ambient: a slow continuous push-in (tesseract-drift) on the image;
+     • pointer: the inline script in TesseractBackdrop.astro writes --tx/--ty
+       (-1..1, lerped) on the root layer; the layers translate a few px, depth-
+       scaled (the far image moves less than the near vignette), so the corridor
+       gains a gentle, restrained parallax that tracks the cursor.
+   Under prefers-reduced-motion BOTH the ambient keyframe and the pointer translate
+   are disabled (the script early-returns; the keyframe is gated below), leaving a
+   static, treated image. */
+.tesseract-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;                /* same depth as .bh-stage — behind .prose (z 1) */
+  overflow: hidden;
+  background: #04060a;       /* near-black floor so edges read as void, not grey */
+  pointer-events: none;      /* never intercepts text selection / links */
+  /* Pointer-parallax targets, lerped toward by the inline script (default 0). */
+  --tx: 0;
+  --ty: 0;
+  /* The per-layer translate magnitudes (px). Near layer (vignette) moves more
+     than the far layer (image) → depth. Scaled to 0 under reduced motion below. */
+  --par-near: 14px;
+  --par-far: 7px;
+}
+
+/* Full-bleed corridor image. Sized larger than the viewport (112%) and centred so
+   neither the ambient push-in nor the pointer translate can ever reveal an edge.
+   Desaturated + dimmed so it reads as atmosphere; the ambient drift eases it in
+   and out over a long cycle. The far (smaller) parallax offset is applied here. */
+.tesseract-backdrop-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  object-position: center 42%;
+  /* Muted, on-palette: drop saturation + brightness, lift contrast a touch so the
+     bright corridor centre stays legible but never glares behind the text. */
+  filter: saturate(0.66) brightness(0.62) contrast(1.04);
+  will-change: transform;
+  transform:
+    translate(-50%, -50%)
+    translate(
+      calc(var(--tx) * var(--par-far)),
+      calc(var(--ty) * var(--par-far))
+    );
+  animation: tesseract-drift 32s ease-in-out infinite alternate;
+}
+
+/* Edge / corner vignette → near-black, so the reading column floats out of a
+   void. This is the NEAR parallax layer (moves more than the image), which reads
+   as the void "in front of" the corridor sliding against it. */
+.tesseract-backdrop-vignette {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  transform: translate(
+    calc(var(--tx) * var(--par-near)),
+    calc(var(--ty) * var(--par-near))
+  );
+  background:
+    /* Reading-column scrim: a tall, narrow elliptical pool of near-black centred
+       on the measure, deepening legibility behind the centred copy while leaving
+       the bright corridor centre felt above/below it. */
+    radial-gradient(46% 118% at 50% 50%,
+      rgba(2, 4, 8, 0.78) 0%,
+      rgba(2, 4, 8, 0.5) 42%,
+      rgba(2, 4, 8, 0) 74%),
+    /* Edge/corner vignette → near-black at the frame so nothing reads as a literal
+       rectangular photo; the corridor fades into the void. */
+    radial-gradient(120% 120% at 50% 46%,
+      rgba(4, 6, 10, 0) 38%,
+      rgba(4, 6, 10, 0.55) 72%,
+      rgba(4, 6, 10, 0.96) 100%),
+    /* Bottom floor: sink the very base to the room colour for long articles. */
+    linear-gradient(180deg,
+      rgba(4, 6, 10, 0) 64%,
+      rgba(4, 6, 10, 0.7) 88%,
+      var(--bg) 100%);
+}
+
+/* Lightweight film grain on top, low opacity, tiling. An inline feTurbulence
+   data-URI (no extra asset) — matches the moody, slightly-analog room. mix-blend
+   keeps it as texture, not a grey film. Static (no animation) so it stays calm. */
+.tesseract-backdrop-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+@keyframes tesseract-drift {
+  from { scale: 1; }
+  to { scale: 1.045; }
+}
+
+/* Reduced motion: kill BOTH the ambient push-in and the pointer parallax (the
+   script also early-returns, so --tx/--ty stay 0; zeroing the magnitudes here is
+   belt-and-braces). Leaves a static, treated image. */
+@media (prefers-reduced-motion: reduce) {
+  .tesseract-backdrop { --par-near: 0px; --par-far: 0px; }
+  .tesseract-backdrop-image { animation: none; }
+}
+
 /* --- Yellow-star designed ring (ITEM 4) -------------------------------------
    One subtle designed detail for the yellow-star chapter: a faint orbital /
    measurement ring + cardinal ticks + a short caliper arc, centred on the viewport

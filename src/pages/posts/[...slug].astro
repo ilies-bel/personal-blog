@@ -2,6 +2,7 @@
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import BlackHole from '../../hero/BlackHole.tsx';
+import TesseractBackdrop from '../../hero/components/TesseractBackdrop.astro';
 
 // Pre-render one static HTML page per post at build time (SSG → SEO-ready).
 export async function getStaticPaths() {
@@ -35,10 +36,21 @@ const fmt = (d: Date) =>
   modifiedTime={post.data.updatedDate}
   bodyClass="article-page"
 >
-  {/* Live signature scene, frozen at the black-hole frame — quiet atmosphere,
-     not the showpiece. client:only means it simply doesn't render without JS,
-     leaving the article fully readable on the plain dark room. */}
-  <BlackHole client:only="react" backdrop backdropStage={0} />
+  {/* Backdrop layer. By default this is the live signature scene, frozen at the
+     black-hole frame — quiet atmosphere, not the showpiece. client:only means it
+     simply doesn't render without JS, leaving the article fully readable on the
+     plain dark room. A post may override it via frontmatter `backdrop`:
+     'tesseract' swaps in the Interstellar bookcase-corridor image backdrop
+     (INSPIRATION / 01) instead, while every other post keeps the live scene. Both
+     sit at z-index 0 behind the reading column and under the dive overlay, so the
+     marker dive resurfaces INTO whichever backdrop the destination renders. */}
+  {
+    post.data.backdrop === 'tesseract' ? (
+      <TesseractBackdrop />
+    ) : (
+      <BlackHole client:only="react" backdrop backdropStage={0} />
+    )
+  }
 
   <article class="prose">
     <header class="article-header">

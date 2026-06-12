@@ -15,6 +15,11 @@ const posts = defineCollection({
     ogImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
+    // Optional per-post backdrop override. When set, the post layout swaps the
+    // default dimmed live <BlackHole backdrop> photon-ring scene for a bespoke
+    // backdrop layer. 'tesseract' = the Interstellar bookcase-corridor image
+    // backdrop (see TesseractBackdrop.astro). Unset = the default BlackHole scene.
+    backdrop: z.enum(['tesseract']).optional(),
   }),
 });
 
