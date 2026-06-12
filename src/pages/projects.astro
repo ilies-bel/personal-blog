@@ -106,12 +106,15 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     margin-bottom: clamp(2.5rem, 8vw, 5.5rem);
   }
 
+  /* Page-hero block snapped to the sitewide ladder (tokens.css) so Writing /
+     Projects / Graveyard open at the same scale and tracking — the old local
+     clamps ran a full rung louder than every other reading page. */
   .projects-kicker {
     margin: 0;
     width: max-content;
     font-family: var(--font-mono);
-    font-size: 0.74rem;
-    letter-spacing: 0.18em;
+    font-size: var(--text-label);
+    letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
     color: var(--highlight);
   }
@@ -119,9 +122,9 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   .projects-hero h1 {
     max-width: 16ch;
     margin: 0;
-    font-size: clamp(2.65rem, 8.2vw, 5.8rem);
-    line-height: 0.95;
-    letter-spacing: -0.055em;
+    font-size: var(--text-hero);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
     text-wrap: balance;
   }
 
@@ -129,7 +132,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     max-width: 42rem;
     margin: 0;
     color: var(--fg-dim);
-    font-size: clamp(1.05rem, 2vw, 1.3rem);
+    font-size: var(--text-subtitle);
     line-height: 1.58;
     text-wrap: pretty;
   }
@@ -151,9 +154,10 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
   .projects-entry-name {
     margin: 0 0 0.5rem;
-    font-size: clamp(1.65rem, 4vw, 2.6rem);
-    line-height: 1.05;
-    letter-spacing: -0.04em;
+    /* Entry headline — the shared secondary display rung (cards, rows). */
+    font-size: var(--text-display);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -249,7 +253,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   .projects-figure figcaption {
     margin-top: 0.6rem;
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: var(--text-label);
     letter-spacing: 0.06em;
     color: var(--fg-faint);
     line-height: 1.4;
@@ -336,9 +340,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     .projects-hero {
       margin-top: 2.75rem;
     }
-
-    .projects-hero h1 {
-      font-size: clamp(2.45rem, 15vw, 3.7rem);
-    }
+    /* --text-hero is a fluid clamp, so it already scales on narrow widths —
+       no per-breakpoint font-size override needed (mirrors writing.css). */
   }
 </style>

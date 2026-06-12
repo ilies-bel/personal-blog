@@ -59,7 +59,10 @@ const fmt = (d: Date) =>
         <span class="article-back-label">Back to writing</span>
       </a>
       <p class="article-kicker">Post · {fmt(post.data.pubDate)}</p>
-      <h1>{post.data.title}</h1>
+      {/* Shared-element morph target: matches the writing index's per-post
+          transition:name (row title / featured h2), so the clicked title
+          physically travels into this headline — browser-back reverses it. */}
+      <h1 transition:name={`post-title-${post.id}`}>{post.data.title}</h1>
       <p class="article-description">{post.data.description}</p>
       {post.data.tags.length > 0 && (
         <p class="article-tags" aria-label="Tags">

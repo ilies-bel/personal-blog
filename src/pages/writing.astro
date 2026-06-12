@@ -35,7 +35,13 @@ const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sor
     <section class="writing-featured" aria-labelledby="latest-title">
       <a class="writing-featured-card" href={href(`posts/${latest.id}/`)}>
         <span class="writing-featured-label">Latest note</span>
-        <h2 id="latest-title">{latest.data.title}</h2>
+        {/* Shared-element morph: this headline carries the latest post's
+            transition:name, so clicking the card sends the title physically
+            travelling into the article h1 (and back on browser-back). The
+            latest post's ARCHIVE ROW below deliberately does NOT carry the
+            name — duplicate view-transition-names on one page abort the whole
+            transition, so the featured card owns the latest post's morph. */}
+        <h2 id="latest-title" transition:name={`post-title-${latest.id}`}>{latest.data.title}</h2>
         <p>{latest.data.description}</p>
         <span class="writing-featured-meta">{fmt(latest.data.pubDate)}</span>
       </a>
@@ -64,7 +70,14 @@ const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sor
       <a class="writing-row" href={href(`posts/${post.id}/`)}>
         <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
         <span class="writing-row-copy">
-          <span class="writing-row-title">{post.data.title}</span>
+          {/* Per-post shared-element name → the article h1 (posts/[...slug]).
+              The latest post's row stays unnamed: its morph belongs to the
+              featured card above (one name per page, or the transition aborts). */}
+          {post.id === latest?.id ? (
+            <span class="writing-row-title">{post.data.title}</span>
+          ) : (
+            <span class="writing-row-title" transition:name={`post-title-${post.id}`}>{post.data.title}</span>
+          )}
           <span class="writing-row-description">{post.data.description}</span>
           {post.data.tags.length > 0 && (
             <span class="writing-tags" aria-label="Tags">

@@ -15,7 +15,9 @@
   display: grid;
   gap: 1.1rem;
   margin-top: clamp(4rem, 11vw, 7.5rem);
-  margin-bottom: clamp(2.5rem, 8vw, 5.5rem);
+  /* Hero → featured gap: a gentler fluid step (the old 8vw clamp ballooned to
+     5.5rem on wide screens and left the featured card stranded). */
+  margin-bottom: clamp(2.25rem, 5vw, 3.75rem);
 }
 
 .writing-kicker {
@@ -138,10 +140,15 @@
 
 .writing-featured-meta {
   color: var(--fg-faint);
+  /* Baseline readout: the date sits on its own hairline at the card's foot, so
+     the card closes on the same instrument line the index card's rows use. */
+  margin-top: 0.35rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid color-mix(in oklch, var(--accent) 12%, var(--line));
 }
 
 .writing-index-card {
-  padding: 1.15rem;
+  padding: clamp(1.25rem, 2vw, 1.5rem);
   border-color: color-mix(in oklch, var(--accent) 16%, var(--line));
   background:
     linear-gradient(140deg, color-mix(in oklch, var(--highlight) 5%, transparent), transparent 52%),
@@ -156,8 +163,11 @@
 
 .writing-index-card div {
   display: grid;
-  gap: 0.35rem;
-  padding: 1rem 0;
+  /* dt → dd: a hair more air between the label and its readout than between
+     rows' content and the next hairline, so each pair reads as one unit and
+     the column stops feeling like an even mechanical grid. */
+  gap: 0.45rem;
+  padding: 1.05rem 0;
   border-bottom: 1px solid color-mix(in oklch, var(--accent) 12%, var(--line));
 }
 
@@ -192,7 +202,7 @@
 
 .writing-row {
   display: grid;
-  grid-template-columns: 9.5rem minmax(0, 1fr);
+  grid-template-columns: 9.5rem minmax(0, 1fr) auto;
   gap: clamp(1rem, 4vw, 2.25rem);
   padding: 1.35rem 0;
   border-bottom: 1px solid var(--line);
@@ -203,9 +213,34 @@
     border-color 0.18s ease;
 }
 
-.writing-row:hover {
+/* Trailing affordance — a quiet mono ↗ at the row's right edge that fades in
+   on hover/focus (instrument language: the row is a departure, not a card).
+   Lives in the grid's third column so it never overlaps the copy. */
+.writing-row::after {
+  content: '↗';
+  grid-column: 3;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-hud);
+  line-height: 1;
+  color: var(--accent-strong);
+  opacity: 0;
+  transform: translate(-0.35rem, 0.35rem);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s var(--ease-out-quint);
+}
+
+.writing-row:hover,
+.writing-row:focus-visible {
   border-bottom-color: color-mix(in oklch, var(--accent) 24%, var(--line));
   background: color-mix(in oklch, var(--bg-soft) 62%, transparent);
+}
+
+.writing-row:hover::after,
+.writing-row:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, 0);
 }
 
 .writing-row time {
@@ -293,6 +328,12 @@
   .writing-row:active .writing-row-copy {
     transform: none;
   }
+
+  /* The trailing ↗ still appears (it is an affordance, not decoration) but
+     without the diagonal travel. */
+  .writing-row::after {
+    transform: none;
+  }
 }
 
 @media (max-width: 52rem) {
@@ -321,5 +362,11 @@
   .writing-row {
     grid-template-columns: 1fr;
     gap: 0.65rem;
+  }
+
+  /* Single-column rows: the trailing ↗ would wrap onto its own row, so it
+     folds away (touch has no hover to reveal it anyway). */
+  .writing-row::after {
+    display: none;
   }
 }

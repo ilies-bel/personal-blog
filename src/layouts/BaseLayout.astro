@@ -9,7 +9,7 @@ import CustomCursor from '../components/CustomCursor.astro';
 // swap and the destination "resurfaces" from under the receding white). Nodes marked
 // transition:persist (the dive overlay, the custom cursor) survive each swap.
 import { ClientRouter } from 'astro:transitions';
-import { SITE_TITLE, SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
+import { SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
 // The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
 // (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
@@ -575,7 +575,7 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
               a glyph + mono-uppercase label row. The CURRENT section is "locked": it
               gets the hero's target-lock treatment — corner ticks + a hairline frame,
               a brighter --fg, and a two-digit mono index — driven by aria-current. */}
-          <header class="subnav">
+          <header class="subnav" transition:name="subnav" transition:animate="none">
             <a class="subnav-brand bh-identity-lockup" href={href('')}>
               <span class="bh-identity-name">{BRAND_NAME}</span>
               <span class="bh-identity-role">{BRAND_ROLE}</span>
@@ -669,13 +669,18 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
             <slot />
           </main>
 
-          <footer class="site-footer">
-            <span>© {year} {SITE_TITLE}</span>
-            <span class="socials">
-              {SOCIALS.github && <a href={SOCIALS.github}>github</a>}
-              {SOCIALS.twitter && <a href={SOCIALS.twitter}>twitter</a>}
-              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}>email</a>}
-            </span>
+          {/* Quiet instrument footer — one row in the subnav's language: top
+              hairline, a mono copyright readout brand-side, small mono-uppercase
+              link labels right (same underline-sweep hover as .subnav-link). Pinned
+              across SPA swaps like the header (transition:name + animate none) so
+              the chrome holds still while only the page content moves. */}
+          <footer class="site-footer" transition:name="site-footer" transition:animate="none">
+            <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
+            <nav class="site-footer-links" aria-label="Social links">
+              {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}
+              {SOCIALS.twitter && <a href={SOCIALS.twitter}><span class="site-footer-label">Twitter</span></a>}
+              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}><span class="site-footer-label">Email</span></a>}
+            </nav>
           </footer>
         </div>
       )
@@ -688,9 +693,19 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
         the overlay is hidden instantly (a normal nav must never flash). The flag is
         single-use (removed on read), so a manual reload of the destination never
         replays the resurface. Lives outside the bare/standard branches so it covers
-        both. Bundled (no is:inline) so it re-binds across swaps. */}
+        both. Bundled (no is:inline) so it re-binds across swaps.
+        FRAMED GUARD: Astro DEV pre-loads destination pages that carry client:only
+        islands (every post's backdrop) in a hidden same-origin IFRAME
+        (prepareForClientOnlyComponents) to collect their styles — that iframe runs
+        this script too, and its astro:page-load would CONSUME the single-use bh:dive
+        flag from the SHARED sessionStorage before the real swap reads it (silently
+        eating the resurface in dev; prod never builds the iframe). The site is never
+        legitimately framed, so the listener simply doesn't bind when framed. */}
     <script>
       document.addEventListener('astro:page-load', () => {
+        // Framed = the dev pre-load iframe (or a hostile embed): bail before the
+        // flag read below so the real navigation still finds it intact.
+        if (window.self !== window.top) return;
         const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
         let dived = false;
         try {
@@ -750,6 +765,42 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
         delete overlay.dataset.bloomState;
         overlay.style.removeProperty('--bloom-x');
         overlay.style.removeProperty('--bloom-y');
+      });
+    </script>
+
+    {/* NAVIGATION CHOREOGRAPHY ARBITER — one before-swap hook that decides which
+        motion system owns each ClientRouter navigation (see transitions.css):
+          • Every SPA nav stamps html[data-astro-nav] onto the INCOMING document
+            (swapRootAttributes copies it to the live root), which gates the
+            hard-load entrance choreography OFF — the view-transition settle/rise
+            owns SPA arrivals, so the two moves can never stack into a double rise.
+          • A DIVE nav (the bh:dive sessionStorage flag HeroIsland sets before
+            navigate()) already has its own choreography — the bloom veil covers
+            the swap and dive-resurface plays on arrival — so the view-transition
+            is skipped outright (skipTransition: the swap still happens, just with
+            no snapshot animation doubling up under the bloom). The flag is only
+            READ here; the astro:page-load resurface handler above still consumes
+            (removes) it. Bundled (no is:inline) so it re-binds across swaps;
+            document-level listener, bound once per script execution. Framed
+            (the dev pre-load iframe — see the resurface script) never navigates,
+            but the guard keeps the two scripts' behaviour symmetric. */}
+    <script>
+      document.addEventListener('astro:before-swap', (event) => {
+        if (window.self !== window.top) return;
+        event.newDocument.documentElement.setAttribute('data-astro-nav', '');
+        let dived = false;
+        try {
+          dived = sessionStorage.getItem('bh:dive') === '1';
+        } catch (_) {
+          /* private mode — treat as a normal nav */
+        }
+        if (dived && event.viewTransition) {
+          // Skipping rejects the native transition's `ready` promise (AbortError
+          // "Transition was skipped") and nothing else awaits it — swallow it so
+          // every dive doesn't log an unhandled rejection.
+          event.viewTransition.ready.catch(() => {});
+          event.viewTransition.skipTransition();
+        }
       });
     </script>
   </body>

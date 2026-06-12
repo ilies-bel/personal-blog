@@ -1,0 +1,119 @@
+/* Page transitions — the "physical" navigation layer for the READING side.
+   Two concerns, both navigation moments (the reading surfaces themselves stay
+   quiet, per the motion grammar):
+
+   1. SPA navigations (ClientRouter view transitions): stable chrome, moving
+      content. The .subnav header + .site-footer are pinned via their own
+      transition:name + transition:animate="none" (BaseLayout), so only the
+      page content swaps: the outgoing page settles down-and-dim, the incoming
+      page rises into place on --ease-out-quint. Shared-element title morphs
+      (writing row/featured → article h1) ride the same curve via the universal
+      group rule. Chromium renders these natively; Astro's simulated fallback
+      keeps its default fade (the chrome pinning still applies there).
+
+   2. Entrance choreography: ONE orchestrated reveal on HARD loads of the
+      standard reading pages (hero block stagger + the first few rows). Pure
+      CSS animation — no class gating, so content can never ship hidden if JS
+      dies. SPA arrivals are owned by the view-transition rise instead: the
+      before-swap hook in BaseLayout stamps html[data-astro-nav], which gates
+      the entrance keyframes OFF so the two moves never stack.
+
+   The cinematic home→article DIVE keeps its own choreography (bloom veil +
+   dive-resurface, hero.css): the same before-swap hook calls skipTransition()
+   when the bh:dive flag is set, so the view-transition never doubles up under
+   the bloom. Reduced motion collapses everything here to an instant swap. */
+
+/* ── 1 · SPA content move: settle out, rise in ─────────────────────────────
+   :root:: prefixes give these type+pseudo specificity AND they live outside
+   @layer astro, so they beat both the UA default crossfade and Astro's layered
+   directive styles without !important. */
+@media (prefers-reduced-motion: no-preference) {
+  :root::view-transition-old(root) {
+    /* Outgoing content settles: a small sink + dim, quick so the incoming
+       rise owns the moment. */
+    animation: vt-settle 0.25s ease-out both;
+  }
+  :root::view-transition-new(root) {
+    /* Incoming content has mass: it rises 14px into place on the house curve. */
+    animation: vt-rise 0.45s var(--ease-out-quint) both;
+  }
+  /* Shared-element groups (the post-title morph) glide on the house curve.
+     Longhands only — the pinned chrome's `animation: none` (Astro's
+     transition:animate="none") zeroes animation-name, so retiming the
+     duration/easing here can never un-pin it. */
+  :root::view-transition-group(*) {
+    animation-duration: 0.45s;
+    animation-timing-function: var(--ease-out-quint);
+  }
+}
+
+@keyframes vt-settle {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes vt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* Reduced motion: every navigation is an instant swap — no snapshot animation
+   at all (the transition resolves immediately when nothing animates). No
+   !important needed: these unlayered author rules already beat both the UA
+   default crossfade and Astro's @layer astro directive styles. */
+@media (prefers-reduced-motion: reduce) {
+  :root::view-transition-group(*),
+  :root::view-transition-image-pair(*),
+  :root::view-transition-old(*),
+  :root::view-transition-new(*) {
+    animation: none;
+  }
+}
+
+/* ── 2 · Entrance choreography (hard loads only, once) ─────────────────────
+   Gated OFF for SPA arrivals via html[data-astro-nav] (stamped in BaseLayout's
+   before-swap hook) so the view-transition rise owns those; gated OFF under
+   reduced motion explicitly (the global 0.001ms clamp in base.css does not
+   zero animation-delay, and a delayed `both` fill would hold content hidden). */
+@media (prefers-reduced-motion: no-preference) {
+  /* Page-hero block (kicker, h1, lead) + the article header: rise with a
+     slight stagger. The whole reveal stays under ~0.8s. */
+  html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > * {
+    animation: page-enter 0.6s var(--ease-out-quint) both;
+  }
+  html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(2) { animation-delay: 0.06s; }
+  html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(3) { animation-delay: 0.12s; }
+  html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(4) { animation-delay: 0.17s; }
+  html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(5) { animation-delay: 0.21s; }
+  html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(n + 6) { animation-delay: 0.24s; }
+
+  /* The writing featured pair lands just behind the hero block. */
+  html:not([data-astro-nav]) .writing-featured > * {
+    animation: page-enter 0.6s var(--ease-out-quint) both;
+    animation-delay: 0.16s;
+  }
+  html:not([data-astro-nav]) .writing-featured > * + * { animation-delay: 0.22s; }
+
+  /* List/section rows: a small stagger for the FIRST six only (capped — later
+     items appear instantly, no animation, so long archives never crawl in). */
+  html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(-n + 6) {
+    animation: page-enter 0.5s var(--ease-out-quint) both;
+    animation-delay: 0.18s;
+  }
+  html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(2) { animation-delay: 0.23s; }
+  html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(3) { animation-delay: 0.28s; }
+  html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(4) { animation-delay: 0.32s; }
+  html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(5) { animation-delay: 0.36s; }
+  html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(6) { animation-delay: 0.4s; }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}

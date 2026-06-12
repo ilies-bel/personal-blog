@@ -18,3 +18,4 @@
 @import './hud.css';      /* the final exploration HUD */
 @import './prose.css';    /* article prose + article header */
 @import './about.css';    /* the about overlay panel */
+@import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */
