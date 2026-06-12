@@ -415,8 +415,28 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       if (typeof document !== 'undefined') {
         document.body.classList.add(SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS);
       }
+      // HUD ALWAYS ON under reduced motion. The live hero only powers the HUD on once
+      // scroll reaches the bottom (the "you've reached the end, here's the menu" beat),
+      // but the reduced path is a quiet still slideshow with no such arrival moment —
+      // so we ask the boot FSM (BaseLayout owns body.hud-active) to power on immediately
+      // and we NEVER dispatch the scroll-driven on/off below (syncChrome is not wired in
+      // this branch), so it simply stays lit for the whole reduced session. We request a
+      // no-boot power-on (detail.on:true) so the rail/menu appear without the ignition
+      // animation. requestAnimationFrame defers one tick so the FSM's page-load listener
+      // is guaranteed attached before the event fires (hydration can run either side of
+      // it). Re-dispatched on every reduced re-entry (e.g. toggling motion off) — the FSM
+      // keeps-lit-once-on, so a repeat request is a harmless no-op.
+      const lightHud = (): void => {
+        window.dispatchEvent(
+          new CustomEvent<HudPowerEventDetail>(HUD_POWER_EVENT, {
+            detail: { on: true, source: 'scroll' },
+          }),
+        );
+      };
+      const hudRaf = requestAnimationFrame(lightHud);
       return () => {
         cancelled = true;
+        cancelAnimationFrame(hudRaf);
         unsub();
         tracker.stop();
         hudAtEndRef.current = false;
