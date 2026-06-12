@@ -1596,7 +1596,19 @@ export const diskVertexShader = /* glsl */ `
       if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
     }
     if(vPlaceholder > 2.9){
-      gl_PointSize = (aSeed < 0.000018) ? clamp(baseSize * 0.10, 0.35, 0.75) : 0.0;
+      // pale blue dot: the closing speck. The cloud is ~1.2M points all collapsed onto
+      // the SAME tiny sphere (pos = sphere * uGiantR*0.018), so we only draw a sparse
+      // SUBSET of them — otherwise the additive stack blows the speck into a bright blob.
+      // The OLD gate (aSeed < 0.000018 → ~22 points, size 0.10/0.35..0.75) drew so few
+      // sub-pixel points the speck was effectively INVISIBLE. Relax the seed threshold to
+      // ~0.06% of the cloud (~700 points) and bump the size a touch so the cluster forms a
+      // coherent, small, soft point — a few clean pixels with a glow, not a flat blob.
+      // DOT_SEED_GATE / DOT_SIZE_MUL are the taste levers: raise the gate or the size to
+      // make the speck bigger/brighter, lower them to make it quieter. (Light to render it
+      // comes from the DOT_* grade in lifecycle.ts; colour #DDEBFF + breath in the frag.)
+      const float DOT_SEED_GATE = 0.0006;  // fraction of the cloud that draws the speck (~0.06%)
+      const float DOT_SIZE_MUL  = 0.18;    // per-point size multiplier (small soft point)
+      gl_PointSize = (aSeed < DOT_SEED_GATE) ? clamp(baseSize * DOT_SIZE_MUL, 0.7, 1.8) : 0.0;
     }
     if(drop) gl_PointSize = 0.0;
   }

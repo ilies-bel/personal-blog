@@ -130,6 +130,16 @@ export interface HudPowerEventDetail {
  *  pushes this value into the CSS var on init so the two can never drift). ~3.6s:
  *  long enough to read like a machine running its start-up self-check. */
 export const HUD_BOOT_DURATION_MS = 3600;
+/** "Brief solo, then HUD arms": how long the closing pale-blue-dot beat holds ALONE
+ *  before HeroIsland asks the boot FSM to power the HUD up. When real scroll first
+ *  reaches the physical bottom (the lonely speck / 'beginning' scene), the island
+ *  WAITS this long before dispatching HUD_POWER_EVENT{on:true}, so the lone dot lands
+ *  in silence for a beat and only THEN does the rail/compass boot in. Scrolling back
+ *  UP off the bottom before the timer fires CANCELS the pending power-on (the dot was
+ *  only glanced, not arrived at). This is the tunable hold length — dial UP for a
+ *  longer solo, DOWN (toward 0) to arm the HUD the instant the dot lands. It is the
+ *  pre-boot pause; the ~3.6s boot loader (HUD_BOOT_DURATION_MS) still plays after. */
+export const HUD_DOT_SOLO_HOLD_MS = 1100;
 /** The window CustomEvent the scene dispatches ONCE, after its first frame has
  *  rendered + composited (see createScene's frame()). The instant intro loader
  *  listens for it to fade itself out (add SCENE_READY_BODY_CLASS). The name lives

@@ -29,6 +29,7 @@ import {
   HUD_BOOTING_BODY_CLASS,
   HUD_POWER_EVENT,
   type HudPowerEventDetail,
+  HUD_DOT_SOLO_HOLD_MS,
   SCROLL_DOWN,
   SCROLL_UP,
   type ScrollDirection,
@@ -188,6 +189,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // forced override + the once-booted-stays-powered rule, so the island can dispatch
   // freely and let the machine decide.
   const hudAtEndRef = useRef(false);
+  // "Brief solo, then HUD arms": the pending power-on timer. When scroll first reaches
+  // the bottom we DELAY the HUD_POWER_EVENT{on:true} by HUD_DOT_SOLO_HOLD_MS so the
+  // lone pale-blue dot lands alone for a beat before the rail/compass boot in. Held in
+  // a ref (0 = none) so a scroll back UP off the bottom — or an unmount — can cancel a
+  // still-pending power-on cleanly.
+  const hudPowerOnTimerRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -271,11 +278,37 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       const atEnd = sceneForProgress(progressRef.current).sceneId === 'beginning';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
-        window.dispatchEvent(
-          new CustomEvent<HudPowerEventDetail>(HUD_POWER_EVENT, {
-            detail: { on: atEnd, source: 'scroll' },
-          }),
-        );
+        if (atEnd) {
+          // BRIEF SOLO, THEN HUD ARMS: do NOT power the HUD on the instant the dot
+          // lands — let the lone speck hold ALONE for HUD_DOT_SOLO_HOLD_MS first, so
+          // the closing beat reads as a quiet arrival before the chrome boots in. The
+          // delayed dispatch is the SAME power-on request as before, just deferred.
+          // (Guard against stacking: clear any prior pending timer first.)
+          if (hudPowerOnTimerRef.current) window.clearTimeout(hudPowerOnTimerRef.current);
+          hudPowerOnTimerRef.current = window.setTimeout(() => {
+            hudPowerOnTimerRef.current = 0;
+            window.dispatchEvent(
+              new CustomEvent<HudPowerEventDetail>(HUD_POWER_EVENT, {
+                detail: { on: true, source: 'scroll' },
+              }),
+            );
+          }, HUD_DOT_SOLO_HOLD_MS);
+        } else {
+          // Left the bottom before the solo hold elapsed → the dot was only glanced,
+          // not arrived at: cancel the still-pending power-on so the HUD never boots
+          // from a fly-by. (If it had already fired, this is a no-op and the FSM keeps
+          // the HUD lit per the once-booted-stays-powered rule; the explicit {on:false}
+          // dispatch below remains a deliberate FSM no-op, preserved for symmetry.)
+          if (hudPowerOnTimerRef.current) {
+            window.clearTimeout(hudPowerOnTimerRef.current);
+            hudPowerOnTimerRef.current = 0;
+          }
+          window.dispatchEvent(
+            new CustomEvent<HudPowerEventDetail>(HUD_POWER_EVENT, {
+              detail: { on: false, source: 'scroll' },
+            }),
+          );
+        }
       }
 
       // Opening hold: while scroll is still on the black-hole opening frame (at/under
@@ -437,6 +470,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // state is the source of truth across an SPA unmount/reload. Reset the
       // at-end edge tracker so a re-mount re-evaluates and re-requests from scratch.
       hudAtEndRef.current = false;
+      // Cancel a still-pending "brief solo" power-on so it can't fire after the island
+      // (and the page it belonged to) is gone — the boot FSM would otherwise light a
+      // HUD for a torn-down hero.
+      if (hudPowerOnTimerRef.current) {
+        window.clearTimeout(hudPowerOnTimerRef.current);
+        hudPowerOnTimerRef.current = 0;
+      }
       // Reset the opening-hold edge tracker too, so a re-mount re-seeds from the live
       // scroll position rather than inheriting a stale "in the opening hold" flag.
       atOpeningRef.current = false;

@@ -521,6 +521,21 @@ export function lifecycle(input: LifecycleInput): StarState {
   //   centre-brightness reduction the brief asks for, while the star stays clearly the brightest state.
   const YELLOW_BLOOM = 0.34; // tight: the extra brightness lands on the disc/rim, not a halo
 
+  // --- pale-blue-dot grade endpoint (the closing speck) --------------------
+  // The dot is the FINAL look of the reversed arc — a small, lonely, clearly-blue
+  // point in a near-black room. The old grade (exposure 0.28, bloom 0.03/0.10)
+  // darkened the whole frame ~3.6x and the Reinhard tone-map crushed the speck to
+  // literal black, so the narrative's payoff — "a single quiet speck" — was
+  // INVISIBLE. These three constants lift it to "faint but unmistakable": visible
+  // the moment you look, with a soft halo, but still quiet and humble — NOT a bright
+  // star. They are the taste levers for the dot's brightness: dial DOWN toward the
+  // old values (0.28 / 0.03 / 0.10) to quieten it, UP to make it bolder. (The dot's
+  // colour #DDEBFF and its breathing pulse live in disk.glsl.ts and just need light
+  // to survive on; the seed-gate there controls how many points draw the speck.)
+  const DOT_EXPOSURE = 0.46; // was 0.28 — lift the whole frame so the speck isn't tone-mapped to black
+  const DOT_BLOOM_STRENGTH = 0.18; // was 0.03 — a soft halo around the speck (humble, not a flare)
+  const DOT_BLOOM_RADIUS = 0.30; // was 0.10 — widen the halo a touch so the few-pixel cluster glows softly
+
   // --- shared star backdrop (yellow star + red giant) ----------------------
   // The twinkling far star dome (the sun rig's dome) is the BACKGROUND for the
   // two star states. The yellow star always showed it (it rides the mesh rig);
@@ -626,10 +641,13 @@ export function lifecycle(input: LifecycleInput): StarState {
     diskSat = diskSat * (1 - ne) + 1.4 * ne;
     grain = grain * (1 - ne); // fade film grain out → smooth immersed gas (no speckle)
   } else if (dot) {
-    // beginning: a near-pixel star in a very large black field.
-    bloomStrength = 0.03;
-    bloomRadius = 0.10;
-    exposure = 0.28;
+    // pale blue dot: the closing speck — a small, lonely, clearly-blue point with a
+    // SOFT GLOW in a very large black field. Graded via the DOT_* endpoint constants
+    // above (the brightness taste levers) so the speck reads "faint but unmistakable"
+    // rather than being crushed to black by the tone-map.
+    bloomStrength = DOT_BLOOM_STRENGTH;
+    bloomRadius = DOT_BLOOM_RADIUS;
+    exposure = DOT_EXPOSURE;
     olive = 0.0;
     warmth = -0.03;
     gradeSat = 0.72;

@@ -595,11 +595,20 @@ export const SCENES: readonly LifecycleScene[] = [
       // PALE BLUE DOT — the lonely speck the reverse arc resolves to (stage ~4.7).
       // In LIFECYCLE space it is the first beat (these bands are lifecycleProgress
       // values), but under the active reverse direction it sits at the PHYSICAL
-      // BOTTOM of the page. Copy is fully visible across the dot's hold (now widened
-      // to 0.00 -> 0.12 = raw 88-100%, the content-unlock band), then fades as the
-      // dot is left behind into the nebula grow.
+      // BOTTOM of the page. Copy is readable across the dot's hold (0.00 -> 0.12 =
+      // raw 88-100%, the content-unlock band), then fades as the dot is left behind
+      // into the nebula grow.
+      //
+      // "FADE COPY OUT AT THE VERY END": unlike the other beats (which hard-cut via
+      // band()), the dot beat is rendered with a true IN/OUT fade (ManifestoOverlay
+      // honours these four fields for the 'pale blue dot' state). The IN ramp is
+      // WIDENED to 0.0 -> 0.05 so the line is near-ZERO at the very bottom frame
+      // (lifecycleProgress ≈ 0.0) — the lone speck is alone in black — and rises to
+      // readable only as the visitor scrolls UP slightly off the bottom. inEnd is the
+      // tunable lever for how far up the line takes to bloom in (raise it to keep the
+      // copy faint for longer; lower toward inStart to bring it back fast).
       at: 0.05,
-      text: { inStart: 0.0, inEnd: 0.02, outStart: 0.12, outEnd: 0.17 },
+      text: { inStart: 0.0, inEnd: 0.05, outStart: 0.12, outEnd: 0.17 },
       state: 'pale blue dot',
       down: 'I build software that stays understandable.',
       up: 'I build software that stays understandable.',

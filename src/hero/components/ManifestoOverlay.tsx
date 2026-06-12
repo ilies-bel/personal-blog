@@ -2,9 +2,14 @@
 // full bone across its scroll band (no fade, no direction swap, no opening intro).
 // Copy + timing live in ../beats (shared with index.astro's SSR fallback).
 import { BEATS } from '../beats';
-import { band } from '../scroll';
+import { band, fadeInOut } from '../scroll';
 import { lifecycleProgress } from '../timeline';
 import { useSceneState } from './SceneStateContext';
+
+// The closing pale-blue-dot beat is the ONE line that does NOT hard-cut: it fades
+// out at the very end so the lone speck is alone in black (see its text band in
+// sceneTable). Identified by state so re-ordering the table never breaks the gate.
+const DOT_BEAT_STATE = 'pale blue dot';
 
 export default function ManifestoOverlay() {
   const { progress, reduced, explorationMode } = useSceneState();
@@ -27,9 +32,23 @@ export default function ManifestoOverlay() {
         // line is shown at FULL opacity across its whole band (no fade) so the big
         // headline always reads at the same bright bone as the identity name and
         // the active HUD labels, then hard-cuts out when the next band begins.
+        //
+        // EXCEPTION — the closing pale-blue-dot line FADES rather than hard-cuts, so
+        // it dims toward near-nothing in the final frame (lifecycleProgress ≈ 0.0)
+        // and the lone speck is alone in black. For that beat we honour the authored
+        // in/out ramp (inStart→inEnd, outStart→outEnd) via fadeInOut; every other
+        // beat keeps the original hard rectangle.
         const opacity = reduced
           ? 1
-          : band(lifecycleP, beat.text.inStart, beat.text.outEnd);
+          : beat.state === DOT_BEAT_STATE
+            ? fadeInOut(
+                lifecycleP,
+                beat.text.inStart,
+                beat.text.inEnd,
+                beat.text.outStart,
+                beat.text.outEnd,
+              )
+            : band(lifecycleP, beat.text.inStart, beat.text.outEnd);
         const visible = opacity > 0.05;
         return (
           <div
