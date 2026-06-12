@@ -378,7 +378,7 @@ body.article-page .bh-backdrop::before {
   inset: 0;
   z-index: 0;                /* same depth as .bh-stage — behind .prose (z 1) */
   overflow: hidden;
-  background: #04060a;       /* near-black floor so edges read as void, not grey */
+  background: #020305;       /* deeper near-black floor so edges read as pure void */
   pointer-events: none;      /* never intercepts text selection / links */
   /* Pointer-parallax targets, lerped toward by the inline script (default 0). */
   --tx: 0;
@@ -401,9 +401,11 @@ body.article-page .bh-backdrop::before {
   height: 112%;
   object-fit: cover;
   object-position: center 42%;
-  /* Muted, on-palette: drop saturation + brightness, lift contrast a touch so the
-     bright corridor centre stays legible but never glares behind the text. */
-  filter: saturate(0.66) brightness(0.62) contrast(1.04);
+  /* Muted, on-palette: drop saturation HARD + brightness LOW so the corridor reads
+     as deep atmosphere (looking into a dark room), not a lit screen. Contrast is
+     lifted slightly to keep the centre legible as a faint glow; the scrim + vignette
+     below do the rest of the dimming. */
+  filter: saturate(0.5) brightness(0.4) contrast(1.06);
   will-change: transform;
   transform:
     translate(-50%, -50%)
@@ -427,22 +429,25 @@ body.article-page .bh-backdrop::before {
   );
   background:
     /* Reading-column scrim: a tall, narrow elliptical pool of near-black centred
-       on the measure, deepening legibility behind the centred copy while leaving
-       the bright corridor centre felt above/below it. */
-    radial-gradient(46% 118% at 50% 50%,
-      rgba(2, 4, 8, 0.78) 0%,
-      rgba(2, 4, 8, 0.5) 42%,
-      rgba(2, 4, 8, 0) 74%),
-    /* Edge/corner vignette → near-black at the frame so nothing reads as a literal
-       rectangular photo; the corridor fades into the void. */
-    radial-gradient(120% 120% at 50% 46%,
-      rgba(4, 6, 10, 0) 38%,
-      rgba(4, 6, 10, 0.55) 72%,
-      rgba(4, 6, 10, 0.96) 100%),
+       on the measure. Pushed STRONGER + WIDER so the text column floats in near-
+       black and the corridor only survives as a faint glow at its edges. */
+    radial-gradient(52% 124% at 50% 50%,
+      rgba(2, 4, 8, 0.92) 0%,
+      rgba(2, 4, 8, 0.74) 40%,
+      rgba(2, 4, 8, 0.22) 70%,
+      rgba(2, 4, 8, 0) 88%),
+    /* Edge/corner vignette → black at the frame, pulled IN (starts darkening
+       earlier) so nothing reads as a literal rectangular photo; the corridor is a
+       muted pool in the centre fading to void well before the edges. */
+    radial-gradient(118% 118% at 50% 46%,
+      rgba(3, 5, 9, 0) 22%,
+      rgba(3, 5, 9, 0.5) 54%,
+      rgba(3, 5, 9, 0.82) 78%,
+      rgba(3, 5, 9, 1) 100%),
     /* Bottom floor: sink the very base to the room colour for long articles. */
     linear-gradient(180deg,
-      rgba(4, 6, 10, 0) 64%,
-      rgba(4, 6, 10, 0.7) 88%,
+      rgba(3, 5, 9, 0) 56%,
+      rgba(3, 5, 9, 0.82) 84%,
       var(--bg) 100%);
 }
 
