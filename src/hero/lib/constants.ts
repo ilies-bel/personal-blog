@@ -99,6 +99,13 @@ export const LOADER_MIN_MS = 2500;
 export const LOADER_SEEN_STORAGE_KEY = 'loader-seen';
 /** localStorage key persisting the chosen exploration-HUD target. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
+/** localStorage key persisting the visitor's MANUAL reduced-motion override (a
+ *  bare 'true'/'false' string). When present it WINS over the OS
+ *  prefers-reduced-motion default and survives reloads + in-app navigations;
+ *  when absent the OS preference is the source of truth. Written by the corner
+ *  reduce-motion toggle (useReducedMotionPreference). Access is wrapped in
+ *  try/catch (private mode / disabled storage must never throw). */
+export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM
  *  writes a small JSON blob `{ powered: boolean, forced: boolean }` here on every
  *  transition and restores it on init, so a returning visitor finds the HUD lit

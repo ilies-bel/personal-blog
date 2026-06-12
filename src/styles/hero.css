@@ -133,6 +133,40 @@
 }
 .bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
 
+/* --- Reduced-motion poster slideshow --------------------------------------- */
+/* The STILL stand-in for the live WebGL hero, rendered by HeroIsland only under the
+   resolved reduced-motion preference. Four lifecycle posters stacked in one fixed
+   full-viewport layer at the canvas's z-plane (z 0) — behind the manifesto overlay
+   (z 10) and the corner chrome, exactly like .bh-stage — so the manifesto copy reads
+   over a matching backdrop. pointer-events:none so it never intercepts clicks meant
+   for the markers/nav above it. NO transform here: the cross-fade is opacity ONLY
+   (each <img>'s inline opacity is driven by scroll progress), which is the whole point
+   of the reduced-motion path. */
+.bh-poster-slideshow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #000;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bh-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* A short opacity transition smooths the per-frame scroll steps into a clean
+     cross-fade. OPACITY ONLY — no transform/scale/translate is ever applied. */
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+}
+/* Honour the contract literally: if any later rule ever tried to animate a transform
+   on the posters, this neutralises it — the slideshow is opacity-only by construction. */
+@media (prefers-reduced-motion: reduce) {
+  .bh-poster { transform: none !important; }
+}
+
 /* Backdrop mode (reading pages): the SAME pinned scene, pushed back so front copy
    stays the focus. Dimmed + slightly desaturated, with a vignette wash that deepens
    the room toward the edges so text never fights the canvas. */

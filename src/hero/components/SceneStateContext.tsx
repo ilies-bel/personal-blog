@@ -48,6 +48,10 @@ export interface SceneActions {
     targetNdc?: { x: number; y: number };
     state?: HudTargetId;
   }) => void;
+  /** Flip the RESOLVED reduced-motion preference (state.reduced) and persist it as
+   *  a manual override. Drives the corner toggle button; the SAME resolved value
+   *  feeds the hero's mount decision (live WebGL vs the still poster slideshow). */
+  toggleReducedMotion?: () => void;
 }
 
 const SceneStateCtx = createContext<SceneState | null>(null);

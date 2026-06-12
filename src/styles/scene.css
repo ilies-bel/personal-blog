@@ -406,8 +406,8 @@ body.bare.hud-active .overlay-blog-label {
    FORCED override specifically; the lit appearance tracks the HUD being up however
    it got there. Gold frame + glyph, soft outer glow, faint gold fill tint. */
 .overlay-blog-power[aria-pressed='true'],
-body.hud-active .overlay-blog-power,
-body.hud-booting .overlay-blog-power {
+body.hud-active .overlay-blog-power:not(.overlay-blog-motion),
+body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
   color: var(--accent-strong);
   border-color: var(--accent-strong);
   background: color-mix(in oklch, var(--highlight) 12%, color-mix(in oklch, var(--bg) 55%, transparent));
@@ -422,7 +422,7 @@ body.hud-booting .overlay-blog-power {
 .overlay-blog-power {
   position: relative;
 }
-body.hud-booting .overlay-blog-power {
+body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
   animation: overlay-power-charge 0.9s ease-in-out infinite;
 }
 /* The pulse: a gold (var(--highlight)/var(--accent-strong)) glow that breathes from
@@ -449,6 +449,24 @@ body.hud-booting .overlay-blog-power {
   /* Drop the charge pulse; the static lit/charging tint above still reads. */
   body.hud-booting .overlay-blog-power { animation: none; }
 }
+
+/* Reduced-motion toggle — a sibling glyph button to the corner power control. It is
+   rendered by the React hero island (inside .bh-root, so it can read the resolved
+   reduced-motion preference from context), NOT inside the SSR .overlay-blog nav, so it
+   is positioned as a fixed corner control that sits just to the LEFT of the power
+   button. It reuses .overlay-blog-power for the ring frame + glyph weight; this
+   modifier only places it (one power button = 2.1rem wide + the 0.6rem row gap to the
+   right of it). Same top as the .overlay-blog row so the two read as one set. */
+.overlay-blog-motion {
+  position: fixed;
+  top: clamp(0.75rem, 2.5vw, 1.5rem);
+  right: calc(clamp(1rem, 4vw, 3rem) + 2.1rem + 0.6rem);
+  z-index: 21;                           /* match .overlay-blog so it sits in the same plane */
+}
+/* aria-pressed='true' (reduced motion ON) gives the toggle the same lit gold look the
+   power button uses for its engaged state, so the corner clearly reads which mode is
+   active. The base .overlay-blog-power[aria-pressed='true'] rule already styles this;
+   this is just a documentation anchor — no extra declarations needed. */
 
 /* On the smallest screens, fold the four section icons away and keep only the
    socials + power controls (the labels were never shown there anyway). */

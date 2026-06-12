@@ -22,7 +22,8 @@ import { legacyStageForProgress } from '../timeline';
 import { hudIdForStage, resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { sceneForProgress } from '../sceneTable';
-import { prefersReducedMotion, detectDeviceTier } from '../lib/config';
+import { detectDeviceTier } from '../lib/config';
+import { useReducedMotionPreference } from '../lib/useReducedMotionPreference';
 import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
@@ -57,6 +58,8 @@ import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
 import StarMarker from './StarMarker';
 import YellowStarRing from './YellowStarRing';
+import PosterSlideshow from './PosterSlideshow';
+import ReducedMotionToggle from './ReducedMotionToggle';
 
 declare global {
   interface Window {
@@ -169,8 +172,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // specific copy; the current forward lifecycle uses matching lines both ways.
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
-  const [reduced, setReduced] = useState(false);
-  const [motionPreferenceVersion, setMotionPreferenceVersion] = useState(0);
+  // The RESOLVED reduced-motion preference (manual override ?? OS preference) and
+  // its toggle. This single value is the source of truth for BOTH the mount
+  // decision below (live WebGL hero vs the still poster slideshow) AND the corner
+  // toggle button — it is threaded into the context state/actions so the button and
+  // the engine never disagree. The hook owns the matchMedia listener, so HeroIsland
+  // no longer keeps its own motion-preference effect.
+  const { reduced, toggle: toggleReducedMotion } = useReducedMotionPreference();
   // The star-navigation rail is always visible (no scroll gate). Initialised on
   // so the HUD shows from the top of the page through to the bottom.
   const [explorationMode] = useState(true);
@@ -197,18 +205,9 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   const hudPowerOnTimerRef = useRef(0);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = (): void => setMotionPreferenceVersion((version) => version + 1);
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
-  }, []);
-
-  useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const isReduced = prefersReducedMotion();
-    setReduced(isReduced);
+    const isReduced = reduced;
     // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
     // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,
     // no bloom, no gravity bake) is chosen up front; 'high' is byte-identical to today.
@@ -389,6 +388,29 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // mirrors how getStage/getProgress flow into the scene. No scrollbar is touched.
     const getDwell = (): number => resolve(progressRef.current).dwell;
 
+    // REDUCED-MOTION CONTRACT: under the resolved reduced-motion preference we do
+    // NOT mount the WebGL engine at all — no createScene import, no rAF loop. The
+    // still poster slideshow (rendered below) stands in for the live hero while the
+    // ScrollTracker above keeps running, so the manifesto copy + the poster cross-fade
+    // stay scroll-driven. Because createScene never fires its scene:ready event here,
+    // we lift the intro loader ourselves (so the page isn't trapped behind it waiting
+    // out the safety backstop) — but WITHOUT the "needs WebGL" note, since this is a
+    // deliberate preference, not a failure. `reduced` is in this effect's dependency
+    // list, so flipping the corner toggle re-runs the effect: the cleanup below tears
+    // any live scene down, and flipping back re-enters and re-mounts it — no reload.
+    if (reduced) {
+      if (typeof document !== 'undefined') {
+        document.body.classList.add(SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS);
+      }
+      return () => {
+        cancelled = true;
+        unsub();
+        tracker.stop();
+        hudAtEndRef.current = false;
+        document.body.classList.remove(SCROLLED_BODY_CLASS, HUD_BOOTING_BODY_CLASS);
+      };
+    }
+
     // Pull in the three.js engine asynchronously, THEN build the scene. The scroll
     // tracker above is pure JS and stays synchronous, so scroll is wired the instant
     // the island hydrates; only the heavy GPU scene waits for its own chunk. The
@@ -487,7 +509,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // loader script — we never strip it here.)
       document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, HUD_BOOTING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS);
     };
-  }, [backdrop, backdropStage, motionPreferenceVersion]);
+  }, [backdrop, backdropStage, reduced]);
 
   // The dive action published to StarMarker via SceneStateProvider. Flies the live
   // camera into the star (the scene owns the geometry + the white-overlay strength),
@@ -582,7 +604,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   return (
     <SceneStateProvider
       state={{ progress, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base }}
-      actions={{ beginDive }}
+      actions={{ beginDive, toggleReducedMotion }}
     >
       {/* data-zone="bright" over the supernova flash + yellow-star beat flips the
           chrome tokens to a dark graphite stroke (see hud.css [data-zone]); warm bone
@@ -595,21 +617,41 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         data-zone={brightZone ? 'bright' : 'dark'}
         data-scene={dataScene}
       >
+        {/* The canvas host. Under reduced motion the mount effect never imports
+            createScene, so this stays an empty fixed layer and the still poster
+            slideshow below paints the backdrop instead — opacity-only cross-fade, no
+            WebGL, no rAF loop. */}
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
-        <YellowStarRing />
+        {reduced ? (
+          // Reduced-motion stand-in for the live hero: four lifecycle posters
+          // cross-faded by scroll progress (opacity only). Sits at the canvas's
+          // z-layer, behind the manifesto overlay copy — same room, no motion.
+          <PosterSlideshow progress={progress} base={base} />
+        ) : (
+          <>
+            <YellowStarRing />
+            {/* One marker per placement, all mounted at once. Each instance gates its
+                own visibility on its state being the settled one (the nebula owns three;
+                the others one each) — no mount/unmount thrash, lock ownership is
+                per-marker via the placement id. These ride the LIVE scene's per-frame
+                marker positions, so they only mount on the live (non-reduced) path. */}
+            {MARKER_PLACEMENTS.map((placement) => (
+              <StarMarker key={placement.id} placement={placement} markerFrameRef={markerFrameRef} />
+            ))}
+          </>
+        )}
         <HeroIdentity />
         <ManifestoOverlay />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
             black hole. Shown only while body.at-opening (the opening hold); fades out
-            once the visitor scrolls past. aria-hidden — pure decoration. */}
+            once the visitor scrolls past. aria-hidden — pure decoration. (Under reduced
+            motion body.at-opening is never set, so it simply stays hidden.) */}
         <div className="bh-focus-dot" aria-hidden="true" />
-        {/* One marker per placement, all mounted at once. Each instance gates its
-            own visibility on its state being the settled one (the nebula owns three;
-            the others one each) — no mount/unmount thrash, lock ownership is
-            per-marker via the placement id. */}
-        {MARKER_PLACEMENTS.map((placement) => (
-          <StarMarker key={placement.id} placement={placement} markerFrameRef={markerFrameRef} />
-        ))}
+        {/* The corner reduced-motion toggle joins the top-right opening-chrome glyph
+            row (styled to match the sibling power button). Reads/flips the resolved
+            preference via the scene context — the single source of truth that also
+            drives the mount decision above. */}
+        <ReducedMotionToggle />
         <ExplorationHud markerFrameRef={markerFrameRef} />
       </div>
     </SceneStateProvider>
