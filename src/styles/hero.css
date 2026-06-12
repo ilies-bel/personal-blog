@@ -353,9 +353,10 @@ body.article-page .bh-backdrop::before {
    A bespoke backdrop scoped to a single post (frontmatter backdrop: 'tesseract',
    the INSPIRATION / 01 page). It REPLACES the dimmed live <BlackHole backdrop>
    photon-ring scene for that one post; every other post keeps the live scene
-   above. The Interstellar bookcase corridor reads as cinematic ATMOSPHERE, not a
-   literal photo: full-bleed, vignetted to near-black at the edges so the reading
-   column floats, desaturated + dimmed, with a soft scrim behind the centred copy.
+   above. The Interstellar bookcase corridor is a REAL-TIME WebGL scene (a raymarched
+   fullscreen <canvas>, see TesseractBackdrop.astro / buildTesseract.ts), read as
+   cinematic ATMOSPHERE: full-bleed, vignetted to near-black at the edges so the
+   reading column floats, dimmed, with a soft scrim behind the centred copy.
 
    It mirrors .bh-stage's depth exactly: position:fixed; inset:0; z-index:0, so it
    sits BEHIND the reading column (.prose is lifted to z-index:1) and UNDER the
@@ -364,15 +365,14 @@ body.article-page .bh-backdrop::before {
    body[data-resurface] keyframe while this fixed layer stays put behind it.
    aria-hidden — it carries no information, it's mood.
 
-   Motion = "pointer + ambient drift" parallax (premium, restrained):
-     • ambient: a slow continuous push-in (tesseract-drift) on the image;
-     • pointer: the inline script in TesseractBackdrop.astro writes --tx/--ty
-       (-1..1, lerped) on the root layer; the layers translate a few px, depth-
-       scaled (the far image moves less than the near vignette), so the corridor
-       gains a gentle, restrained parallax that tracks the cursor.
-   Under prefers-reduced-motion BOTH the ambient keyframe and the pointer translate
-   are disabled (the script early-returns; the keyframe is gated below), leaving a
-   static, treated image. */
+   Motion = pointer "look-around" + ambient push-in, BOTH owned by the WebGL rig:
+     • ambient: the rig's rAF loop advances time + a slow push-in along Z;
+     • pointer: the mount script in TesseractBackdrop.astro feeds the cursor (-1..1)
+       to the shader's uLook, which shears the ray so the vanishing point slides and
+       you peer down different axes of the tunnel (the "look around inside the
+       tesseract" move).
+   Under prefers-reduced-motion the script renders ONE static frame (no rAF, no look,
+   no push-in) and the drift keyframe is gated off below — a frozen corridor. */
 .tesseract-backdrop {
   position: fixed;
   inset: 0;
@@ -380,40 +380,18 @@ body.article-page .bh-backdrop::before {
   overflow: hidden;
   background: #020305;       /* deeper near-black floor so edges read as pure void */
   pointer-events: none;      /* never intercepts text selection / links */
-  /* Pointer-parallax targets, lerped toward by the inline script (default 0). */
-  --tx: 0;
-  --ty: 0;
-  /* The per-layer translate magnitudes (px). Near layer (vignette) moves more
-     than the far layer (image) → depth. Scaled to 0 under reduced motion below. */
-  --par-near: 14px;
-  --par-far: 7px;
 }
 
-/* Full-bleed corridor image. Sized larger than the viewport (112%) and centred so
-   neither the ambient push-in nor the pointer translate can ever reveal an edge.
-   Desaturated + dimmed so it reads as atmosphere; the ambient drift eases it in
-   and out over a long cycle. The far (smaller) parallax offset is applied here. */
-.tesseract-backdrop-image {
+/* Full-bleed corridor canvas. The WebGL renderer is sized to the viewport in CSS
+   pixels (DPR-capped in JS), so the canvas just fills the layer. It sits UNDER the
+   vignette + grain overlays, which do the edge-dimming and reading-column scrim. The
+   shader's own uDim keeps it deep/atmospheric; this layer just stretches it. */
+.tesseract-backdrop-canvas {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 112%;
-  height: 112%;
-  object-fit: cover;
-  object-position: center 42%;
-  /* Muted, on-palette: drop saturation HARD + brightness LOW so the corridor reads
-     as deep atmosphere (looking into a dark room), not a lit screen. Contrast is
-     lifted slightly to keep the centre legible as a faint glow; the scrim + vignette
-     below do the rest of the dimming. */
-  filter: saturate(0.5) brightness(0.4) contrast(1.06);
-  will-change: transform;
-  transform:
-    translate(-50%, -50%)
-    translate(
-      calc(var(--tx) * var(--par-far)),
-      calc(var(--ty) * var(--par-far))
-    );
-  animation: tesseract-drift 32s ease-in-out infinite alternate;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* Edge / corner vignette → near-black, so the reading column floats out of a
@@ -463,18 +441,9 @@ body.article-page .bh-backdrop::before {
   background-size: 180px 180px;
 }
 
-@keyframes tesseract-drift {
-  from { scale: 1; }
-  to { scale: 1.045; }
-}
-
-/* Reduced motion: kill BOTH the ambient push-in and the pointer parallax (the
-   script also early-returns, so --tx/--ty stay 0; zeroing the magnitudes here is
-   belt-and-braces). Leaves a static, treated image. */
-@media (prefers-reduced-motion: reduce) {
-  .tesseract-backdrop { --par-near: 0px; --par-far: 0px; }
-  .tesseract-backdrop-image { animation: none; }
-}
+/* Reduced motion is handled in JS: the mount script renders ONE static frame and
+   binds no rAF / pointer / resize listeners, so there is no CSS animation to gate
+   here. The frozen corridor inherits the same vignette + scrim + grain. */
 
 /* --- Yellow-star designed ring (ITEM 4) -------------------------------------
    One subtle designed detail for the yellow-star chapter: a faint orbital /

@@ -6,12 +6,16 @@
  * INSPIRATION / 01 page). It REPLACES the default dimmed live `<BlackHole backdrop>`
  * photon-ring scene for that one post; every other post keeps the live scene.
  *
- * The Interstellar bookcase corridor reads as cinematic ATMOSPHERE, not a literal
- * photo: full-bleed, vignetted to near-black at the edges so the reading column
- * floats, desaturated + dimmed, with a soft scrim behind the centred copy and a
- * light film grain on top. All structural look lives in hero.css (the partial that
- * owns the backdrop) under `.tesseract-backdrop*`; this component owns the markup +
- * the tiny pointer-parallax script.
+ * The Interstellar bookcase corridor is now a REAL-TIME WebGL scene: a self-contained
+ * raymarched fragment shader (`buildTesseract` → `tesseract.glsl.ts`) drawing an
+ * infinite tunnel of nested rectangular frames diving to a luminous vanishing point —
+ * NOT a static photo. It reads as cinematic ATMOSPHERE: vignetted to near-black at the
+ * edges so the reading column floats, dimmed to a deep-room level, with a soft scrim
+ * behind the centred copy and a light film grain on top. The WebGL canvas sits UNDER
+ * those CSS overlays (vignette + scrim + grain), which are unchanged from the image
+ * version. The corridor look lives in the shader; the framing/dimming lives in
+ * hero.css under `.tesseract-backdrop*`; this component owns the markup + the mount
+ * script.
  *
  * Depth: position:fixed; inset:0; z-index:0 (mirrors `.bh-stage`), so it sits BEHIND
  * the reading column (`.prose` is z-index:1) and UNDER the `.dive-overlay` (z 9999).
@@ -19,109 +23,101 @@
  * the destination `<main>` rises via `body[data-resurface] main` while this fixed
  * layer stays put behind it.
  *
- * Motion = "pointer + ambient drift" parallax. Ambient: a slow continuous push-in
- * (CSS `@keyframes tesseract-drift`). Pointer: the inline script writes lerped
- * `--tx`/`--ty` (-1..1) on the root layer once per `requestAnimationFrame`; the
- * image + vignette translate a few px, depth-scaled. Both are disabled under
- * `prefers-reduced-motion` (the script early-returns; the keyframe + magnitudes are
- * gated off in CSS), leaving a static, treated image. `aria-hidden` — it's mood.
+ * Interaction = pointer "look-around". The mount script lerps a -1..1 pointer offset
+ * into the shader's `uLook` uniform so the view direction shears toward the cursor and
+ * you peer down different axes of the tunnel (the vanishing point slides), like the
+ * film. Ambient: the rig's own rAF loop advances time + a slow push-in along Z. Under
+ * `prefers-reduced-motion` the script renders ONE static frame (no rAF, no look-around,
+ * no push-in) — still the corridor, just frozen. `aria-hidden` — it's mood.
  */
-const base = import.meta.env.BASE_URL;
-// Match the slash-normalising pattern used in [...slug].astro and the mdx figures.
-const href = (p: string): string => `${base}/${p}`.replace(/\/+/g, '/');
-const webp = href('inspirations/tesseract-bookcase.webp');
-const jpg = href('inspirations/tesseract-bookcase.jpg');
 ---
 
 <div class="tesseract-backdrop" data-tesseract-backdrop aria-hidden="true">
-  {/* Far layer: the corridor itself. <picture> serves the optimized WebP with a
-      JPEG fallback. Decorative, so empty alt. The ambient push-in + the smaller
-      (far) parallax offset are applied to .tesseract-backdrop-image in hero.css. */}
-  <picture>
-    <source srcset={webp} type="image/webp" />
-    <img class="tesseract-backdrop-image" src={jpg} alt="" decoding="async" />
-  </picture>
-  {/* Near layer: vignette + reading-column scrim. Translates MORE than the image
-      (depth). Pure CSS gradients. */}
+  {/* The live corridor. The mount script (below) attaches a WebGL renderer to this
+      canvas and raymarches the infinite nested-frame tunnel each frame. Sits UNDER
+      the vignette + grain. */}
+  <canvas class="tesseract-backdrop-canvas" data-tesseract-canvas></canvas>
+  {/* Near layer: vignette + reading-column scrim. Pure CSS gradients (unchanged). */}
   <div class="tesseract-backdrop-vignette"></div>
   {/* Film grain on top — static, low opacity, overlay-blended texture. */}
   <div class="tesseract-backdrop-grain"></div>
 </div>
 
-{/* Pointer-parallax driver. Bundled (no is:inline) so it re-runs across ClientRouter
-    swaps. Idempotent + SSR-guarded. Stores the latest pointer event and applies a
-    single lerped write per animation frame (throttled), so the corridor eases toward
-    the cursor instead of snapping. Early-returns under prefers-reduced-motion. */}
+{/* WebGL mount + pointer look-around driver. Bundled (no is:inline) so the
+    `buildTesseract` import is processed by Vite and re-runs across ClientRouter swaps.
+    Idempotent + SSR-guarded. Mounts the corridor on the canvas, drives `setLook` from
+    pointermove (the rig lerps internally), resizes with the viewport, and disposes on
+    `astro:before-swap`. Under prefers-reduced-motion it renders ONE static frame (no
+    rAF, no look, no push-in) and binds no listeners. */}
 <script>
-  function initTesseractParallax(): void {
+  import { buildTesseract, type TesseractRig } from '../scene/buildTesseract';
+
+  async function initTesseractBackdrop(): Promise<void> {
     if (typeof window === 'undefined') return;
     const layer = document.querySelector<HTMLElement>('[data-tesseract-backdrop]');
     if (!layer) return;
+    const canvas = layer.querySelector<HTMLCanvasElement>('[data-tesseract-canvas]');
+    if (!canvas) return;
 
-    // Respect the OS reduced-motion preference: no pointer translate at all (the
-    // CSS also zeroes the ambient keyframe + parallax magnitudes).
+    // Re-init guard: ClientRouter can swap the body and re-run this. Mount exactly once.
+    const flagged = layer as HTMLElement & { dataset: DOMStringMap };
+    if (flagged.dataset.tesseractMounted === '1') return;
+    flagged.dataset.tesseractMounted = '1';
+
     const reduceMotion =
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) return;
 
-    // Re-init guard: ClientRouter can swap the body and re-run this. Bind the
-    // window pointer listener exactly once; the RAF loop also runs once.
-    const flagged = layer as HTMLElement & { dataset: DOMStringMap };
-    if (flagged.dataset.parallaxBound === '1') return;
-    flagged.dataset.parallaxBound = '1';
+    let rig: TesseractRig;
+    try {
+      rig = buildTesseract({ canvas, maxPixelRatio: 2, dim: 0.92 });
+    } catch {
+      // No WebGL (or context creation failed): leave the dimmed CSS layers; the
+      // reading column still floats in near-black. Release the guard so a later
+      // navigation back can retry on a fresh canvas.
+      flagged.dataset.tesseractMounted = '';
+      return;
+    }
 
-    // Target (latest pointer, normalised -1..1) and the current lerped value.
-    let targetX = 0;
-    let targetY = 0;
-    let currentX = 0;
-    let currentY = 0;
-    let rafId = 0;
-    let queued = false;
-
-    const apply = (): void => {
-      queued = false;
-      // Ease current toward target (smooth, never snaps).
-      currentX += (targetX - currentX) * 0.08;
-      currentY += (targetY - currentY) * 0.08;
-      layer.style.setProperty('--tx', currentX.toFixed(4));
-      layer.style.setProperty('--ty', currentY.toFixed(4));
-      // Keep stepping while we're still meaningfully far from the target so the
-      // ease completes; otherwise idle until the next pointer move.
-      const settled =
-        Math.abs(targetX - currentX) < 0.001 && Math.abs(targetY - currentY) < 0.001;
-      if (!settled) {
-        rafId = window.requestAnimationFrame(apply);
-      } else {
-        queued = false;
-      }
+    const sizeToViewport = (): void => {
+      rig.resize(window.innerWidth, window.innerHeight);
     };
+    sizeToViewport();
 
-    const requestFrame = (): void => {
-      if (queued) return;
-      queued = true;
-      rafId = window.requestAnimationFrame(apply);
-    };
+    // Reduced motion: one frozen frame, no loop, no listeners.
+    if (reduceMotion) {
+      rig.renderOnce();
+      document.addEventListener('astro:before-swap', () => rig.dispose(), { once: true });
+      return;
+    }
 
+    // Pointer look-around: normalise the cursor to -1..1 and hand it to the rig, which
+    // eases its own `uLook` toward it so the view direction shears down the tunnel
+    // toward the cursor (the vanishing point slides) — the "peer around inside the
+    // tesseract" move. Passive listener; the rig owns the smoothing + the rAF loop.
     const onPointerMove = (event: PointerEvent): void => {
-      // Normalise cursor to -1..1 across the viewport (centre = 0,0).
-      targetX = (event.clientX / window.innerWidth) * 2 - 1;
-      targetY = (event.clientY / window.innerHeight) * 2 - 1;
-      requestFrame();
+      const nx = (event.clientX / window.innerWidth) * 2 - 1;
+      const ny = (event.clientY / window.innerHeight) * 2 - 1;
+      rig.setLook(nx, -ny); // flip Y so "up" on screen looks up the corridor
     };
-
     window.addEventListener('pointermove', onPointerMove, { passive: true });
 
-    // If the page is swapped away, stop the RAF loop (cheap hygiene).
+    const onResize = (): void => sizeToViewport();
+    window.addEventListener('resize', onResize, { passive: true });
+
+    rig.start();
+
     document.addEventListener(
       'astro:before-swap',
       () => {
-        if (rafId) window.cancelAnimationFrame(rafId);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('resize', onResize);
+        rig.dispose();
       },
       { once: true },
     );
   }
 
-  document.addEventListener('astro:page-load', initTesseractParallax);
-  initTesseractParallax();
+  document.addEventListener('astro:page-load', initTesseractBackdrop);
+  void initTesseractBackdrop();
 </script>
