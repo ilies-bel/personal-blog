@@ -35,17 +35,24 @@ export interface PosterSlideshowProps {
 }
 
 /**
- * Per-poster opacity for a fractional position across the four stops. `progress`
- * is mapped to an index in [0, 3]; the active poster is full-on and its nearer
- * neighbour blends in across the overlap zone, so adjacent posters cross-fade.
- * Only the two posters straddling the current position are ever non-zero.
+ * Per-poster opacity for a position across the four stops — a HARD CUT, no fade.
+ * `progress` maps to a position in [0, 3]; whichever stop is nearest is shown solid
+ * (opacity 1) and all others are off (0). Exactly one poster is ever visible.
+ *
+ * Why a hard cut, not a cross-fade: these are STILL photographs of very different
+ * objects (a black hole vs a red giant). ANY opacity blend between two such stills
+ * muds into a double-exposure at the 50/50 midpoint — the black hole's photon ring
+ * ghosts THROUGH the red giant's surface, reading as a render glitch, and the scroll
+ * can park right on it. A snap avoids that entirely; it's also the honest reduced-
+ * motion behaviour (swap states, don't animate the swap). The visible jump is small
+ * because each adjacent pair shares the dark space background, and the manifesto line
+ * changes at the same boundary, so the cut reads as turning a page, not a flicker.
  */
 function opacityFor(index: number, progress: number): number {
   const clamped = Math.min(1, Math.max(0, progress));
   const position = clamped * (POSTERS.length - 1); // 0..3
-  const distance = Math.abs(index - position);
-  if (distance >= 1) return 0;
-  return 1 - distance; // linear cross-fade in the [0,1) overlap band
+  const nearest = Math.round(position); // the stop this scroll position belongs to
+  return index === nearest ? 1 : 0;
 }
 
 export default function PosterSlideshow({ progress, base }: PosterSlideshowProps) {

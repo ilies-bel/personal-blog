@@ -27,18 +27,25 @@ export default function ManifestoOverlay() {
         // build software that stays understandable." on the dot) while it now
         // appears at the correct PHYSICAL scroll position under the reverse arc.
         const lifecycleP = lifecycleProgress(progress);
-        // REDUCED MOTION shows STILL posters, so each line pairs with its poster via
-        // the authored band [inStart, outEnd] — a hard 0/1 step (no fade), which is the
-        // no-cross-fade reduced-motion intent. (A later commit makes this gapless so a
-        // line is always on screen; here it is the plain band.)
+        // Three visibility regimes, by path:
         //
-        // The LIVE (non-reduced) hero keeps the authored bands too, EXCEPT the closing
-        // pale-blue-dot line, which FADES rather than hard-cuts so it dims toward near-
-        // nothing in the final frame (lifecycleProgress ≈ 0.0) and the lone speck is
-        // alone in black. For that beat we honour the authored in/out ramp via
-        // fadeInOut; every other beat keeps the hard rectangle.
+        // 1) REDUCED MOTION shows STILL posters. The authored bands have GAPS between
+        //    them; on the live hero those are filled by the morphing canvas, but with
+        //    still posters they become dead, text-less, dim frames ("stuck on a dim
+        //    image"). So each reduced line holds GAPLESSLY from its own inStart until
+        //    the NEXT beat's inStart (minus a hair, so the inclusive band()'s handoff
+        //    shows exactly one line at the boundary, never two). The final beat holds to
+        //    1 (bottom of page). Exactly one headline is always on screen.
+        //
+        // 2) LIVE hero, closing pale-blue-dot line: FADES rather than hard-cuts via the
+        //    authored in/out ramp, so it dims toward nothing in the final frame and the
+        //    lone speck is alone in black.
+        //
+        // 3) LIVE hero, every other beat: the authored narrow band [inStart, outEnd] —
+        //    a hard cut, the deliberate gaps filled by the morphing canvas. Byte-identical.
+        const nextInStart = BEATS[i + 1]?.text.inStart;
         const opacity = reduced
-          ? band(lifecycleP, beat.text.inStart, beat.text.outEnd)
+          ? band(lifecycleP, beat.text.inStart, nextInStart !== undefined ? nextInStart - 1e-4 : 1)
           : beat.state === DOT_BEAT_STATE
             ? fadeInOut(
                 lifecycleP,
