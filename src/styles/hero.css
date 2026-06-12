@@ -552,9 +552,18 @@ body.scene-ready.at-opening .bh-focus-dot {
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
 }
 
-/* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
-   stay reachable, so the island renders every beat fully and shows BOTH big lines
-   stacked (no crossfade); lay them out in normal flow instead of pinning them. */
+/* Reduced motion: keep the atmosphere, drop the motion. The manifesto overlay keeps
+   its normal PINNED layout (one line at the bottom-left, pinned over the matching
+   poster) — the React island already drives a DISCRETE one-beat-at-a-time hard cut
+   via inline opacity (band(), no cross-fade), which honours the reduced-motion intent
+   without stacking every line. So this block only drops the chrome's grow/scale
+   animation; it must NOT force every .bh-beat to opacity:1 / static flow (that was the
+   pre-poster behaviour and is what stacked all the copy onto one slide). All copy stays
+   reachable to a screen reader because the island keeps every beat in the a11y tree
+   under reduced motion (see ManifestoOverlay's aria-hidden).
+   NOTE this is keyed on the OS media query only; the resolved preference can differ
+   (a manual toggle can enable/disable reduced motion against the OS), so deliberately
+   nothing here gates the manifesto — the JS owns that for BOTH the OS and manual paths. */
 @media (prefers-reduced-motion: reduce) {
   /* Keep the chrome present and legible; drop the grow/scale animation. The name
      stays at full size (no whisper shrink) so nothing moves on scroll, and the menu
@@ -566,36 +575,6 @@ body.scene-ready.at-opening .bh-focus-dot {
   body.bare .bh-identity,
   body.bare.hud-active .bh-identity {
     transform: none !important;
-    opacity: 1 !important;
-  }
-
-  .bh-overlay {
-    position: static !important;
-    pointer-events: auto !important;
-  }
-  .bh-beat {
-    position: static !important;
-    inset: auto !important;
-    opacity: 1 !important;
-    max-width: var(--max);
-    margin: 0 auto;
-    padding: clamp(2.5rem, 12vh, 6rem) var(--gutter);
-  }
-  .bh-beat-big { min-height: 0 !important; }
-  .bh-beat-big {
-    display: grid;
-    gap: 0.45rem;
-  }
-  .bh-beat-line {
-    position: static !important;
-    opacity: 1 !important;
-    transform: none !important;
-    inset: auto !important;
-    margin-bottom: 0.4rem;
-  }
-
-  .bh-root[data-exploring='true'] .bh-overlay,
-  .bh-overlay[data-exploring='true'] {
     opacity: 1 !important;
   }
 }

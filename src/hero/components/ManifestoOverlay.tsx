@@ -27,19 +27,18 @@ export default function ManifestoOverlay() {
         // build software that stays understandable." on the dot) while it now
         // appears at the correct PHYSICAL scroll position under the reverse arc.
         const lifecycleP = lifecycleProgress(progress);
-        // Under reduced motion every beat is shown (so all copy is reachable).
-        // Otherwise each beat owns a non-overlapping band [inStart, outEnd]: the
-        // line is shown at FULL opacity across its whole band (no fade) so the big
-        // headline always reads at the same bright bone as the identity name and
-        // the active HUD labels, then hard-cuts out when the next band begins.
+        // REDUCED MOTION shows STILL posters, so each line pairs with its poster via
+        // the authored band [inStart, outEnd] — a hard 0/1 step (no fade), which is the
+        // no-cross-fade reduced-motion intent. (A later commit makes this gapless so a
+        // line is always on screen; here it is the plain band.)
         //
-        // EXCEPTION — the closing pale-blue-dot line FADES rather than hard-cuts, so
-        // it dims toward near-nothing in the final frame (lifecycleProgress ≈ 0.0)
-        // and the lone speck is alone in black. For that beat we honour the authored
-        // in/out ramp (inStart→inEnd, outStart→outEnd) via fadeInOut; every other
-        // beat keeps the original hard rectangle.
+        // The LIVE (non-reduced) hero keeps the authored bands too, EXCEPT the closing
+        // pale-blue-dot line, which FADES rather than hard-cuts so it dims toward near-
+        // nothing in the final frame (lifecycleProgress ≈ 0.0) and the lone speck is
+        // alone in black. For that beat we honour the authored in/out ramp via
+        // fadeInOut; every other beat keeps the hard rectangle.
         const opacity = reduced
-          ? 1
+          ? band(lifecycleP, beat.text.inStart, beat.text.outEnd)
           : beat.state === DOT_BEAT_STATE
             ? fadeInOut(
                 lifecycleP,
@@ -55,6 +54,13 @@ export default function ManifestoOverlay() {
             className="bh-beat"
             key={i}
             style={{ opacity }}
+            // VISUALLY both paths now show exactly the one beat whose band the
+            // scroll is in (opacity hard-cuts 0/1). For A11Y the reduced-motion path
+            // keeps EVERY beat in the accessibility tree (aria-hidden never set, since
+            // !reduced is false) so a screen reader can reach ALL the manifesto copy —
+            // the posters are aria-hidden, so this text is the page's only a11y
+            // narrative. The live (non-reduced) hero hides the visually-hidden beats
+            // from a11y as before (the canvas conveys the state visually).
             aria-hidden={!reduced && !visible}
           >
             {/* Big line: one line per beat, always shown at full bone. No

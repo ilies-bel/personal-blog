@@ -39,6 +39,25 @@ function writeManualOverride(value: boolean): void {
   }
 }
 
+/**
+ * SYNCHRONOUS resolve of the reduced-motion preference, read straight from the
+ * client environment: the persisted manual override, or failing that the live OS
+ * `prefers-reduced-motion` media query. Both are readable on the FIRST client render
+ * (matchMedia + localStorage exist client-side), so this returns the TRUE resolved
+ * value without waiting for the hook's post-mount reconcile effect.
+ *
+ * Why it exists: HeroIsland's scene-mount effect uses this to gate the heavy
+ * `createScene` dynamic import. Under `client:visible` the island is server-rendered
+ * first (window undefined → false), so the hook's React `reduced` state can be false
+ * on the very first client render and only flip true in a post-mount effect — long
+ * enough for the mount effect to have already imported + built a WebGL canvas that is
+ * then torn down. Reading the real value synchronously here means NO scene is ever
+ * created when the resolved preference is reduced. SSR-safe (window guarded → false).
+ */
+export function resolveReducedMotionNow(): boolean {
+  return readManualOverride() ?? prefersReducedMotion();
+}
+
 /** The resolved reduced-motion preference + a toggle that records a manual choice. */
 export interface ReducedMotionPreference {
   /** resolvedReduced = manualOverride ?? osPreference. */

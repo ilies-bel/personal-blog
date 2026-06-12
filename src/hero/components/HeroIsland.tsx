@@ -23,7 +23,7 @@ import { hudIdForStage, resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { sceneForProgress } from '../sceneTable';
 import { detectDeviceTier } from '../lib/config';
-import { useReducedMotionPreference } from '../lib/useReducedMotionPreference';
+import { useReducedMotionPreference, resolveReducedMotionNow } from '../lib/useReducedMotionPreference';
 import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
@@ -207,7 +207,17 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const isReduced = reduced;
+    // Resolve the reduced-motion preference SYNCHRONOUSLY from the live client
+    // environment (manual override ?? OS media query) rather than trusting React's
+    // `reduced` state, which under `client:visible` can be a stale `false` on the very
+    // first client render (the island is SSR'd with window undefined, so the hook
+    // seeds false and only reconciles true in a post-mount effect). Reading the true
+    // value here is what guarantees we NEVER import + build a WebGL canvas when the
+    // resolved preference is reduced — closing the "canvas mounts then is torn down"
+    // gap. `reduced` is still in this effect's dependency list, so flipping the corner
+    // toggle re-runs the effect and re-reads the (now updated) value, re-mounting or
+    // tearing down the scene as appropriate. The two agree once reconciled.
+    const isReduced = resolveReducedMotionNow();
     // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
     // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,
     // no bloom, no gravity bake) is chosen up front; 'high' is byte-identical to today.
@@ -398,7 +408,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // deliberate preference, not a failure. `reduced` is in this effect's dependency
     // list, so flipping the corner toggle re-runs the effect: the cleanup below tears
     // any live scene down, and flipping back re-enters and re-mounts it — no reload.
-    if (reduced) {
+    // NOTE we branch on `isReduced` (the SYNCHRONOUS resolve above), not the React
+    // `reduced` state, so a first-render stale `false` can never slip through to the
+    // createScene import below: no WebGL scene is EVER created under reduced motion.
+    if (isReduced) {
       if (typeof document !== 'undefined') {
         document.body.classList.add(SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS);
       }
