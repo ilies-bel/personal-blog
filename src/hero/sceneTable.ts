@@ -935,19 +935,13 @@ const NEBULA_GATHERED_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
 // the origin (no off-axis lean), steady z. Stillness vs the red orbit either side.
 const YELLOW_HOLD_POS: Vec3Tuple = [0.0, 0.0, 17.4];
 const YELLOW_HOLD_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
-// RED GIANT (raw 23-43%, ITEM 1): a three-beat cinematic — REVEAL the full mass ->
-// LIMB ORBIT/drift along the surface -> PUSH IN to a surface/active-region close-up.
-// The orb stays at the world origin (radius ≈ 10.5) the whole time; only the camera
-// moves (no re-geometry). Three poses drive it:
-//   REVEAL  — pulled BACK + slightly off-centre so the WHOLE grown giant reads as it
-//             inflates out of the yellow swap (the "reveal the full mass" arrival).
-//   CLOSE   — PUSHED IN (z 39.5 -> 27.5) and panned across the limb to an active region
-//             (sunspot/plage cluster, upper-left): the close-on-surface beat. Aimed
-//             nearer the surface so the granulation/active region reads big.
-// The limb orbit + the push-in are ONE continuous move REVEAL -> CLOSE across the hold
-// (ITEM 1's beats 2+3): the camera arcs along the surface as it dives in.
-const RED_REVEAL_POS: Vec3Tuple = [4.6, -1.8, 41.5];
-const RED_REVEAL_TGT: Vec3Tuple = [2.6, -0.9, 4.5];
+// RED GIANT (raw 23-43%): a single settled close-up resting pose — the surface /
+// active-region framing the red beat rests on (aimed nearer the surface, upper-left,
+// so the granulation/active region reads big). The orb stays at the world origin
+// (radius ≈ 10.5) the whole time; only the camera moves (no re-geometry). There is no
+// separate "reveal" arrival pose or limb-orbit beat: red->yellow is ONE continuous
+// camera move DIRECTLY between the two resting poses (yellow hold <-> this close-up),
+// then a flat hold here.
 const RED_CLOSE_POS: Vec3Tuple = [-5.6, -0.4, 24.5];
 const RED_CLOSE_TGT: Vec3Tuple = [-7.0, -1.6, 8.6];
 // REVERSE SUPERNOVA (raw 14-28%): compress inward — the camera eases toward the core
@@ -1047,33 +1041,31 @@ const CAMERA_BANDS: readonly CameraBand[] = [
     targetEnd: YELLOW_HOLD_TGT,
     parallax: 0.03,
   },
-  // 5 — YELLOW -> RED GIANT REVEAL (raw 33-43%, ITEM 1 beat 1): one continuous travel
-  // from the centred yellow hold out to the REVEAL pose as the giant inflates — the
-  // camera pulls BACK (z 17.4 -> 39.5) and off-centre so the WHOLE grown red giant
-  // reads as it arrives. easeInOutCubic so it eases into the reveal without a snap.
+  // 5 — YELLOW -> RED GIANT (raw 33-43%): the WHOLE red->yellow camera move — ONE
+  // continuous travel DIRECTLY between the two resting poses, from the centred yellow
+  // hold to the settled red-giant close-up (no intermediate reveal arrival). The orb
+  // never leaves the origin (pure camera move). easeInOutCubic so it eases between the
+  // two rests without a snap.
   {
     endProgress: RED_HOLD_START,
     interp: [YELLOW_HOLD_END, RED_HOLD_START],
     easing: 'easeInOutCubic',
     posStart: YELLOW_HOLD_POS,
-    posEnd: RED_REVEAL_POS,
+    posEnd: RED_CLOSE_POS,
     targetStart: YELLOW_HOLD_TGT,
-    targetEnd: RED_REVEAL_TGT,
+    targetEnd: RED_CLOSE_TGT,
     parallax: 0.025,
   },
-  // 6 — RED GIANT LIMB ORBIT + CLOSE-UP (raw 23-33%, ITEM 1 beats 2+3): from the
-  // pulled-back reveal the camera ARCS along the limb (x swings +4.6 -> -5.2, the look
-  // target pans across the surface) WHILE diving IN (z 39.5 -> 27.5) to a surface /
-  // active-region close-up — so it reads as travelling AROUND the body and then
-  // settling onto its surface, never a static corner. ONE continuous move; the orb
-  // never leaves the origin (pure camera move). The red-hold micro-drift rides on top.
+  // 6 — RED GIANT HOLD (raw 23-33%): a true still hold on the settled close-up resting
+  // pose (flat: start === end === RED_CLOSE). Band 5 already did the whole move into
+  // it; there is no limb-orbit / second beat. The red-hold micro-drift rides on top.
   {
     endProgress: RED_HOLD_END,
     interp: [RED_HOLD_START, RED_HOLD_END],
     easing: 'easeInOutCubic',
-    posStart: RED_REVEAL_POS,
+    posStart: RED_CLOSE_POS,
     posEnd: RED_CLOSE_POS,
-    targetStart: RED_REVEAL_TGT,
+    targetStart: RED_CLOSE_TGT,
     targetEnd: RED_CLOSE_TGT,
     parallax: 0.015,
   },
