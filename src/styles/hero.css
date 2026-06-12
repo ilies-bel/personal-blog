@@ -578,13 +578,18 @@ body.article-page .bh-backdrop::before {
 }
 .bh-identity-lockup:hover .bh-identity-name { color: var(--accent-strong); }
 .bh-identity-lockup:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
-/* On the reading-page header there is no canvas behind the mark, so drop the
-   heavy legibility text-shadow the hero/about need over the moving scene — and
-   restore the warm --fg bone (the cool --fg-overlay is only for text floating on
-   the orange star; against the graphite header the warm bone reads on-palette). */
-.site-header .bh-identity-lockup .bh-identity-name { color: var(--fg); }
+/* On the reading-page header there is no bright canvas behind the mark (list
+   pages are plain graphite; article pages sit on a heavily dimmed backdrop), so
+   drop the heavy legibility text-shadow the hero/about need over the moving scene
+   — and restore the warm --fg bone (the cool --fg-overlay is only for text floating
+   on the orange star; against the graphite header the warm bone reads on-palette).
+   Applies to both the old header selector and the new sub-page HUD nav (.subnav). */
 .site-header .bh-identity-lockup .bh-identity-name,
-.site-header .bh-identity-lockup .bh-identity-role { text-shadow: none; }
+.subnav .bh-identity-lockup .bh-identity-name { color: var(--fg); }
+.site-header .bh-identity-lockup .bh-identity-name,
+.site-header .bh-identity-lockup .bh-identity-role,
+.subnav .bh-identity-lockup .bh-identity-name,
+.subnav .bh-identity-lockup .bh-identity-role { text-shadow: none; }
 
 /* The name (.bh-identity) and the top-right section menu (.overlay-blog, scene.css)
    now stay VISIBLE throughout the whole scroll — they are quiet at the top and only

@@ -42,15 +42,36 @@ const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 const year = new Date().getFullYear();
 
-// Mark the active nav item (the reference highlights the current page in its
-// pill). Compare the current path to each link's resolved href, trailing-slash
-// insensitive, so "/" and "/about" each light up their own pill segment.
+// Mark the active nav item (the sub-page HUD nav locks the current section).
+// Compare the current path to each link's resolved href, trailing-slash
+// insensitive, so "/" and "/about" each light up their own section.
 const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
 const norm = (p: string) => p.replace(/\/+$/, '') || '/';
 const isActive = (p: string) => norm(href(p)) === path;
 const writingRoot = norm(href('writing'));
 const postsRoot = norm(href('posts'));
 const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`);
+
+// Sub-page HUD nav model — the standard (non-bare) reading-page nav. One entry
+// per section, in scroll/lifecycle order, each carrying the SAME lifecycle-motif
+// glyph used by the hero corner rail (`.overlay-blog`): pale-blue-dot = About,
+// nebula = Writing, four-point-star = Projects, red-giant = Graveyard, plus a
+// black-hole origin glyph for Home. `index` is the two-digit mono readout shown
+// on the locked (current) section; `active` reuses the existing isActive helpers.
+interface SubnavItem {
+  href: string;
+  label: string;
+  active: boolean;
+}
+const subnavItems: SubnavItem[] = [
+  { href: href(''), label: 'Home', active: isActive('') },
+  { href: href('writing'), label: 'Writing', active: isWritingActive },
+  { href: href('projects'), label: 'Projects', active: isActive('projects') },
+  { href: href('graveyard'), label: 'Graveyard', active: isActive('graveyard') },
+  { href: href('about'), label: 'About', active: isActive('about') },
+];
+// Two-digit mono index for the locked section (1-based, matches reading order).
+const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
 ---
 
 <!doctype html>
@@ -546,47 +567,101 @@ const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`)
               the header / nav straight to the main content. */}
           <a href="#main-content" class="skip-link">Skip to main content</a>
 
-          <header class="site-header">
-            <a class="brand bh-identity-lockup" href={href('')}>
+          {/* Sub-page HUD nav (.subnav) — the standard reading-page header wearing
+              the hero design language WITHOUT the live-scene coupling: no scroll-
+              gated unfurl, no power button, no scene toggle. Brand lockup hard-left,
+              section rail hard-right, sitting under a single top hairline rule.
+              Labels are ALWAYS shown (there is no scene to power on); each section is
+              a glyph + mono-uppercase label row. The CURRENT section is "locked": it
+              gets the hero's target-lock treatment — corner ticks + a hairline frame,
+              a brighter --fg, and a two-digit mono index — driven by aria-current. */}
+          <header class="subnav">
+            <a class="subnav-brand bh-identity-lockup" href={href('')}>
               <span class="bh-identity-name">{BRAND_NAME}</span>
               <span class="bh-identity-role">{BRAND_ROLE}</span>
             </a>
-            <nav class="nav-pill">
-              <a
-                href={href('')}
-                class={isActive('') ? 'is-active' : undefined}
-                aria-current={isActive('') ? 'page' : undefined}
-              >
-                Home
-              </a>
-              <a
-                href={href('writing')}
-                class={isWritingActive ? 'is-active' : undefined}
-                aria-current={isWritingActive ? 'page' : undefined}
-              >
-                Writing
-              </a>
-              <a
-                href={href('projects')}
-                class={isActive('projects') ? 'is-active' : undefined}
-                aria-current={isActive('projects') ? 'page' : undefined}
-              >
-                Projects
-              </a>
-              <a
-                href={href('graveyard')}
-                class={isActive('graveyard') ? 'is-active' : undefined}
-                aria-current={isActive('graveyard') ? 'page' : undefined}
-              >
-                Graveyard
-              </a>
-              <a
-                href={href('about')}
-                class={isActive('about') ? 'is-active' : undefined}
-                aria-current={isActive('about') ? 'page' : undefined}
-              >
-                About
-              </a>
+            <nav class="subnav-rail" aria-label="Sections">
+              <ul class="subnav-list">
+                {subnavItems.map((item, i) => (
+                  <li class="subnav-item">
+                    <a
+                      class="subnav-link"
+                      href={item.href}
+                      aria-current={item.active ? 'page' : undefined}
+                    >
+                      {/* Target-lock frame — four corner ticks, only rendered/shown
+                          on the locked (current) section (CSS hides them otherwise). */}
+                      <span class="subnav-lock" aria-hidden="true">
+                        <span class="subnav-tick subnav-tick-tl"></span>
+                        <span class="subnav-tick subnav-tick-tr"></span>
+                        <span class="subnav-tick subnav-tick-bl"></span>
+                        <span class="subnav-tick subnav-tick-br"></span>
+                      </span>
+                      {/* Lifecycle-motif glyph — the SAME set as the hero corner rail,
+                          on one shared optical grid (~20px circle centred at 16,16). */}
+                      {item.label === 'Home' && (
+                        /* BLACK HOLE / origin — a thin ring with a filled dark core
+                           and a short accretion tick (matches the lifecycle motif). */
+                        <svg class="subnav-icon" viewBox="0 0 32 32" aria-hidden="true">
+                          <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+                          <circle cx="16" cy="16" r="3.4" fill="currentColor" stroke="none" />
+                          <path d="M6 16 L9.5 16 M22.5 16 L26 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+                        </svg>
+                      )}
+                      {item.label === 'Writing' && (
+                        /* NEBULA — thin ring + concentric inner hint + two specks. */
+                        <svg
+                          class="subnav-icon"
+                          viewBox="0 0 32 32"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="16" cy="16" r="9" />
+                          <circle cx="16" cy="16" r="4" />
+                          <circle cx="16" cy="6" r="0.9" fill="currentColor" stroke="none" />
+                          <circle cx="25" cy="20" r="0.9" fill="currentColor" stroke="none" />
+                        </svg>
+                      )}
+                      {item.label === 'Projects' && (
+                        /* YELLOW STAR — a 4-point star OUTLINE on the shared grid. */
+                        <svg
+                          class="subnav-icon"
+                          viewBox="0 0 32 32"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M16 6 Q17 15 26 16 Q17 17 16 26 Q15 17 6 16 Q15 15 16 6 Z" />
+                        </svg>
+                      )}
+                      {item.label === 'Graveyard' && (
+                        /* RED GIANT — a half-toned circle (◐): ring outline, left
+                           hemisphere filled. Same mass as the others. */
+                        <svg class="subnav-icon" viewBox="0 0 32 32" aria-hidden="true">
+                          <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+                          <path d="M16 7 A 9 9 0 0 0 16 25 Z" fill="currentColor" stroke="none" opacity="0.85" />
+                        </svg>
+                      )}
+                      {item.label === 'About' && (
+                        /* THE BEGINNING / pale blue dot — thin ring + filled speck. */
+                        <svg class="subnav-icon" viewBox="0 0 32 32" aria-hidden="true">
+                          <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+                          <circle cx="16" cy="16" r="2" fill="currentColor" stroke="none" />
+                        </svg>
+                      )}
+                      <span class="subnav-label">{item.label}</span>
+                      {/* Two-digit mono index — only shown on the locked section. */}
+                      <span class="subnav-index" aria-hidden="true">{subnavIndex(i)}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </nav>
           </header>
 
