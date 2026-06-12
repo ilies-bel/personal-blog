@@ -1,0 +1,70 @@
+// Reduced-motion poster slideshow — the STILL stand-in for the live WebGL hero.
+//
+// Under the resolved reduced-motion preference HeroIsland renders this instead of
+// mounting the GPU engine (no createScene, no rAF loop). It stacks the four
+// pre-captured lifecycle posters and HARD-CUTS between them from the same 0..1
+// scroll progress the live hero reads, so the manifesto copy still scrubs over a
+// matching backdrop:
+//
+//   progress 0 (top) → blackhole → red-giant → nebula → dot (progress 1, bottom)
+//
+// OPACITY IS THE ONLY THING THAT ANIMATES — no transform / scale / translate /
+// parallax. That restraint is the whole point of the reduced-motion path.
+import { resolveHref } from '../../lib/url';
+
+/** The four lifecycle posters, in top-of-page → bottom-of-page (reverse-arc)
+ *  order. Paths are relative to the site base; resolveHref prefixes BASE_URL. */
+const POSTERS: ReadonlyArray<{ src: string; alt: string }> = [
+  { src: 'assets/posters/poster-1-blackhole.webp', alt: 'A black hole' },
+  { src: 'assets/posters/poster-2-red-giant.webp', alt: 'A red giant star' },
+  { src: 'assets/posters/poster-3-nebula.webp', alt: 'A nebula' },
+  { src: 'assets/posters/poster-4-dot.webp', alt: 'A lone pale blue dot' },
+];
+
+export interface PosterSlideshowProps {
+  /** 0..1 scroll progress — 0 at the top (black hole), 1 at the bottom (dot). */
+  progress: number;
+  /** import.meta.env.BASE_URL — the URL prefix the poster assets live under. */
+  base: string;
+}
+
+/**
+ * Per-poster opacity for a position across the four stops — a HARD CUT, no fade.
+ * `progress` maps to a position in [0, 3]; whichever stop is nearest is shown solid
+ * and all others are off. Exactly one poster is ever visible.
+ *
+ * Why a hard cut, not a cross-fade: these are STILL photographs of very different
+ * objects (a black hole vs a red giant). Any opacity blend between two such stills
+ * muds into a double-exposure at the 50/50 midpoint — the black hole's photon ring
+ * ghosts through the red giant's surface, reading as a render glitch. A snap avoids
+ * that and is the honest reduced-motion behaviour (swap states, don't animate the
+ * swap). The jump is small because adjacent pairs share the dark-space background
+ * and the manifesto line changes at the same boundary, so it reads as a page turn.
+ */
+function opacityFor(index: number, progress: number): number {
+  const clamped = Math.min(1, Math.max(0, progress));
+  const position = clamped * (POSTERS.length - 1); // 0..3
+  const nearest = Math.round(position);
+  return index === nearest ? 1 : 0;
+}
+
+export default function PosterSlideshow({ progress, base }: PosterSlideshowProps) {
+  return (
+    <div className="bh-poster-slideshow" aria-hidden="true">
+      {POSTERS.map((poster, index) => (
+        <img
+          key={poster.src}
+          className="bh-poster"
+          src={resolveHref(base, poster.src)}
+          alt={poster.alt}
+          style={{ opacity: opacityFor(index, progress) }}
+          draggable={false}
+          decoding="async"
+          // The first poster is the opening frame, so load it eagerly; the rest are
+          // below the initial fold of the cut and can defer.
+          loading={index === 0 ? 'eager' : 'lazy'}
+        />
+      ))}
+    </div>
+  );
+}

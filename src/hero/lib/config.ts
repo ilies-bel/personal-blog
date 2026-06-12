@@ -224,8 +224,12 @@ export function tuneRenderPixelRatio(reduced = false, tier: DeviceTier = 'high')
   const width = window.innerWidth;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
   if (reduced) return Math.min(dpr, 1.25);
-  // Low tier: cap at 1.0 (no super-sampling) so the fragment load stays minimal.
-  if (tier === 'low') return Math.min(dpr, 1.0);
+  // Low tier (ALL mobile): cap at 0.6 — render WELL BELOW native resolution and let
+  // the browser upscale. The additive gaussian-sprite cloud is fragment-bound, so
+  // fewer fragments is the single biggest cost lever. A measured low-tier scroll
+  // benchmark under CPU throttle could not hold 30fps at the old 1.0 cap; dropping to
+  // 0.6 (with the smaller particle buckets below) recovered most of the headroom.
+  if (tier === 'low') return Math.min(dpr, 0.6);
   if (isMobile) return Math.min(dpr, 1.4);
   if (width < 1280) return Math.min(dpr, 1.6);
   return Math.min(dpr, 1.85);
@@ -236,12 +240,18 @@ export function tuneParticlesForDevice(tier: DeviceTier = 'high'): number {
   if (typeof window === 'undefined') return CFG.diskParticles;
   const width = window.innerWidth;
   // Low tier: a hard, small cap regardless of the width ladder below (the cloud is
-  // the dominant draw cost), with a tighter budget on the narrowest viewports. The
-  // benchmark showed LARGE headroom on low (pins 120 FPS where high dips to 35), so
-  // we spend some of it: the count is bumped ~2× from the old 45k/60k → 90k/140k.
-  // Denser coverage means the grains overlap more on their own, so the grain-fattening
-  // compensation below can be LIGHTER (less brightening/widening = less chunk).
-  if (tier === 'low') return width < 480 ? 90_000 : 140_000;
+  // the dominant draw cost), with a tighter budget on the narrowest viewports. A
+  // measured low-tier scroll benchmark under CPU throttle (4×/6×, mobile viewport)
+  // showed the old 90k/140k buckets were FAR too many for a throttled mobile CPU
+  // (single-digit fps, sustained sub-30 the whole sweep — the prior "pins 120 FPS"
+  // claim here was simply wrong). The cloud is cut hard to 16k/24k, which together
+  // with the 0.6 DPR cap above lifts the 4× scroll median back toward the low-20s fps.
+  // (Cutting further — 9k/14k — gave NO additional gain: the residual cost is the
+  // per-frame render loop + occasional shader/GPGPU stalls, not the grain count, so
+  // 16k/24k is the floor before the cloud visibly thins for nothing.) The ratio-based
+  // densityCompensation below auto-scales to the smaller count, and the cheap
+  // quarter-res bloom + grain-fattening still smooth the thinned cloud into gas.
+  if (tier === 'low') return width < 480 ? 16_000 : 24_000;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
   if (width < 480) return 95_000;
   if (isMobile) return 150_000;

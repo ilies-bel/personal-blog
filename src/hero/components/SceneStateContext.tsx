@@ -12,7 +12,8 @@ export interface SceneState {
   progress: number;
   /** Scroll direction; selects the active big line per beat. */
   direction: ScrollDirection;
-  /** prefers-reduced-motion: shows all beats, drops the crossfades. */
+  /** Resolved reduced-motion preference (manual override ?? OS). When true the hero
+   *  shows the still poster slideshow and the beats hard-cut (one line per band). */
   reduced: boolean;
   /** True once the final exploration HUD has taken over. */
   explorationMode: boolean;
@@ -48,6 +49,12 @@ export interface SceneActions {
     targetNdc?: { x: number; y: number };
     state?: HudTargetId;
   }) => void;
+  /** Request a change to the RESOLVED reduced-motion preference (state.reduced).
+   *  Drives the corner toggle button; the SAME resolved value feeds the hero's mount
+   *  decision (live WebGL vs the still poster slideshow). Asymmetric: requesting
+   *  reduced=true raises a confirmation modal first; requesting reduced=false (back to
+   *  the live hero) applies instantly. HeroIsland owns that decision + the modal. */
+  requestReducedMotion?: (next: boolean) => void;
 }
 
 const SceneStateCtx = createContext<SceneState | null>(null);

@@ -133,6 +133,137 @@
 }
 .bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
 
+/* --- Reduced-motion poster slideshow --------------------------------------- */
+/* The STILL stand-in for the live WebGL hero, rendered by HeroIsland only under the
+   resolved reduced-motion preference. Four lifecycle posters stacked in one fixed
+   full-viewport layer at the canvas's z-plane (z 0) — behind the manifesto overlay
+   (z 10) and the corner chrome, exactly like .bh-stage — so the manifesto copy reads
+   over a matching backdrop. pointer-events:none so it never intercepts clicks meant
+   for the markers/nav above it. NO transform here: the cross-fade is opacity ONLY
+   (each <img>'s inline opacity is driven by scroll progress), which is the whole point
+   of the reduced-motion path. */
+.bh-poster-slideshow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #000;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bh-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* A short opacity transition smooths the per-frame scroll steps into a clean
+     cross-fade. OPACITY ONLY — no transform/scale/translate is ever applied. */
+  transition: opacity 0.3s ease;
+  will-change: opacity;
+}
+/* Honour the contract literally: if any later rule ever tried to animate a transform
+   on the posters, this neutralises it — the slideshow is opacity-only by construction. */
+@media (prefers-reduced-motion: reduce) {
+  .bh-poster { transform: none !important; }
+}
+
+/* Reduced-motion modal — the confirm/explain dialog raised when entering reduced
+   motion (or once when the OS requests it). Sits above all hero chrome + the dive
+   overlay so it owns the foreground while open. Dark scrim + a single panel built
+   from the shared tokens, so it belongs to the same room as the rest of the site.
+   A simple opacity fade is the only motion — reduced-motion-friendly by design. */
+.bh-rm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: var(--edge-x);
+  background: color-mix(in oklch, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: bh-rm-fade-in 0.2s var(--ease-out-quint);
+}
+.bh-rm-modal {
+  width: min(28rem, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  padding: clamp(1.5rem, 4vw, 2rem);
+  box-shadow: 0 24px 60px color-mix(in oklch, var(--bg) 70%, transparent);
+  animation: bh-rm-fade-in 0.24s var(--ease-out-quint);
+}
+.bh-rm-modal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-title);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg);
+}
+.bh-rm-modal-body {
+  margin: 0.85rem 0 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--leading-body);
+  color: var(--fg-dim);
+}
+.bh-rm-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+.bh-rm-modal-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-hud);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-dim);
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    background-color 0.2s ease;
+}
+.bh-rm-modal-btn:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.bh-rm-modal-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* The primary action wears the aged-gold signal so it reads as the recommended path. */
+.bh-rm-modal-btn--primary {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.bh-rm-modal-btn--primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--bg);
+}
+@keyframes bh-rm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Drop even the fade for visitors who ask for reduced motion (the common case here,
+   since this modal often shows BECAUSE of an OS reduced-motion preference). */
+@media (prefers-reduced-motion: reduce) {
+  .bh-rm-modal-backdrop,
+  .bh-rm-modal { animation: none; }
+  .bh-rm-modal-btn { transition: none; }
+}
+
 /* Backdrop mode (reading pages): the SAME pinned scene, pushed back so front copy
    stays the focus. Dimmed + slightly desaturated, with a vignette wash that deepens
    the room toward the edges so text never fights the canvas. */
@@ -518,9 +649,18 @@ body.scene-ready.at-opening .bh-focus-dot {
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
 }
 
-/* Reduced motion: keep the atmosphere, drop the motion. All manifesto copy must
-   stay reachable, so the island renders every beat fully and shows BOTH big lines
-   stacked (no crossfade); lay them out in normal flow instead of pinning them. */
+/* Reduced motion: keep the atmosphere, drop the motion. The manifesto overlay keeps
+   its normal PINNED layout (one line at the bottom-left, pinned over the matching
+   poster) — the React island already drives a DISCRETE one-beat-at-a-time hard cut
+   via inline opacity (band(), no cross-fade), which honours the reduced-motion intent
+   without stacking every line. So this block only drops the chrome's grow/scale
+   animation; it must NOT force every .bh-beat to opacity:1 / static flow (that was the
+   pre-poster behaviour and is what stacked all the copy onto one slide). All copy stays
+   reachable to a screen reader because the island keeps every beat in the a11y tree
+   under reduced motion (see ManifestoOverlay's aria-hidden).
+   NOTE this is keyed on the OS media query only; the resolved preference can differ
+   (a manual toggle can enable/disable reduced motion against the OS), so deliberately
+   nothing here gates the manifesto — the JS owns that for BOTH the OS and manual paths. */
 @media (prefers-reduced-motion: reduce) {
   /* Keep the chrome present and legible; drop the grow/scale animation. The name
      stays at full size (no whisper shrink) so nothing moves on scroll, and the menu
@@ -532,36 +672,6 @@ body.scene-ready.at-opening .bh-focus-dot {
   body.bare .bh-identity,
   body.bare.hud-active .bh-identity {
     transform: none !important;
-    opacity: 1 !important;
-  }
-
-  .bh-overlay {
-    position: static !important;
-    pointer-events: auto !important;
-  }
-  .bh-beat {
-    position: static !important;
-    inset: auto !important;
-    opacity: 1 !important;
-    max-width: var(--max);
-    margin: 0 auto;
-    padding: clamp(2.5rem, 12vh, 6rem) var(--gutter);
-  }
-  .bh-beat-big { min-height: 0 !important; }
-  .bh-beat-big {
-    display: grid;
-    gap: 0.45rem;
-  }
-  .bh-beat-line {
-    position: static !important;
-    opacity: 1 !important;
-    transform: none !important;
-    inset: auto !important;
-    margin-bottom: 0.4rem;
-  }
-
-  .bh-root[data-exploring='true'] .bh-overlay,
-  .bh-overlay[data-exploring='true'] {
     opacity: 1 !important;
   }
 }

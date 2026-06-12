@@ -406,8 +406,8 @@ body.bare.hud-active .overlay-blog-label {
    FORCED override specifically; the lit appearance tracks the HUD being up however
    it got there. Gold frame + glyph, soft outer glow, faint gold fill tint. */
 .overlay-blog-power[aria-pressed='true'],
-body.hud-active .overlay-blog-power,
-body.hud-booting .overlay-blog-power {
+body.hud-active .overlay-blog-power:not(.overlay-blog-motion),
+body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
   color: var(--accent-strong);
   border-color: var(--accent-strong);
   background: color-mix(in oklch, var(--highlight) 12%, color-mix(in oklch, var(--bg) 55%, transparent));
@@ -422,7 +422,7 @@ body.hud-booting .overlay-blog-power {
 .overlay-blog-power {
   position: relative;
 }
-body.hud-booting .overlay-blog-power {
+body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
   animation: overlay-power-charge 0.9s ease-in-out infinite;
 }
 /* The pulse: a gold (var(--highlight)/var(--accent-strong)) glow that breathes from
@@ -449,6 +449,37 @@ body.hud-booting .overlay-blog-power {
   /* Drop the charge pulse; the static lit/charging tint above still reads. */
   body.hud-booting .overlay-blog-power { animation: none; }
 }
+
+/* Reduced-motion toggle — a sibling glyph button to the corner power control. The
+   React island PORTALS it INTO the .overlay-blog flex row (BUG 4 fix: a single fixed
+   `right:` offset could not clear that right-anchored, leftward-growing row in both its
+   resting + hud-active states, so the toggle used to land on top of the socials/links).
+   As a real flex child it can never collide with the other controls at any width; the
+   `order: -1` makes it the LEFTMOST item in the row (the portal appends it last in the
+   DOM, so the order property — not DOM position — places it) and the small margin gives
+   it the same breathing room as the row's own gap. It reuses .overlay-blog-power for the
+   ring frame + glyph weight.
+   FALLBACK: on a page with no .overlay-blog nav the portal target is absent and the
+   button renders in place inside .bh-root; the fixed-position rule below keeps it a
+   tidy top-right corner control in that case (it never collides there — the nav is
+   absent). The flow-based rule wins whenever the button is actually inside the row. */
+.overlay-blog-motion {
+  order: -1;                 /* leftmost flex item in the .overlay-blog row */
+  margin-right: 0.05rem;     /* nudge: the row's 0.6rem gap already spaces it from the next icon */
+}
+/* Fallback placement when the toggle is NOT inside the nav row (no portal host on
+   the page). Scoped to .bh-root so it only applies to the in-place fallback render;
+   inside .overlay-blog the flow layout above governs and this never matches. */
+.bh-root > .overlay-blog-motion {
+  position: fixed;
+  top: clamp(0.75rem, 2.5vw, 1.5rem);
+  right: calc(clamp(1rem, 4vw, 3rem) + 2.1rem + 0.6rem);
+  z-index: 21;
+}
+/* aria-pressed='true' (reduced motion ON) gives the toggle the same lit gold look the
+   power button uses for its engaged state, so the corner clearly reads which mode is
+   active. The base .overlay-blog-power[aria-pressed='true'] rule already styles this;
+   this is just a documentation anchor — no extra declarations needed. */
 
 /* On the smallest screens, fold the four section icons away and keep only the
    socials + power controls (the labels were never shown there anyway). */

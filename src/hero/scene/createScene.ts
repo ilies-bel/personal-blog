@@ -571,6 +571,27 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // sane dt so a backgrounded-tab time jump never teleports a ripple across the disc.
   let prevEruptT = 0;
 
+  // --- render-on-change gating (idle CPU win) -------------------------------
+  // A visitor reading a manifesto line is NOT scrolling, yet every idle rAF tick
+  // still runs the full ease→look→applyLook→render (bloom) pipeline. When NOTHING
+  // visible is moving we skip the heavy work + the render entirely. The previous
+  // eased stage/progress are tracked here so a settled scroll (delta below EPS) can
+  // be detected; a fresh scroll moves them past EPS and the next frame runs full.
+  // EPS is small because the follow-ease ASYMPTOTES toward target — it never lands
+  // exactly, which is precisely why an unconditioned loop never rests.
+  let prevFrameStage = stage;
+  let prevFrameProgress = progress;
+  const STATIC_EPS = 1e-4;
+  // While static we still render on a slow HEARTBEAT so a late async texture/restore
+  // (or a focus-glow ease still settling) eventually composites; `lastRenderTime`
+  // is the wall-clock of the last frame that actually rendered.
+  let lastRenderTime = 0;
+  const STATIC_HEARTBEAT_MS = 500;
+  // LOW-tier frame cap: target ~30fps rather than chasing 60 and stuttering. The
+  // margin trims the threshold so a frame landing a hair early still renders (we'd
+  // rather hit 30 than drop to 20 by over-waiting). High tier is never capped.
+  const LOW_FRAME_MS = 1000 / 30 - 2;
+
   // --- cinematic dive: plunge the LIVE camera INTO the clicked marker, soft bloom --
   // A one-shot state machine driven entirely from frame(): once beginDive() arms
   // it, the dive OVERRIDES the resolved scroll camera each frame — easing the live
@@ -985,6 +1006,93 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     applyCtx.focusEmission = 1 + focusGlow * 0.18;
     applyCtx.focusBloom = 1 + focusGlow * 0.12;
     applyCtx.focusDome = 1 + focusGlow * 0.08;
+
+    // === IDLE GATING + LOW-TIER FRAME CAP ====================================
+    // Everything ABOVE this line is cheap (the scroll ease + the pure lifecycle()
+    // choreography + the focus ease). Everything BELOW — applyLook's ~50 uniform
+    // writes, the camera rig, the gravity-sim sample and `postRig.render()` (the
+    // bloom chain, ~99% of idle CPU) — is the heavy work we skip when the frame is
+    // STATIC or throttled by the low-tier cap. rAF was already re-armed at the top
+    // of frame(), so an early return here keeps the loop alive; the very next tick
+    // re-evaluates from scratch, so the instant scroll resumes (dStage > EPS) the
+    // FULL pipeline runs again with ZERO hitch (no "wake" latch needed — a moving
+    // frame is simply never static).
+    const dStage = Math.abs(stage - prevFrameStage);
+    const dProgress = Math.abs(progress - prevFrameProgress);
+    prevFrameStage = stage;
+    prevFrameProgress = progress;
+    // A debug hook that pins/forces a specific frame must ALWAYS render in full so the
+    // capture scripts see exact frames — never a parked one. morph/flash pin the
+    // stage + whiteout; the others retune look (nebLight/nebulaFlash) or hold an
+    // eruption — none should ever be swallowed by the idle gate. Each read is a cheap
+    // typeof window[key] check (morphOverride/flashOverride were already read above).
+    const debugForcesFull =
+      morphOverride !== undefined ||
+      flashOverride !== undefined ||
+      readDebugNumber(DEBUG_WINDOW_KEYS.nebLight) !== undefined ||
+      readDebugNumber(DEBUG_WINDOW_KEYS.nebulaFlash) !== undefined ||
+      readDebugNumber(DEBUG_WINDOW_KEYS.erupt) !== undefined ||
+      readDebugNumber(DEBUG_WINDOW_KEYS.giantErupt) !== undefined ||
+      readDebugNumber(DEBUG_WINDOW_KEYS.streak) !== undefined;
+    // STATIC: a frame where nothing time-driven is visibly moving, so re-rendering
+    // it would paint identical pixels. The ONE state that qualifies is the settled
+    // PALE BLUE DOT — the closing speck at the bottom of the page, a long idle dwell
+    // where the visitor reads the final manifesto + the content below. There the disk
+    // clock is frozen (the dot is inside the nebula window → uTime 0), gravity is gone
+    // (no warp / ring / lensed-star twinkle), the sun rig + dome are hidden, and the
+    // only animation — the dot's uDotTime brightness "breath" — is a sub-pixel pulse
+    // on a single speck that does not cross the perceptual floor (measured 0.003% of
+    // canvas pixels over a FULL 8s breath cycle at 2× DPR, == the back-to-back capture
+    // noise floor), so parking it is byte-identical in observable terms.
+    //   Every OTHER state is deliberately EXCLUDED because it visibly animates on
+    // wall-clock time: the black hole (starfield/warp/ring twinkle + the orbiting
+    // lensed star, ~0.7%/s), the red giant (photosphere spin, ~22%/s), the yellow
+    // star (corona/loops) and even the NEBULA hold (a slow gas drift, ~0.23%/s that
+    // accumulates over seconds). Freezing any of those would visibly halt the hero —
+    // far worse than a smaller idle win. Reduced motion never runs frame() at all
+    // (HeroIsland shows posters under it), so there is no reduced-motion path to gate.
+    const focusSettled = Math.abs((focusTarget ? 1 : 0) - focusGlow) < STATIC_EPS;
+    // The nebula beat PRE-WARMS the baked GPGPU collapse flipbook (gravitySim.bake,
+    // resumable + incremental) so the snapshots are ready when the visitor scrolls UP
+    // into the collapse. The visitor passes through the whole nebula beat BEFORE
+    // reaching the dot, so the bake is normally done by then; we still gate on it so a
+    // slow bake can never be starved by parking at the dot. (Unavailable on the low
+    // tier + the unsupported-float fallback, which never bake — then it's trivially
+    // "done".) Once baked the pre-warm call is a no-op, so dropping it here is free.
+    const bakeDone = !gravitySim.available || gravitySim.isBaked();
+    const dotIdle = look.dot && bakeDone;
+    const isStatic =
+      firstFramePainted && // never gate before the first real paints land
+      t >= SETTLE_SNAP_S && // always full-render during the restore-snap window
+      dStage < STATIC_EPS &&
+      dProgress < STATIC_EPS &&
+      nova < 0.001 && // no supernova whiteout on screen (scroll-anchored Gaussian)
+      !diveActive && // no cinematic dive in flight
+      // The HUD focus glow ease must have SETTLED. This is the real "exploration
+      // focus isn't moving" guard: a live focus target keeps focusGlow easing (and
+      // its disk-emission / bloom / dome multipliers changing), so focusSettled stays
+      // false and the frame renders. We do NOT gate on isExplorationMode itself — it
+      // is a permanently-on flag here (the whole site is "explorable"), not a
+      // per-frame motion signal, so testing it would defeat the gate everywhere.
+      focusSettled &&
+      !debugForcesFull &&
+      dotIdle;
+    // LOW-tier 30fps cap: on the low tier, render at most ~30fps. We keep arming rAF
+    // every native tick but skip the heavy work + render until LOW_FRAME_MS has
+    // elapsed since the last actual render. High tier is never capped (native rAF).
+    const capThrottled = tier === 'low' && now - lastRenderTime < LOW_FRAME_MS;
+    // While static we still render on a slow HEARTBEAT so a late async texture load
+    // or a restore that lands after we've parked eventually composites — and so the
+    // dot's slow uDotTime breath keeps progressing (its ~7.85s period is sampled fine
+    // at the ~2 Hz heartbeat) instead of freezing outright. The cap and the static
+    // gate COMPOSE: a capped tick skips even the heartbeat (the next un-capped tick
+    // renders it). firstFramePainted guards the heartbeat so the first frame is never
+    // deferred.
+    const heartbeatDue = now - lastRenderTime >= STATIC_HEARTBEAT_MS;
+    if ((isStatic && !heartbeatDue) || (capThrottled && firstFramePainted)) {
+      return; // skip applyLook + camera + gravity + postRig.render() this tick
+    }
+    lastRenderTime = now;
 
     // --- transition 2: red-giant SIZE override (giantSize debug hook) ----------
     // Red-giant SIZE is a RED-GIANT-ONLY scale (uGiantScale) so resizing the orb never
