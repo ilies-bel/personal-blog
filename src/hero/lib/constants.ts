@@ -106,6 +106,14 @@ export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
  *  reduce-motion toggle (useReducedMotionPreference). Access is wrapped in
  *  try/catch (private mode / disabled storage must never throw). */
 export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
+/** localStorage flag (a bare 'true') recording that the one-time OS-driven
+ *  reduced-motion EXPLANATION modal has been shown. The page never animates for an
+ *  OS reduced-motion visitor, so this explanatory modal ("you're seeing the still
+ *  version because your system requests it") shows once and then stays dismissed
+ *  across reloads — it must not nag on every load. The manual-toggle confirmation is
+ *  separate and always shows on the click. Access wrapped in try/catch (private mode
+ *  / disabled storage must never throw). */
+export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM
  *  writes a small JSON blob `{ powered: boolean, forced: boolean }` here on every
  *  transition and restores it on init, so a returning visitor finds the HUD lit

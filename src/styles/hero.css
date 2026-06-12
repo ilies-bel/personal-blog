@@ -167,6 +167,103 @@
   .bh-poster { transform: none !important; }
 }
 
+/* Reduced-motion modal — the confirm/explain dialog raised when entering reduced
+   motion (or once when the OS requests it). Sits above all hero chrome + the dive
+   overlay so it owns the foreground while open. Dark scrim + a single panel built
+   from the shared tokens, so it belongs to the same room as the rest of the site.
+   A simple opacity fade is the only motion — reduced-motion-friendly by design. */
+.bh-rm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: var(--edge-x);
+  background: color-mix(in oklch, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: bh-rm-fade-in 0.2s var(--ease-out-quint);
+}
+.bh-rm-modal {
+  width: min(28rem, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  padding: clamp(1.5rem, 4vw, 2rem);
+  box-shadow: 0 24px 60px color-mix(in oklch, var(--bg) 70%, transparent);
+  animation: bh-rm-fade-in 0.24s var(--ease-out-quint);
+}
+.bh-rm-modal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-title);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg);
+}
+.bh-rm-modal-body {
+  margin: 0.85rem 0 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--leading-body);
+  color: var(--fg-dim);
+}
+.bh-rm-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+.bh-rm-modal-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-hud);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-dim);
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    background-color 0.2s ease;
+}
+.bh-rm-modal-btn:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.bh-rm-modal-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* The primary action wears the aged-gold signal so it reads as the recommended path. */
+.bh-rm-modal-btn--primary {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.bh-rm-modal-btn--primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--bg);
+}
+@keyframes bh-rm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Drop even the fade for visitors who ask for reduced motion (the common case here,
+   since this modal often shows BECAUSE of an OS reduced-motion preference). */
+@media (prefers-reduced-motion: reduce) {
+  .bh-rm-modal-backdrop,
+  .bh-rm-modal { animation: none; }
+  .bh-rm-modal-btn { transition: none; }
+}
+
 /* Backdrop mode (reading pages): the SAME pinned scene, pushed back so front copy
    stays the focus. Dimmed + slightly desaturated, with a vignette wash that deepens
    the room toward the edges so text never fights the canvas. */
