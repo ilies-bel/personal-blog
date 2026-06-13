@@ -19,7 +19,7 @@ import { navigate } from 'astro:transitions/client';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
 import { legacyStageForProgress } from '../timeline';
-import { hudIdForStage, resolve } from '../lifecycleMachine';
+import { resolve } from '../lifecycleMachine';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { sceneForProgress } from '../sceneTable';
 import { detectDeviceTier } from '../lib/config';
@@ -296,7 +296,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // band, not just the last frame. The 'beginning' SCENE owns lifecycle 0.00-0.12
       // = raw 88-100% exactly (segment 1 in the RE-TIMED table), so gate on the SCENE
       // id rather than the stage>=4.7 threshold (which only fired at raw=1.0). The
-      // stage-threshold hudIdForStage stays the scroll-spy source for the rail below.
+      // rail's scroll-spy below now reads the SAME sceneForProgress resolver, so the
+      // at-end gate and the highlighted row stay consistent.
       const atEnd = sceneForProgress(progressRef.current).sceneId === 'beginning';
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
@@ -354,14 +355,20 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     const publishProgress = (nextProgress: number, force = false): void => {
       const previous = publishedProgressRef.current;
       const crossedHint = crossedProgressThreshold(previous, nextProgress, SCROLL_HINT_DISMISS_AT);
-      const hudStageChanged = explorationModeRef.current
-        && hudIdForStage(resolve(previous).stage) !== hudIdForStage(resolve(nextProgress).stage);
+      // Push a React update the instant the SCENE the visitor is on changes, so the
+      // rail's highlighted row (now driven by sceneForProgress — see scrollHudId
+      // below) updates in lockstep with the scene rather than lagging. This MUST use
+      // the SAME scene resolver as scrollHudId, not the old hudIdForStage stage-spy,
+      // or the correct row would update late/jumpily (the stage thresholds sit above
+      // the scenes' settled holds, so a stage-spy fires the publish on the wrong frame).
+      const hudSceneChanged = explorationModeRef.current
+        && sceneForProgress(previous).sceneId !== sceneForProgress(nextProgress).sceneId;
 
       if (
         !force
         && Math.abs(nextProgress - previous) < REACT_PROGRESS_MIN_DELTA
         && !crossedHint
-        && !hudStageChanged
+        && !hudSceneChanged
         && nextProgress !== 0
         && nextProgress !== 1
       ) {
@@ -637,12 +644,23 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   }, [backdrop, fromOsOnly]);
 
   const base = import.meta.env.BASE_URL ?? '/';
-  // Scroll-spy: the HUD target the live scroll position maps to. Derived from the
-  // same forward-progress to shader-stage expression the scene uses.
+  // The lifecycle scene the live scroll position is ON (same segment-boundary
+  // resolver the morph, camera, beats and data-scene all use). Computed up here so
+  // the rail's scroll-spy can derive from it (see scrollHudId just below); reused for
+  // data-scene at the bottom of the component.
+  const sceneId = sceneForProgress(progress).sceneId;
+  // Scroll-spy: the HUD row the live scroll position maps to. Driven by the SCENE
+  // resolver above — NOT the old hudIdForStage stage-threshold spy. Those per-row
+  // stage thresholds sit ABOVE the scenes' settled holds (yellow row stage 2.9 vs the
+  // yellow hold at shader-stage 2.88; nebula row 3.5 vs the nebula hold at 3.42), so
+  // hudIdForStage(settledStage) returned the row BELOW the one you were on — yellow lit
+  // red, nebula lit yellow. sceneForProgress(...).sceneId is a HudTargetId keyed to the
+  // SAME id set as the HUD rows, so the highlighted row always matches the scene you
+  // are actually on. Self-consistent by construction.
+  const scrollHudId: HudTargetId | null = explorationMode ? sceneId : null;
+  // Shader stage (0..5) for the bright-zone test below; still the resolver's stage,
+  // just no longer fed through hudIdForStage for the rail's "current" row.
   const lifecycleStage = resolve(progress).stage;
-  const scrollHudId: HudTargetId | null = explorationMode
-    ? hudIdForStage(lifecycleStage)
-    : null;
   // Adaptive dark stroke: is the chrome currently over a BRIGHT lifecycle zone? Two
   // bright beats bleach the canvas behind the warm-bone chrome — the supernova flash
   // (shader stage ~0.5, the breakout) and the bright yellow-star hold (settled gold at
@@ -650,10 +668,9 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // scroll read). Over the dark states (black hole / red giant / nebula / dot) this is
   // false → warm bone. The provider hands it down; the CSS [data-zone] flips the tokens.
   const brightZone = isBrightZoneStage(lifecycleStage);
-  // The lifecycle scene the live scroll position is ON (same pure resolver the HUD /
-  // beats use). Drives the per-scene HUD colour tokens (data-scene below) and the
-  // yellow-star designed-ring overlay.
-  const sceneId = sceneForProgress(progress).sceneId;
+  // sceneId (the lifecycle scene the live scroll position is ON) is computed once
+  // above — it now feeds BOTH the rail scroll-spy and these per-scene HUD colour
+  // tokens (data-scene) + the yellow-star designed-ring overlay, from the one resolver.
   const dataScene = DATA_SCENE_BY_ID[sceneId];
 
   // Backdrop mode renders only the scene canvas — the reading page owns its own

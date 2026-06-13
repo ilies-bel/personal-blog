@@ -16,6 +16,14 @@
   --fg: oklch(0.86 0.02 80.1);          /* #d8d0c3 warm bone, body + display */
   --fg-dim: oklch(0.777 0.018 76.1);    /* #bdb5aa smoked silver, secondary text */
   --fg-faint: oklch(0.62 0.02 78.2);    /* #8d8579 etched gray, labels/dates only */
+  /* Rail non-current dim: ONE fixed dimmest tone for every NON-current HUD-rail row
+     (number + title + subtext), scene-independent. The per-scene --fg-faint/--fg-dim
+     overrides made the dim level vary by chapter (the bright red/yellow scenes dimmed
+     to ~0.44/0.36, the dark scenes only to ~0.62/0.78), so 'dimmed' read at two
+     brightnesses. These rail-only tokens are NOT overridden per scene, so the rail's
+     resting rows sit at the single dimmest level everywhere. */
+  --hud-rail-dim: oklch(0.44 0.012 78);     /* dimmest non-current number/title */
+  --hud-rail-dim-sub: oklch(0.36 0.012 78); /* dimmest non-current subtext */
   /* Hero-overlay text — the ONLY copy that floats over the warm/orange star states
      (manifesto big line + whisper, identity, the bottom HUD compass). Warm bone
      (--fg) loses authority against the orange photosphere, so this rung shifts the

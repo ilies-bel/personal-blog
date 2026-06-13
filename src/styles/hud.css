@@ -204,12 +204,33 @@ body.at-opening .hud-system[data-visible='true'] {
   background: color-mix(in oklch, var(--hud-gold) 46%, var(--hud-line-dim));
 }
 /* Active readout value: the stage label of the lit (current) row — at the black
-   hole this is the readout the HUD shows. It sits one HUD rung down so it reads as
-   the live readout, and uses the cool overlay bone so it holds on the bright star
-   (replacing the old hard-coded #eee5d8). */
+   hole this is the readout the HUD shows. It uses the cool overlay bone so it holds
+   on the bright star (replacing the old hard-coded #eee5d8). Selection is conveyed by
+   BRIGHTNESS (this colour lift) + the glyph/number glow only — NEVER by size: the title
+   keeps the base --text-hud so selecting a row no longer shrinks it. */
 .hud-nav-button[data-current='true'] .hud-nav-title {
-  font-size: var(--text-label);
   color: var(--fg-overlay);
+}
+/* CONSISTENT SELECTION (subtext): mirror the title lift onto the destination subtext so
+   the WHOLE current row — number + title + subtext — reads bright in BOTH states, and
+   every other row reads fully dim. Previously the subtext only brightened under
+   body.hud-active, so in the quiet icon rail a current row's subtext stayed grey (the
+   'YELLOW STAR / PROJECTS' mismatch). --fg-overlay (NOT --fg) because --fg goes DARK on
+   the yellow-star scene; --fg-overlay is the cool bone that stays bright on every scene,
+   the same token the current title uses, so the whole current row lifts together. */
+.hud-nav-button[data-current='true'] .hud-nav-destination {
+  color: var(--fg-overlay);
+}
+/* Hard-dim every NON-current row's TITLE and SUBTEXT in BOTH states, so selection is
+   conveyed uniformly by exactly one bright row. The :not(:hover):not(:focus-visible)
+   guard lets a pointed row still lift via the hover/focus rules; the [data-current] lifts
+   above win on the selected row. The quiet icon rail previously left non-current titles at
+   the brighter --hud-main and subtext at --hud-muted — now they match the powered menu. */
+.hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-title {
+  color: var(--hud-rail-dim);
+}
+.hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-destination {
+  color: var(--hud-rail-dim-sub);
 }
 /* Keyboard focus ring (#1): keep an accessible ring but make it QUIET and not a
    tight box hugging the glyph. We push it well clear of the rail with a generous
@@ -280,8 +301,8 @@ body.hud-active .hud-nav-copy {
    --fg-faint via currentColor) and the destination at the dim --fg-dim tone. The
    [data-current='true'] block below re-brightens the current row (higher specificity)
    and the :hover / :focus-visible rules still lift any hovered row. */
-body.hud-active .hud-nav-title { color: var(--fg-faint); }
-body.hud-active .hud-nav-destination { color: var(--fg-dim); }
+body.hud-active .hud-nav-title { color: var(--hud-rail-dim); }
+body.hud-active .hud-nav-destination { color: var(--hud-rail-dim-sub); }
 /* The CURRENT row in the active menu is the ONLY one lifted to full brightness.
    Adding [data-current] gives these higher specificity than the blanket
    `body.hud-active .hud-nav-*` rules (so the non-current default dim holds) AND than
@@ -299,7 +320,7 @@ body.hud-active .hud-nav-button[data-current='true'] .hud-nav-title {
   color: var(--fg-overlay);
 }
 body.hud-active .hud-nav-button[data-current='true'] .hud-nav-destination {
-  color: var(--fg);
+  color: var(--fg-overlay);
 }
 /* HOVER / focus-visible brightens ANY row's copy in BOTH states (it must still lift
    a non-current row past the dimmed resting default). Higher specificity than the
@@ -311,7 +332,7 @@ body.hud-active .hud-nav-button[data-current='true'] .hud-nav-destination {
 }
 .hud-nav-button:hover .hud-nav-destination,
 .hud-nav-button:focus-visible .hud-nav-destination {
-  color: var(--fg);
+  color: var(--fg-overlay);
 }
 
 /* Per-row stagger: row N reveals at beat + (N-1)*step. The label (copy) follows
@@ -371,6 +392,94 @@ body.hud-active .hud-nav-row:nth-child(5) .hud-nav-copy { transition-delay: calc
 .hud-nav-button[data-current='true'] .hud-nav-glyph,
 .hud-nav-button:hover .hud-nav-glyph,
 .hud-nav-button:focus-visible .hud-nav-glyph {
+  filter:
+    drop-shadow(0 0 16px rgba(0, 0, 0, 1))
+    drop-shadow(0 0 6px color-mix(in oklch, var(--hud-gold) 55%, transparent));
+}
+
+/* Bare NUMBER rail symbols (replacing the mask glyphs, which read as illegible /
+   inconsistent). The number reuses .hud-nav-glyph so it keeps the SAME column box
+   (width: --rail-col), centering, z-index, the base dark drop-shadow AND the
+   current/hover gold-glow rules above (those target .hud-nav-glyph, so the lit number
+   glows exactly like the mask did). This override turns OFF the mask machinery — the
+   element is no longer a currentColor block punched by an SVG alpha; it is real text
+   PAINTED in currentColor — so it inherits the rail's faint→gold→current colour
+   transitions for free, just like the mask. Mono, ~--text-hud, dead-centred in the box. */
+.hud-nav-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  -webkit-mask-image: none;
+  mask-image: none;
+  color: currentColor;
+  font-family: var(--font-mono);
+  font-size: var(--text-hud);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  /* SELECTED-ONLY GLOW: the shared .hud-nav-glyph base filter carries a 26% gold
+     drop-shadow that lit EVERY number (the bare digits glowed gold on every row →
+     'everything lights up'). Override the number's resting filter to the dark
+     outline ONLY; the gold glow is re-added solely on the current/hover row by the
+     [data-current] rule above. So exactly one number glows, never the whole column. */
+  filter: drop-shadow(0 0 16px rgba(0, 0, 0, 1));
+  /* `color` eases the rail's faint→gold→current lift (the glyph only transitioned
+     `filter`, but text colour wants to ease too); `filter` carries the glow from
+     .hud-nav-glyph + the current/hover rule above; `opacity` carries the FIX 2
+     progressive-discovery fade-in (the number is hidden until its scene is first seen). */
+  transition:
+    filter 0.3s ease,
+    color 0.2s ease,
+    opacity 0.45s var(--ease-out-quint);
+}
+
+/* RESTING (non-current) NUMBER DIM: pin every non-current number to the faint tone in
+   BOTH the icon rail and the powered menu, so it reads as quiet as its dimmed title and
+   only the current row's number stands out. Without this the per-scene --fg-faint (e.g.
+   the red giant's warm 0.44) sat bright enough that all five numbers looked active. The
+   :not([data-current]) guard lets the [data-current] lift above win on the selected row,
+   and :hover/:focus-visible still brighten any pointed row (those rules have a glow +
+   colour lift of their own). */
+.hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-number {
+  color: var(--hud-rail-dim);
+}
+body.hud-active .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-number {
+  color: var(--hud-rail-dim);
+}
+
+/* PROGRESSIVE DISCOVERY (FIX 2): while the HUD is OFF (the quiet icon rail before the
+   black-hole power-on), an UNDISCOVERED row's number is faded to 0 — but the row keeps
+   its fixed position/height (the .hud-nav::before connector-line mask assumes 5 fixed
+   row positions), so ONLY the number's opacity is gated; the rail never reflows.
+   Discovered numbers fade IN PLACE. Discovery is driven from data-discovered, set in the
+   JSX off the accumulating Set (monotonic — a number never reverts on scroll-up). */
+.hud-nav-button[data-discovered='false'] .hud-nav-number {
+  opacity: 0;
+}
+.hud-nav-button[data-discovered='true'] .hud-nav-number {
+  opacity: 1;
+}
+/* Once the HUD POWERS ON (body.hud-active), the full menu shows ALL rows as it does
+   today — discovery does NOT gate the powered-on menu. Force every number visible,
+   overriding the data-discovered='false' dim via this more specific selector. */
+body.hud-active .hud-nav-button[data-discovered='false'] .hud-nav-number,
+body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-number {
+  opacity: 1;
+}
+
+/* SELECTED NUMBER LIFT: the bare number replaced the masked glyph, but the glyph's
+   current/hover glow rule targets .hud-nav-glyph only — so a selected row's NUMBER
+   stayed dim grey while its title lit up. Mirror the glyph treatment for the number:
+   on the scroll-spy current row (and on hover/focus) lift the number to the bright
+   overlay tone AND give it the same soft gold drop-shadow glow, so the selected
+   number reads as lit as the title beside it. Unqualified [data-current] so it also
+   lights the current row inside the powered-on menu. */
+.hud-nav-button[data-current='true'] .hud-nav-number,
+.hud-nav-button:hover .hud-nav-number,
+.hud-nav-button:focus-visible .hud-nav-number {
+  color: var(--fg-overlay);
   filter:
     drop-shadow(0 0 16px rgba(0, 0, 0, 1))
     drop-shadow(0 0 6px color-mix(in oklch, var(--hud-gold) 55%, transparent));
@@ -964,6 +1073,12 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   }
   .hud-nav-glyph {
     animation: none !important;
+  }
+  /* Progressive-discovery reveal (FIX 2) SNAPS under reduced motion — no opacity
+     transition — consistent with the cascade being dropped below. The number still
+     hides until discovered (opacity gated above); it just appears instantly. */
+  .hud-nav-number {
+    transition: none;
   }
   /* Drop the cascade (#4): everything snaps to the hud-active end state with no
      per-row stagger delay (the :nth-child delays above are zeroed). */

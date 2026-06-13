@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
@@ -43,26 +43,25 @@ interface HudNavigationProps {
    *  is merely SCANNING; in a transition band past the opening hold it prompts the
    *  visitor to scroll back onto a beat. */
   progress: number;
-  base: string;
+  /** Deploy base path (e.g. `/` or `/personal-blog/`). Retained on the props for
+   *  caller compatibility (ExplorationHud still passes it); the rail no longer uses
+   *  it now that the rows render bare numbers instead of base-resolved mask glyphs. */
+  base?: string;
   /** The scene's per-frame marker frame (stage/visible + projected x/y for the
    *  anchored marker), owned by HeroIsland. The compass reads it to find the
    *  on-screen marker nearest the cursor and aim its needle at it. */
   markerFrameRef: React.RefObject<MarkerFrame | null>;
 }
 
-// Resolve a `public/` glyph asset against the deploy base (same base prop the
-// links use), so the mask URL is correct whether base is `/` or `/personal-blog/`.
-function resolveAsset(base: string, src: string): string {
-  return `${base}/${src}`.replace(/\/+/g, '/');
-}
-
 /**
  * Travel to a lifecycle stage: map the stage to its scroll progress and scroll the
  * page there. Honours reduced-motion (jumps instead of smooth-scrolling). Used by
  * the HUD rail so clicking a glyph flies the visitor to that star rather than
- * navigating away to a page.
+ * navigating away to a page. RETURNS the target raw scroll-Y (px) it scrolled to,
+ * so the caller can poll window.scrollY against it to detect when the smooth-scroll
+ * has settled (and clear the click-lock highlight).
  */
-function scrollToStage(stage: number, reduced: boolean): void {
+function scrollToStage(stage: number, reduced: boolean): number {
   // progressForLegacyStage returns LIFECYCLE-space progress (the inverse of the
   // progress->stage table). The page maps RAW scroll -> stage by first running raw
   // scroll through lifecycleProgress() (the LIFECYCLE_DIRECTION seam, = 1 - p under
@@ -70,7 +69,9 @@ function scrollToStage(stage: number, reduced: boolean): void {
   // progress back to raw scroll progress via lifecycleProgress() (its own inverse).
   const raw = lifecycleProgress(progressForLegacyStage(stage));
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  window.scrollTo({ top: raw * max, behavior: reduced ? 'auto' : 'smooth' });
+  const top = raw * max;
+  window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
+  return top;
 }
 
 // --- Aiming-compass data source --------------------------------------------
@@ -140,6 +141,15 @@ interface AimState {
 const WAYPOINT_MIN_OFFSET = 4; // px — closest the ┼ gets to the ▲ (essentially on it)
 const WAYPOINT_MAX_OFFSET = 22; // px — farthest the ┼ rides out from the ▲
 const WAYPOINT_OFFSET_SCALE = 0.04; // px of offset per px of cursor→marker distance
+
+// --- Click-travel highlight lock tuning ------------------------------------
+// How close (px) window.scrollY must be to the target top — and how little it may
+// move between frames — to count as "settled" on the destination. A few px of
+// slack absorbs sub-pixel rounding and the smooth-scroll's easing tail.
+const TRAVEL_SETTLE_EPSILON_PX = 3;
+// Hard fallback (ms): the click-lock ALWAYS releases by now even if the scroll never
+// lands exactly on target. Comfortably longer than the browser's smooth-scroll.
+const TRAVEL_LOCK_TIMEOUT_MS = 1500;
 
 function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
@@ -218,7 +228,6 @@ export default function HudNavigation({
   reduced,
   currentId,
   progress,
-  base,
   markerFrameRef,
 }: HudNavigationProps) {
   // The rail item the pointer is hovering / the keyboard has focused. null when
@@ -231,6 +240,127 @@ export default function HudNavigation({
   // Read from the sitewide __bhMarkerLock global each rAF; flips at most a handful
   // of times as the cursor crosses a hexagon boundary — never per frame.
   const [locked, setLocked] = useState(false);
+
+  // PROGRESSIVE DISCOVERY (while the HUD is still OFF — the quiet icon rail before
+  // the black-hole power-on). A rail row's number is hidden until its scene first
+  // becomes the current (scroll-spy) one; once revealed it STAYS revealed for the
+  // session — the Set only ever grows (monotonic, never reverts on scroll-up). Since
+  // the lifecycle is scrolled in one order, the rail fills top→bottom. Seeded with
+  // the initial currentId so a row that is already current at mount counts as
+  // discovered. The slot/height is always reserved in CSS (the connector-line mask
+  // assumes 5 fixed row positions); only the number's OPACITY is gated, so the rail
+  // never reflows. Once body.hud-active, the powered-on menu shows ALL rows (the CSS
+  // forces every number visible under hud-active), so this gating only matters while OFF.
+  const [discovered, setDiscovered] = useState<Set<HudTargetId>>(() =>
+    currentId ? new Set<HudTargetId>([currentId]) : new Set<HudTargetId>(),
+  );
+  useEffect(() => {
+    if (currentId === null) return;
+    setDiscovered((prev) => {
+      if (prev.has(currentId)) return prev; // already discovered — no state churn
+      const next = new Set(prev);
+      next.add(currentId);
+      return next;
+    });
+  }, [currentId]);
+
+  // CLICK-TRAVEL HIGHLIGHT LOCK. Clicking a rail row fires a multi-second SMOOTH
+  // scroll; during that travel the scroll-spy currentId sweeps through every
+  // intervening scene, which would strobe the gold data-current glow across all the
+  // rows between start and target. So on click we PIN the displayed-current row to
+  // the clicked one (travelId) and ignore the scroll-spy sweep until the smooth
+  // scroll lands on the target, then clear travelId so normal scroll-spy resumes.
+  // null = not travelling (scroll-spy drives the highlight as usual).
+  const [travelId, setTravelId] = useState<HudTargetId | null>(null);
+
+  // Teardown handles for the in-flight settle-watcher (rAF + hard-timeout fallback)
+  // and the manual-scroll listeners that yield the lock to real user input. Held in
+  // a ref so a fresh click (or unmount) can cancel the previous watcher cleanly —
+  // no overlapping watchers, no leaked rAF/timeout/listeners.
+  const travelWatchRef = useRef<(() => void) | null>(null);
+
+  // Cancel any in-flight settle-watcher on unmount so no rAF/timeout/listener leaks
+  // past the component's life.
+  useEffect(() => {
+    return () => {
+      travelWatchRef.current?.();
+      travelWatchRef.current = null;
+    };
+  }, []);
+
+  // Begin a click-travel: pin the highlight to `id`, scroll there, and watch for the
+  // smooth-scroll to SETTLE (then release the lock). Robust settle detection: poll
+  // window.scrollY each frame and clear once it is within a few px of the target top
+  // AND has stopped changing for ~2 consecutive frames. A hard-timeout fallback
+  // (TRAVEL_LOCK_TIMEOUT_MS) always clears the lock even if the scroll math is a hair
+  // off or the page can't reach the exact top. Manual user scroll (wheel/touch/
+  // keydown) during travel clears the lock immediately so grabbing the scrollbar mid
+  // travel isn't left with a stale pin. Any prior watcher is torn down first.
+  function beginTravel(id: HudTargetId, stage: number): void {
+    // Tear down a previous in-flight watcher before starting a new one.
+    travelWatchRef.current?.();
+    travelWatchRef.current = null;
+
+    // Pin the highlight to the clicked row immediately, and reveal its number at once
+    // (a click-to-travel discovers the destination even before the spy reaches it).
+    setTravelId(id);
+    setDiscovered((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+
+    const targetTop = scrollToStage(stage, reduced);
+
+    let rafId = 0;
+    let timeoutId = 0;
+    let stableFrames = 0;
+    let lastY = window.scrollY;
+    let done = false;
+
+    const release = (): void => {
+      if (done) return;
+      done = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+      window.removeEventListener('wheel', onUserScroll);
+      window.removeEventListener('touchmove', onUserScroll);
+      window.removeEventListener('keydown', onUserScroll);
+      travelWatchRef.current = null;
+      setTravelId(null);
+    };
+
+    // Real user input mid-travel yields the lock at once (don't fight the user).
+    function onUserScroll(): void {
+      release();
+    }
+    window.addEventListener('wheel', onUserScroll, { passive: true });
+    window.addEventListener('touchmove', onUserScroll, { passive: true });
+    window.addEventListener('keydown', onUserScroll);
+
+    function poll(): void {
+      const y = window.scrollY;
+      const atTarget = Math.abs(y - targetTop) <= TRAVEL_SETTLE_EPSILON_PX;
+      const stillNow = Math.abs(y - lastY) <= TRAVEL_SETTLE_EPSILON_PX;
+      lastY = y;
+      // Settled = parked on (≈)the target AND not moving for ~2 frames running.
+      stableFrames = atTarget && stillNow ? stableFrames + 1 : 0;
+      if (stableFrames >= 2) {
+        release();
+        return;
+      }
+      rafId = requestAnimationFrame(poll);
+    }
+    rafId = requestAnimationFrame(poll);
+
+    // Hard fallback so the lock ALWAYS clears even if the target/scroll math is a hair
+    // off (or under reduced motion where the jump is instant but the poll's 2-frame
+    // settle still needs a tick). Generous enough for the longest smooth-scroll.
+    timeoutId = window.setTimeout(release, TRAVEL_LOCK_TIMEOUT_MS);
+
+    travelWatchRef.current = release;
+  }
 
   // The boot-to-HUD intro phase. Starts 'loading' (or 'ready' if the scene was
   // already ready before this island hydrated) and advances LOADING → READY →
@@ -529,6 +659,16 @@ export default function HudNavigation({
   // live compass is suppressed (data-booting) so the two never both occupy the slot.
   const booting = bootPhase !== 'live';
 
+  // The DISPLAYED current row: the click-travel target while a click-travel is in
+  // flight (travelId), else the live scroll-spy currentId. Only the highlight readout
+  // is overridden — discovery + the currentId prop stay keyed off the real spy value.
+  // travelId (click-travel destination) pins the highlight during a click-fly;
+  // otherwise the live scroll-spy currentId drives it directly. currentId is the
+  // clean sceneForProgress resolver, so exactly one row is current at any settled
+  // position — the highlight tracks the scene with no lag and never sticks on the
+  // previous row.
+  const effectiveCurrentId = travelId ?? currentId;
+
   return (
     <>
     <div className="hud-system" data-visible={visible}>
@@ -538,12 +678,39 @@ export default function HudNavigation({
         aria-hidden={!visible}
       >
         <ol className="hud-nav-list">
-          {HUD_NAV_ITEMS.map((item) => {
-            const isCurrent = currentId === item.id;
+          {HUD_NAV_ITEMS.map((item, i) => {
+            // While a click-travel is in flight, the CLICKED row owns the highlight
+            // (travelId); otherwise the scroll-spy currentId does. Overriding only the
+            // DISPLAYED current row here keeps the highlight pinned to the destination
+            // through the smooth-scroll, so the gold glow can't strobe through the
+            // intermediate rows the spy sweeps past during travel. The currentId prop
+            // and the discovery effect still key off the REAL scroll-spy value.
+            const isCurrent = effectiveCurrentId === item.id;
+            // SCROLL-ORDER number, top→bottom: HUD_NAV_ITEMS is already in render /
+            // scroll order (black hole = row 1 at the top, the beginning = row 5 at
+            // the bottom), so the array index + 1 IS the row's number. Deriving it here
+            // keeps it correct if the order ever changes — never hardcode per-scene.
+            const number = i + 1;
+            // The CURRENT row is discovered by definition; otherwise check the
+            // accumulating Set. Drives data-discovered, which the CSS reads to fade the
+            // number in IN PLACE (the slot/height is always reserved). Under hud-active
+            // the CSS forces every number visible regardless, so this only gates the OFF rail.
+            //
+            // ONE-WAY by construction (no opacity bounce): the moment a row first becomes
+            // current, `isCurrent` is already true in THIS render (→ data-discovered='true'),
+            // and the discovery effect adds its id to the Set on the same commit. The Set
+            // only ever grows, so when the row LATER stops being current (`isCurrent` →
+            // false) `discovered.has(item.id)` is already true — isDiscovered stays true.
+            // data-discovered therefore flips false→true exactly once and never back, so the
+            // CSS opacity transition runs a single time. With the scroll-spy now driven by
+            // the SAME scene resolver as everything else (see scrollHudId in HeroIsland), the
+            // currentId no longer churns through wrong rows, so nothing seeds the Set early /
+            // out of order — the number reveals once and cannot blink.
+            const isDiscovered = isCurrent || discovered.has(item.id);
 
             return (
               <li className="hud-nav-row" key={item.id}>
-                {/* A HUD glyph TRAVELS to its lifecycle stage rather than navigating
+                {/* A HUD number TRAVELS to its lifecycle stage rather than navigating
                     away — clicking it smooth-scrolls the page to that star. So it is a
                     real <button>, not a link (keyboard-accessible, no page load). The
                     on-screen StarMarker still owns the page navigation via item.href. */}
@@ -552,21 +719,24 @@ export default function HudNavigation({
                   className="hud-nav-button"
                   data-motion={item.motion}
                   data-current={isCurrent}
+                  data-discovered={isDiscovered}
                   aria-label={`Travel to ${item.label}`}
                   tabIndex={visible ? 0 : -1}
                   aria-current={isCurrent ? 'location' : undefined}
-                  onClick={() => scrollToStage(item.stage, reduced)}
+                  onClick={() => beginTravel(item.id, item.stage)}
                   // Feed the ASCII compass: hovering or focusing a row points at it.
                   onMouseEnter={() => setPointedId(item.id)}
                   onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}
                   onFocus={() => setPointedId(item.id)}
                   onBlur={() => setPointedId((prev) => (prev === item.id ? null : prev))}
                 >
-                  <span
-                    className="hud-nav-glyph"
-                    aria-hidden="true"
-                    style={{ '--glyph-mask': `url(${resolveAsset(base, item.glyphSrc)})` } as CSSProperties}
-                  />
+                  {/* Bare scroll-order NUMBER in the glyph column (replacing the masked
+                      SVG glyph): same box/centering as the mask used so the connector-line
+                      mask geometry + row pitch are UNCHANGED. currentColor inherits the
+                      rail's faint→gold→current colour transitions exactly like the mask did. */}
+                  <span className="hud-nav-glyph hud-nav-number" aria-hidden="true">
+                    {number}
+                  </span>
                   <span className="hud-nav-copy">
                     <span className="hud-nav-title">{item.label}</span>
                     <span className="hud-nav-destination">{item.destination}</span>
