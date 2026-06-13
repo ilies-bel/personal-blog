@@ -234,21 +234,31 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // GRADE: yellow core exposure dialled DOWN a further −10% (1.62 → 1.458); red end held.
     col *= mix(1.458, 0.5, uRed);
 
-    // HOT YOUNG STAR (uBlue): while still forming/small the star is blue-white hot
-    // (mass->heat). Recolour the whole photosphere onto a blue-white ramp keyed by
-    // the same surface field m, and lerp gold->blue-white by uBlue. Cools to the
-    // gold ramp above as it grows (uBlue->0). No-op for the settled yellow sun.
-    vec3 b0 = vec3(0.06, 0.12, 0.30);  // cool deep blue (umbral)
-    vec3 b1 = vec3(0.18, 0.34, 0.72);  // mid blue
-    vec3 b2 = vec3(0.42, 0.62, 0.95);  // bright azure
-    vec3 b3 = vec3(0.72, 0.86, 1.00);  // pale blue-white
-    vec3 b4 = vec3(0.92, 0.97, 1.00);  // hot white core
+    // HOT YOUNG STAR (uBlue): while still forming/small the star is hot BLUE (mass->heat).
+    // Recolour the whole photosphere onto a blue ramp keyed by the same surface field m,
+    // and lerp gold->blue by uBlue. Cools to the gold ramp above as it grows (uBlue->0).
+    // No-op for the settled yellow sun.
+    //
+    // SATURATED-BLUE RETUNE: the seed is rendered at ≈0.4% scale and its emission is
+    // lifted HARD by uSeedGlow (col *= uSeedGlow, up to ≈3.2× a few lines below). The old
+    // ramp's bright stops were near-WHITE (b3 0.72,0.86,1.00 / b4 0.92,0.97,1.00), so that
+    // multiply pushed all three channels past 1.0 and the bright core CLIPPED to white —
+    // the newborn never read blue. Fix: keep BLUE the clearly dominant channel at EVERY
+    // stop and hold red+green well BELOW it on the bright stops, so even after the seed-glow
+    // multiply (and tone-map) clips blue toward 1.0, red/green stay lower and the core stays
+    // unmistakably BLUE rather than washing to white. Brightness is carried by the high blue
+    // channel + the seed-glow lift, not by lifting red/green toward white.
+    vec3 b0 = vec3(0.04, 0.09, 0.34);  // cool deep blue (umbral) — bluer, darker R/G
+    vec3 b1 = vec3(0.10, 0.26, 0.78);  // mid blue — R/G pulled down vs old 0.18,0.34
+    vec3 b2 = vec3(0.20, 0.44, 0.98);  // bright azure — strongly blue-dominant
+    vec3 b3 = vec3(0.34, 0.60, 1.00);  // bright blue (was pale blue-WHITE 0.72,0.86,1.0)
+    vec3 b4 = vec3(0.52, 0.74, 1.00);  // hot blue core (was near-white 0.92,0.97,1.0)
     vec3 bcol = b0;
     bcol = mix(bcol, b1, smoothstep(0.14,0.40,m));
     bcol = mix(bcol, b2, smoothstep(0.34,0.58,m));
     bcol = mix(bcol, b3, smoothstep(0.55,0.78,m));
     bcol = mix(bcol, b4, smoothstep(0.80,0.96,m));
-    bcol += limbWide * vec3(0.30, 0.45, 0.70);   // cool limb glow
+    bcol += limbWide * vec3(0.20, 0.40, 0.78);   // cool limb glow — bluer (R cut, B up)
     bcol *= 1.25;                             // young star is luminous
     col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
 
@@ -313,7 +323,17 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // NEWBORN-SEED GLOW: lift the photosphere emission while the star is a tiny seed so
     // the pinpoint reads as an intense hot core (not a dim dot). Applied to colour only
     // (not alpha) so the body stays the same SIZE/shape — it just burns brighter. 1.0 = no-op.
-    col *= uSeedGlow;
+    //
+    // BLUE-PRESERVING TEMPER: uSeedGlow arrives as 1 + extra (extra up to ≈2.2 at the seed).
+    // A full ≈3.2× multiply on the saturated-blue core would push red+green past 1.0 and
+    // clip the core toward WHITE again, undoing the blue retune above. So scale only the
+    // EXTRA lift (never the base 1.0) DOWN by uBlue: glow = 1 + (uSeedGlow-1)*(1 - 0.5*uBlue).
+    // At full blue (uBlue=1) the extra lift is HALVED so the newborn glows as a luminous hot
+    // BLUE point instead of blowing white; as it warms to gold (uBlue->0) the full lift
+    // returns. The blue ramp's own ×1.25 keeps the seed bright on its own, so a softer glow
+    // still reads as an intense core. No-op when uSeedGlow==1 (every settled star).
+    float seedGlowEff = 1.0 + (uSeedGlow - 1.0) * (1.0 - 0.5 * clamp(uBlue, 0.0, 1.0));
+    col *= seedGlowEff;
     // uMeshFade cross-dissolves the (normally opaque) photosphere in over the gold
     // cloud at the yellow↔red swap: premultiplied colour × alpha so it dissolves
     // cleanly over black. 1.0 everywhere outside the swap band → byte-identical output.

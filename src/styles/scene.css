@@ -182,9 +182,23 @@ body.scene-ready .scene-loader::before {
 /* The scroll track: N stages that exist only to give the page scrollable height.
    They render nothing — the pinned canvas reads scrollY. Each stage is taller than
    one viewport, so the proportional scroll→stage map (scroll.ts) makes a lifecycle
-   step cost more pixels the taller the track: pacing lives here. */
+   step cost more pixels the taller the track: pacing lives here.
+
+   PACING NOTE — per-stage height is the SINGLE global lever for how many physical
+   pixels of scrolling each unit of progress costs. scroll.ts normalizes progress by
+   the TOTAL track height (progress = scrollY / (scrollHeight - innerHeight)), so the
+   segment weights in sceneTable.ts (and every easing / stage bound) are PROPORTIONS
+   of that 0→1 progress and are UNTOUCHED by this height. Raising the height therefore
+   lengthens the physical scroll distance of EVERY beat uniformly with byte-identical
+   visuals — only "pixels scrolled per unit progress" changes, nothing in the mapping.
+
+   COLLAPSE LENGTHENING (nebula→star): bumped 160svh → 300svh (≈1.875× taller track)
+   so the collapse beat — segment 3b, weight 0.20 — grows from ≈0.20 × (6 × 160) =
+   ≈192svh of scrolling to ≈0.20 × (6 × 300) = ≈360svh (~1.9× longer to scroll
+   through), giving the gas a long, legible build into the forming star. SCROLL_SECTION_COUNT
+   (=6) is unchanged; this is purely a height change, so all proportions/easings hold. */
 .scene-track { position: relative; z-index: 0; }
-.scene-stage { height: 160svh; }
+.scene-stage { height: 300svh; } /* was 160svh — lengthens the whole arc ~1.875×; collapse ≈360svh */
 
 /* --- Fixed corner overlay (brand top-left, blog micro-nav top-right) --------- */
 /* About's brand mark — the shared identity lockup (.bh-identity-lockup, hero.css)

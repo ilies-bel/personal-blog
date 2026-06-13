@@ -818,8 +818,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // vanishing dot). starFormed lags the gas inflow (gas leads via collapse=prog^0.85), so
     // the cloud is seen pouring INTO this growing core. No-op (1.0) outside the window.
     sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.004 + 0.996 * look.starFormed : 1.0);
-    // HOT YOUNG STAR: blue-white while small/forming, cooling to gold near full size.
-    sunRig.surfaceMat.uniforms.uBlue.value = look.starFormed > 0 ? 1 - look.starFormed * look.starFormed : 0;
+    // HOT YOUNG STAR (uBlue): born a saturated hot-BLUE pinpoint (echoing the page's
+    // pale-blue dot), HOLDING blue through the early growth, then cooling to gold only in
+    // the LATER half as it reaches full mass ("mass induces heat" runs in reverse here —
+    // small+young = bluest). Curve: 1 - smoothstep01((starFormed - 0.40) / 0.60) so uBlue
+    // stays pinned at FULL 1.0 (unmistakably blue) until starFormed = 0.40 (the seed +
+    // first 40% of growth), then eases smoothly to 0 (gold) by full size. This deliberately
+    // holds blue LONGER than the old 1 - starFormed² (which began cooling immediately), so
+    // the newborn reads as a blue point well into its growth before warming to the yellow
+    // sun. The 0.40 hold-point and 0.60 ramp span are the two magic numbers; widen the hold
+    // (raise 0.40) for an even longer blue beat. 0 (no-op) outside the forming window.
+    sunRig.surfaceMat.uniforms.uBlue.value =
+      look.starFormed > 0 ? 1 - smoothstep01((look.starFormed - 0.4) / 0.6) : 0;
     // SEED EMISSION LIFT: a 0.4%-scale photosphere is a tiny speck on screen, so without a
     // boost it reads as a dim dot rather than an intense newborn-star pinpoint. Lift the
     // surface emission HARD when the star is smallest and ease it back to the normal 1.0 as
