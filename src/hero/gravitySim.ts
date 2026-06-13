@@ -404,10 +404,22 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
 
   velVar.material.uniforms.uSeedTex = { value: seedTex };
   velVar.material.uniforms.uDt = { value: FIXED_DT };
-  velVar.material.uniforms.uG = { value: 22.0 }; // strong pull → MORE gas reaches the core
+  // DECISIVE pull (22 -> 32): the user wants the cloud WAY MORE ABSORBED before it
+  // fades. A stronger central well means the bulk of the gas reaches uCoreR and PARKS
+  // (accretes) within the integration length, rather than still being in free-fall when
+  // the last snapshot is taken (and then vanishing in place via the old global dimmer).
+  // Paired with the longer MAX_STEPS (200) and the lifted uMaxSpeed below so the strong
+  // pull isn't immediately clamped away.
+  velVar.material.uniforms.uG = { value: 32.0 }; // DECISIVE pull → the VAST MAJORITY of gas reaches & parks on the core
   velVar.material.uniforms.uM0 = { value: 1.0 };
   velVar.material.uniforms.uEps = { value: giantR * 0.15 };
-  velVar.material.uniforms.uMaxSpeed = { value: giantR * 4.5 };
+  // velocity clamp, LIFTED 4.5 -> 6.5 × giantR. With uG raised to 32 the infall is much
+  // stronger; the old 4.5 ceiling would clamp that strong pull away near the cloud's outer
+  // radius, so grains starting at the nebula edge (~giantR*1.72) couldn't build enough speed
+  // to cross the whole way to uCoreR inside MAX_STEPS. 6.5 lets the strong pull actually move
+  // the gas in (more grains park by the last snapshot) while still capping the singular spike
+  // at the very centre so the integrator stays stable.
+  velVar.material.uniforms.uMaxSpeed = { value: giantR * 6.5 };
   // damping bleeds orbital energy so the gas spirals IN and accretes over the collapse.
   // Nudged UP again (1.6 -> 1.9) to make the absorption CRISP: stiffer damping bleeds
   // orbital energy faster so the gas leans straight IN and falls onto the core instead of
@@ -427,21 +439,26 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   velVar.material.uniforms.uCurlAmp = { value: 0.8 };
   velVar.material.uniforms.uCollapseDrive = { value: 0 };
   velVar.material.uniforms.uAccretedFrac = { value: 0 };
-  // ABSORPTION RADIUS — tightened 1.35 -> 1.05× coreR so gas parks RIGHT ON the
-  // photosphere shell, not on a wide halo standing off the surface. The old 1.35 left a
-  // visible gap of gas hovering around the core (read as "not absorbed"); 1.05 hugs the
-  // surface so each grain converges onto the star and is swallowed there. (coreR is the
-  // full-size sun radius; the render side shrinks/winks the grain as it lands so it reads
-  // as consumed even while the mesh star is still a growing seed — see disk.glsl.ts.)
-  velVar.material.uniforms.uCoreR = { value: coreR * 1.05 };
+  // ABSORPTION RADIUS — 1.05 -> 1.25× coreR. The user wants the cloud WAY MORE absorbed,
+  // so capture must be RELIABLE: with the stronger pull (uG 32) grains arrive at the core
+  // FAST, and a razor-thin 1.05 shell let some fast grains skim THROUGH the capture band in
+  // a single uDt step without ever testing `dist < uCoreR`, so they slingshot back out and
+  // keep orbiting instead of parking. Widening to 1.25 gives the fast infall a thicker shell
+  // to be caught in → it parks on the first crossing and accretes. Still hugs the surface
+  // (1.25× the full-size sun radius), and the render side shrinks/winks the grain as it lands
+  // so it reads as consumed even while the mesh star is still a growing seed (see disk.glsl.ts).
+  // MUST stay in sync with the position-shader uCoreR below (same park shell).
+  velVar.material.uniforms.uCoreR = { value: coreR * 1.25 };
   velVar.material.uniforms.uTime = { value: 0 };
   velVar.material.uniforms.uFrozenTime = { value: 0 };
   velVar.material.uniforms.uGiantR = { value: giantR };
 
   posVar.material.uniforms.uDt = { value: FIXED_DT };
-  // park shell matches the velocity-side capture radius (1.05× coreR) so a captured grain
-  // snaps onto the SAME tight surface it was caught at — no jump between capture and park.
-  posVar.material.uniforms.uCoreR = { value: coreR * 1.05 };
+  // park shell matches the velocity-side capture radius (1.25× coreR) so a captured grain
+  // snaps onto the SAME surface it was caught at — no jump between capture and park. MUST
+  // stay in sync with the velocity-shader uCoreR above (widened 1.05 -> 1.25 for reliable
+  // capture of the now-faster infall — see the note there).
+  posVar.material.uniforms.uCoreR = { value: coreR * 1.25 };
   // PARK RATE — bumped 0.08 -> 0.14 so a captured grain's life ramps to 0 in fewer frames:
   // a CRISP swallow (the gas winks out fast at the surface) instead of a slow lingering
   // fade that read as the gas dissolving in mid-air rather than being eaten by the star.
@@ -484,8 +501,20 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   // at scroll time just blend the two snapshots bracketing the scroll position. The
   // collapse is then a PURE FUNCTION of scroll: scrub-anywhere, both directions, no
   // state, no per-frame physics. uTime is frozen, so the bake is deterministic.
-  const MAX_STEPS = 110; // full-collapse integration length (tuned for the scroll span)
-  const SNAP_COUNT = 17; // baked frames (snapshot 0 = dispersed, last = fully collapsed)
+  // full-collapse integration length, LENGTHENED 110 -> 200. The user wants the cloud WAY
+  // MORE absorbed before it fades: at 110 steps a large fraction of grains were STILL IN
+  // FLIGHT at the last snapshot (uG 22, capture 1.05×) and so vanished in place rather than
+  // physically reaching the core and parking. 200 steps gives the (now-stronger, uG 32)
+  // infall the time it needs for the VAST MAJORITY of grains to fall all the way to uCoreR
+  // and accrete (life→0) by the deepest snapshot — only a thin trailing wisp is still
+  // infalling. Bake cost scales with MAX_STEPS × 1.2M texels; 200 is acceptable (it bakes
+  // once, pre-warmed while the visitor eases into the window — see STEPS_PER_BAKE_FRAME).
+  const MAX_STEPS = 200; // full-collapse integration length → most of the cloud parks on the core
+  // baked frames (snapshot 0 = dispersed, last = fully collapsed). Bumped 17 -> 21 because
+  // the longer 200-step collapse covers more physical distance per snapshot interval; the
+  // extra temporal resolution keeps the blended infall smooth between baked frames (no
+  // visible jump as grains stream in). uTime is frozen, so the bake stays deterministic.
+  const SNAP_COUNT = 21;
   velVar.material.uniforms.uCollapseDrive.value = 1;
 
   // persistent snapshot render targets — one per baked frame. Built via the GPGPU's
@@ -502,13 +531,18 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
     { uSrc: { value: null as THREE.Texture | null } },
   );
 
-  // INCREMENTAL bake: ~110 compute passes over a 1.2M-texel sim crammed into one frame
+  // INCREMENTAL bake: ~200 compute passes over a 1.2M-texel sim crammed into one frame
   // would be a visible hitch, so bake() is RESUMABLE — call it each frame and it advances
   // a bounded number of steps, capturing any snapshots it crosses, until all SNAP_COUNT
   // are done. The first frame seeds + captures snapshot 0, so sampleAt() has the dispersed
   // nebula immediately; later snapshots fill in over the next few frames (the visitor is
   // still easing into the collapse, so the deeper frames are ready before they're needed).
-  const STEPS_PER_BAKE_FRAME = 14; // compute passes per frame while baking (≈8 frames total)
+  // compute passes per frame while baking. Raised 14 -> 18 so the longer 200-step collapse
+  // (vs the old 110) still bakes in a similar number of frames: ≈12 frames total (200/18 +
+  // the snapshot captures) instead of ballooning to ~15. Still a bounded per-frame budget, so
+  // no visible hitch; the deeper snapshots fill in over the next few frames while the visitor
+  // is still easing into the collapse window, so they're ready before they're sampled.
+  const STEPS_PER_BAKE_FRAME = 18; // compute passes per frame while baking (≈12 frames total at MAX_STEPS=200)
   let bakeStarted = false;
   let bakeDone = false;
   let curStep = 0;
