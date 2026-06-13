@@ -63,16 +63,19 @@ export { smoothstep };
 // RE-TIMED SEGMENTS/CAMERA tables in sceneTable.ts (same numbers, same order).
 const DOT_HOLD_END = 0.1;         // dot hold (content-unlock band, raw 90-100%)
 const NEBULA_GROW_END = 0.26;     // dot->nebula grow ends; nebula proper begins
-const STAR_IGNITION_START = 0.43; // nebula collapse ends; yellow ignites
-const YELLOW_SETTLE_END = 0.5;    // yellow ignition resolves into the centred hold
+// SHIFTED +0.08 (3rd iteration): the nebula COLLAPSE span widened (seg 3b 0.12 -> 0.20) so
+// the pinpoint-seed→full-star growth has more scroll to play out, pushing the four
+// breakpoints after it forward by 0.08. These MUST stay in lockstep with STARTS[4..7] in
+// sceneTable.ts ([0.51, 0.58, 0.61, 0.74]) or progressForLegacyStage's inverse drifts.
+const STAR_IGNITION_START = 0.51; // was 0.43 — nebula collapse ends; yellow ignites
+const YELLOW_SETTLE_END = 0.58;   // was 0.50 — yellow ignition resolves into the centred hold
 // The yellow star HOLDS centred across YELLOW_SETTLE_END→YELLOW_HOLD_END so the dwell
 // resolves into a real, still beat (headline reads on the blazing sun). Only AFTER this
 // hold does the giant grow + the camera swing into the lateral orbit — so yellow→red
 // reads as ONE move (grow + arc around the body) instead of "dive in, then reverse out".
-const YELLOW_HOLD_END = 0.57;     // yellow hold ends; the red-giant grow/orbit begins
-// Red-giant hold band. Named so camera and stage use the same numbers. WIDENED grow
-// band (RED_HOLD_START 0.64 -> 0.70) so the red giant owns raw 23-43% (ITEM 1/9).
-const RED_HOLD_START = 0.7;       // red grow ends; the settled red-giant close-up hold begins
+const YELLOW_HOLD_END = 0.61;     // was 0.57 — yellow hold ends; the red-giant grow/orbit begins
+// Red-giant hold band. Named so camera and stage use the same numbers.
+const RED_HOLD_START = 0.74;      // was 0.70 — red grow ends; the settled red-giant close-up hold begins
 const RED_HOLD_END = 0.77;        // red-giant hold ends; the reverse-collapse FLASH begins
 
 // The public cinematic timeline. The existing shaders still understand the older
@@ -89,8 +92,8 @@ const RED_HOLD_END = 0.77;        // red-giant hold ends; the reverse-collapse F
 // Phase bands (in lifecycleProgress space), RE-TIMED to the ART-DIRECTION chapter
 // grid (the raw-scroll band each occupies under the reverse flip is raw = 1 - lifecycle):
 //   0.00-0.10 dot hold / content-unlock (raw 90-100) | 0.10-0.26 dot->nebula grow |
-//   0.26-0.43 nebula (raw 57-74)        | 0.43-0.57 yellow ignite+hold (raw 43-57) |
-//   0.57-0.77 red giant grow+orbit+close (raw 23-43) | 0.77-0.85 reverse collapse FLASH (raw 15-23) |
+//   0.26-0.51 nebula (raw 49-74, collapse WIDENED) | 0.51-0.61 yellow ignite+hold (raw 39-49) |
+//   0.61-0.77 red giant grow+orbit+close (raw 23-39) | 0.77-0.85 reverse collapse FLASH (raw 15-23) |
 //   0.85-1.00 black-hole settle + event-horizon hold / portfolio lure (raw 0-15).
 export function legacyStageForProgress(progress: number): number {
   return legacyStageForProgressFromTable(progress);

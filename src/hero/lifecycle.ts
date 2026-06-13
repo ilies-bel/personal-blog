@@ -353,15 +353,22 @@ export function lifecycle(input: LifecycleInput): StarState {
   // (and, via nebulaShader -> uNebula, suppresses the shader's red-giant default there).
   // At the floor prog~1, so it sits at its window-floor value (~0.55) across the band.
   const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
-  // cloud DENSITY/brightness fades the gas as the star forms — but the OLD curve
-  // ((1-prog)^1.6) crashed to ~0 by prog≈0.85 while the star (prog^1.5) was only ~0.78
-  // formed, leaving a frame with the gas GONE and a bare bright core on black (the
-  // "nebula vanishes at the start of star creation" bug). Now the gas HOLDS near full
-  // through prog≈0.6 then fades out only across 0.6→0.99, so it clears exactly as the
-  // star completes — a true cross-fade, never a gap. feedBump still glows the
-  // mid-window convergence (light pouring into the core). 1 (no-op) outside the window.
+  // cloud DENSITY/brightness is the INVERSE of the star (R3 — mass conservation): as the
+  // star grows the cloud thins out in DIRECT proportion, so gas LEAVING reads as star
+  // GAINING. The envelope tracks (1 - starFormed) — the literal complement of the mesh's
+  // growth ramp (starFormed = prog^1.5) — instead of the old hold-then-crash curve
+  // (1 - smoothstep((prog-0.6)/0.39)), which held full to prog 0.6 then dumped, so the
+  // cloud-vs-star ratio was NOT conserved (gas lingered full while the star was already
+  // swelling, then crashed). The new shape mirrors the star: at every scroll point in the
+  // window cloud-density + star-size read as one conserved mass. A tiny SHAPING floor
+  // (0.06 * (1 - prog)) keeps a whisper of gas from snapping to literally 0 a hair before
+  // the star locks in, and it ITSELF goes to 0 at prog→1 — so the cloud still reaches ~0
+  // EXACTLY where the star reaches full and the mesh cross-fade completes (R4: a clean
+  // simultaneous handoff, never gas-gone-then-star-pops or star-full-then-cloud-lingers).
+  // feedBump still glows the mid-window convergence (light pouring into the core). 1 (no-op)
+  // outside the window.
   const feedBump = 5.2 * prog * (1 - prog); // 0→1→0, peaks mid-window (brighter convergence)
-  const invDensity = 1 - smoothstep01((prog - 0.6) / (0.99 - 0.6)); // 1 until 0.6, then →0 by 0.99
+  const invDensity = 1 - starFormed + 0.06 * (1 - prog); // ≈ (1 - star growth); →0 as prog→1
   const cloudBright = 1 + inWindow * ((1 + 0.8 * feedBump) * invDensity - 1);
   // the shader runs its nebula geometry across the real nebula AND the collapse
   // window, so `pos` holds the analytic nebula placement (the sim's seed/home)

@@ -41,6 +41,15 @@ const easeInOutCubic = (t: number): number => {
   const x = clamp01(t);
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 };
+// A GENTLER symmetric in/out than cubic — the sine S-curve has shallower endpoints, so
+// it eases in AND OUT more softly. Used by the WIDENED nebula collapse (seg 3b): over the
+// longer span a cubic tail snapped to full a touch hard near the floor; the sine tail glides
+// the last frames of the pinpoint→full-star growth into the mesh lock-in (R4 "stops too soon /
+// botched" fix). cos form keeps it in [0,1] with f(0)=0, f(0.5)=0.5, f(1)=1.
+const easeInOutSine = (t: number): number => {
+  const x = clamp01(t);
+  return -(Math.cos(Math.PI * x) - 1) / 2;
+};
 // Exported so the scene engine (createScene.ts) can reuse the SAME accelerating
 // fall curve for the cinematic dive plunge — no second, drifting copy of the
 // easing. Still backs the END-collapse band's stage curve below (band 8).
@@ -58,6 +67,7 @@ export type Easing =
   | 'smoothstep'
   | 'easeOutCubic'
   | 'easeInOutCubic'
+  | 'easeInOutSine'
   | 'easeInQuart'
   | 'easeOutExpo';
 
@@ -69,6 +79,7 @@ const EASE: Record<Easing, (t: number) => number> = {
   smoothstep,
   easeOutCubic,
   easeInOutCubic,
+  easeInOutSine,
   easeInQuart,
   easeOutExpo,
 };
@@ -116,23 +127,28 @@ export interface Segment {
 //   raw 0-15%   black hole        (lifecycle 0.85-1.00, segs 10-11)
 //   raw 15-23%  reverse collapse  (lifecycle 0.77-0.85, segs 8-9 — SHORTENED to a
 //               transition FLASH, not a chapter: collapse is ~8% of scroll, was 14%)
-//   raw 23-43%  red giant         (lifecycle 0.57-0.77, segs 6-7 — WIDENED to 20% so
-//               the reveal->limb-orbit->close-up staging has room)
-//   raw 43-57%  yellow star       (lifecycle 0.43-0.57, segs 4-5)
-//   raw 57-74%  nebula            (lifecycle 0.26-0.43, segs 3a-3b: idle hold + collapse)
+//   raw 23-39%  red giant         (lifecycle 0.61-0.77, segs 6-7)
+//   raw 39-49%  yellow star       (lifecycle 0.51-0.61, segs 4-5)
+//   raw 49-74%  nebula            (lifecycle 0.26-0.51, segs 3a-3b: idle hold + collapse)
 //   raw 74-90%  pale dot          (lifecycle 0.10-0.26, seg 2 dot->nebula grow)
 //   raw 90-100% content/settled   (lifecycle 0.00-0.10, seg 1 the dot hold — the
 //               HUD arms across this band; see HeroIsland's at-end edge).
-// The nebula chapter's single collapse span (this branch's 0.17) is SPLIT into a
-// short idle held-frame (3a, 0.05, flat stage 3.42) + the remaining collapse
-// (3b, 0.12); 3a + 3b = 0.17, so the NEBULA chapter breakpoint (lifecycle 0.43) is
-// preserved exactly and only ONE new intermediate breakpoint (0.31) is added. That
-// idle hold is what the strict idle-only marker gate (settledIdForStage) anchors the
-// nebula markers to, so they never show across the collapse transition. The yellow
-// ignition span is the documented-grid 0.07 (an earlier draft shipped 0.08, which
-// pushed the prefix-sum to 1.01 and let the terminal band spill past p=1.0); it is
-// 0.07 here so STARTS lands on exactly 1.0. New STARTS prefix-sum (lifecycle):
-//   [0, 0.10, 0.26, 0.31, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]
+// NEBULA→YELLOW LENGTHENED (3rd iteration): the nebula COLLAPSE span (3b) was WIDENED
+// 0.12 -> 0.20 (+0.08 scroll) so the pinpoint-seed → full-star growth is a slow, legible
+// build, not a quick snap. To keep the HARD INVARIANT (all weights sum to exactly 1.0 so
+// STARTS lands on 1.0), the +0.08 is taken back from the two FLAT IDLE HOLDS — dead-time
+// pauses whose LOOK is unchanged, only their scroll duration shrinks: YELLOW hold (seg 5)
+// 0.07 -> 0.03 and RED hold (seg 7) 0.07 -> 0.03 (−0.04 each = −0.08). No TRANSITION span
+// that does visible work was touched. The nebula chapter's single collapse span is still
+// SPLIT into a short idle held-frame (3a, 0.05, flat stage 3.42) + the remaining collapse
+// (3b, now 0.20); that idle hold is what the strict idle-only marker gate
+// (settledIdForStage) anchors the nebula markers to, so they never show across the collapse
+// transition. The yellow ignition span (seg 4) stays 0.07. Widening 3b pushes the four
+// breakpoints AFTER it forward by 0.08 (STARTS[4..7]: 0.43→0.51, 0.50→0.58, 0.57→0.61,
+// 0.70→0.74), so the named beat-progress constants pinned to them (STAR_IGNITION_START,
+// YELLOW_SETTLE_END, YELLOW_HOLD_END, RED_HOLD_START in the CAMERA block below + timeline.ts)
+// move in lockstep. NEW STARTS prefix-sum (lifecycle):
+//   [0, 0.10, 0.26, 0.31, 0.51, 0.58, 0.61, 0.74, 0.77, 0.81, 0.85, 0.93, 1.0]
 // The curve stays continuous + monotonic (stage falls 4.7 -> 0.0 as lifecycle
 // rises 0 -> 1); only WHICH scroll position maps to WHICH stage changed.
 // Two facts encoded honestly (both reproduce the curve; do NOT "tidy"):
@@ -179,16 +195,20 @@ export const SEGMENTS: readonly Segment[] = [
     settledWindow: [3.39, 3.45],
   },
   // 3b — NEBULA collapse: gas streams inward feeding the star (3.42 -> 3.02). The
-  // NEBULA chapter proper (raw 58-74%). Pure transition now (the held-frame idle
-  // window moved to 3a above), so NO marker shows while the gas is collapsing. Weight
-  // is 0.12 (this branch's nebula collapse span was 0.17; 0.05 went to 3a, 0.12 stays
-  // here) so the art-direction nebula chapter boundary (lifecycle 0.43) is preserved.
+  // NEBULA chapter proper (raw 49-74%). Pure transition (the held-frame idle window
+  // is 3a above), so NO marker shows while the gas is collapsing. Weight WIDENED
+  // 0.12 -> 0.20 (3rd iteration): this is the SCROLL SPAN of the collapse, so a longer
+  // span gives the visitor more scroll distance to watch the pinpoint seed grow into the
+  // full star — a slow, legible build instead of a snap. The +0.08 is taken back from the
+  // two flat idle HOLDS (segs 5 + 7, −0.04 each) so the weights still sum to 1.0; the
+  // easeInOutCubic tail is softened to a longer-S easeInOutSine (below) so the final
+  // lock-in onto the formed star doesn't feel abrupt at the end of the now-longer span.
   {
     sceneId: 'nebula',
-    weight: 0.12,
+    weight: 0.2,
     stageStart: 3.42,
     stageEnd: 3.02,
-    easing: 'easeInOutCubic',
+    easing: 'easeInOutSine',
     phase: 'transition',
   },
   // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88). Weight is the
@@ -203,10 +223,14 @@ export const SEGMENTS: readonly Segment[] = [
     easing: 'easeOutCubic',
     phase: 'transition',
   },
-  // 5 — YELLOW hold: stay at the settled gold (flat 2.88).
+  // 5 — YELLOW hold: stay at the settled gold (flat 2.88). Weight TRIMMED 0.07 -> 0.03
+  // (3rd iteration): this is a flat IDLE pause — shrinking its scroll duration frees 0.04
+  // for the widened nebula collapse (3b) WITHOUT changing the hold's LOOK (same stage 2.88,
+  // same settledWindow). It still holds long enough to read the yellow beat; the dwell makes
+  // it feel longer than 0.03 of scroll alone.
   {
     sceneId: 'yellow',
-    weight: 0.07,
+    weight: 0.03,
     stageStart: 2.88,
     stageEnd: 2.88,
     easing: 'linear',
@@ -228,11 +252,14 @@ export const SEGMENTS: readonly Segment[] = [
   },
   // 7 — RED hold: the flat red-giant beat (flat 2.05). The settled close-up beat —
   // the camera has pushed in to the active region by here (ITEM 1's third beat).
-  // Weight is the art-direction grid's 0.07; the tight settledWindow [2.03, 2.07] is
-  // the marker branch's strict idle-only gate (this is where the red marker shows).
+  // Weight TRIMMED 0.07 -> 0.03 (3rd iteration): like the yellow hold, this is a flat IDLE
+  // pause — shrinking its scroll duration frees the other 0.04 for the widened nebula
+  // collapse (3b) with NO change to its LOOK (same stage 2.05, same settledWindow). The
+  // tight settledWindow [2.03, 2.07] is the strict idle-only gate (this is where the red
+  // marker shows); the red dwell keeps the beat reading despite the shorter span.
   {
     sceneId: 'red',
-    weight: 0.07,
+    weight: 0.03,
     stageStart: 2.05,
     stageEnd: 2.05,
     easing: 'linear',
@@ -288,7 +315,7 @@ export const SEGMENTS: readonly Segment[] = [
 /** Prefix-sum of the segment weights — the progress breakpoints. Length is
  *  SEGMENTS.length + 1: STARTS[i] is span i's start progress, STARTS[i + 1] its
  *  end. Computed once at module load. Equals (to float precision)
- *  [0, 0.10, 0.26, 0.31, 0.43, 0.50, 0.57, 0.70, 0.77, 0.81, 0.85, 0.93, 1.0]. */
+ *  [0, 0.10, 0.26, 0.31, 0.51, 0.58, 0.61, 0.74, 0.77, 0.81, 0.85, 0.93, 1.0]. */
 export const STARTS: readonly number[] = (() => {
   const out: number[] = [0];
   let acc = 0;
@@ -687,10 +714,12 @@ export const SCENES: readonly LifecycleScene[] = [
     dwell: { strength: 0.45 },
     beat: {
       // NEBULA — the cloud settles into its held frame around stage 3.42 (~0.26 now)
-      // and dwells through the collapse band (raw 58-74%). The headline fades in as
-      // the cloud settles (~0.27) and out before the yellow ignition (~0.42).
-      at: 0.35,
-      text: { inStart: 0.28, inEnd: 0.31, outStart: 0.41, outEnd: 0.43 },
+      // and dwells through the WIDENED collapse band (raw 49-74%). The headline fades in
+      // as the cloud settles (~0.27) and out before the yellow ignition; outStart/outEnd
+      // shift +0.08 with the collapse span so the copy still clears just before ignition
+      // (STAR_IGNITION_START 0.51). `at` re-centred on the longer band.
+      at: 0.39,
+      text: { inStart: 0.28, inEnd: 0.31, outStart: 0.49, outEnd: 0.51 },
       state: 'nebula',
       // ITEM 8: a clear boundary in the raw material saves a thousand future decisions.
       down: 'One clear boundary can save a thousand future decisions.',
@@ -730,10 +759,12 @@ export const SCENES: readonly LifecycleScene[] = [
       },
     ],
     beat: {
-      // YELLOW STAR — ignites by ~0.42 (STAR_IGNITION_START) and HOLDS centred across
-      // 0.50 -> 0.57 (raw 43-50%). The headline sits in that stable, still window.
-      at: 0.535,
-      text: { inStart: 0.5, inEnd: 0.52, outStart: 0.56, outEnd: 0.57 },
+      // YELLOW STAR — ignites by ~0.51 (STAR_IGNITION_START) and HOLDS centred across
+      // 0.58 -> 0.61 (raw 39-42%). The headline sits in that stable, still window. The band
+      // shifts +0.08 in lockstep with the holds moving forward (the hold's LOOK is unchanged,
+      // only its scroll position), so the copy still reads on the blazing settled sun.
+      at: 0.595,
+      text: { inStart: 0.58, inEnd: 0.59, outStart: 0.6, outEnd: 0.61 },
       state: 'yellow star',
       down: 'Systems grow. Interfaces drift. Complexity compounds.',
       up: 'Systems grow. Interfaces drift. Complexity compounds.',
@@ -782,11 +813,13 @@ export const SCENES: readonly LifecycleScene[] = [
     // touch longer here than the brighter nebula/yellow beats. Gentle by design.
     dwell: { strength: 0.5 },
     beat: {
-      // RED GIANT — the settled close-up hold band (stage 2.05, progress ~0.70 -> 0.77,
-      // raw 23-30%). The headline sits in the close-up stretch AFTER the reveal + limb
-      // orbit, so it reads on the surface/active-region beat (ITEM 1's third stage).
-      at: 0.735,
-      text: { inStart: 0.705, inEnd: 0.72, outStart: 0.76, outEnd: 0.77 },
+      // RED GIANT — the settled close-up hold band (stage 2.05, progress ~0.74 -> 0.77,
+      // raw 23-26%). RED_HOLD_START shifted 0.70 -> 0.74 (the red hold is shorter now, its
+      // LOOK unchanged), so the headline window is re-fitted INSIDE the new [0.74, 0.77]
+      // hold — it still reads on the surface/active-region close-up beat (ITEM 1's third
+      // stage), AFTER the reveal + limb orbit.
+      at: 0.755,
+      text: { inStart: 0.74, inEnd: 0.75, outStart: 0.76, outEnd: 0.77 },
       state: 'red giant',
       // ITEM 8: complexity expands as the giant bloats — the work is to keep the centre readable.
       down: 'Complexity expands. My work is to keep the center readable.',
@@ -980,10 +1013,13 @@ interface CameraBand {
 // Breakpoints reused by the camera bands (the same numbers as the RE-TIMED stage
 // table; the camera shares them so the pose moves in lockstep with the morph).
 const NEBULA_GROW_END = 0.26;
-const STAR_IGNITION_START = 0.43;
-const YELLOW_SETTLE_END = 0.5;
-const YELLOW_HOLD_END = 0.57;
-const RED_HOLD_START = 0.7;
+// SHIFTED +0.08 (3rd iteration) — these four breakpoints sit AFTER the widened nebula
+// collapse span (seg 3b, 0.12 -> 0.20), so the prefix-sum pushed each forward by 0.08.
+// They MUST match STARTS[4..7] = [0.51, 0.58, 0.61, 0.74] (and timeline.ts's copies).
+const STAR_IGNITION_START = 0.51; // was 0.43 — nebula collapse ends; yellow ignites
+const YELLOW_SETTLE_END = 0.58; // was 0.50 — yellow ignition resolves into the centred hold
+const YELLOW_HOLD_END = 0.61; // was 0.57 — yellow hold ends; red-giant grow/orbit begins
+const RED_HOLD_START = 0.74; // was 0.70 — red grow ends; the settled red-giant close-up hold begins
 const RED_HOLD_END = 0.77;
 const DOT_HOLD_END = 0.1;
 
@@ -1020,7 +1056,7 @@ const CAMERA_BANDS: readonly CameraBand[] = [
     targetEnd: NEBULA_GATHERED_TGT,
     parallax: 0.05,
   },
-  // 3 — NEBULA -> YELLOW ignition (raw 50-58%): ease in to the centred yellow hold.
+  // 3 — NEBULA -> YELLOW ignition (raw 42-49%): ease in to the centred yellow hold.
   {
     endProgress: YELLOW_SETTLE_END,
     interp: [STAR_IGNITION_START, YELLOW_SETTLE_END],
@@ -1031,7 +1067,7 @@ const CAMERA_BANDS: readonly CameraBand[] = [
     targetEnd: YELLOW_HOLD_TGT,
     parallax: 0.04,
   },
-  // 4 — YELLOW STAR hold (raw 43-50%): symmetric, centred, low-motion beat (flat).
+  // 4 — YELLOW STAR hold (raw 39-42%): symmetric, centred, low-motion beat (flat).
   // Stillness — the idle roll/shake are reduced across this band (see createScene).
   {
     endProgress: YELLOW_HOLD_END,

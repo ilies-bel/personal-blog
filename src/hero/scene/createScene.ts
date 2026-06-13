@@ -809,24 +809,29 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
     // --- sun-rig look (mesh yellow star + shared star backdrop dome) ----------
     // young forming star grows from a tiny SEED to full size as the gas accretes.
-    // Seed scale 0.012 (≈1.2% of full) so the star is born as a genuine bright PINPOINT
-    // — a hot newborn core, not a small ball — and visibly GROWS as the infalling gas
-    // feeds it. (Was 0.05 / 5%, which already read as a small sphere; the user wants a
-    // true seed that swells.) The 0.988 span carries it from that pinpoint to full size.
-    // starFormed lags the gas inflow (gas leads via collapse=prog^0.85), so the cloud is
-    // seen pouring INTO this growing core. No-op (1.0) outside the collapse window.
-    sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.012 + 0.988 * look.starFormed : 1.0);
+    // Seed scale 0.004 (≈0.4% of full) so the star is born as a TRUE PINPOINT — an intense
+    // hot newborn core, not a small ball — and visibly GROWS over the (now-longer) collapse
+    // as the infalling gas feeds it. (Was 0.012 / 1.2%, still too big a starting dot; 3rd
+    // iteration drops it to ≈0.4% for a real seed that swells.) The 0.996 span carries it
+    // from that pinpoint to full size. It MUST still read because of the uSeedGlow emission
+    // lift below (raised in step with this so the smaller seed stays a bright point, not a
+    // vanishing dot). starFormed lags the gas inflow (gas leads via collapse=prog^0.85), so
+    // the cloud is seen pouring INTO this growing core. No-op (1.0) outside the window.
+    sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.004 + 0.996 * look.starFormed : 1.0);
     // HOT YOUNG STAR: blue-white while small/forming, cooling to gold near full size.
     sunRig.surfaceMat.uniforms.uBlue.value = look.starFormed > 0 ? 1 - look.starFormed * look.starFormed : 0;
-    // SEED EMISSION LIFT: a 1.2%-scale photosphere is tiny on screen, so without a boost
-    // it reads as a dim dot rather than an intense newborn-star pinpoint. Lift the surface
-    // emission HARD when the star is smallest and ease it back to the normal 1.0 as it
-    // grows (by starFormed≈0.45 it is full-size enough to glow on its own). The curve is
-    // (1 - starFormed)² so the lift is strongest at the seed (≈+150%) and fades smoothly —
-    // the seed glows like a hot core, the grown star is unchanged. 0 (no-op) outside the
-    // window where starFormed==0. uMeshFade (the cross-dissolve) still gates final opacity.
+    // SEED EMISSION LIFT: a 0.4%-scale photosphere is a tiny speck on screen, so without a
+    // boost it reads as a dim dot rather than an intense newborn-star pinpoint. Lift the
+    // surface emission HARD when the star is smallest and ease it back to the normal 1.0 as
+    // it grows (by starFormed≈0.45 it is full-size enough to glow on its own). The curve is
+    // (1 - starFormed)² so the lift is strongest at the seed and fades smoothly — the seed
+    // glows like a hot core, the grown star is unchanged. RAISED 1.5 -> 2.2 (3rd iteration)
+    // in step with the smaller 0.4% seed (R1): the ~9× smaller area would otherwise read too
+    // faint, so the peak lift goes from ≈+150% to ≈+220% to keep the newborn core an intense
+    // hot POINT. 0 (no-op) outside the window where starFormed==0. uMeshFade (the cross-
+    // dissolve) still gates final opacity.
     {
-      const seedGlow = look.starFormed > 0 ? 1 + 1.5 * (1 - look.starFormed) * (1 - look.starFormed) : 1;
+      const seedGlow = look.starFormed > 0 ? 1 + 2.2 * (1 - look.starFormed) * (1 - look.starFormed) : 1;
       sunRig.surfaceMat.uniforms.uSeedGlow.value = seedGlow;
     }
     sunRig.surfaceMat.uniforms.uRed.value = 0;
@@ -1458,10 +1463,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // a game-camera wobble.
     if (!reduced) {
       // PER-CHAPTER STILLNESS: the idle roll is REDUCED across the chapters that should
-      // read as calm/symmetric — the yellow star (raw 43-58%, stabilise) and the pale
+      // read as calm/symmetric — the yellow star (raw ~39-49%, stabilise) and the pale
       // dot / content band (raw >= 74%, near-static). `idleRollScale` rides scroll
       // POSITION (never velocity): full elsewhere, ~0.25 across yellow, ~0.08 on the dot.
-      const inYellow = progress >= 0.43 && progress <= 0.58;
+      // The yellow window is in RAW-scroll space (progress here is the raw scroll value):
+      // the yellow chapter is lifecycle 0.51-0.61 = raw 0.39-0.49, so it shifts +0.08 with
+      // the holds (was raw 0.43-0.58 for the old lifecycle 0.43-0.57 yellow band).
+      const inYellow = progress >= 0.39 && progress <= 0.49;
       const inDot = progress >= 0.74;
       const idleRollScale = inDot ? 0.08 : inYellow ? 0.25 : 1.0;
       const idleRoll = Math.sin(t * 0.067 + 2.3) * 0.0016 * idleRollScale; // rad, ~0.09° at full

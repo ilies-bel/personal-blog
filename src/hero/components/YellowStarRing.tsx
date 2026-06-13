@@ -9,13 +9,15 @@ import { fadeInOut } from '../scroll';
 import { lifecycleProgress } from '../timeline';
 import { useSceneState } from './SceneStateContext';
 
-// The yellow-star hold band (lifecycle space). The headline sits in 0.50-0.57; we fade
-// the ring in slightly before the hold settles and out as the red-giant grow begins, so
-// it only annotates the still yellow beat. Mirrors the yellow beat's text band feel.
-const RING_IN_START = 0.46;
-const RING_IN_END = 0.5;
-const RING_OUT_START = 0.565;
-const RING_OUT_END = 0.6;
+// The yellow-star hold band (lifecycle space). The headline now sits in 0.58-0.61 (the
+// holds shifted +0.08 when the nebula collapse span widened — same LOOK, later scroll); we
+// fade the ring in slightly before the hold settles and out as the red-giant grow begins, so
+// it only annotates the still yellow beat. Mirrors the yellow beat's text band feel. All four
+// shift +0.08 in lockstep with STAR_IGNITION_START/YELLOW_SETTLE_END/YELLOW_HOLD_END.
+const RING_IN_START = 0.54;
+const RING_IN_END = 0.58;
+const RING_OUT_START = 0.605;
+const RING_OUT_END = 0.64;
 
 export default function YellowStarRing() {
   const { progress, reduced, sceneId } = useSceneState();

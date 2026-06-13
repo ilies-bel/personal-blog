@@ -194,10 +194,15 @@ export interface BodyOwnership {
 export function bodyOwnership(stage: number, starFormed: number): BodyOwnership {
   const COLLAPSE_FLOOR_XFADE = 0.05; // 3.00 -> 2.95: cloud yields to the formed mesh
   // mesh reveal INSIDE the collapse window: hold the forming mesh hidden under
-  // the dense gas until the star is nearly complete (starFormed ramps 0.85->1.0,
-  // i.e. ~stage 3.08->3.00) — AFTER the nebula text has faded (~stage 3.05) — so
-  // it reveals as a clean cross-fade, never a warm body under the nebula copy.
-  const meshFormIn = smoothstep01((starFormed - 0.85) / 0.15);
+  // the dense gas until the star is nearly complete, then cross-fade it in. Band
+  // WIDENED 0.85->1.0  =>  0.80->1.0 (3rd iteration): over the now-longer collapse span
+  // (seg 3b 0.12 -> 0.20) the tighter 0.15-wide band snapped the solid mesh in a touch
+  // hard at the very end; starting the reveal at starFormed 0.80 spreads the final lock-in
+  // over more scroll so the cloud→star handoff glides (R4 "stops too soon / botched" fix).
+  // Still late enough that it reveals AFTER the nebula text has faded — no warm body under
+  // the nebula copy — and the cloud density (lifecycle's invDensity) reaches ~0 across the
+  // same stretch, so it is a clean simultaneous cross-fade, never a gap.
+  const meshFormIn = smoothstep01((starFormed - 0.8) / 0.2);
   // Per-body presence weights. A body renders iff its weight > 0; both are > 0 only
   // in the two declared crossfade bands (handoffs that dissolve under bloom). Across
   // those bands the weights are now true OPACITIES (0..1), not just booleans — the
