@@ -836,23 +836,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // the forming window.
     sunRig.surfaceMat.uniforms.uBlue.value =
       look.starFormed > 0 ? 1 - smoothstep01((look.starFormed - 0.25) / 0.55) : 0;
-    // SURFACE-DETAIL ramp (uDetail): the NEWBORN star must read as a CLEAN glowing dot-sphere,
-    // NOT the full granulated photosphere, while it is small — and CRUCIALLY while it is VISIBLE.
-    // 0 = clean limb-darkened sphere (granulation/mottle/sunspot/network all suppressed), 1 =
-    // full textured photosphere. Ramp clean→textured across starFormed 0.45 → 0.90:
-    //
-    // RE-KEYED TO THE WHOLE VISIBLE GROWTH (was 0.80→0.98): with the mesh now revealed at LOW
-    // starFormed (meshFormIn, full by ≈0.12), the star is visible while genuinely small — so the
-    // CLEAN phase must cover the small star, and granulation must only appear as it nears full
-    // size. A ramp starting at 0.80 would have left the dot clean only in the last sliver; tying
-    // it to 0.45→0.90 keeps the small/mid dot a CLEAN sphere (no granulation speckle on a
-    // few-pixel body, which would just read as noise) and lets it visibly GAIN its granulated
-    // photosphere over the back half of the growth as it locks into the full yellow sun. On
-    // screen: clean dot through stage ≈3.22, texturing across ≈3.22→3.06, fully textured by
-    // ≈3.06. smoothstep gives a soft, even reveal of the cells. Default-restored to 1 (no-op)
-    // outside the window where starFormed == 0.
-    sunRig.surfaceMat.uniforms.uDetail.value =
-      look.starFormed > 0 ? smoothstep01((look.starFormed - 0.45) / 0.45) : 1;
+    // SURFACE-DETAIL ramp (uDetail) — NOW INERT (pinned to 1 = full texture always). The
+    // newborn seed used to cross-fade to a clean limb-darkened sphere to avoid granulation
+    // speckle on a tiny body, but that made it read as a flat SOLID blue disc. The user wants
+    // the real yellow-sun SURFACE TEXTURE tinted blue at the seed (granulation + mottle on a
+    // blue palette via uBlue), warming to gold as it grows — so the texture is kept at every
+    // size and only the colour ramps blue→gold. uDetail stays wired (the shader still declares
+    // it) but is held at 1 so it never flattens the surface. Left as a uniform rather than
+    // ripped out so the shader/JS contract is unchanged and re-enabling is one line.
+    sunRig.surfaceMat.uniforms.uDetail.value = 1;
     // SEED EMISSION LIFT: a 0.4%-scale photosphere is a tiny speck on screen, so without a
     // boost it reads as a dim dot rather than an intense newborn-star pinpoint. This lift is
     // now even MORE load-bearing: the mesh reveals at LOW starFormed (meshFormIn), so the tiny
@@ -882,16 +874,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     sunRig.loopMat.uniforms.uFade.value = flarePresence;
     sunRig.coronaMat.uniforms.uFade.value = flarePresence;
     // inner chromosphere glow rides meshW (it has no starFormed flare gate — it is the rim
-    // glow present at all star sizes), so it dissolves in/out with the body. BUT at the SEED
-    // the full backside-additive shell adds a fuzzy halo that breaks the "clean crisp dot"
-    // read, so its presence is also scaled by the detail ramp — kept at a floor of 0.30 (a
-    // TIGHT soft halo, which a glowing dot-sphere may have) at the seed and easing to full
-    // (1.0) as the star grows and gains its chromosphere. detailRamp mirrors the uDetail ramp
-    // above (re-keyed to the same 0.45→0.90 visible-growth band) so the halo stays TIGHT while
-    // the small dot is clean+blue and blooms to the full chromosphere only as it textures into
-    // the yellow sun.
-    const detailRamp = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.45) / 0.45) : 1;
-    sunRig.glowMat.uniforms.uFade.value = look.meshW * (0.3 + 0.7 * detailRamp);
+    // glow present at all star sizes), so it dissolves in/out with the body. It rides meshW
+    // directly: the seed is now the real textured photosphere (blue-tinted), not a clean disc,
+    // so it carries its normal chromosphere halo at every size — no detail-based suppression.
+    sunRig.glowMat.uniforms.uFade.value = look.meshW;
     sunRig.starMat.uniforms.uOpacity.value = 1;
     // Mesh visible across its side (cross-dissolves with the cloud at the swap).
     sunRig.group.visible = look.sunRigVisible;
