@@ -193,16 +193,32 @@ export interface BodyOwnership {
  */
 export function bodyOwnership(stage: number, starFormed: number): BodyOwnership {
   const COLLAPSE_FLOOR_XFADE = 0.05; // 3.00 -> 2.95: cloud yields to the formed mesh
-  // mesh reveal INSIDE the collapse window: hold the forming mesh hidden under
-  // the dense gas until the star is nearly complete, then cross-fade it in. Band
-  // WIDENED 0.85->1.0  =>  0.80->1.0 (3rd iteration): over the now-longer collapse span
-  // (seg 3b 0.12 -> 0.20) the tighter 0.15-wide band snapped the solid mesh in a touch
-  // hard at the very end; starting the reveal at starFormed 0.80 spreads the final lock-in
-  // over more scroll so the cloud→star handoff glides (R4 "stops too soon / botched" fix).
-  // Still late enough that it reveals AFTER the nebula text has faded — no warm body under
-  // the nebula copy — and the cloud density (lifecycle's invDensity) reaches ~0 across the
-  // same stretch, so it is a clean simultaneous cross-fade, never a gap.
-  const meshFormIn = smoothstep01((starFormed - 0.8) / 0.2);
+  // mesh reveal INSIDE the collapse window: make the forming mesh VISIBLE as soon as a
+  // SEED exists, so the small star is on screen for the WHOLE growth arc (tiny blue dot →
+  // grows → warms to gold → textures into the full sun).
+  //
+  // REVEAL PULLED WAY EARLY (was starFormed 0.80→1.0): the prior late gate kept the star
+  // INVISIBLE until starFormed ≥ 0.80, which is exactly the slice where it is ALSO warming
+  // to gold + texturing — so the brief blue/clean window happened while opacity was ~0, and
+  // by the time the mesh was visible it already read as a gold textured star. There was no
+  // visible tiny-blue-dot-grows arc at all. Revealing at LOW starFormed (full opacity by
+  // ≈0.12, i.e. ~12% size — see the starFormed = prog^1.5 map: stage 3.34) fades the dot in
+  // quickly but smoothly the moment the seed lights up, then leaves it on screen for the
+  // entire blue→gold growth. The blue (uBlue) and clean-sphere (uDetail) ramps in
+  // createScene are re-keyed to span this same now-VISIBLE growth (full-blue+clean while
+  // small, warming+texturing only as it nears full size).
+  //
+  // The star now renders UNDER/THROUGH the gas while small (a young star embedded in its
+  // nebula — accepted): the cloud still owns cloudW=1 across the collapse window, so the gas
+  // stays IN FRONT, but the bright seed + seedGlow reads through it as a dot peeking out. The
+  // cloud (cloudW) logic, the COLLAPSE_FLOOR_XFADE band, and the yellow↔red swap below are
+  // ALL UNCHANGED — only this reveal timing moves. The nebula manifesto copy fades by
+  // ~stage 3.05, well below where the dot first lights up (stage ≈3.45), and since the star
+  // starts as a TINY bright point (≈1–4% scale up there, not a gold body) a small speck in
+  // the gas under the tail of the copy reads as a forming star, not a wrong warm body. The
+  // cloud density (lifecycle's invDensity) still reaches ~0 only in the final stretch, so the
+  // floor handoff stays a clean simultaneous cross-fade, never a gap or double-body.
+  const meshFormIn = smoothstep01(starFormed / 0.12);
   // Per-body presence weights. A body renders iff its weight > 0; both are > 0 only
   // in the two declared crossfade bands (handoffs that dissolve under bloom). Across
   // those bands the weights are now true OPACITIES (0..1), not just booleans — the

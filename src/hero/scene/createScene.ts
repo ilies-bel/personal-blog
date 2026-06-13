@@ -819,45 +819,52 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // the cloud is seen pouring INTO this growing core. No-op (1.0) outside the window.
     sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.004 + 0.996 * look.starFormed : 1.0);
     // HOT YOUNG STAR (uBlue): born a saturated hot-BLUE pinpoint (echoing the page's
-    // pale-blue dot), HOLDING blue through almost all of the growth, then cooling to gold
-    // only in the FINAL stretch as it reaches full mass ("mass induces heat" runs in reverse
-    // here — small+young = bluest). Curve: 1 - smoothstep01((starFormed - 0.78) / 0.22).
+    // pale-blue dot), HOLDING blue while the star is SMALL and only cooling to gold over the
+    // LATER part of the growth as it reaches full mass ("mass induces heat" runs in reverse
+    // here — small+young = bluest). Curve: 1 - smoothstep01((starFormed - 0.25) / 0.55).
     //
-    // HOLD EXTENDED (was 0.40/0.60): the forming star is HIDDEN inside the dense infalling gas
-    // until starFormed ≈ 0.85 — it only emerges as a distinct body in the FINAL stretch of the
-    // collapse. With the old 0.40 hold the star had already warmed mostly to GOLD by the time it
-    // became visible, so the "clean BLUE dot" never read on screen. Pushing the hold to 0.78
-    // keeps uBlue pinned at FULL 1.0 right up to the moment the dot emerges from the gas, then
-    // warms it gold over its last visible growth — so the newborn is seen as a clean BLUE dot
-    // that warms to the yellow sun as it finishes forming. Pairs with the uDetail ramp below
-    // (both keyed to the same upper band so the visible emergence is clean+blue → textured+gold).
-    // 0 (no-op) outside the forming window.
+    // RE-KEYED TO THE WHOLE VISIBLE GROWTH (was 0.78→1.0): the mesh now reveals at LOW
+    // starFormed (meshFormIn in transitions.ts, full opacity by ≈0.12), so the small star is
+    // on screen for its ENTIRE growth — the blue phase must therefore cover the EARLY and
+    // MOST of growth, not the thin 0.78→1.0 slice (which was both invisible-then-already-gold
+    // under the old late reveal). uBlue is pinned FULL (1.0) through starFormed ≈0.25 — the
+    // small visible dot is unambiguously BLUE — then warms to gold by ≈0.80, so by the time
+    // the star is near full size it has cooled to the yellow sun. Net on screen as stage falls
+    // 3.5→3.0: a tiny BLUE dot emerges (stage ≈3.4), stays blue while it grows (≈3.4→3.26),
+    // warms blue→gold across mid/late growth (≈3.26→3.08), gold by full size (≈3.06). Pairs
+    // with the uDetail ramp below (clean while small, textured as it warms). 0 (no-op) outside
+    // the forming window.
     sunRig.surfaceMat.uniforms.uBlue.value =
-      look.starFormed > 0 ? 1 - smoothstep01((look.starFormed - 0.78) / 0.22) : 0;
+      look.starFormed > 0 ? 1 - smoothstep01((look.starFormed - 0.25) / 0.55) : 0;
     // SURFACE-DETAIL ramp (uDetail): the NEWBORN star must read as a CLEAN glowing dot-sphere,
     // NOT the full granulated photosphere, while it is small — and CRUCIALLY while it is VISIBLE.
     // 0 = clean limb-darkened sphere (granulation/mottle/sunspot/network all suppressed), 1 =
-    // full textured photosphere. Ramp clean→textured across starFormed 0.80 → 0.98:
+    // full textured photosphere. Ramp clean→textured across starFormed 0.45 → 0.90:
     //
-    // KEYED TO THE VISIBLE BAND (was 0.0→0.5): the star is buried in gas until starFormed ≈ 0.85,
-    // so a ramp that finished texturing by 0.5 had ALREADY restored the full granulation before
-    // the star ever emerged — on screen the dot appeared textured from its first visible frame.
-    // Tying the reveal to 0.80→0.98 means the star EMERGES from the gas as a CLEAN (blue, via
-    // uBlue above) dot-sphere and visibly GAINS its granulated photosphere over the final stretch
-    // as it locks into the full yellow sun. smoothstep gives a soft, even reveal of the cells.
-    // Default-restored to 1 (no-op) outside the window where starFormed == 0.
+    // RE-KEYED TO THE WHOLE VISIBLE GROWTH (was 0.80→0.98): with the mesh now revealed at LOW
+    // starFormed (meshFormIn, full by ≈0.12), the star is visible while genuinely small — so the
+    // CLEAN phase must cover the small star, and granulation must only appear as it nears full
+    // size. A ramp starting at 0.80 would have left the dot clean only in the last sliver; tying
+    // it to 0.45→0.90 keeps the small/mid dot a CLEAN sphere (no granulation speckle on a
+    // few-pixel body, which would just read as noise) and lets it visibly GAIN its granulated
+    // photosphere over the back half of the growth as it locks into the full yellow sun. On
+    // screen: clean dot through stage ≈3.22, texturing across ≈3.22→3.06, fully textured by
+    // ≈3.06. smoothstep gives a soft, even reveal of the cells. Default-restored to 1 (no-op)
+    // outside the window where starFormed == 0.
     sunRig.surfaceMat.uniforms.uDetail.value =
-      look.starFormed > 0 ? smoothstep01((look.starFormed - 0.8) / 0.18) : 1;
+      look.starFormed > 0 ? smoothstep01((look.starFormed - 0.45) / 0.45) : 1;
     // SEED EMISSION LIFT: a 0.4%-scale photosphere is a tiny speck on screen, so without a
-    // boost it reads as a dim dot rather than an intense newborn-star pinpoint. Lift the
-    // surface emission HARD when the star is smallest and ease it back to the normal 1.0 as
-    // it grows (by starFormed≈0.45 it is full-size enough to glow on its own). The curve is
-    // (1 - starFormed)² so the lift is strongest at the seed and fades smoothly — the seed
-    // glows like a hot core, the grown star is unchanged. RAISED 1.5 -> 2.2 (3rd iteration)
-    // in step with the smaller 0.4% seed (R1): the ~9× smaller area would otherwise read too
-    // faint, so the peak lift goes from ≈+150% to ≈+220% to keep the newborn core an intense
-    // hot POINT. 0 (no-op) outside the window where starFormed==0. uMeshFade (the cross-
-    // dissolve) still gates final opacity.
+    // boost it reads as a dim dot rather than an intense newborn-star pinpoint. This lift is
+    // now even MORE load-bearing: the mesh reveals at LOW starFormed (meshFormIn), so the tiny
+    // seed is VISIBLE through the gas from the start and must punch through it as a bright blue
+    // point. Lift the surface emission HARD when the star is smallest and ease it back to the
+    // normal 1.0 as it grows (by starFormed≈0.45 it is full-size enough to glow on its own).
+    // The curve is (1 - starFormed)² so the lift is strongest at the seed and fades smoothly —
+    // the seed glows like a hot core, the grown star is unchanged. RAISED 1.5 -> 2.2 (3rd
+    // iteration) in step with the smaller 0.4% seed (R1): the ~9× smaller area would otherwise
+    // read too faint, so the peak lift goes from ≈+150% to ≈+220% to keep the newborn core an
+    // intense hot POINT. 0 (no-op) outside the window where starFormed==0. uMeshFade (the
+    // cross-dissolve) still gates final opacity.
     {
       const seedGlow = look.starFormed > 0 ? 1 + 2.2 * (1 - look.starFormed) * (1 - look.starFormed) : 1;
       sunRig.surfaceMat.uniforms.uSeedGlow.value = seedGlow;
@@ -880,9 +887,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // read, so its presence is also scaled by the detail ramp — kept at a floor of 0.30 (a
     // TIGHT soft halo, which a glowing dot-sphere may have) at the seed and easing to full
     // (1.0) as the star grows and gains its chromosphere. detailRamp mirrors the uDetail ramp
-    // above (same 0.80→0.98 visible band) so the halo stays TIGHT while the dot is clean and
-    // blooms to the full chromosphere only as it textures into the yellow sun.
-    const detailRamp = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.8) / 0.18) : 1;
+    // above (re-keyed to the same 0.45→0.90 visible-growth band) so the halo stays TIGHT while
+    // the small dot is clean+blue and blooms to the full chromosphere only as it textures into
+    // the yellow sun.
+    const detailRamp = look.starFormed > 0 ? smoothstep01((look.starFormed - 0.45) / 0.45) : 1;
     sunRig.glowMat.uniforms.uFade.value = look.meshW * (0.3 + 0.7 * detailRamp);
     sunRig.starMat.uniforms.uOpacity.value = 1;
     // Mesh visible across its side (cross-dissolves with the cloud at the swap).
