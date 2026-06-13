@@ -282,12 +282,14 @@ const seedVelocityShader = /* glsl */ `
     vec2 uv = gl_FragCoord.xy / resolution.xy;
     vec3 sd = texture2D(uSeedTex, uv).xyz;
     vec3 wp = nebulaPlace(sd.x, sd.y, sd.z, uFrozenTime, uGiantR);
-    // a SMALL tangential swirl about the y axis so the infall forms streamers,
-    // plus a gentle inward bias so the gas leans toward the star from the start
-    // (more particles actually reach + feed the core rather than orbiting forever).
-    // RANDOM per-particle swirl axis (NOT a global y axis) so the infall does not form
-    // a clean equatorial disk + polar columns (the cross-seam artifact). Each particle
-    // orbits about its own jittered axis, so the collapse is chaotic from all sides.
+    // a SMALL tangential swirl plus a DOMINANT inward bias so the gas leans toward the
+    // star from the start and merges as a clean inward spiral — NOT a chaotic implosion.
+    // We keep a jittered per-particle swirl AXIS (not a global y axis) so the convergence
+    // still avoids the clean equatorial-disk + polar-column cross-seam artifact and reads
+    // organic — but the swirl MAGNITUDE is cut hard so the dominant motion is inward, not
+    // orbital. The old big swirl (0.10 + 0.22*h31) made the collapse "chaotic from all
+    // sides" (a leftover chaotic-interaction experiment); it's now a gentle texture on top
+    // of a clean inward fall.
     vec3 rnd = normalize(vec3(
       h31(vec3(sd.x*91.0, sd.y*13.0, 7.0)) - 0.5,
       h31(vec3(sd.y*51.0, sd.z*29.0, 3.0)) - 0.5,
@@ -295,8 +297,14 @@ const seedVelocityShader = /* glsl */ `
     ) + 1e-4);
     vec3 tang = normalize(cross(rnd, wp) + 1e-4);
     vec3 inward = -normalize(wp + 1e-4);
-    float swirl = 0.10 + 0.22*h31(vec3(sd.x*5.0, sd.y*7.0, 11.0));
-    gl_FragColor = vec4(tang * swirl + inward * (0.20 + 0.25*sd.y), sd.x); // w = seed
+    // GENTLER swirl (0.10+0.22 → 0.05+0.10): a small jittered orbit so the spiral isn't a
+    // sterile radial implosion, but well below the inward pull so particles lean toward the
+    // core rather than orbiting chaotically.
+    float swirl = 0.05 + 0.10*h31(vec3(sd.x*5.0, sd.y*7.0, 11.0));
+    // STRONGER inward bias (0.20+0.25 → 0.32+0.25): every particle leans harder toward the
+    // core from frame one, so the dominant motion is a clean inward spiral that merges into
+    // the star, not a long chaotic orbit.
+    gl_FragColor = vec4(tang * swirl + inward * (0.32 + 0.25*sd.y), sd.x); // w = seed
   }
 `;
 
@@ -400,14 +408,21 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   velVar.material.uniforms.uM0 = { value: 1.0 };
   velVar.material.uniforms.uEps = { value: giantR * 0.15 };
   velVar.material.uniforms.uMaxSpeed = { value: giantR * 4.5 };
-  // moderate damping bleeds orbital energy so swirling gas spirals IN and accretes
-  // over the collapse, but not so hard that it plummets straight (we want chaos).
-  velVar.material.uniforms.uDamp = { value: 1.2 };
+  // damping bleeds orbital energy so the gas spirals IN and accretes over the collapse.
+  // Nudged UP (1.2 -> 1.6) to match the calmer-convergence intent: with the curl turbulence
+  // cut right back, slightly stiffer damping makes orbital energy bleed a touch faster so the
+  // gas leans inward and merges cleanly rather than churning/orbiting. Still soft enough that
+  // it spirals (not a dead straight plummet) — just a clean inward spiral instead of chaos.
+  velVar.material.uniforms.uDamp = { value: 1.6 };
   velVar.material.uniforms.uHomeDamp = { value: 8.0 };
   velVar.material.uniforms.uHomeK = { value: 30.0 };
-  // STRONG curl turbulence so the infall churns — chaotic streamers/filaments feeding
-  // the star, organic and asymmetric (the whole point of using the real sim).
-  velVar.material.uniforms.uCurlAmp = { value: 3.2 };
+  // GENTLE curl turbulence: just enough organic asymmetry that the infall isn't a sterile
+  // radial implosion, but FAR weaker than before. The old strong value (3.2) churned the
+  // gas into chaotic streamers that read as messy/streamery during the merge — a leftover
+  // "chaotic gas interaction" experiment. Pulled down to 0.8 so the gas CONVERGES cleanly
+  // (a calm inward spiral) instead of churning. The aCurl term + its `edge` core-fade are
+  // unchanged structurally; they're simply driven by this smaller amplitude now.
+  velVar.material.uniforms.uCurlAmp = { value: 0.8 };
   velVar.material.uniforms.uCollapseDrive = { value: 0 };
   velVar.material.uniforms.uAccretedFrac = { value: 0 };
   // a wider capture radius so MORE of the infalling gas parks onto the star.

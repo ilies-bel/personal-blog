@@ -1121,8 +1121,9 @@ export const diskVertexShader = /* glsl */ `
 
     // === Real gravity sim collapse (nebula -> yellow star) ====================
     // The collapse is a STATEFUL N-body-style sim (gravitySim.ts) BAKED to a flipbook
-    // at load: particles accelerate under a softened central well + strong curl
-    // turbulence, swirl in chaotically from all directions, and accrete onto the core.
+    // at load: particles accelerate under a softened central well + GENTLE curl
+    // turbulence, spiral cleanly inward (a small jittered swirl on a dominant inward
+    // pull, not a chaotic implosion), and accrete onto the core.
     // Here we read the two baked snapshots that bracket the scroll position and blend
     // them (uSimMix), then blend THAT into the analytic placement (uSimBlend). Because
     // the snapshots are fixed, the result is a pure function of scroll — scrubbing back
@@ -1920,12 +1921,24 @@ export const diskFragmentShader = /* glsl */ `
         ncol = mix(ncol, vec3(0.91, 0.77, 0.42), smoothstep(1.45, 1.85, vHeat)*0.42); // small soft-gold CENTRE core (#E8C46A)
         // scattered young stars read crisp blue-white, off-ramp.
         ncol = mix(ncol, vec3(0.85, 0.92, 1.00), step(2.4, vPlaceholder));
-        // GRAVITATIONAL COLLAPSE: as gas accretes onto the forming star (vSimLife
-        // 1→0) it is COMPRESSED → heats up → drives toward hot blue-white, matching
-        // the young blue star it feeds (mass→heat). The star then cools blue→yellow
-        // as it grows. No-op for free gas (vSimLife=1).
+        // GRAVITATIONAL COLLAPSE — WARM GOLD ACCRETION RAMP: as gas accretes onto the
+        // forming star (vSimLife 1→0) it is COMPRESSED → heats up → and must WARM toward
+        // the GOLD of the YELLOW star it is feeding (NOT hot blue-white — that conflicted
+        // with the gold sun and read as a messy blue flash mid-infall). Each grain ramps
+        // cold-blue nebula → warm WHITE → gold as accreteHeat goes 0→1, so the convergence
+        // visibly heats from the nebula's cold palette into the star's photosphere colour.
+        //   • warm-white waypoint (#FFEBCC) at the mid stop so the path goes
+        //     cold-blue → warm-white → gold (a clean two-leg warm ramp), never a muddy
+        //     direct blue→gold lerp through grey.
+        //   • the gold target (#FFDB73 ≈ vec3(1.00,0.86,0.45)) matches the yellow star's
+        //     photosphere band (the gold swap-in #FFA833 ≈ vec3(1.0,0.66,0.20) and the
+        //     soft-cream crest vec3(1.0,0.90,0.62) in the sun ramp above), so a grain that
+        //     reaches the core is already the star's colour → seamless merge, no recolour pop.
         float accreteHeat = 1.0 - clamp(vSimLife, 0.0, 1.0);
-        ncol = mix(ncol, vec3(0.80, 0.90, 1.00), smoothstep(0.1, 0.85, accreteHeat));
+        vec3 warmWhite = vec3(1.00, 0.92, 0.80);                 // #FFEBCC warm-white waypoint (heating gas)
+        vec3 goldStar  = vec3(1.00, 0.86, 0.45);                 // #FFDB73 photosphere gold (matches the yellow sun)
+        ncol = mix(ncol, warmWhite, smoothstep(0.08, 0.50, accreteHeat)); // cold-blue → warm white (first leg)
+        ncol = mix(ncol, goldStar,  smoothstep(0.45, 0.92, accreteHeat)); // warm white → gold (second leg, into the star)
         pcol = ncol;
       } else {
         // pale blue dot: the famous faint blue point. ITEM 6: the dot reads as a clean
@@ -2005,13 +2018,21 @@ export const diskFragmentShader = /* glsl */ `
     } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
       inten = a * clamp(vBright, 0.0, 4.0);          // young-star knot: bright point
     }
-    // GPGPU collapse glow: as gas accretes onto the core (vSimLife 1→0) give it a
-    // GENTLE brightening as it heats/compresses, then fade it OUT as it parks so the
-    // opaque mesh star owns the core (the gas in front must not wash the blue star).
-    // Kept subtle (≤1.4×) so the forming star reads cleanly. No-op for free gas.
+    // GPGPU collapse glow — MONOTONIC BRIGHTEN-INTO-CORE: as gas accretes onto the core
+    // (vSimLife 1→0) it compresses and heats, so it must get BRIGHTER the closer it gets —
+    // monotonically, all the way in — then hand off CLEANLY to the opaque mesh star right at
+    // the end. The OLD curve was a symmetric bump (peaked mid-infall, then dimmed again before
+    // parking) which read as a flicker — gas brightening then vanishing in mid-flight. Now:
+    //   • brightness ramps UP smoothly across the whole infall (1.0 → ~1.8× by the core), so
+    //     each grain glows hotter as it spirals in and merges, matching the warm-gold colour
+    //     ramp above — dispersed cold gas condenses into a brighter, warmer point.
+    //   • the fade-out is TIGHTENED to the last sliver (accrete ≳ 0.85): the gas only dims in
+    //     the final stretch where it parks ON the photosphere and the opaque mesh star takes
+    //     over, so gas in front never washes out the star — but it no longer disappears
+    //     mid-flight. Brighten-then-clean-handoff, never brighten-then-vanish.
     float accrete = 1.0 - clamp(vSimLife, 0.0, 1.0);   // 0 free gas → 1 fully parked
-    inten *= 1.0 + 0.4*accrete*(1.0 - accrete)*4.0;     // gentle heat brightening
-    inten *= mix(1.0, 0.0, smoothstep(0.55, 0.9, accrete)); // fade out as it parks
+    inten *= 1.0 + 0.8*smoothstep(0.0, 0.9, accrete);  // monotonic heat brightening (→ ~1.8× at the core)
+    inten *= 1.0 - smoothstep(0.85, 0.99, accrete);    // fade out ONLY in the last sliver (mesh star takes over)
     gl_FragColor = vec4(col * inten, 1.0);
   }
 `;

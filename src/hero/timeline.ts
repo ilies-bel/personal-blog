@@ -144,14 +144,16 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     target = [target[0] + micro * 0.42, target[1] - micro * 0.08, target[2]];
   }
 
-  // NEBULA breathing drift — a gentle, low-frequency sine on position so the nebula
-  // chapter (lifecycle 0.26 -> 0.42, raw 58-74%) feels loose/alive with breathing
-  // room, looser than the rest. Windowed to the nebula band so it never bleeds into
-  // the still yellow hold or the dot. Off under reduced motion.
+  // NEBULA breathing drift — a TINY, low-frequency sine on position so the nebula
+  // chapter (lifecycle 0.26 -> 0.42, raw 58-74%) reads alive without looking
+  // artificial. Windowed to the nebula band so it never bleeds into the still yellow
+  // hold or the dot. Off under reduced motion. Amplitude HALVED (0.5 -> 0.25): the
+  // old swing made the cloud visibly wander; this keeps just enough loose drift to
+  // read as living gas, not a static sprite, while the cloud essentially sits still.
   const nebulaBand =
     smoothstep(segment(p, NEBULA_GROW_END, NEBULA_GROW_END + 0.04)) *
     (1 - smoothstep(segment(p, STAR_IGNITION_START - 0.04, STAR_IGNITION_START)));
-  const breathe = reduced ? 0 : nebulaBand * Math.sin(time * 0.21) * 0.5;
+  const breathe = reduced ? 0 : nebulaBand * Math.sin(time * 0.21) * 0.25;
   if (breathe !== 0) {
     position = [position[0] + breathe * 0.6, position[1] + breathe * 0.35, position[2] + breathe * 0.8];
   }
