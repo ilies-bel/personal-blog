@@ -63,6 +63,11 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
       // uSeedGlow: newborn-seed emission lift (>1 only while the forming star is a tiny
       // pinpoint; the render loop drives it from starFormed). Default 1 → no-op everywhere.
       uSeedGlow: { value: 1 },
+      // uDetail: surface-DETAIL ramp (0 = clean evenly-lit glowing sphere, all granulation/
+      // mottle/sunspot/network texture suppressed; 1 = full granulated photosphere). The
+      // render loop drives it from starFormed so the newborn SEED is a clean (blue) dot-sphere
+      // that GAINS its yellow-star texture as it grows. Default 1 → full detail = no-op everywhere.
+      uDetail: { value: 1 },
       uErupt: { value: uEruptInit },
       uEruptAge: { value: uEruptAgeInit },
     },

@@ -98,6 +98,15 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   // drives this >1 only while the seed is tiny (strongest at birth, easing to 1 as it
   // grows) so the surface glows like an intense hot core. 1.0 = no-op (every other star).
   uniform float uSeedGlow;
+  // uDetail ∈ [0,1]: SURFACE-DETAIL ramp. 1 = the full granulated/mottled photosphere
+  // (the settled yellow star and everywhere else — no-op). 0 = a CLEAN, evenly-lit glowing
+  // sphere: all high-frequency cell/mottle/sunspot/network texture is suppressed and the
+  // surface is just a smooth, limb-darkened radial falloff (bright core → soft limb). The
+  // render loop drives it from starFormed (0 at the tiny SEED, full by ~half-grown) so the
+  // NEWBORN star reads as a clean blue dot-sphere that GAINS its yellow-star texture as it
+  // grows. The colour (clean vs textured) is cross-faded by uDetail at the very end of the
+  // surface ramp; uBlue still tints the whole thing blue at the seed → a clean BLUE dot.
+  uniform float uDetail;
   // --- CLICK ERUPTIONS (geyser plume + travelling surface ripple) ------------
   // uErupt[i].xyz = OBJECT-SPACE unit direction of eruption i's centre on the
   //   sphere (same space as vObj, so a chord distance to vObj is meaningful).
@@ -234,6 +243,33 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // GRADE: yellow core exposure dialled DOWN a further −10% (1.62 → 1.458); red end held.
     col *= mix(1.458, 0.5, uRed);
 
+    // === CLEAN DOT-SPHERE (uDetail) =========================================
+    // At the SEED (uDetail→0) the star must read as a clean, evenly-lit glowing SPHERE,
+    // NOT the full granulated photosphere — at pinpoint scale the cell/mottle/spot noise
+    // reads as ugly speckle rather than a crisp dot. So build a smooth clean colour with
+    // NO high-frequency surface field (no 'm', no granulation/network/spots/active-region)
+    // — just the mid-body palette colour with a soft limb-darkened radial falloff — and
+    // cross-fade textured→clean by uDetail. uBlue (applied just below) then tints this the
+    // same way for both branches, so at the seed it is a clean BLUE dot-sphere; as the star
+    // grows uDetail→1 restores the exact textured photosphere (this whole block is a no-op
+    // at uDetail==1). Done BEFORE the uBlue recolour so the clean sphere is also tinted blue.
+    //   clean body colour: the pale-gold body stop (c2) — already gold→red aware via uRed —
+    //   so the clean sphere matches the body's hue without any of its mottle.
+    vec3 cleanBody = c2 * 1.458;                         // match the textured luminance multiply (yellow end)
+    cleanBody = mix(cleanBody, c2 * 0.5, uRed);          // and the red-giant end, so uRed is respected
+    //   smooth limb darkening: bright, flat-lit centre easing to a soft darker limb. 'fres'
+    //   (0 at disc centre → 1 at the silhouette) drives a gentle centre→limb dim plus a thin
+    //   soft rim lift, so the clean sphere has volume (a lit ball) without any texture.
+    float cleanLimb = 1.0 - 0.45 * pow(fres, 1.6);       // centre full → limb ~0.55 (soft 3D shading)
+    vec3 cleanCol = cleanBody * cleanLimb;
+    // faint soft rim so the edge glows, not a hard cut. Use a NEUTRAL warm-white rim (not the
+    // gold limbCol) and keep it tight (pow 5) + faint so the clean BLUE dot doesn't pick up a
+    // tan ring at the silhouette — at the seed uBlue swaps in the blue branch anyway, but a
+    // neutral rim keeps the gold→blue mid-frames clean too. Tint follows uRed only.
+    vec3 cleanRim = mix(vec3(1.0, 0.96, 0.88), vec3(0.7, 0.3, 0.1), uRed);
+    cleanCol += cleanRim * pow(fres, 5.0) * 0.20;
+    col = mix(cleanCol, col, clamp(uDetail, 0.0, 1.0));  // SEED = clean sphere → grown = full texture
+
     // HOT YOUNG STAR (uBlue): while still forming/small the star is hot BLUE (mass->heat).
     // Recolour the whole photosphere onto a blue ramp keyed by the same surface field m,
     // and lerp gold->blue by uBlue. Cools to the gold ramp above as it grows (uBlue->0).
@@ -260,6 +296,16 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     bcol = mix(bcol, b4, smoothstep(0.80,0.96,m));
     bcol += limbWide * vec3(0.20, 0.40, 0.78);   // cool limb glow — bluer (R cut, B up)
     bcol *= 1.25;                             // young star is luminous
+    // CLEAN BLUE DOT (uDetail): the bcol above is built from the granulation field 'm', so
+    // at the SEED it would re-introduce the cell/mottle speckle the clean-sphere block just
+    // suppressed. Build a smooth CLEAN blue (the bright-azure body stop b2, softly limb-
+    // darkened — no 'm', no texture) and cross-fade bcol→cleanBlue by (1 - uDetail), matching
+    // the clean-sphere ramp on the gold branch. So at the seed the blue body is a clean glowing
+    // dot-sphere; as it grows (uDetail→1) the textured blue ramp returns (then warms to gold as
+    // uBlue→0). Uses the SAME cleanLimb radial falloff so clean gold and clean blue share a shape.
+    vec3 cleanBlue = b2 * cleanLimb * 1.25;             // mid-azure body, smooth limb, matched luminance
+    cleanBlue += limbWide * vec3(0.20, 0.40, 0.78) * 0.6; // a touch of the cool limb glow, softened
+    bcol = mix(cleanBlue, bcol, clamp(uDetail, 0.0, 1.0));
     col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
 
     // === CLICK ERUPTIONS ====================================================
