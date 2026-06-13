@@ -1595,6 +1595,16 @@ export const diskVertexShader = /* glsl */ `
       }
       if(vPlaceholder > 2.4) gl_PointSize = clamp(baseSize * 3.0 * growSize, 0.5, 9.0 * uPointGain); // young-star knot (small bright point)
       if(vNebLane < -0.5) gl_PointSize = 0.0;            // culled diffuse grain
+      // ABSORPTION CONTRACT: as a grain parks onto the photosphere (accrete = 1 - vSimLife
+      // → 1) it must visibly CONTRACT into the surface, not just dim — so a big soft puff
+      // shrinks to a pinpoint right as it is swallowed. The shrink ramps across the last
+      // stretch of the fall (0.70→0.985) so the grain is already drawing in as it lands,
+      // then is a near-point as the sharp wink-out (frag, accrete 0.90→0.985) eats it. We
+      // shrink to 12% (not 0) so a still-bright grain doesn't vanish a frame before its
+      // brightness fade completes — the two together read as "pulled in and consumed".
+      // vSimLife defaults to 1.0 (accrete 0) outside the collapse window → factor 1, no-op.
+      float accreteShrink = smoothstep(0.70, 0.985, 1.0 - clamp(vSimLife, 0.0, 1.0));
+      gl_PointSize *= 1.0 - 0.88*accreteShrink;          // big puff → pinpoint as the star eats it
     }
     if(vPlaceholder > 2.9){
       // pale blue dot: the closing speck. The cloud is ~1.2M points all collapsed onto
@@ -2018,21 +2028,22 @@ export const diskFragmentShader = /* glsl */ `
     } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
       inten = a * clamp(vBright, 0.0, 4.0);          // young-star knot: bright point
     }
-    // GPGPU collapse glow — MONOTONIC BRIGHTEN-INTO-CORE: as gas accretes onto the core
-    // (vSimLife 1→0) it compresses and heats, so it must get BRIGHTER the closer it gets —
-    // monotonically, all the way in — then hand off CLEANLY to the opaque mesh star right at
-    // the end. The OLD curve was a symmetric bump (peaked mid-infall, then dimmed again before
-    // parking) which read as a flicker — gas brightening then vanishing in mid-flight. Now:
-    //   • brightness ramps UP smoothly across the whole infall (1.0 → ~1.8× by the core), so
+    // GPGPU collapse glow — BRIGHTEN-INTO-CORE then a CRISP SWALLOW at the surface: as gas
+    // accretes onto the core (vSimLife 1→0) it compresses and heats, so it gets BRIGHTER the
+    // closer it gets — monotonically — then the star EATS it: a sharp flash-and-wink-out right
+    // at the photosphere, so the eye reads "the star consumed that grain" rather than "the gas
+    // softly dissolved near the star". Behaviour:
+    //   • brightness ramps UP smoothly across the whole infall (1.0 → ~2.0× at the surface), so
     //     each grain glows hotter as it spirals in and merges, matching the warm-gold colour
-    //     ramp above — dispersed cold gas condenses into a brighter, warmer point.
-    //   • the fade-out is TIGHTENED to the last sliver (accrete ≳ 0.85): the gas only dims in
-    //     the final stretch where it parks ON the photosphere and the opaque mesh star takes
-    //     over, so gas in front never washes out the star — but it no longer disappears
-    //     mid-flight. Brighten-then-clean-handoff, never brighten-then-vanish.
+    //     ramp above — dispersed cold gas condenses into a brighter, warmer point. Lifted 1.8→
+    //     2.0× so the final pre-swallow flare pops a touch more (the grain blazes as it lands).
+    //   • the fade-out is SHARP and pinned to the photosphere: smoothstep(0.90, 0.985) — a
+    //     narrower, later band than the old (0.85, 0.99) soft dissolve — so the grain holds full
+    //     brightness right up to the surface then WINKS OUT in a tight sliver as it is absorbed
+    //     and the opaque mesh star takes over. Crisp swallow, never a lingering mid-air fade.
     float accrete = 1.0 - clamp(vSimLife, 0.0, 1.0);   // 0 free gas → 1 fully parked
-    inten *= 1.0 + 0.8*smoothstep(0.0, 0.9, accrete);  // monotonic heat brightening (→ ~1.8× at the core)
-    inten *= 1.0 - smoothstep(0.85, 0.99, accrete);    // fade out ONLY in the last sliver (mesh star takes over)
+    inten *= 1.0 + 1.0*smoothstep(0.0, 0.92, accrete); // monotonic heat brightening (→ ~2.0× at the core, blazes as it lands)
+    inten *= 1.0 - smoothstep(0.90, 0.985, accrete);   // SHARP wink-out at the photosphere (the star eats it; mesh takes over)
     gl_FragColor = vec4(col * inten, 1.0);
   }
 `;

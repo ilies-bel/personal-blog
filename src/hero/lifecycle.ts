@@ -331,17 +331,19 @@ export function lifecycle(input: LifecycleInput): StarState {
   const inWindowGeo = stage > NEB_COLLAPSE_LO - FLOOR_XFADE && stage < NEB_COLLAPSE_HI ? 1 : 0;
   const prog = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / (NEB_COLLAPSE_HI - NEB_COLLAPSE_LO));
   // `collapse` is the GPGPU drive. It LEADS the star growth (prog^0.85 still ramps
-  // faster than the star's prog^1.8) so the gas falls inward and piles onto the core
+  // faster than the star's prog^1.5) so the gas falls inward and piles onto the core
   // BEFORE the star reaches full size — the inflow visibly FEEDS the star. The 0.85
   // (eased up from 0.7) is less front-loaded so the convergence RAMPS IN gently as
   // you scroll into the window instead of the gas lurching inward at the first pixel.
   const collapse = Math.pow(prog, 0.85);
-  // star GROWTH (prog^1.8): the seed becomes faintly visible EARLIER and grows on
-  // a smoother, more continuous curve, so the yellow star reads as CONDENSING out
-  // of the infalling gas rather than popping into existence in the final stretch.
-  // It still lags the gas (which leads at prog^0.7), so the inflow visibly feeds a
-  // growing core. Visual size is `0.05 + 0.95*starFormed` in frame() (small→full).
-  const starFormed = Math.pow(prog, 1.8);
+  // star GROWTH (prog^1.5): the TINY SEED (visual scale starts at ≈1.2% in frame())
+  // needs to become visible a touch earlier and grow smoothly to full, so the eased
+  // exponent is pulled 1.8 → 1.5 — the seed lights up sooner and swells continuously
+  // across the window instead of staying invisibly small until the final stretch.
+  // It STILL lags the gas (collapse leads at prog^0.85), so the inflow visibly feeds a
+  // growing core (1.5 > 0.85 ⇒ the star always trails the infall). Visual size is
+  // `0.012 + 0.988*starFormed` in frame() (a hot pinpoint → full star).
+  const starFormed = Math.pow(prog, 1.5);
   // sim owns the disk across the window and HOLDS near full through the deep end so
   // the accreting gas keeps reading right up to the floor (no bare-core frame). It
   // eases in over a wide edge band (/0.16) and only tapers in the final stretch
@@ -352,7 +354,7 @@ export function lifecycle(input: LifecycleInput): StarState {
   // At the floor prog~1, so it sits at its window-floor value (~0.55) across the band.
   const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
   // cloud DENSITY/brightness fades the gas as the star forms — but the OLD curve
-  // ((1-prog)^1.6) crashed to ~0 by prog≈0.85 while the star (prog^1.8) was only ~0.7
+  // ((1-prog)^1.6) crashed to ~0 by prog≈0.85 while the star (prog^1.5) was only ~0.78
   // formed, leaving a frame with the gas GONE and a bare bright core on black (the
   // "nebula vanishes at the start of star creation" bug). Now the gas HOLDS near full
   // through prog≈0.6 then fades out only across 0.6→0.99, so it clears exactly as the

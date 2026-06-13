@@ -808,10 +808,27 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     setDisk('uSat', look.diskSat);
 
     // --- sun-rig look (mesh yellow star + shared star backdrop dome) ----------
-    // young forming star grows from a tiny core to full size as the gas accretes.
-    sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.05 + 0.95 * look.starFormed : 1.0);
+    // young forming star grows from a tiny SEED to full size as the gas accretes.
+    // Seed scale 0.012 (≈1.2% of full) so the star is born as a genuine bright PINPOINT
+    // — a hot newborn core, not a small ball — and visibly GROWS as the infalling gas
+    // feeds it. (Was 0.05 / 5%, which already read as a small sphere; the user wants a
+    // true seed that swells.) The 0.988 span carries it from that pinpoint to full size.
+    // starFormed lags the gas inflow (gas leads via collapse=prog^0.85), so the cloud is
+    // seen pouring INTO this growing core. No-op (1.0) outside the collapse window.
+    sunRig.group.scale.setScalar(look.starFormed > 0 ? 0.012 + 0.988 * look.starFormed : 1.0);
     // HOT YOUNG STAR: blue-white while small/forming, cooling to gold near full size.
     sunRig.surfaceMat.uniforms.uBlue.value = look.starFormed > 0 ? 1 - look.starFormed * look.starFormed : 0;
+    // SEED EMISSION LIFT: a 1.2%-scale photosphere is tiny on screen, so without a boost
+    // it reads as a dim dot rather than an intense newborn-star pinpoint. Lift the surface
+    // emission HARD when the star is smallest and ease it back to the normal 1.0 as it
+    // grows (by starFormed≈0.45 it is full-size enough to glow on its own). The curve is
+    // (1 - starFormed)² so the lift is strongest at the seed (≈+150%) and fades smoothly —
+    // the seed glows like a hot core, the grown star is unchanged. 0 (no-op) outside the
+    // window where starFormed==0. uMeshFade (the cross-dissolve) still gates final opacity.
+    {
+      const seedGlow = look.starFormed > 0 ? 1 + 1.5 * (1 - look.starFormed) * (1 - look.starFormed) : 1;
+      sunRig.surfaceMat.uniforms.uSeedGlow.value = seedGlow;
+    }
     sunRig.surfaceMat.uniforms.uRed.value = 0;
     sunRig.coronaMat.uniforms.uRed.value = 0;
     // CROSS-DISSOLVE: meshW (0 outside the swap band, 0→1 across it) fades the WHOLE mesh

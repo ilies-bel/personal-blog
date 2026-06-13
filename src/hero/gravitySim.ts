@@ -409,11 +409,13 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   velVar.material.uniforms.uEps = { value: giantR * 0.15 };
   velVar.material.uniforms.uMaxSpeed = { value: giantR * 4.5 };
   // damping bleeds orbital energy so the gas spirals IN and accretes over the collapse.
-  // Nudged UP (1.2 -> 1.6) to match the calmer-convergence intent: with the curl turbulence
-  // cut right back, slightly stiffer damping makes orbital energy bleed a touch faster so the
-  // gas leans inward and merges cleanly rather than churning/orbiting. Still soft enough that
-  // it spirals (not a dead straight plummet) — just a clean inward spiral instead of chaos.
-  velVar.material.uniforms.uDamp = { value: 1.6 };
+  // Nudged UP again (1.6 -> 1.9) to make the absorption CRISP: stiffer damping bleeds
+  // orbital energy faster so the gas leans straight IN and falls onto the core instead of
+  // lingering in a slow orbit around it — the grain reaches the surface and is swallowed,
+  // rather than circling the star for a beat first. Still soft enough that it spirals (not
+  // a dead radial plummet) — a clean, slightly tighter inward spiral that converges and
+  // is consumed. (Was 1.6, itself up from the churny 1.2.)
+  velVar.material.uniforms.uDamp = { value: 1.9 };
   velVar.material.uniforms.uHomeDamp = { value: 8.0 };
   velVar.material.uniforms.uHomeK = { value: 30.0 };
   // GENTLE curl turbulence: just enough organic asymmetry that the infall isn't a sterile
@@ -425,15 +427,25 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   velVar.material.uniforms.uCurlAmp = { value: 0.8 };
   velVar.material.uniforms.uCollapseDrive = { value: 0 };
   velVar.material.uniforms.uAccretedFrac = { value: 0 };
-  // a wider capture radius so MORE of the infalling gas parks onto the star.
-  velVar.material.uniforms.uCoreR = { value: coreR * 1.35 };
+  // ABSORPTION RADIUS — tightened 1.35 -> 1.05× coreR so gas parks RIGHT ON the
+  // photosphere shell, not on a wide halo standing off the surface. The old 1.35 left a
+  // visible gap of gas hovering around the core (read as "not absorbed"); 1.05 hugs the
+  // surface so each grain converges onto the star and is swallowed there. (coreR is the
+  // full-size sun radius; the render side shrinks/winks the grain as it lands so it reads
+  // as consumed even while the mesh star is still a growing seed — see disk.glsl.ts.)
+  velVar.material.uniforms.uCoreR = { value: coreR * 1.05 };
   velVar.material.uniforms.uTime = { value: 0 };
   velVar.material.uniforms.uFrozenTime = { value: 0 };
   velVar.material.uniforms.uGiantR = { value: giantR };
 
   posVar.material.uniforms.uDt = { value: FIXED_DT };
-  posVar.material.uniforms.uCoreR = { value: coreR * 1.35 };
-  posVar.material.uniforms.uParkRate = { value: 0.08 };
+  // park shell matches the velocity-side capture radius (1.05× coreR) so a captured grain
+  // snaps onto the SAME tight surface it was caught at — no jump between capture and park.
+  posVar.material.uniforms.uCoreR = { value: coreR * 1.05 };
+  // PARK RATE — bumped 0.08 -> 0.14 so a captured grain's life ramps to 0 in fewer frames:
+  // a CRISP swallow (the gas winks out fast at the surface) instead of a slow lingering
+  // fade that read as the gas dissolving in mid-air rather than being eaten by the star.
+  posVar.material.uniforms.uParkRate = { value: 0.14 };
 
   const error = gpu.init();
   if (error !== null) {

@@ -93,6 +93,11 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   // "Mass induces heat": while the star is still forming/small it is blue-white
   // hot; as it grows to full mass it cools to yellow. Driven by (1 - starFormed).
   uniform float uBlue;
+  // uSeedGlow ≥ 1: NEWBORN-SEED emission lift. A freshly-forming star is rendered at
+  // ≈1.2% scale (a pinpoint), which without help reads as a dim dot. The render loop
+  // drives this >1 only while the seed is tiny (strongest at birth, easing to 1 as it
+  // grows) so the surface glows like an intense hot core. 1.0 = no-op (every other star).
+  uniform float uSeedGlow;
   // --- CLICK ERUPTIONS (geyser plume + travelling surface ripple) ------------
   // uErupt[i].xyz = OBJECT-SPACE unit direction of eruption i's centre on the
   //   sphere (same space as vObj, so a chord distance to vObj is meaningful).
@@ -305,6 +310,10 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
       float plume  = core * height * (0.45 + 0.85 * limbWide);
       col += eruptHot * plume * 1.4;
     }
+    // NEWBORN-SEED GLOW: lift the photosphere emission while the star is a tiny seed so
+    // the pinpoint reads as an intense hot core (not a dim dot). Applied to colour only
+    // (not alpha) so the body stays the same SIZE/shape — it just burns brighter. 1.0 = no-op.
+    col *= uSeedGlow;
     // uMeshFade cross-dissolves the (normally opaque) photosphere in over the gold
     // cloud at the yellow↔red swap: premultiplied colour × alpha so it dissolves
     // cleanly over black. 1.0 everywhere outside the swap band → byte-identical output.

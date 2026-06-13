@@ -60,6 +60,9 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
       uMeshFade: { value: 1 },
       uRed: { value: 0 },
       uBlue: { value: 0 },
+      // uSeedGlow: newborn-seed emission lift (>1 only while the forming star is a tiny
+      // pinpoint; the render loop drives it from starFormed). Default 1 → no-op everywhere.
+      uSeedGlow: { value: 1 },
       uErupt: { value: uEruptInit },
       uEruptAge: { value: uEruptAgeInit },
     },
