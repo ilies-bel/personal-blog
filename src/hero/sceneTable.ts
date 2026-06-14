@@ -927,9 +927,11 @@ const DOT_VIEW_POS: Vec3Tuple = [0.0, 0.0, 78.0];
 const DOT_VIEW_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
 // NEBULA (raw 58-74%): pulled BACK with breathing room so the cloud reads loose
 // (z widened 39 -> 44 / 34 -> 40 vs the old tight push so the gas has air around it).
-const NEBULA_START_POS: Vec3Tuple = [-0.7, 0.14, 44.0];
+// FINAL — x zeroed (was -0.7 / 0.18) so the cloud sits CENTRED the whole chapter; clearing
+// for the left HUD/text column is done by CSS dimming, NOT a lateral camera pan or a snap-back.
+const NEBULA_START_POS: Vec3Tuple = [0.0, 0.14, 44.0];
 const NEBULA_START_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
-const NEBULA_GATHERED_POS: Vec3Tuple = [0.18, 0.035, 40.0];
+const NEBULA_GATHERED_POS: Vec3Tuple = [0.0, 0.035, 40.0];
 const NEBULA_GATHERED_TGT: Vec3Tuple = [0.0, 0.0, 0.0];
 // YELLOW STAR (raw 43-58%): a symmetric, centred, low-motion framing — target on
 // the origin (no off-axis lean), steady z. Stillness vs the red orbit either side.

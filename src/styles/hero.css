@@ -108,11 +108,17 @@
   overflow: hidden;
 }
 
-/* NEBULA left-edge text scrim (ITEM 5): a soft left→right darkening behind the left
-   text column so the headline reads premium against the (now rightward-shifted) cold
-   violet cloud. The pseudo is ALWAYS present (so the opacity transition can ease) but is
-   fully transparent except when data-scene='nebula'. Fixed full-viewport, behind the
-   manifesto overlay (z 10) but above the canvas (z 0); pointer-events:none. */
+/* NEBULA dimming (FINAL): the cloud now stays CENTRED — no lateral pan — so the left
+   HUD/text column is kept legible purely by DARKENING around the nebula. Two stacked,
+   fixed full-viewport pseudos, both fading in only during the nebula chapter, both behind
+   the manifesto overlay (z 10) and the HUD rail (z 18) but above the canvas (z 0);
+   pointer-events:none.
+     ::before — a STRONGER left→right wash on the HUD-rail side (the rail lives at the left
+                edge, --edge-x), so the chrome/headline read over the centred gas. Deeper
+                left edge + a held dark plateau + a fade pulled further right than before.
+     ::after  — a soft RADIAL vignette that pulls the corners/edges down so the centred
+                cloud's glow can't bleed out under the rail or the far edges; the centre
+                stays clear so the nebula itself is untouched. */
 .bh-root::before {
   content: '';
   position: fixed;
@@ -121,15 +127,34 @@
   pointer-events: none;
   background: linear-gradient(
     90deg,
-    rgba(0, 0, 0, 0.72) 0%,
-    rgba(0, 0, 0, 0.35) 32%,
-    rgba(0, 0, 0, 0) 60%
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(0, 0, 0, 0.84) 15%,
+    rgba(0, 0, 0, 0.46) 38%,
+    rgba(0, 0, 0, 0) 56%
   );
   opacity: 0;                /* invisible off the nebula beat */
   transition: opacity 0.5s var(--ease-out-quint);
 }
-.bh-root[data-scene='nebula']::before {
-  opacity: 1;               /* the scrim fades in only during the nebula chapter */
+.bh-root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  /* clear core, darkening toward the edges/corners — biased slightly LEFT (45% x) so the
+     HUD-rail side gets a touch more falloff. Centre transparent so the cloud is untouched. */
+  background: radial-gradient(
+    ellipse 78% 82% at 45% 50%,
+    rgba(0, 0, 0, 0) 42%,
+    rgba(0, 0, 0, 0.28) 74%,
+    rgba(0, 0, 0, 0.62) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-out-quint);
+}
+.bh-root[data-scene='nebula']::before,
+.bh-root[data-scene='nebula']::after {
+  opacity: 1;               /* the dimming fades in only during the nebula chapter */
 }
 .bh-stage canvas { display: block; width: 100vw !important; height: 100svh !important; }
 
