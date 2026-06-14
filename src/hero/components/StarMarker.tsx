@@ -164,9 +164,11 @@ const HEX_POINTS = '25,6.7 75,6.7 100,50 75,93.3 25,93.3 0,50';
 // arm springs from just outside the silhouette), ARM_GAP is the segmented break,
 // ARM_OUTER_END is how far the arm reaches into the overflow margin.
 const ARM_INNER_START = 50; // px from centre where the inner arm segment begins
-const ARM_INNER_END = 64; // inner segment outer end
-const ARM_OUTER_START = 70; // outer segment inner end (the gap is ARM_INNER_END→here)
-const ARM_OUTER_END = 86; // outer segment far end (sits inside the -8..108 overflow)
+const ARM_INNER_END = 66; // inner segment outer end
+const ARM_OUTER_START = 74; // outer segment inner end (the gap is ARM_INNER_END→here)
+const ARM_OUTER_END = 104; // outer segment far end — reaches WELL past the hex into the
+// -8..108 overflow so the crosshair arms clearly extend beyond the silhouette (reference
+// proportions: long, unmistakable N/E/S/W arms, not stubs hugging the hex edge).
 // Four arms as inner+outer segment pairs, in N / E / S / W order. Built from the
 // radii above so the geometry stays in one place; dx/dy is the unit direction.
 const ARM_DIRS: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
@@ -678,7 +680,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
               x2={s.x2}
               y2={s.y2}
               stroke="currentColor"
-              strokeWidth="1"
+              strokeWidth="1.6"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
             />
@@ -690,18 +692,18 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           points={HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1"
-          strokeDasharray="2 4"
+          strokeWidth="1.8"
+          strokeDasharray="2.5 4"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
-        {/* HOVER and up: solid thin outline hexagon. */}
+        {/* HOVER and up: solid outline hexagon. */}
         <polygon
           className="star-marker-hex-solid"
           points={HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1"
+          strokeWidth="2"
           vectorEffect="non-scaling-stroke"
         />
         {/* ACTIVE and up: a second concentric INNER hexagon (the double-hex). Reuses
@@ -712,7 +714,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           points={INNER_HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1"
+          strokeWidth="1.6"
           vectorEffect="non-scaling-stroke"
         />
         {/* LOCKED: tick marks on three edge midpoints — the "tripod" confirm cue,
@@ -727,7 +729,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
               x2={t.x2}
               y2={t.y2}
               stroke="currentColor"
-              strokeWidth="1"
+              strokeWidth="1.8"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
             />
@@ -741,7 +743,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           cy={C}
           r={INNER_RING_RADIUS}
           fill="none"
-          strokeWidth="1.5"
+          strokeWidth="2"
           vectorEffect="non-scaling-stroke"
         />
         {/* LOCKED: gold inner hexagon — rotates + breathes (CSS). Also the element
@@ -750,7 +752,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           className="star-marker-hex-gold"
           points={HEX_POINTS}
           fill="none"
-          strokeWidth="1.5"
+          strokeWidth="2"
           vectorEffect="non-scaling-stroke"
         />
       </svg>

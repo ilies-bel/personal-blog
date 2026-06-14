@@ -1309,16 +1309,23 @@ body.hud-booting .hud-boot-scan {
      for the animated INNER hexagon + the locked accents (card, dot-on-lock). */
   --marker-line: var(--fg);
   --marker-gold: var(--highlight);
-  /* Reticle box — ~72px so the hexagon reads as a real target, not a speck. */
-  --marker-size: 4.5rem;
-  /* Inner glyph box — sits centred inside the reticle (the per-type icon). */
-  --marker-glyph-size: 1.5rem;
-  /* Whole-marker dim multiplier: markers ride at 60% (40% dimmer) until the HUD
-     powers up. Composed onto the VISIBLE opacity below so it stacks cleanly with
-     the data-visible fade and leaves the per-element opacities (reticle/hexes)
-     untouched. body.hud-active flips it to 1 (full brightness) once the boot FSM
-     lights the HUD up at the bottom of the scroll. */
-  --marker-hud-dim: 0.6;
+  /* Reticle box — ~96px so the hexagon is an unmistakable target that dominates its
+     spot on every scene (was 4.5rem/72px, which read as a tiny dim blob against the
+     black-hole glow / nebula gas / yellow photosphere). The proximity engage/hover
+     radii in StarMarker.tsx derive from the MEASURED box width, so they scale with
+     this automatically — the capture script's tier offsets were updated to match. */
+  --marker-size: 6rem;
+  /* Inner glyph box — sits centred inside the reticle (the per-type icon). Scaled up
+     with the box so it stays proportionate. */
+  --marker-glyph-size: 1.85rem;
+  /* Whole-marker dim multiplier: markers ride a touch dimmer until the HUD powers
+     up, then snap to full. RAISED 0.6 → 0.85 so a marker is clearly visible on
+     EVERY scene even before the HUD arms (it only arms at the black hole / bottom
+     of the scroll, so yellow/nebula/red are reached while still dimmed — 0.6 made
+     them read as faint blobs there). Composed onto the VISIBLE opacity below so it
+     stacks cleanly with the data-visible fade and leaves the per-element opacities
+     (reticle/hexes) untouched. body.hud-active flips it to 1 (full brightness). */
+  --marker-hud-dim: 0.85;
 
   position: fixed;
   z-index: 20;
@@ -1381,13 +1388,13 @@ body.hud-active .star-marker {
    This MULTIPLIES with the inner hex/dotted opacities (group opacity), which is the
    desired effect — the show/hide of the dotted vs solid hex still wins inside. */
 .star-marker[data-bg='dark'] {
-  --marker-rest-opacity: 0.85;
+  --marker-rest-opacity: 0.95;
 }
 .star-marker[data-bg='bright'] {
   --marker-rest-opacity: 1;
 }
 .star-marker[data-bg='noisy'] {
-  --marker-rest-opacity: 0.95;
+  --marker-rest-opacity: 1;
 }
 /* Reduced motion: visible but no animation. Still clickable. */
 .star-marker[data-reduced='true'],
@@ -1410,43 +1417,47 @@ body.hud-active .star-marker {
      reticle a hair on the dark states. Defaults to 1 when no data-bg is set. */
   opacity: var(--marker-rest-opacity, 1);
   filter:
-    drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
-    drop-shadow(0 0 1.2px color-mix(in oklch, var(--bg) 90%, transparent))
-    drop-shadow(0 0 2.5px color-mix(in oklch, var(--bg) 78%, transparent))
-    drop-shadow(0 0 6px color-mix(in oklch, var(--bg) 55%, transparent));
+    drop-shadow(0 0 1px color-mix(in oklch, var(--bg) 98%, transparent))
+    drop-shadow(0 0 2px color-mix(in oklch, var(--bg) 94%, transparent))
+    drop-shadow(0 0 4px color-mix(in oklch, var(--bg) 82%, transparent))
+    drop-shadow(0 0 8px color-mix(in oklch, var(--bg) 60%, transparent));
 }
 /* BRIGHT STATES: the strokes are now near-BLACK (see the data-bright rule above),
    so the dark legibility halo no longer separates them from the bright surface —
-   it needs to flip to a LIGHT halo. Same multi-layer shape / blur radii / opacities
-   as the default stack, just swapping --bg (dark) for --fg (light): the black
-   reticle gets a soft white outline so it stays crisp on the orange/yellow/red. */
+   it needs to flip to a strong LIGHT halo. This is the most fragile case: black
+   arms over the blazing yellow photosphere wash out without a dense white outline.
+   A FOUR-LAYER white stack (tighter cores + a broad outer bloom) so both the hex
+   AND the thin crosshair arms carve cleanly out of the bright surface. */
 .star-marker[data-bright='true'] .star-marker-reticle {
   filter:
-    drop-shadow(0 0 0.6px color-mix(in oklch, var(--fg) 96%, transparent))
-    drop-shadow(0 0 1.2px color-mix(in oklch, var(--fg) 90%, transparent))
-    drop-shadow(0 0 2.5px color-mix(in oklch, var(--fg) 78%, transparent))
-    drop-shadow(0 0 6px color-mix(in oklch, var(--fg) 55%, transparent));
+    drop-shadow(0 0 1px color-mix(in oklch, var(--fg) 98%, transparent))
+    drop-shadow(0 0 2px color-mix(in oklch, var(--fg) 96%, transparent))
+    drop-shadow(0 0 4px color-mix(in oklch, var(--fg) 88%, transparent))
+    drop-shadow(0 0 9px color-mix(in oklch, var(--fg) 70%, transparent));
 }
 /* DARK STATES (the 'beginning' speck + 'end' black hole): the strokes are the
    off-white --marker-line, so a pure dark halo would vanish into the black canvas.
-   Keep a tight dark separating ring but ADD a faint LIGHT bloom (--fg) so the light
-   stroke actually reads on black. Scoped to data-bg='dark' so it never touches the
-   bright light-halo above (bright also carries data-bg='bright', which has no
-   reticle override here, so the [data-bright] light halo keeps winning for it). */
+   Keep a tight dark separating ring but ADD a stronger LIGHT bloom (--fg) so the
+   light stroke reads as a crisp glow on black — the bolder reticle now lifts off
+   the black-hole glow. Scoped to data-bg='dark' so it never touches the bright
+   light-halo above. */
 .star-marker[data-bg='dark'] .star-marker-reticle {
   filter:
-    drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
-    drop-shadow(0 0 1.2px color-mix(in oklch, var(--bg) 90%, transparent))
-    drop-shadow(0 0 3px color-mix(in oklch, var(--fg) 30%, transparent));
+    drop-shadow(0 0 1px color-mix(in oklch, var(--bg) 98%, transparent))
+    drop-shadow(0 0 2px color-mix(in oklch, var(--bg) 92%, transparent))
+    drop-shadow(0 0 4px color-mix(in oklch, var(--fg) 45%, transparent))
+    drop-shadow(0 0 9px color-mix(in oklch, var(--fg) 22%, transparent));
 }
 /* NOISY STATES (the nebula gas, the red-giant limb): the busy background needs a
-   TIGHT, strong dark outline to carve the reticle out of the texture — no light
-   bloom (it would smear into the gas), just denser dark drop-shadows. */
+   TIGHT, DENSE dark outline to carve the reticle — especially the thin arms — out
+   of the texture. No wide light bloom (it would smear into the gas); instead a
+   stacked dark outline that hugs the strokes tightly plus one mid bloom for depth. */
 .star-marker[data-bg='noisy'] .star-marker-reticle {
   filter:
-    drop-shadow(0 0 0.6px color-mix(in oklch, var(--bg) 96%, transparent))
-    drop-shadow(0 0 1.4px color-mix(in oklch, var(--bg) 92%, transparent))
-    drop-shadow(0 0 4px color-mix(in oklch, var(--bg) 60%, transparent));
+    drop-shadow(0 0 1px color-mix(in oklch, var(--bg) 99%, transparent))
+    drop-shadow(0 0 2px color-mix(in oklch, var(--bg) 96%, transparent))
+    drop-shadow(0 0 3.5px color-mix(in oklch, var(--bg) 88%, transparent))
+    drop-shadow(0 0 6px color-mix(in oklch, var(--bg) 68%, transparent));
 }
 
 /* ============================================================================
@@ -1472,31 +1483,34 @@ body.hud-active .star-marker {
    and a touch heavier toward locked. Drawn in the off-white --marker-line. */
 .star-marker-arms line {
   color: var(--marker-line);
-  stroke-width: 1;
+  stroke-width: 1.8;
 }
-/* idle: a faint hint of the cross. */
+/* idle: a faint but UNMISTAKABLE cross — the arms are the signature element and were
+   the weakest, so idle now clearly reads as a crosshair rather than near-vanishing. */
 .star-marker[data-state='idle'] .star-marker-arms line {
-  opacity: 0.3;
+  opacity: 0.55;
 }
 /* hover: the arms brighten + the gap reads as segmented targeting ticks. */
 .star-marker[data-state='hover'] .star-marker-arms line {
-  opacity: 0.62;
-  stroke-width: 1.2;
+  opacity: 0.82;
+  stroke-width: 2;
 }
 /* active: stronger arms. */
 .star-marker[data-state='active'] .star-marker-arms line {
-  opacity: 0.8;
-  stroke-width: 1.4;
+  opacity: 0.92;
+  stroke-width: 2.3;
 }
-/* locked: the fullest arms. */
+/* locked: the fullest, boldest arms. */
 .star-marker[data-state='locked'] .star-marker-arms line {
-  opacity: 0.95;
-  stroke-width: 1.6;
+  opacity: 1;
+  stroke-width: 2.6;
 }
 
-/* IDLE hexagon — the dotted outline. Cross-fades to the solid hex from hover up. */
+/* IDLE hexagon — the dotted outline. Cross-fades to the solid hex from hover up.
+   Raised so the resting hexagon is clearly present (reference idle proportions),
+   not a near-invisible dotted ghost. */
 .star-marker-hex-dotted {
-  opacity: 0.62;
+  opacity: 0.85;
 }
 .star-marker[data-state='hover'] .star-marker-hex-dotted,
 .star-marker[data-state='active'] .star-marker-hex-dotted,
@@ -1512,13 +1526,13 @@ body.hud-active .star-marker {
   opacity: 0;
 }
 .star-marker[data-state='hover'] .star-marker-hex-solid {
-  opacity: 0.78;
+  opacity: 0.95;
 }
 .star-marker[data-state='active'] .star-marker-hex-solid {
-  opacity: 0.92;
+  opacity: 1;
 }
 .star-marker[data-state='locked'] .star-marker-hex-solid {
-  opacity: 0.95;
+  opacity: 1;
 }
 
 /* INNER HEXAGON — the concentric double-hex, shown from ACTIVE up. Reuses the hex
@@ -1532,10 +1546,10 @@ body.hud-active .star-marker {
   scale: 0.62;
 }
 .star-marker[data-state='active'] .star-marker-hex-inner {
-  opacity: 0.6;
+  opacity: 0.78;
 }
 .star-marker[data-state='locked'] .star-marker-hex-inner {
-  opacity: 0.72;
+  opacity: 0.9;
 }
 
 /* TICKS — the three-point "tripod" confirm cue. LOCKED only (the fullest structure).
@@ -1608,50 +1622,50 @@ body.hud-active .star-marker {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0.36rem;
-  height: 0.36rem;
+  width: 0.5rem;
+  height: 0.5rem;
   transform: translate(-50%, -50%) scale(var(--core-scale, 0.7));
   border-radius: 50%;
   /* Gold from the moment it appears (hover up) — it is the warm targeting core. */
   background: var(--marker-gold);
   box-shadow:
-    0 0 var(--core-glow, 4px) var(--core-glow-spread, 1px)
-      color-mix(in oklch, var(--marker-gold) 50%, transparent),
-    0 0 2px 0 color-mix(in oklch, var(--marker-gold) 90%, transparent);
+    0 0 var(--core-glow, 6px) var(--core-glow-spread, 1.5px)
+      color-mix(in oklch, var(--marker-gold) 55%, transparent),
+    0 0 3px 0 color-mix(in oklch, var(--marker-gold) 92%, transparent);
   /* Hidden at idle (the glyph owns the resting centre); the state rules below fade
      it in + grow it as the pointer escalates. */
   opacity: 0;
   --core-scale: 0.7;
-  --core-glow: 4px;
-  --core-glow-spread: 1px;
+  --core-glow: 6px;
+  --core-glow-spread: 1.5px;
   transition:
     opacity 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
     transform 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
     box-shadow 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
-/* HOVER: a small glowing gold core appears. */
+/* HOVER: a clearly glowing gold core appears. */
 .star-marker[data-state='hover'] .star-marker-dot {
-  opacity: 0.85;
-  --core-scale: 0.8;
-  --core-glow: 5px;
+  opacity: 0.9;
+  --core-scale: 0.85;
+  --core-glow: 8px;
 }
 /* ACTIVE: a brighter photosphere. */
 .star-marker[data-state='active'] .star-marker-dot {
   opacity: 1;
-  --core-scale: 0.95;
-  --core-glow: 6px;
-  --core-glow-spread: 1.5px;
+  --core-scale: 1;
+  --core-glow: 11px;
+  --core-glow-spread: 2px;
 }
 /* LOCKED: the brightest gold core — the dot that docks with the cursor. Wins over
    data-bright on EVERY state. */
 .star-marker[data-state='locked'] .star-marker-dot {
   opacity: 1;
-  --core-scale: 1;
-  --core-glow: 7px;
-  --core-glow-spread: 2px;
+  --core-scale: 1.1;
+  --core-glow: 14px;
+  --core-glow-spread: 2.5px;
   box-shadow:
-    0 0 7px 2px color-mix(in oklch, var(--marker-gold) 55%, transparent),
-    0 0 2px 0 color-mix(in oklch, var(--marker-gold) 95%, transparent);
+    0 0 14px 2.5px color-mix(in oklch, var(--marker-gold) 60%, transparent),
+    0 0 4px 0 color-mix(in oklch, var(--marker-gold) 96%, transparent);
 }
 
 /* The per-type INNER GLYPH — owns the resting centre (the dot is hidden until
@@ -1715,27 +1729,29 @@ body.hud-active .star-marker {
 /* DARK: a soft dark disc deepens the black under the light reticle so the strokes
    read crisply against the canvas. */
 .star-marker[data-bg='dark'] .star-marker-plate {
-  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 60%, transparent) 0%, transparent 68%);
-  opacity: 0.5;
+  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 70%, transparent) 0%, transparent 70%);
+  opacity: 0.55;
 }
 /* BRIGHT: a soft DARK halo that deepens local contrast behind the near-black
    reticle so it reads on the bright photosphere / orange limb. Restrained — a
    radial fade to transparent, never a hard disc. Applies to BOTH bright markers
    (yellow star + red giant): both sit on bright surfaces and want a dark seat. */
 .star-marker[data-bg='bright'] .star-marker-plate {
+  width: calc(var(--marker-size) * 1.25);
+  height: calc(var(--marker-size) * 1.25);
   background: radial-gradient(circle,
-    color-mix(in oklch, var(--bg) 42%, transparent) 0%,
-    color-mix(in oklch, var(--bg) 24%, transparent) 50%,
-    transparent 74%);
-  opacity: 0.62;
+    color-mix(in oklch, var(--bg) 52%, transparent) 0%,
+    color-mix(in oklch, var(--bg) 30%, transparent) 50%,
+    transparent 76%);
+  opacity: 0.72;
 }
 /* NOISY: a larger, denser dark disc to carve the marker out of the busy gas/limb —
    the strongest plate of the three. */
 .star-marker[data-bg='noisy'] .star-marker-plate {
-  width: calc(var(--marker-size) * 1.35);
-  height: calc(var(--marker-size) * 1.35);
-  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 62%, transparent) 0%, color-mix(in oklch, var(--bg) 45%, transparent) 50%, transparent 78%);
-  opacity: 0.7;
+  width: calc(var(--marker-size) * 1.4);
+  height: calc(var(--marker-size) * 1.4);
+  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 70%, transparent) 0%, color-mix(in oklch, var(--bg) 50%, transparent) 50%, transparent 80%);
+  opacity: 0.78;
 }
 
 /* Always-near MICRO-LABEL — a tiny mono caption just under the reticle so every
