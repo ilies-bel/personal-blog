@@ -8,9 +8,8 @@ import {
   type HudTargetId,
   type MarkerPlacement,
 } from './sceneTable';
-import { hudIdForStage } from './lifecycleMachine';
 import type { MarkerFrame } from './scene/types';
-import { lifecycleProgress, progressForLegacyStage } from './timeline';
+import { hudIdForStage, lifecycleProgress, progressForLegacyStage } from './timeline';
 import {
   SCROLL_HINT_DISMISS_AT,
   SCENE_READY_EVENT,
@@ -19,11 +18,11 @@ import {
 
 // The HUD nav rows, on-screen markers, the settled-window gate and their shared
 // types now live in sceneTable.ts (the pure data layer); the scroll-spy
-// `hudIdForStage` now lives in lifecycleMachine.ts (the single lifecycle
-// selector). They are re-exported here so the existing import paths
+// `hudIdForStage` now lives in timeline.ts (the choreography facade, alongside
+// resolve()). They are re-exported here so the existing import paths
 // ('../HudNavigation') resolve UNCHANGED. The duplicated literals, the
 // byte-identical settled-window body, and the former local hudIdForStage copy
-// that used to sit here are gone (the table + the machine are the single sources).
+// that used to sit here are gone (the table + the facade are the single sources).
 export { HUD_NAV_ITEMS, MARKER_PLACEMENTS, settledIdForStage, hudIdForStage };
 export type { HudNavItem, HudTargetId, MarkerPlacement };
 

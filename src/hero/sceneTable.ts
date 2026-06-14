@@ -326,6 +326,24 @@ export const STARTS: readonly number[] = (() => {
   return out;
 })();
 
+// ---------------------------------------------------------------------------
+// NAMED PROGRESS BREAKPOINTS — the lifecycle-progress chapter edges, DERIVED from
+// STARTS so they can never drift from the SEGMENTS table. These are the seven
+// values the camera ramp (cameraPoseForProgress) and the HUD-preview inverse
+// (progressForLegacyStage) key off; they USED to be hand-typed a second time in
+// timeline.ts with a "MUST stay in lockstep" comment. Binding them to STARTS makes
+// the lockstep structural instead of clerical: re-time a scene (edit one weight)
+// and every consumer follows automatically. The index → meaning map:
+//   STARTS[1]=dot hold end · [2]=nebula grow end · [4]=yellow ignition start ·
+//   [5]=yellow settle end · [6]=yellow hold end · [7]=red hold start · [8]=red hold end.
+export const DOT_HOLD_END = STARTS[1]; // 0.10 — dot hold / content-unlock band end
+export const NEBULA_GROW_END = STARTS[2]; // 0.26 — dot->nebula grow ends; nebula proper begins
+export const STAR_IGNITION_START = STARTS[4]; // 0.51 — nebula collapse ends; yellow ignites
+export const YELLOW_SETTLE_END = STARTS[5]; // 0.58 — yellow ignition resolves into the centred hold
+export const YELLOW_HOLD_END = STARTS[6]; // 0.61 — yellow hold ends; the red-giant grow/orbit begins
+export const RED_HOLD_START = STARTS[7]; // 0.74 — red grow ends; the settled red-giant close-up hold begins
+export const RED_HOLD_END = STARTS[8]; // 0.77 — red-giant hold ends; the reverse-collapse FLASH begins
+
 /**
  * The forward progress -> shader-stage curve, generated from SEGMENTS. Replaces
  * the former 11-band if-ladder in timeline.ts. `progress` is the RAW scroll
@@ -1010,18 +1028,11 @@ interface CameraBand {
   parallax: number;
 }
 
-// Breakpoints reused by the camera bands (the same numbers as the RE-TIMED stage
-// table; the camera shares them so the pose moves in lockstep with the morph).
-const NEBULA_GROW_END = 0.26;
-// SHIFTED +0.08 (3rd iteration) — these four breakpoints sit AFTER the widened nebula
-// collapse span (seg 3b, 0.12 -> 0.20), so the prefix-sum pushed each forward by 0.08.
-// They MUST match STARTS[4..7] = [0.51, 0.58, 0.61, 0.74] (and timeline.ts's copies).
-const STAR_IGNITION_START = 0.51; // was 0.43 — nebula collapse ends; yellow ignites
-const YELLOW_SETTLE_END = 0.58; // was 0.50 — yellow ignition resolves into the centred hold
-const YELLOW_HOLD_END = 0.61; // was 0.57 — yellow hold ends; red-giant grow/orbit begins
-const RED_HOLD_START = 0.74; // was 0.70 — red grow ends; the settled red-giant close-up hold begins
-const RED_HOLD_END = 0.77;
-const DOT_HOLD_END = 0.1;
+// The breakpoints reused by the camera bands below (DOT_HOLD_END … RED_HOLD_END)
+// are the SAME named consts the stage table exports near STARTS — DERIVED from the
+// SEGMENTS prefix-sum, so the camera pose moves in lockstep with the morph by
+// construction. They used to be re-typed here (and a third time in timeline.ts) as
+// hand-kept-in-sync literals; both copies are gone now that they're table-derived.
 
 // CAMERA_BANDS are keyed to lifecycle p; scrolling DOWN, p decreases 1 -> 0, so the
 // visitor walks these bands 10 -> 1. Each band's chapter (raw-scroll band noted) and

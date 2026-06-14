@@ -2,9 +2,9 @@
 import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { warpVertexShader, warpFragmentShader } from '../shaders/warp.glsl';
-import type { Uniforms } from './types';
+import type { Uniforms, UniformRig } from './types';
 
-export interface WarpRig {
+export interface WarpRig extends UniformRig {
   seg: THREE.LineSegments; // primary arc image
   seg2: THREE.LineSegments; // secondary arc image
   geo: THREE.BufferGeometry;

@@ -6,6 +6,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { CFG } from '../lib/config';
 import { GradeShader, NovaShader } from '../shaders/post.glsl';
+import type { Rig } from './types';
 
 // Bloom build mode. 'full' is the desktop/high pass — the UnrealBloom mip pyramid
 // runs at the FULL composer resolution (byte-identical default). 'cheap' is the
@@ -28,7 +29,9 @@ const BLOOM_SCALE: Record<BloomQuality, number> = { full: 1.0, cheap: 0.5, none:
 const BLOOM_STRENGTH_MUL: Record<BloomQuality, number> = { full: 1.0, cheap: 1.0, none: 1.0 };
 const BLOOM_RADIUS_MUL: Record<BloomQuality, number> = { full: 1.0, cheap: 1.15, none: 1.0 };
 
-export interface PostRig {
+// PostRig is a plain Rig (no shared `uniforms` block): its tunable values live on
+// the bloom pass + the grade/nova ShaderPasses, not one shared uniform object.
+export interface PostRig extends Rig {
   composer: EffectComposer;
   // Null only when bloomQuality === 'none': the bloom pass is skipped entirely, so
   // the chain runs RenderPass → Grade → Nova. Callers that write to bloom MUST

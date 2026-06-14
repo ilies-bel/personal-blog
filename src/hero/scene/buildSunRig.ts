@@ -5,10 +5,13 @@ import {
   sunCoronaVert, sunCoronaFrag, sunStarVert, sunStarFrag, sunLoopVert, sunLoopFrag,
   SUN_ERUPT_SLOTS,
 } from '../shaders/sun.glsl';
+import type { Rig } from './types';
 
 export const STAR_BACK_BASE_BRIGHT = 2.2;
 
-export interface SunRig {
+// SunRig is a plain Rig (no shared `uniforms` block): each mesh carries its own
+// material with its own uniforms, so there is no single block to widen to UniformRig.
+export interface SunRig extends Rig {
   group: THREE.Group;
   surfaceMat: THREE.ShaderMaterial;
   // The photosphere mesh itself. Exposed so the render loop's click raycaster can

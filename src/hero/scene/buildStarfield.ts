@@ -2,9 +2,9 @@
 import * as THREE from 'three';
 import { CFG, densityCompensation } from '../lib/config';
 import { starVertexShader, starFragmentShader, distantStarVertexShader, distantStarFragmentShader } from '../shaders/star.glsl';
-import type { Uniforms } from './types';
+import type { Uniforms, UniformRig } from './types';
 
-export interface StarRig {
+export interface StarRig extends UniformRig {
   pts: THREE.Points; // primary lensed starfield (frame toggles .visible)
   secPts: THREE.Points; // secondary image (kept hidden — caustic pile-up)
   geo: THREE.BufferGeometry;
@@ -85,12 +85,10 @@ export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelR
 
   return { pts, secPts, geo, mat, matSec, uniforms, dispose };
 }
-export interface DistantStarRig {
+export interface DistantStarRig extends UniformRig {
   pts: THREE.Points;
   geo: THREE.BufferGeometry;
   mat: THREE.ShaderMaterial;
-  uniforms: Uniforms;
-  dispose: () => void;
 }
 export function buildDistantStar(scene: THREE.Scene, pixelRatio: number): DistantStarRig {
   const N = 9;

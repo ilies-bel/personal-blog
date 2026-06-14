@@ -17,9 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // mounts <ClientRouter />.
 import { navigate } from 'astro:transitions/client';
 import { ScrollTracker } from '../scroll';
-import { SCROLL_SECTION_COUNT, BUILT_STAGES } from '../beats';
-import { legacyStageForProgress } from '../timeline';
-import { resolve } from '../lifecycleMachine';
+import { SCROLL_SECTION_COUNT, BUILT_STAGES, legacyStageForProgress, resolve, brightZoneFor } from '../timeline';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { sceneForProgress } from '../sceneTable';
 import { detectDeviceTier } from '../lib/config';
@@ -131,23 +129,10 @@ function revealWithoutWebgl(): void {
   );
 }
 
-// BRIGHT-ZONE bands in shader-stage space (the same 0..5 coordinate `resolve().stage`
-// returns). The hero chrome reads warm bone over the dark states and flips to a dark
-// graphite stroke over these two bright beats so it stays legible against the bleached
-// canvas:
-//   • SUPERNOVA whiteout flash — the breakout sits at stage ~0.5 (segments 8/9 sweep
-//     1.05 → 0.32 through it); a band around it covers the blinding frames.
-//   • YELLOW STAR — the settled gold holds flat at stage 2.88 (segments 4/5); a band
-//     around it covers the bright photosphere beat.
-// Defined as data, so the two beats and their soft edges read in one place.
-const BRIGHT_STAGE_BANDS: ReadonlyArray<readonly [number, number]> = [
-  [0.35, 0.78], // supernova whiteout flash
-  [2.6, 3.02], // bright yellow-star beat (settled gold + ignition into it)
-];
-
-function isBrightZoneStage(stage: number): boolean {
-  return BRIGHT_STAGE_BANDS.some(([lo, hi]) => stage >= lo && stage <= hi);
-}
+// The bright-zone stage geometry (which beats flip the chrome to a dark stroke) now
+// lives in the timeline module via brightZoneFor() — see the BRIGHT_STAGE_BANDS block
+// there. The React layer asks the timeline rather than holding its own copy of stage
+// numbers, so re-timing a beat never silently leaves a stale band here.
 
 // Internal lifecycle scene id -> the public art-direction data-scene name. The CSS
 // per-scene HUD token blocks + the yellow-star designed-ring overlay key off these
@@ -667,7 +652,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // stage ~2.88). Derived purely from the shader stage already tracked here (no extra
   // scroll read). Over the dark states (black hole / red giant / nebula / dot) this is
   // false → warm bone. The provider hands it down; the CSS [data-zone] flips the tokens.
-  const brightZone = isBrightZoneStage(lifecycleStage);
+  const brightZone = brightZoneFor(lifecycleStage);
   // sceneId (the lifecycle scene the live scroll position is ON) is computed once
   // above — it now feeds BOTH the rail scroll-spy and these per-scene HUD colour
   // tokens (data-scene) + the yellow-star designed-ring overlay, from the one resolver.

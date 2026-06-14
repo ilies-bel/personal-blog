@@ -14,7 +14,7 @@ import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildPostChain } from './buildPostChain';
-import { WebGLUnavailableError, type SceneHandle, type SceneHooks, type DiveOptions } from './types';
+import { WebGLUnavailableError, type SceneHandle, type SceneHooks, type DiveOptions, type Rig } from './types';
 
 /**
  * Lightweight WebGL-availability probe, run BEFORE constructing THREE.WebGLRenderer.
@@ -1765,16 +1765,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       renderer.domElement.removeEventListener('webglcontextrestored', onContextRestored, false);
 
       // Each rig disposes its own geos + materials (and, for post, the composer +
-      // bloom + grade material) — construction and teardown are now co-located in
-      // the build*() factories, so this just calls each rig's dispose().
-      postRig.dispose();
-      diskRig.dispose();
-      starRig.dispose();
-      distantStarRig.dispose();
-      warpRig.dispose();
-      streakRig.dispose();
-      ringRig.dispose();
-      sunRig.dispose();
+      // bloom + grade material) — construction and teardown are co-located in the
+      // build*() factories. They all satisfy the `Rig` seam (a `dispose()` method),
+      // so teardown is ONE loop over the rig set instead of eight hand-listed calls
+      // that drift as rigs are added/removed. Order preserved (post first). gravitySim
+      // and renderer are NOT rigs (their own teardown contracts) so stay explicit.
+      const rigs: Rig[] = [postRig, diskRig, starRig, distantStarRig, warpRig, streakRig, ringRig, sunRig];
+      for (const rig of rigs) rig.dispose();
       gravitySim.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
@@ -1789,8 +1786,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 //  roughly one viewport tall), pinned over the canvas and cross-faded as the
 //  scroll morph passes its window.
 //
-//  The timeline + copy themselves (the ManifestoBeat shape, the BEATS array,
-//  and the derived STAGE_COUNT / BUILT_STAGES) live in ./beats so the SSR
-//  fallback and scroll track in index.astro share one source of truth with this
-//  live overlay; see that module for the full narrative rationale.
+//  The copy itself (the ManifestoBeat shape + the BEATS array) lives colocated
+//  per scene in ./sceneTable, and the scroll-track geometry (SCROLL_SECTION_COUNT
+//  / STAGE_COUNT / BUILT_STAGES) in ./timeline, so the SSR fallback and scroll
+//  track in index.astro share one source of truth with this live overlay.
 // ---------------------------------------------------------------------------

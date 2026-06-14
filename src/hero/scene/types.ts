@@ -3,6 +3,27 @@ import type { HudTargetId } from '../HudNavigation';
 
 export type Uniforms = Record<string, { value: unknown }>;
 
+/** The seam every rig factory (buildDisk/buildStarfield/buildWarp/buildRing/
+ *  buildStreak/buildSunRig/buildPostChain) satisfies: a rig owns some three.js
+ *  resources and knows how to release them. createScene assembles a heterogeneous
+ *  set of rigs but tears them ALL down through this one contract — `rigs.forEach(r
+ *  => r.dispose())` — instead of seven hand-listed disposal calls that drift as
+ *  rigs are added or removed. The per-rig specifics (materials, points, segments,
+ *  passes) stay on each concrete `*Rig` type; this names only what they share. */
+export interface Rig {
+  dispose: () => void;
+}
+
+/** A Rig that also exposes a shared uniform block driven per frame. The five
+ *  GPU-geometry rigs (disk, starfield, warp, ring, streak) all hand the render
+ *  loop a single `uniforms` object their material(s) reference, so the loop can
+ *  write `uTime`/look uniforms through this common surface. (SunRig and PostRig
+ *  are plain `Rig`s: their uniforms live on per-mesh materials / per-pass passes,
+ *  not one shared block, so they deliberately do NOT widen to this.) */
+export interface UniformRig extends Rig {
+  uniforms: Uniforms;
+}
+
 /** Thrown by createScene() when the WebGL visual cannot be created — either no
  *  WebGL context is obtainable (browser/device without WebGL, or it is blocked)
  *  or THREE.WebGLRenderer construction itself throws. createScene FAILS GRACEFULLY:

@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { CFG, densityCompensation } from '../lib/config';
 import { simDimensions } from '../gravitySim';
 import { diskVertexShader, diskFragmentShader, DISK_ERUPT_SLOTS } from '../shaders/disk.glsl';
-import type { Uniforms } from './types';
+import type { Uniforms, UniformRig } from './types';
 
-export interface DiskRig {
+export interface DiskRig extends UniformRig {
   primary: THREE.ShaderMaterial; // bright crescent (primary lensed image)
   secondary: THREE.ShaderMaterial; // lower grainy band (secondary image, sign -1)
   primaryPts: THREE.Points; // the primary Points object (frame toggles .visible)

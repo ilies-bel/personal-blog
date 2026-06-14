@@ -10,9 +10,9 @@
 import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { streakVertexShader, streakFragmentShader } from '../shaders/streak.glsl';
-import type { Uniforms } from './types';
+import type { Uniforms, UniformRig } from './types';
 
-export interface StreakRig {
+export interface StreakRig extends UniformRig {
   seg: THREE.LineSegments; // the streak field (frame toggles .visible)
   geo: THREE.BufferGeometry;
   mat: THREE.ShaderMaterial;

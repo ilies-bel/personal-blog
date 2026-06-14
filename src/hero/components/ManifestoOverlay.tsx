@@ -1,7 +1,7 @@
 // The manifesto overlay: sparse text beats pinned over the canvas, each shown at
 // full bone across its scroll band (no fade, no direction swap, no opening intro).
-// Copy + timing live in ../beats (shared with index.astro's SSR fallback).
-import { BEATS } from '../beats';
+// Copy + timing live colocated per scene in ../sceneTable (shared with index.astro's SSR fallback).
+import { BEATS } from '../sceneTable';
 import { band, fadeInOut } from '../scroll';
 import { lifecycleProgress } from '../timeline';
 import { useSceneState } from './SceneStateContext';

@@ -1,8 +1,22 @@
 import { clamp01, segment } from './scroll';
 import {
   cameraBaseForLifecycleP,
+  DOT_HOLD_END,
+  dwellForScene,
+  HUD_NAV_ITEMS,
   legacyStageForProgressFromTable,
+  NEBULA_GROW_END,
+  RED_HOLD_END,
+  RED_HOLD_START,
+  sceneForProgress,
+  settledIdForStage,
   smoothstep,
+  STAR_IGNITION_START,
+  YELLOW_HOLD_END,
+  YELLOW_SETTLE_END,
+  type HudNavItem,
+  type HudTargetId,
+  type Phase,
 } from './sceneTable';
 
 // ===========================================================================
@@ -58,25 +72,12 @@ const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 // timeline; the implementation now lives in sceneTable.ts (one easing source).
 export { smoothstep };
 
-// RE-TIMED for the "one continuous mechanism" chapter grid (raw 0-14% black hole ...
-// 88-100% content). These lifecycle-progress breakpoints stay in lockstep with the
-// RE-TIMED SEGMENTS/CAMERA tables in sceneTable.ts (same numbers, same order).
-const DOT_HOLD_END = 0.1;         // dot hold (content-unlock band, raw 90-100%)
-const NEBULA_GROW_END = 0.26;     // dot->nebula grow ends; nebula proper begins
-// SHIFTED +0.08 (3rd iteration): the nebula COLLAPSE span widened (seg 3b 0.12 -> 0.20) so
-// the pinpoint-seed→full-star growth has more scroll to play out, pushing the four
-// breakpoints after it forward by 0.08. These MUST stay in lockstep with STARTS[4..7] in
-// sceneTable.ts ([0.51, 0.58, 0.61, 0.74]) or progressForLegacyStage's inverse drifts.
-const STAR_IGNITION_START = 0.51; // was 0.43 — nebula collapse ends; yellow ignites
-const YELLOW_SETTLE_END = 0.58;   // was 0.50 — yellow ignition resolves into the centred hold
-// The yellow star HOLDS centred across YELLOW_SETTLE_END→YELLOW_HOLD_END so the dwell
-// resolves into a real, still beat (headline reads on the blazing sun). Only AFTER this
-// hold does the giant grow + the camera swing into the lateral orbit — so yellow→red
-// reads as ONE move (grow + arc around the body) instead of "dive in, then reverse out".
-const YELLOW_HOLD_END = 0.61;     // was 0.57 — yellow hold ends; the red-giant grow/orbit begins
-// Red-giant hold band. Named so camera and stage use the same numbers.
-const RED_HOLD_START = 0.74;      // was 0.70 — red grow ends; the settled red-giant close-up hold begins
-const RED_HOLD_END = 0.77;        // red-giant hold ends; the reverse-collapse FLASH begins
+// The seven lifecycle-progress chapter breakpoints (DOT_HOLD_END … RED_HOLD_END)
+// are now DERIVED from the SEGMENTS prefix-sum and imported from sceneTable.ts — see
+// the "NAMED PROGRESS BREAKPOINTS" block there. They used to be hand-typed here a
+// second time with a "MUST stay in lockstep with STARTS[4..7]" comment; binding them
+// to the table makes that lockstep structural. Re-time a scene by editing one weight
+// in SEGMENTS; the camera ramp + the HUD-preview inverse below follow automatically.
 
 // The public cinematic timeline. The existing shaders still understand the older
 // reverse "stage" coordinates, so this is the single handoff from the new story
@@ -183,4 +184,109 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
     shake: shock * 0.3,
     parallax,
   };
+}
+
+// ===========================================================================
+// LIFECYCLE POSITION — "where am I on the lifecycle, and how far through it?"
+//
+// Formerly lifecycleMachine.ts. resolve() is a pure COMPOSITION of the sceneTable
+// walkers (sceneForProgress + legacyStageForProgress + settledIdForStage); it adds
+// NO new math, so it returns exactly what the four scattered reads returned, in one
+// object. hudIdForStage() is the single scroll-spy implementation. Both live here —
+// the choreography facade — so callers learn ONE module instead of choosing between
+// the raw table walkers and a separate machine layer.
+// ===========================================================================
+
+/** The lifecycle state granularity is the existing scene id set
+ *  ('beginning' | 'nebula' | 'yellow' | 'red' | 'end'). */
+export type LifecycleState = HudTargetId;
+
+/** The full position on the lifecycle for a raw scroll value, composed once from
+ *  the sceneTable walkers. Every field equals what its old standalone reader
+ *  returned for the same input. */
+export interface LifecyclePosition {
+  /** Which lifecycle scene the scroll value is on (the active SEGMENT's scene). */
+  state: LifecycleState;
+  /** Idle hold vs. moving transition for the active segment. */
+  phase: Phase;
+  /** Position within the active segment (0..1, after the segment() clamp). */
+  localT: number;
+  /** The settled-hold scene for `stage`, or null mid-transition (marker gate). */
+  settledId: LifecycleState | null;
+  /** The shader-stage coordinate (0..5) for this progress. */
+  stage: number;
+  /** The raw scroll value passed in (0..1), echoed back. */
+  progress: number;
+  /** The active scene's dwell STRENGTH (0..1), 0 when the scene declares none. */
+  dwell: number;
+}
+
+/**
+ * Resolve the full lifecycle position for a RAW scroll value. A pure COMPOSITION of
+ * the sceneTable walkers — no new thresholds, no new math — so it returns exactly
+ * what the four scattered reads returned, in one object.
+ */
+export function resolve(progress: number): LifecyclePosition {
+  const scene = sceneForProgress(progress);
+  const stage = legacyStageForProgressFromTable(progress);
+  return {
+    state: scene.sceneId,
+    phase: scene.phase,
+    localT: scene.localT,
+    settledId: settledIdForStage(stage),
+    stage,
+    progress,
+    dwell: dwellForScene(scene.sceneId),
+  };
+}
+
+// HUD nav rows in ascending `stage` order. The source list is authored in this
+// order, but the scroll-spy depends on it, so the contract is made explicit.
+const HUD_NAV_BY_STAGE: readonly HudNavItem[] = [...HUD_NAV_ITEMS].sort((a, b) => a.stage - b.stage);
+
+/**
+ * Scroll-spy: map a lifecycle `stage` (0..5) to the HUD target the visitor is
+ * currently "on" — the last stage they have scrolled past. Returns the first item
+ * while still above it, so the top of the rail (BLACK HOLE / stage 0) lights up at
+ * the very top of the page. The SINGLE implementation; HudNavigation re-exports it.
+ */
+export function hudIdForStage(stage: number): HudTargetId {
+  let current = HUD_NAV_BY_STAGE[0];
+  for (const item of HUD_NAV_BY_STAGE) {
+    if (stage >= item.stage) current = item;
+    else break;
+  }
+  return current.id;
+}
+
+// ---------------------------------------------------------------------------
+// SCROLL-TRACK GEOMETRY — formerly beats.ts. The copy and the scroll distance are
+// separate on purpose: the lifecycle needs a long physical runway, while headlines
+// should be sparse. (BEATS itself stays in sceneTable, colocated per scene; the SSR
+// <noscript> and ManifestoOverlay import it from there directly.)
+// ---------------------------------------------------------------------------
+export const SCROLL_SECTION_COUNT = 6;
+export const STAGE_COUNT = SCROLL_SECTION_COUNT;
+export const BUILT_STAGES = 3.5;
+
+// ---------------------------------------------------------------------------
+// BRIGHT-ZONE bands — the stage windows over which the hero chrome flips from warm
+// bone to a dark graphite stroke so it stays legible against the bleached canvas.
+// These are AUTHORED art-direction windows (a soft band around each bright beat),
+// NOT scene boundaries — the supernova flash is not its own scene, and the yellow
+// band deliberately covers ignition+hold, not just the settled window — so they stay
+// hand-tuned here rather than being derived from SEGMENTS. They live in the timeline
+// (the single home for stage geometry) so the React layer ASKS for the bright zone
+// via brightZoneFor() instead of HOLDING a fourth private copy of stage numbers.
+//   • SUPERNOVA whiteout flash — breakout at stage ~0.5 (segments 8/9 sweep through it).
+//   • YELLOW STAR — settled gold holds flat at stage 2.88 (segments 4/5).
+const BRIGHT_STAGE_BANDS: ReadonlyArray<readonly [number, number]> = [
+  [0.35, 0.78], // supernova whiteout flash
+  [2.6, 3.02], // bright yellow-star beat (settled gold + ignition into it)
+];
+
+/** True when the shader `stage` sits in one of the bright beats — the chrome flips
+ *  to a dark stroke. The SINGLE source for the bright-zone geometry. */
+export function brightZoneFor(stage: number): boolean {
+  return BRIGHT_STAGE_BANDS.some(([lo, hi]) => stage >= lo && stage <= hi);
 }
