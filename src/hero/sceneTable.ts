@@ -857,12 +857,19 @@ export const SCENES: readonly LifecycleScene[] = [
       href: 'posts/thanks-for-scrolling-to-the-bottom',
     },
     markers: [
-      // END / black hole — ONE marker, fixed spot near the hero centre.
+      // END / black hole — ONE marker near the event horizon but LIFTED off the
+      // brightest beam. The horizontal accretion beam + photon ring blaze straight
+      // through the dead centre (0.5, 0.5), where the reticle's dotted idle hex
+      // washes out into the ring glow. Per the reference's black-hole guidance
+      // ("anchor near event horizon; AVOID the brightest beam; label in negative
+      // space"), sit it just ABOVE the disk in the darker sky: still hugging the
+      // event horizon, but clear of the beam so all four states read and the card
+      // opens into negative space. Horizontally centred over the hole.
       {
         id: 'end',
         state: 'end',
         vx: 0.5,
-        vy: 0.5,
+        vy: 0.34,
         href: 'posts/thanks-for-scrolling-to-the-bottom',
         title: 'INSPIRATION',
         subtitle: 'Why this site exists',

@@ -1292,10 +1292,15 @@ body.hud-booting .hud-boot-scan {
    on screen. The element is always a real <a> link so it remains keyboard-
    focusable and follows the standard focus ring below.
 
-   Three states (toggled by data-locked, computed in the rAF loop):
-     RESTING  — a dotted-outline hexagon + centre dot, quiet/off-white.
-     LOCKED   — solid hexagon + edge tick marks + an animated gold inner hexagon,
-                plus a tethered terminal-style info card.
+   FOUR states (data-state, computed in the rAF loop) layered on the unchanged
+   binary data-locked. Each state escalates contrast / stroke-weight / glow:
+     idle    — faint dotted hex + faint crosshair arms + dim core. Quiet.
+     hover   — solid hex + brighter segmented arms + glowing core + leader line.
+     active  — + concentric inner double-hex + brighter glowing core + stronger arms.
+     locked  — + inner ring + brightest gold core + tick tripod + rotating gold hex
+               + the tethered terminal-style info card (the data-locked contract).
+   data-locked still SOLELY drives the card + the custom-cursor dock; data-state
+   drives the reticle geometry. The four crosshair ARMS read in every state.
    --------------------------------------------------------------------------- */
 .star-marker {
   /* Off-white for the whole OUTER reticle — resting dotted hex, locked solid hex,
@@ -1444,34 +1449,119 @@ body.hud-active .star-marker {
     drop-shadow(0 0 4px color-mix(in oklch, var(--bg) 60%, transparent));
 }
 
-/* RESTING: dotted hexagon — quiet, but legible. Hidden once locked. */
+/* ============================================================================
+   FOUR-STATE GEOMETRY MATRIX — keyed off data-state (idle/hover/active/locked).
+   The shared transition var keeps every element easing on the same confident curve
+   at the same tempo as the rest of the marker block.
+   ========================================================================== */
+.star-marker-arms line,
+.star-marker-hex-dotted,
+.star-marker-hex-solid,
+.star-marker-hex-inner,
+.star-marker-ticks,
+.star-marker-ring,
+.star-marker-hex-gold {
+  transition:
+    opacity 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
+    stroke-width 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* CROSSHAIR ARMS — four N/E/S/W arms that read in EVERY state (this is what makes
+   the reticle a crosshair). Inner + outer segments share one group; the GAP between
+   them grows visually as the stroke brightens on escalation. Faint at idle, brighter
+   and a touch heavier toward locked. Drawn in the off-white --marker-line. */
+.star-marker-arms line {
+  color: var(--marker-line);
+  stroke-width: 1;
+}
+/* idle: a faint hint of the cross. */
+.star-marker[data-state='idle'] .star-marker-arms line {
+  opacity: 0.3;
+}
+/* hover: the arms brighten + the gap reads as segmented targeting ticks. */
+.star-marker[data-state='hover'] .star-marker-arms line {
+  opacity: 0.62;
+  stroke-width: 1.2;
+}
+/* active: stronger arms. */
+.star-marker[data-state='active'] .star-marker-arms line {
+  opacity: 0.8;
+  stroke-width: 1.4;
+}
+/* locked: the fullest arms. */
+.star-marker[data-state='locked'] .star-marker-arms line {
+  opacity: 0.95;
+  stroke-width: 1.6;
+}
+
+/* IDLE hexagon — the dotted outline. Cross-fades to the solid hex from hover up. */
 .star-marker-hex-dotted {
   opacity: 0.62;
-  transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
-.star-marker[data-locked='true'] .star-marker-hex-dotted {
+.star-marker[data-state='hover'] .star-marker-hex-dotted,
+.star-marker[data-state='active'] .star-marker-hex-dotted,
+.star-marker[data-state='locked'] .star-marker-hex-dotted {
   opacity: 0;
 }
 
-/* LOCKED: solid hexagon + edge ticks. Hidden until locked. */
-.star-marker-hex-solid,
-.star-marker-ticks {
-  opacity: 0;
-  transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
-}
+/* SOLID hexagon — the thin outline. Hidden at idle, in from hover up. Always the
+   off-white --marker-line (currentColor); the gold is reserved for the inner hex +
+   core + ring. */
 .star-marker-hex-solid {
-  /* Inherit the off-white --marker-line (currentColor) — the locked OUTER hex is
-     WHITE, never gold. Only the inner hex below uses the gold token. */
   color: var(--marker-line);
+  opacity: 0;
 }
-.star-marker[data-locked='true'] .star-marker-hex-solid {
+.star-marker[data-state='hover'] .star-marker-hex-solid {
+  opacity: 0.78;
+}
+.star-marker[data-state='active'] .star-marker-hex-solid {
+  opacity: 0.92;
+}
+.star-marker[data-state='locked'] .star-marker-hex-solid {
   opacity: 0.95;
 }
-.star-marker[data-locked='true'] .star-marker-ticks {
+
+/* INNER HEXAGON — the concentric double-hex, shown from ACTIVE up. Reuses the hex
+   shape scaled toward the centre. Off-white, a touch dimmer than the outer hex so
+   the doubling reads without competing. */
+.star-marker-hex-inner {
+  color: var(--marker-line);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  scale: 0.62;
+}
+.star-marker[data-state='active'] .star-marker-hex-inner {
+  opacity: 0.6;
+}
+.star-marker[data-state='locked'] .star-marker-hex-inner {
+  opacity: 0.72;
+}
+
+/* TICKS — the three-point "tripod" confirm cue. LOCKED only (the fullest structure).
+   Coexists with the four arms now rather than standing in for them. */
+.star-marker-ticks {
+  color: var(--marker-line);
+  opacity: 0;
+}
+.star-marker[data-state='locked'] .star-marker-ticks {
   opacity: 1;
 }
 
-/* LOCKED: the animated gold inner hexagon — rotates + breathes. Hidden at rest. */
+/* INNER RING — the concentric gold circle around the core. LOCKED only — the
+   confirmed-selection flourish. */
+.star-marker-ring {
+  color: var(--marker-gold);
+  stroke: currentColor;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.star-marker[data-state='locked'] .star-marker-ring {
+  opacity: 0.85;
+}
+
+/* LOCKED: the animated gold inner hexagon — rotates + breathes. Hidden until locked. */
 .star-marker-hex-gold {
   color: var(--marker-gold);
   stroke: currentColor;
@@ -1483,7 +1573,7 @@ body.hud-active .star-marker {
      cleanly without overwriting one another. */
   scale: 0.6;
 }
-.star-marker[data-locked='true'] .star-marker-hex-gold {
+.star-marker[data-state='locked'] .star-marker-hex-gold {
   opacity: 0.8;
   animation:
     star-marker-spin 16s linear infinite,
@@ -1510,50 +1600,58 @@ body.hud-active .star-marker {
   50%      { scale: 0.62; opacity: 0.85; }
 }
 
-/* Core dot — constant in both states, centred on the lock point. Its resting
-   colour is chosen PER STATE (not via a canvas blend, which fails because the
-   canvas is in a separate stacking context): light on the dark states and dark
-   on the bright states, driven by the marker's data-bright attribute below. */
+/* GOLD CORE — the glowing centre, the single gold-core source of truth (this is the
+   element the custom cursor docks against). It escalates across the four states: dim
+   at idle (the glyph owns the centre), a small glowing gold core at hover, a brighter
+   photosphere at active, the brightest core at locked. Centred on the lock point. */
 .star-marker-dot {
   position: absolute;
   top: 50%;
   left: 50%;
   width: 0.36rem;
   height: 0.36rem;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--core-scale, 0.7));
   border-radius: 50%;
-  /* DARK-STATE DEFAULT (data-bright unset/false: the 'beginning' speck + 'end'
-     black hole): off-white dot with a dark 1px separating ring + soft glow so it
-     reads cleanly on the dark canvas. */
-  background: var(--marker-line);
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--bg) 70%, transparent),
-    0 0 5px 1px color-mix(in oklch, var(--marker-line) 45%, transparent);
-  /* The inner glyph now owns the resting centre, so the dot is HIDDEN at rest and
-     only appears on lock as the Voyager-gold accent (the locked rule below). */
-  opacity: 0;
-  transition:
-    background 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
-    opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
-}
-/* BRIGHT-STATE RESTING (orange nebula, yellow star, red giant): a near-black dot
-   with a LIGHT separating ring + soft dark halo so it pops on the bright surface.
-   Scoped :not([data-locked]) so a locked marker on a bright state still goes gold
-   below (the locked rule must always win, on every state). */
-.star-marker[data-bright='true']:not([data-locked='true']) .star-marker-dot {
-  background: var(--bg);
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--fg) 75%, transparent),
-    0 0 5px 1px color-mix(in oklch, var(--bg) 55%, transparent);
-}
-.star-marker[data-locked='true'] .star-marker-dot {
-  /* Locked: the dot reappears as the literal Voyager-gold accent on EVERY state
-     (wins over data-bright) — this is the dot that docks with the cursor. */
-  opacity: 1;
+  /* Gold from the moment it appears (hover up) — it is the warm targeting core. */
   background: var(--marker-gold);
   box-shadow:
-    0 0 6px 2px color-mix(in oklch, var(--marker-gold) 50%, transparent),
+    0 0 var(--core-glow, 4px) var(--core-glow-spread, 1px)
+      color-mix(in oklch, var(--marker-gold) 50%, transparent),
     0 0 2px 0 color-mix(in oklch, var(--marker-gold) 90%, transparent);
+  /* Hidden at idle (the glyph owns the resting centre); the state rules below fade
+     it in + grow it as the pointer escalates. */
+  opacity: 0;
+  --core-scale: 0.7;
+  --core-glow: 4px;
+  --core-glow-spread: 1px;
+  transition:
+    opacity 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
+    box-shadow 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* HOVER: a small glowing gold core appears. */
+.star-marker[data-state='hover'] .star-marker-dot {
+  opacity: 0.85;
+  --core-scale: 0.8;
+  --core-glow: 5px;
+}
+/* ACTIVE: a brighter photosphere. */
+.star-marker[data-state='active'] .star-marker-dot {
+  opacity: 1;
+  --core-scale: 0.95;
+  --core-glow: 6px;
+  --core-glow-spread: 1.5px;
+}
+/* LOCKED: the brightest gold core — the dot that docks with the cursor. Wins over
+   data-bright on EVERY state. */
+.star-marker[data-state='locked'] .star-marker-dot {
+  opacity: 1;
+  --core-scale: 1;
+  --core-glow: 7px;
+  --core-glow-spread: 2px;
+  box-shadow:
+    0 0 7px 2px color-mix(in oklch, var(--marker-gold) 55%, transparent),
+    0 0 2px 0 color-mix(in oklch, var(--marker-gold) 95%, transparent);
 }
 
 /* The per-type INNER GLYPH — owns the resting centre (the dot is hidden until
@@ -1582,9 +1680,17 @@ body.hud-active .star-marker {
   opacity: var(--marker-rest-opacity, 0.9);
   transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
-/* On lock the glyph dims so the gold dot + card take focus (the glyph stays as a
-   quiet anchor rather than competing with the gold accent). */
-.star-marker[data-locked='true'] .star-marker-glyph {
+/* As the marker escalates the glyph steps back so the gold core + structure take
+   focus (the glyph stays a quiet anchor rather than competing with the gold accent).
+   The core appears at hover, so the glyph already eases down a touch there, and
+   fully recedes by locked. */
+.star-marker[data-state='hover'] .star-marker-glyph {
+  opacity: 0.7;
+}
+.star-marker[data-state='active'] .star-marker-glyph {
+  opacity: 0.6;
+}
+.star-marker[data-state='locked'] .star-marker-glyph {
   opacity: 0.55;
 }
 
@@ -1666,6 +1772,67 @@ body.hud-active .star-marker {
   text-shadow:
     0 0 2px color-mix(in oklch, var(--fg) 85%, transparent),
     0 0 5px color-mix(in oklch, var(--fg) 55%, transparent);
+}
+
+/* LEADER LINE — a thin horizontal connector + small endpoint dot that extends out
+   to the card side, appearing from HOVER (per the reference). It is the lightweight
+   "this hotspot is targetable, the card lives over here" cue BEFORE the full card
+   opens. It sits ON the card side (respects data-side) and is hidden once LOCKED (the
+   full card + its own connector take over). Positioned absolute relative to the
+   marker box; sits at the marker's vertical centre. */
+.star-marker-leader {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* Right side (default): the leader extends to the right of the reticle. */
+.star-marker[data-side='right'] .star-marker-leader {
+  left: 100%;
+  transform: translate(0.2rem, -50%);
+  flex-direction: row;
+}
+/* Left side: mirrored to the left. */
+.star-marker[data-side='left'] .star-marker-leader {
+  right: 100%;
+  transform: translate(-0.2rem, -50%);
+  flex-direction: row-reverse;
+}
+/* The thin line — gold-tinted, like the card connector but lighter. */
+.star-marker-leader-line {
+  width: 1.6rem;
+  height: 1px;
+  background: color-mix(in oklch, var(--highlight) 60%, var(--marker-line));
+  flex: 0 0 auto;
+}
+/* The small endpoint dot at the far end of the leader. */
+.star-marker-leader-dot {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--highlight) 80%, var(--marker-line));
+  box-shadow: 0 0 4px 0 color-mix(in oklch, var(--highlight) 45%, transparent);
+  flex: 0 0 auto;
+}
+/* The leader appears at HOVER and stays through ACTIVE (it is the pre-card cue),
+   then is hidden at LOCKED when the full card + its connector take over. */
+.star-marker[data-state='hover'] .star-marker-leader,
+.star-marker[data-state='active'] .star-marker-leader {
+  opacity: 1;
+}
+.star-marker[data-state='locked'] .star-marker-leader {
+  opacity: 0;
+}
+/* Narrow viewport / coarse pointer: the card is a bottom sheet, so a side leader
+   line pointing at it reads wrong — hide it (same rationale as the card connector). */
+@media (max-width: 46rem), (pointer: coarse) {
+  .star-marker-leader {
+    display: none;
+  }
 }
 
 /* The tethered terminal-style card. Hidden until locked, then slides in beside
@@ -1815,16 +1982,22 @@ body.hud-active .star-marker {
   border-radius: var(--radius-sm);
 }
 
-/* Reduced motion: the lock still appears (snap, not animate) so the feature stays
-   usable — only the gold hex's rotation/breathe and the transitions are dropped. */
+/* Reduced motion: the four states still escalate (snap, not animate) so the feature
+   stays usable — only the gold hex's rotation/breathe and the transitions are
+   dropped. The escalation is just a static opacity/weight step per state. */
 @media (prefers-reduced-motion: reduce) {
+  .star-marker-arms line,
   .star-marker-hex-dotted,
   .star-marker-hex-solid,
+  .star-marker-hex-inner,
   .star-marker-ticks,
+  .star-marker-ring,
+  .star-marker-hex-gold,
   .star-marker-dot,
   .star-marker-plate,
   .star-marker-glyph,
   .star-marker-microlabel,
+  .star-marker-leader,
   .star-marker-card,
   .star-marker-card-cta {
     transition: none;
@@ -1833,15 +2006,24 @@ body.hud-active .star-marker {
   .star-marker[data-side='left'][data-locked='true'] .star-marker-card-cta {
     transform: none;
   }
-  .star-marker[data-locked='true'] .star-marker-hex-gold {
+  .star-marker[data-state='locked'] .star-marker-hex-gold {
     animation: none;
     opacity: 0.8;
     transform: scale(0.6);
   }
 }
+.star-marker[data-reduced='true'] .star-marker-arms line,
+.star-marker[data-reduced='true'] .star-marker-hex-dotted,
+.star-marker[data-reduced='true'] .star-marker-hex-solid,
+.star-marker[data-reduced='true'] .star-marker-hex-inner,
+.star-marker[data-reduced='true'] .star-marker-ticks,
+.star-marker[data-reduced='true'] .star-marker-ring,
+.star-marker[data-reduced='true'] .star-marker-hex-gold,
+.star-marker[data-reduced='true'] .star-marker-dot,
 .star-marker[data-reduced='true'] .star-marker-plate,
 .star-marker[data-reduced='true'] .star-marker-glyph,
 .star-marker[data-reduced='true'] .star-marker-microlabel,
+.star-marker[data-reduced='true'] .star-marker-leader,
 .star-marker[data-reduced='true'] .star-marker-card-cta {
   transition: none;
 }
@@ -1849,7 +2031,7 @@ body.hud-active .star-marker {
 .star-marker[data-reduced='true'][data-side='left'][data-locked='true'] .star-marker-card-cta {
   transform: none;
 }
-.star-marker[data-reduced='true'][data-locked='true'] .star-marker-hex-gold {
+.star-marker[data-reduced='true'][data-state='locked'] .star-marker-hex-gold {
   animation: none;
   opacity: 0.8;
   transform: scale(0.6);
@@ -1995,11 +2177,17 @@ body.hud-active .star-marker {
     translate: -50% -50%;
   }
   /* No hover on touch → make the RESTING marker read as a touchable affordance:
-     lift the dotted hex's opacity a little (0.62 → 0.78) so it invites a tap. Only
-     while resting (not locked) and only when its state is on screen. The locked
-     reveal still wins because the [data-locked] rule above zeroes this hex anyway. */
-  .star-marker[data-visible='true']:not([data-locked='true']) .star-marker-hex-dotted {
+     lift the dotted hex's opacity a little (0.62 → 0.78) so it invites a tap. On a
+     coarse pointer there is no proximity hover/active, so the resting state is always
+     idle (a tap jumps straight to locked); scope to data-state='idle' so the lift is
+     exactly the resting cue. */
+  .star-marker[data-visible='true'][data-state='idle'] .star-marker-hex-dotted {
     opacity: 0.78;
+  }
+  /* Lift the idle crosshair arms a touch on touch too, so the cross reads as a
+     tappable target without a hover to lean on. */
+  .star-marker[data-visible='true'][data-state='idle'] .star-marker-arms line {
+    opacity: 0.45;
   }
   /* CTA is the explicit "OPEN" affordance on touch — give it a comfortable tap
      line height so the second tap is easy to land. Visual size of the text is

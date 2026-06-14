@@ -15,14 +15,25 @@
 //     hexagon stays centred on the speck wherever it projects.
 // Either way the stage/visible SIGNAL still comes from markerFrameRef.
 //
-// Interaction model — a HUD "target lock":
-//   1. RESTING  — a dotted-outline hexagon + centre dot, quiet/off-white.
-//   2. LOCKED   — the pointer comes within a proximity radius (or the link is
-//      keyboard-focused): the hexagon becomes a solid outline with tick marks on
-//      each edge midpoint, a slowly rotating/breathing gold inner hexagon appears,
-//      and a tethered terminal-style info card pops up beside the marker.
-//   3. The whole thing is a real <a href>, so a click (on the marker OR the card's
-//      OPEN affordance) navigates to the destination.
+// Interaction model — a HUD "target lock" that escalates across FOUR states. The
+// visible reticle is keyed off `data-state` (idle → hover → active → locked); the
+// LOCK contract (the card, the custom-cursor dock, window.__bhMarkerLock) is keyed
+// off the unchanged binary `data-locked`. `locked === true` always implies
+// data-state='locked'; the other three are pure proximity tiers OUTSIDE the lock
+// radius, so they escalate the LOOK without ever changing WHEN the lock fires.
+//   1. IDLE   — pointer far / none: a faint dotted hex, faint crosshair arms, a dim
+//      centre core. Quiet.
+//   2. HOVER  — pointer inside the OUTER ring: the hex turns solid, the four
+//      crosshair arms brighten + segment, the gold core glows, and a light LEADER
+//      LINE appears to one side. Targetable.
+//   3. ACTIVE — pointer inside the engage ring: + a concentric inner double-hex, a
+//      brighter glowing core, stronger arms. Ready for selection.
+//   4. LOCKED — the pointer reaches the lock radius (or the link is keyboard-focused,
+//      or a touch tap on a coarse pointer): + an inner ring around the brightest gold
+//      core, the tick "tripod", the rotating/breathing gold inner hex, and the
+//      tethered terminal-style info card. Confirmed selection.
+//   The whole thing is a real <a href>, so a click (on the marker OR the card's OPEN
+//   affordance) navigates to the destination.
 //
 // The position AND the lock state are both computed inside the rAF loop, comparing
 // the live pointer position (tracked via a ref, not state) to the marker's current
@@ -98,6 +109,31 @@ const HEX_PEAK_RATIO = 50 / 116;
 // boundary. RELEASE_MARGIN is added to the geometry-derived engage radius.
 const LOCK_RELEASE_MARGIN = 14; // px past the peak before the lock drops
 
+// --- The four crosshair states -------------------------------------------------
+// The visible reticle escalates across FOUR tiers as the pointer approaches, on top
+// of the unchanged binary `data-locked` (which still solely drives the card + the
+// custom-cursor dock + window.__bhMarkerLock). `data-state` is the richer signal CSS
+// reads to layer geometry: idle → hover → active → locked, low→high contrast.
+//
+//   idle    pointer far away / no pointer            — dotted hex + faint arms + dim core
+//   hover   pointer inside the OUTER ring             — solid hex + segmented arms + leader line
+//   active  pointer inside the engage ring            — + inner double-hex + brighter core
+//   locked  the existing lock (engage / focus / tap)  — + inner ring + brightest core + card
+//
+// LOCKED is identical to today's lock — same radius, same `data-locked`, same
+// __bhMarkerLock publish. ACTIVE/HOVER are NEW tiers strictly OUTSIDE the lock
+// radius, so they never change WHEN the lock fires; they only add escalation before
+// it. Each ring boundary has its own hysteresis margin so the state never chatters.
+type MarkerState = 'idle' | 'hover' | 'active' | 'locked';
+
+// Ring radii are derived per-frame from the lock's engage radius (boxWidth *
+// HEX_PEAK_RATIO). ACTIVE sits just outside the lock circle; HOVER sits outside
+// ACTIVE. The factors are multipliers ON the engage radius; the margins add the
+// same flicker-proofing hysteresis the lock uses, on each new boundary.
+const ACTIVE_RADIUS_FACTOR = 1.55; // active band = lock radius → 1.55× the engage radius
+const HOVER_RADIUS_FACTOR = 2.7; // hover band  = active edge → 2.7× the engage radius
+const TIER_RELEASE_MARGIN = 10; // px past a tier edge before it relaxes
+
 // Card-flip threshold: when the marker sits in the right ~30% of the viewport the
 // card + connector flip to the LEFT so the card stays on-screen.
 const CARD_FLIP_FRACTION = 0.7;
@@ -116,10 +152,68 @@ function isCoarsePointer(): boolean {
 // the pointy sides, top/bottom are flat edges.
 const HEX_POINTS = '25,6.7 75,6.7 100,50 75,93.3 25,93.3 0,50';
 
-// Outward-pointing tick marks for a 3-point reticle: top edge + the two lower
-// slanted edges. Each is a short stroke whose inner end sits on an edge midpoint
-// and whose outer end sticks out radially. Computed for the same 100x100 hexagon.
-// One tick points up and two splay down — a triangular "tripod" lock.
+// The four CROSSHAIR ARMS — what makes the reticle read as a crosshair, not just a
+// hexagon. One arm at each of N / E / S / W, reaching OUTWARD past the hexagon. The
+// viewBox is "-8 -8 116 116" and the reticle CSS sets overflow:visible, so the arms
+// can extend well past the 0..100 hex box. Each arm is split into an INNER and an
+// OUTER segment with a small gap between them: at idle a single faint line reads; on
+// escalation the segments brighten and the gap makes them read as "targeting" ticks
+// (the reference's segmented arms). The hexagon centre is (50,50); ARM_INNER_START
+// is just past the hex edge (50 ± ~6 from the flat top/bottom at 6.7/93.3 and the
+// pointy sides at 0/100 — we start at the mid-edge radius ≈ 43 from centre so the
+// arm springs from just outside the silhouette), ARM_GAP is the segmented break,
+// ARM_OUTER_END is how far the arm reaches into the overflow margin.
+const ARM_INNER_START = 50; // px from centre where the inner arm segment begins
+const ARM_INNER_END = 64; // inner segment outer end
+const ARM_OUTER_START = 70; // outer segment inner end (the gap is ARM_INNER_END→here)
+const ARM_OUTER_END = 86; // outer segment far end (sits inside the -8..108 overflow)
+// Four arms as inner+outer segment pairs, in N / E / S / W order. Built from the
+// radii above so the geometry stays in one place; dx/dy is the unit direction.
+const ARM_DIRS: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
+  { id: 'n', dx: 0, dy: -1 },
+  { id: 'e', dx: 1, dy: 0 },
+  { id: 's', dx: 0, dy: 1 },
+  { id: 'w', dx: -1, dy: 0 },
+];
+const C = 50; // hexagon centre in viewBox units
+interface ArmSegment {
+  key: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+const ARM_SEGMENTS: ReadonlyArray<ArmSegment> = ARM_DIRS.flatMap((d) => [
+  {
+    key: `${d.id}-in`,
+    x1: C + d.dx * ARM_INNER_START,
+    y1: C + d.dy * ARM_INNER_START,
+    x2: C + d.dx * ARM_INNER_END,
+    y2: C + d.dy * ARM_INNER_END,
+  },
+  {
+    key: `${d.id}-out`,
+    x1: C + d.dx * ARM_OUTER_START,
+    y1: C + d.dy * ARM_OUTER_START,
+    x2: C + d.dx * ARM_OUTER_END,
+    y2: C + d.dy * ARM_OUTER_END,
+  },
+]);
+
+// The INNER (double-)hexagon shown from ACTIVE upward — a smaller concentric hex
+// scaled toward the centre. We reuse the flat-top hexagon shape via a transform in
+// CSS (scale about the fill-box centre), so no second point set is needed; the
+// element just reuses HEX_POINTS. (Defined as the same string for clarity.)
+const INNER_HEX_POINTS = HEX_POINTS;
+// The LOCKED inner ring (concentric circle inside the inner hex, around the core).
+// Centre (50,50); radius chosen to sit comfortably inside the inner hex.
+const INNER_RING_RADIUS = 17;
+
+// LOCKED tick marks — the three-point "tripod" confirm cue: top edge midpoint plus
+// the two lower slanted edges. Each is a short stroke whose inner end sits on an
+// edge midpoint and whose outer end sticks out radially. Computed for the same
+// 100x100 hexagon. One tick points up and two splay down. Kept as part of the
+// fullest LOCKED structure, coexisting with the four N/E/S/W arms above.
 const HEX_TICKS: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }> = [
   // top edge midpoint (50, 6.7) -> straight up
   { x1: 50, y1: 6.7, x2: 50, y2: -7 },
@@ -189,6 +283,12 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // Whether the marker is locked (pointer near / focused). Flips at most a handful
   // of times as the pointer crosses the proximity boundary — never per frame.
   const [locked, setLocked] = useState(false);
+  // The richer 4-way escalation tier, layered ON TOP of `locked`. Drives the CSS
+  // geometry matrix (data-state). Flips only when the pointer crosses a tier
+  // boundary (each with its own hysteresis) — never per frame. `locked === true`
+  // always implies state === 'locked'; the other three are pure proximity tiers
+  // OUTSIDE the lock radius, so changing them never affects the lock contract.
+  const [state, setState] = useState<MarkerState>('idle');
   // Side the card tethers to ('right' default, 'left' when the marker is near the
   // right edge). Recomputed only when the lock engages so it stays stable while held.
   const [cardSide, setCardSide] = useState<'right' | 'left'>('right');
@@ -256,6 +356,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     let rafId = 0;
     let lastVisible = false;
     let lastLocked = false;
+    let lastState: MarkerState = 'idle';
     let lastSide: 'right' | 'left' = 'right';
 
     // This marker's lock-ownership token (the placement id). Only the marker that
@@ -320,6 +421,16 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // event-driven (set by tap, cleared by an outside tap / navigation). The only
       // thing that still overrides it is `!nextVisible` (the marker scrolled away),
       // which also resets touchLockedRef so a re-entry starts clean.
+      // Geometry shared by the lock AND the new hover/active tiers: the engage
+      // radius is the hexagon's on-screen peak (circumradius); the tier radii fan
+      // out from it. Measured once per frame so both the lock and the tier logic
+      // read the same numbers (and the tier work below never re-measures).
+      const boxWidth = el ? el.getBoundingClientRect().width : 0;
+      const engageRadius = boxWidth * HEX_PEAK_RATIO;
+      // Live pointer distance (squared) to this marker, or -1 when no pointer.
+      const p = pointerRef.current;
+      const distSq = p ? (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) : -1;
+
       let nextLocked = lastLocked;
       if (!nextVisible) {
         nextLocked = false;
@@ -329,15 +440,8 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       } else if (focusedRef.current) {
         nextLocked = true;
       } else {
-        const p = pointerRef.current;
         if (p) {
-          const dx = p.x - x;
-          const dy = p.y - y;
-          const distSq = dx * dx + dy * dy;
-          // Engage radius = the hexagon's on-screen peak (circumradius), so the lock
-          // circle touches each vertex. Derived from the marker's measured width.
-          const boxWidth = el ? el.getBoundingClientRect().width : 0;
-          const engageRadius = boxWidth * HEX_PEAK_RATIO;
+          // Lock circle touches each vertex (engage radius), with hysteresis.
           const releaseRadius = engageRadius + LOCK_RELEASE_MARGIN;
           const engageSq = engageRadius * engageRadius;
           const releaseSq = releaseRadius * releaseRadius;
@@ -346,6 +450,44 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         } else if (!focusedRef.current) {
           nextLocked = false;
         }
+      }
+
+      // Four-state escalation tier (data-state), layered on top of `nextLocked`.
+      // LOCKED always wins (focus / touch / proximity-lock reach the top tier). When
+      // NOT locked, the pointer's distance picks ACTIVE (inside the active ring),
+      // HOVER (inside the wider hover ring), or IDLE (beyond it / no pointer). Each
+      // boundary uses TIER_RELEASE_MARGIN of hysteresis vs the PREVIOUS tier so the
+      // state can't chatter as the pointer hovers a boundary. The tiers sit strictly
+      // OUTSIDE the lock radius, so this never changes WHEN the lock fires.
+      let nextState: MarkerState = lastState;
+      if (!nextVisible) {
+        nextState = 'idle';
+      } else if (nextLocked) {
+        nextState = 'locked';
+      } else if (focusedRef.current) {
+        // Keyboard focus engages the lock above already, but guard so a focused
+        // marker is never left below ACTIVE even if the lock branch is bypassed.
+        nextState = 'active';
+      } else if (distSq < 0) {
+        nextState = 'idle';
+      } else {
+        const activeR = engageRadius * ACTIVE_RADIUS_FACTOR;
+        const hoverR = engageRadius * HOVER_RADIUS_FACTOR;
+        // Hysteresis: to ENTER a tighter tier use its raw radius; to LEAVE it, the
+        // pointer must pass the radius PLUS the margin. Compare against the tier the
+        // marker is currently in (lastState) so each boundary is sticky.
+        const m = TIER_RELEASE_MARGIN;
+        const inActive =
+          lastState === 'active' || lastState === 'locked'
+            ? distSq <= (activeR + m) * (activeR + m)
+            : distSq <= activeR * activeR;
+        const inHover =
+          lastState === 'hover' || lastState === 'active' || lastState === 'locked'
+            ? distSq <= (hoverR + m) * (hoverR + m)
+            : distSq <= hoverR * hoverR;
+        if (inActive) nextState = 'active';
+        else if (inHover) nextState = 'hover';
+        else nextState = 'idle';
       }
 
       // Card side: pin to the left when the marker is in the right ~30% of the
@@ -387,6 +529,12 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         lastLocked = nextLocked;
         setLocked(nextLocked);
       }
+      // Tier flip — the same disciplined compare-then-setState the other flips use,
+      // so React re-renders only when the escalation tier actually changes.
+      if (nextState !== lastState) {
+        lastState = nextState;
+        setState(nextState);
+      }
     }
 
     rafId = requestAnimationFrame(tick);
@@ -411,6 +559,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-visible={visible}
       data-reduced={reduced}
       data-locked={locked}
+      data-state={state}
       data-bright={isBright}
       data-bg={placement.bg}
       data-side={cardSide}
@@ -505,14 +654,37 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           anchor box. Decorative. */}
       <span className="star-marker-plate" aria-hidden="true" />
 
-      {/* The target reticle: resting dotted hex + locked solid hex + ticks + the
-          animated gold inner hex. All in one SVG so they scale crisply together. */}
+      {/* The target reticle — ONE crosshair that escalates across four states
+          (data-state, layered atop data-locked). All elements live in one SVG so
+          they scale crisply together; CSS keys each element's opacity / weight /
+          glow off data-state. The viewBox is padded (-8..108) and the reticle CSS
+          sets overflow:visible so the four crosshair arms can reach past the hex. */}
       <svg
         className="star-marker-reticle"
         viewBox="-8 -8 116 116"
         aria-hidden="true"
       >
-        {/* Resting state: dotted-outline hexagon. */}
+        {/* CROSSHAIR ARMS — four N/E/S/W arms reaching outward past the hex. This is
+            what makes the reticle read as a crosshair, present in EVERY state (faint
+            at idle, brighter on escalation). Each arm is an inner + outer segment
+            with a small gap, so on escalation the arms read as segmented targeting
+            ticks. Stroke colour is currentColor; weight/opacity come from CSS. */}
+        <g className="star-marker-arms">
+          {ARM_SEGMENTS.map((s) => (
+            <line
+              key={s.key}
+              x1={s.x1}
+              y1={s.y1}
+              x2={s.x2}
+              y2={s.y2}
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+        {/* IDLE: dotted-outline hexagon. Cross-faded to the solid hex from hover up. */}
         <polygon
           className="star-marker-hex-dotted"
           points={HEX_POINTS}
@@ -523,7 +695,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
-        {/* Locked state: solid thin outline hexagon. */}
+        {/* HOVER and up: solid thin outline hexagon. */}
         <polygon
           className="star-marker-hex-solid"
           points={HEX_POINTS}
@@ -532,11 +704,24 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        {/* Locked state: tick marks on each edge midpoint. */}
+        {/* ACTIVE and up: a second concentric INNER hexagon (the double-hex). Reuses
+            the hex shape, scaled toward the centre via CSS. Off-white, like the
+            outer hex — the gold is reserved for the rotating inner hex + core. */}
+        <polygon
+          className="star-marker-hex-inner"
+          points={INNER_HEX_POINTS}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* LOCKED: tick marks on three edge midpoints — the "tripod" confirm cue,
+            kept as part of the fullest locked structure (it now coexists with the
+            four arms above rather than standing in for them). */}
         <g className="star-marker-ticks">
-          {HEX_TICKS.map((t, i) => (
+          {HEX_TICKS.map((t) => (
             <line
-              key={i}
+              key={`tick-${t.x1}-${t.y1}`}
               x1={t.x1}
               y1={t.y1}
               x2={t.x2}
@@ -548,7 +733,19 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
             />
           ))}
         </g>
-        {/* Locked state: gold inner hexagon — rotates + breathes (CSS). */}
+        {/* LOCKED: an inner RING around the gold core (concentric circle inside the
+            inner hex) — the confirmed-selection flourish. Gold. */}
+        <circle
+          className="star-marker-ring"
+          cx={C}
+          cy={C}
+          r={INNER_RING_RADIUS}
+          fill="none"
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* LOCKED: gold inner hexagon — rotates + breathes (CSS). Also the element
+            the custom cursor docks to / hides when docked. */}
         <polygon
           className="star-marker-hex-gold"
           points={HEX_POINTS}
@@ -567,9 +764,20 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         style={{ '--glyph-mask': glyphMask } as CSSProperties}
       />
 
-      {/* The gold centre dot — hidden at rest (the glyph owns the centre), shown
-          ONLY on lock as the Voyager-gold accent that docks with the cursor. */}
+      {/* The gold CORE — the glowing centre. Hidden/dim at idle (the glyph owns the
+          centre), brightens to a small glowing gold core from HOVER up, becomes a
+          small photosphere at ACTIVE, and the brightest core at LOCKED. This is the
+          single gold-core source of truth the custom cursor docks against. */}
       <span className="star-marker-dot" aria-hidden="true" />
+
+      {/* LEADER LINE — a thin connector + endpoint dot extending out to one side,
+          appearing from HOVER (per the reference). It is lighter than the full
+          locked card connector and reads as the "this hotspot is targetable" cue
+          before the card opens. Sits on the card side (respects data-side). */}
+      <span className="star-marker-leader" aria-hidden="true">
+        <span className="star-marker-leader-line" />
+        <span className="star-marker-leader-dot" />
+      </span>
 
       {/* Always-near micro-label — a tiny mono caption under the marker so each
           hotspot reads even at rest; fades out on lock when the full card opens.
