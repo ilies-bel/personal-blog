@@ -7,6 +7,7 @@ import ArticleHud from '../../hero/components/ArticleHud.tsx';
 import TesseractBackdrop from '../../hero/components/TesseractBackdrop.astro';
 import IslandsDemo from '../../components/mdx/IslandsDemo.tsx';
 import SceneFigure from '../../components/mdx/SceneFigure.tsx';
+import SignalsReadout from '../../components/mdx/SignalsReadout.tsx';
 
 // Pre-render one static HTML page per post at build time (SSG → SEO-ready).
 export async function getStaticPaths() {
@@ -31,7 +32,7 @@ const fmt = (d: Date) =>
 // MDX component map: in-prose islands authors can drop into a post. Each hydrates on
 // its own (client:* in the MDX), keeping the surrounding prose zero-JS — the islands
 // thesis, demonstrated. Passed to <Content components={...} /> below.
-const mdxComponents = { IslandsDemo, SceneFigure };
+const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
 
 // ART-DIRECTION ROUTING. Three backdrop modes, resolved here so the template stays flat:
 //   • scene.journey set     → the LIVE engine driven by article scroll (the scene

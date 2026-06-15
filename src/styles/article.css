@@ -247,11 +247,132 @@ body.article-page .prose[data-scene-journey] {
   text-align: center;
 }
 
+/* ===========================================================================
+   MDX ISLAND: <SignalsReadout/> — a live "what the page knows about you" panel,
+   used by the personalized-hero post to demonstrate its own thesis in-prose.
+   Same instrument family as <IslandsDemo/> (hairline panel + status dot + mono
+   caps), with a small dt/dd grid for the readings.
+   =========================================================================== */
+.signals-readout {
+  margin: 2rem 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  transition: border-color 0.4s var(--ease-out-quint);
+}
+.signals-readout[data-hydrated='true'] {
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
+}
+.signals-readout-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.signals-readout-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--hud-rail-dim);
+  transition: background 0.4s var(--ease-out-quint), box-shadow 0.4s var(--ease-out-quint);
+}
+.signals-readout[data-hydrated='true'] .signals-readout-dot {
+  background: var(--accent-strong);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--accent) 70%, transparent);
+}
+.signals-readout-label { color: var(--fg-dim); }
+.signals-readout-state { margin-left: auto; color: var(--fg-faint); }
+
+.signals-readout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.7rem 1.1rem;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+.signals-readout-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.signals-readout-grid dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.signals-readout-grid dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  color: var(--hud-main);
+  word-break: break-word;
+}
+
+.signals-readout-greeting {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  line-height: 1.5;
+  color: var(--highlight);
+  background: color-mix(in oklch, var(--accent) 6%, transparent);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.signals-readout-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.signals-readout-button {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.12s var(--ease-out-quint);
+}
+.signals-readout-button:hover:not(:disabled) { background: var(--accent-strong); }
+.signals-readout-button:active:not(:disabled) { transform: translateY(1px); }
+.signals-readout-button:disabled {
+  color: var(--fg-faint);
+  background: color-mix(in oklch, var(--line) 70%, transparent);
+  cursor: not-allowed;
+}
+.signals-readout-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.signals-readout-promise {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
 /* Reduced motion: no HUD boot slide, no panel/dot easing — instant, calm states. */
 @media (prefers-reduced-motion: reduce) {
   .article-hud { animation: none; }
   .article-hud-rail-fill,
   .islands-demo,
   .islands-demo-dot,
-  .islands-demo-button { transition: none; }
+  .islands-demo-button,
+  .signals-readout,
+  .signals-readout-dot,
+  .signals-readout-button { transition: none; }
 }

@@ -4,12 +4,27 @@ description: "How the homepage greets you differently based on time, device, and
 pubDate: 2026-05-30
 tags: ["astro", "frontend", "privacy"]
 draft: false
+scene:
+  # Read the essay as a condensation FROM signal-soup TO one personal moment: it opens
+  # in the diffuse nebula (many ambient browser signals scattered across the page —
+  # time, timezone, device, referrer, scheme) and resolves inward to the yellow-star
+  # beat (those scattered signals coalescing into a single, warm, witty greeting). The
+  # backdrop scrubs that condensation as you scroll through the [from, to] window in
+  # getStage transition-space (0 = black hole … 3.5 = nebula); 2.05 lands inside the
+  # yellow/red-star coalescence beat — a small ignited point of light, the right shape
+  # for "one personal hello from many ambient signals".
+  journey: [3.5, 2.05]
 ---
+
+import SceneFigure from '../../components/mdx/SceneFigure.tsx';
+import SignalsReadout from '../../components/mdx/SignalsReadout.tsx';
 
 If you landed on the homepage, you probably noticed it said something
 suspiciously specific to you: the time of day, your browser, maybe a jab about
 how you got here. Here's how that works, and why it doesn't cost a single
 server request or store anything about you.
+
+<SceneFigure stage={3.5} caption="Diffuse signals: time, timezone, device, referrer, scheme — scattered context every browser hands a page for free" client:visible />
 
 ## The whole trick is the browser already knows
 
@@ -26,6 +41,17 @@ permission prompt and no network call:
 None of this identifies you. It's ambient context, the same context every site
 silently uses for analytics. The difference here is that I use it to say hello
 and then immediately forget it.
+
+The panel below isn't a screenshot or a mock — it is the exact same trick, run
+right here in the article. Every value is read inside this island the moment it
+hydrates, then held only in this component's memory. Nothing is fetched, sent,
+or stored:
+
+<SignalsReadout client:visible />
+
+Reroll the greeting a few times and you'll see the sentence change while the
+underlying readings stay the same — that's the second function in the next
+section, picking randomly among the lines that apply.
 
 ## Read signals, write a sentence
 
@@ -63,3 +89,5 @@ else gets the personal touch a few milliseconds later.
 
 That's the entire feature. No database, no cookies sent to a server, no privacy
 policy required, just a friendlier first impression.
+
+<SceneFigure stage={2.05} caption="One personal moment: the scattered signals coalesce into a single ignited point" client:visible />
