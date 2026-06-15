@@ -1315,9 +1315,6 @@ body.hud-booting .hud-boot-scan {
      radii in StarMarker.tsx derive from the MEASURED box width, so they scale with
      this automatically — the capture script's tier offsets were updated to match. */
   --marker-size: 6rem;
-  /* Inner glyph box — sits centred inside the reticle (the per-type icon). Scaled up
-     with the box so it stays proportionate. */
-  --marker-glyph-size: 1.85rem;
   /* Whole-marker dim multiplier: markers ride a touch dimmer until the HUD powers
      up, then snap to full. RAISED 0.6 → 0.85 so a marker is clearly visible on
      EVERY scene even before the HUD arms (it only arms at the black hole / bottom
@@ -1632,12 +1629,13 @@ body.hud-active .star-marker {
     0 0 var(--core-glow, 6px) var(--core-glow-spread, 1.5px)
       color-mix(in oklch, var(--marker-gold) 55%, transparent),
     0 0 3px 0 color-mix(in oklch, var(--marker-gold) 92%, transparent);
-  /* Hidden at idle (the glyph owns the resting centre); the state rules below fade
-     it in + grow it as the pointer escalates. */
-  opacity: 0;
-  --core-scale: 0.7;
-  --core-glow: 6px;
-  --core-glow-spread: 1.5px;
+  /* PRESENT IN EVERY STATE (reference: a warm gold dot at the heart of the reticle,
+     even at rest). Idle = a small, dim, low-contrast core ("resting · minimal
+     presence"); the state rules below brighten + grow it as the pointer escalates. */
+  opacity: 0.7;
+  --core-scale: 0.5;
+  --core-glow: 4px;
+  --core-glow-spread: 1px;
   transition:
     opacity 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
     transform 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
@@ -1668,45 +1666,9 @@ body.hud-active .star-marker {
     0 0 4px 0 color-mix(in oklch, var(--marker-gold) 96%, transparent);
 }
 
-/* The per-type INNER GLYPH — owns the resting centre (the dot is hidden until
-   lock). An SVG (public/glyphs/) applied as a mask and painted with the marker's
-   adaptive currentColor (= --marker-line, which flips to near-black on bright
-   states via the data-bright rule above), exactly like .hud-nav-glyph on the rail.
-   Position:absolute + translate so it never grows the anchor box. The --glyph-mask
-   custom prop is set inline per-marker in the JSX. */
-.star-marker-glyph {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: var(--marker-glyph-size);
-  height: var(--marker-glyph-size);
-  transform: translate(-50%, -50%);
-  background-color: currentColor;
-  -webkit-mask-image: var(--glyph-mask);
-  mask-image: var(--glyph-mask);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  /* Rest opacity per data-bg (see the [data-bg] props above); falls back to 0.9. */
-  opacity: var(--marker-rest-opacity, 0.9);
-  transition: opacity 0.22s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
-}
-/* As the marker escalates the glyph steps back so the gold core + structure take
-   focus (the glyph stays a quiet anchor rather than competing with the gold accent).
-   The core appears at hover, so the glyph already eases down a touch there, and
-   fully recedes by locked. */
-.star-marker[data-state='hover'] .star-marker-glyph {
-  opacity: 0.7;
-}
-.star-marker[data-state='active'] .star-marker-glyph {
-  opacity: 0.6;
-}
-.star-marker[data-state='locked'] .star-marker-glyph {
-  opacity: 0.55;
-}
+/* (The per-type inner glyph was removed: the reticle's resting centre is now the
+   warm gold core dot in EVERY state, matching the reference. The chapter is named
+   by the micro-label + info card instead of an icon inside the hex.) */
 
 /* Adaptive backing PLATE — a restrained blurred disc behind everything (z-index:-1
    inside the anchor) that lifts the marker off its surface. Off at rest by default,
@@ -2011,7 +1973,6 @@ body.hud-active .star-marker {
   .star-marker-hex-gold,
   .star-marker-dot,
   .star-marker-plate,
-  .star-marker-glyph,
   .star-marker-microlabel,
   .star-marker-leader,
   .star-marker-card,
@@ -2037,7 +1998,6 @@ body.hud-active .star-marker {
 .star-marker[data-reduced='true'] .star-marker-hex-gold,
 .star-marker[data-reduced='true'] .star-marker-dot,
 .star-marker[data-reduced='true'] .star-marker-plate,
-.star-marker[data-reduced='true'] .star-marker-glyph,
 .star-marker[data-reduced='true'] .star-marker-microlabel,
 .star-marker[data-reduced='true'] .star-marker-leader,
 .star-marker[data-reduced='true'] .star-marker-card-cta {

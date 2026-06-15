@@ -55,7 +55,7 @@
 // clears a touch-set lock from "no pointer is near") so the tap doesn't race the
 // next frame. Desktop's mouse-proximity + keyboard-focus path is untouched — the
 // touch branch only runs when `window.matchMedia('(pointer: coarse)')` matches.
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   settledIdForStage,
   type MarkerPlacement,
@@ -153,24 +153,18 @@ function isCoarsePointer(): boolean {
 const HEX_POINTS = '25,6.7 75,6.7 100,50 75,93.3 25,93.3 0,50';
 
 // The four CROSSHAIR ARMS — what makes the reticle read as a crosshair, not just a
-// hexagon. One arm at each of N / E / S / W, reaching OUTWARD past the hexagon. The
-// viewBox is "-8 -8 116 116" and the reticle CSS sets overflow:visible, so the arms
-// can extend well past the 0..100 hex box. Each arm is split into an INNER and an
-// OUTER segment with a small gap between them: at idle a single faint line reads; on
-// escalation the segments brighten and the gap makes them read as "targeting" ticks
-// (the reference's segmented arms). The hexagon centre is (50,50); ARM_INNER_START
-// is just past the hex edge (50 ± ~6 from the flat top/bottom at 6.7/93.3 and the
-// pointy sides at 0/100 — we start at the mid-edge radius ≈ 43 from centre so the
-// arm springs from just outside the silhouette), ARM_GAP is the segmented break,
-// ARM_OUTER_END is how far the arm reaches into the overflow margin.
-const ARM_INNER_START = 50; // px from centre where the inner arm segment begins
-const ARM_INNER_END = 66; // inner segment outer end
-const ARM_OUTER_START = 74; // outer segment inner end (the gap is ARM_INNER_END→here)
-const ARM_OUTER_END = 104; // outer segment far end — reaches WELL past the hex into the
-// -8..108 overflow so the crosshair arms clearly extend beyond the silhouette (reference
-// proportions: long, unmistakable N/E/S/W arms, not stubs hugging the hex edge).
-// Four arms as inner+outer segment pairs, in N / E / S / W order. Built from the
-// radii above so the geometry stays in one place; dx/dy is the unit direction.
+// hexagon. One SHORT tick at each of N / E / S / W, FLOATING just outside the hexagon
+// with a clear gap from the silhouette (reference proportions: clean short ticks, NOT
+// long arms that span the frame). The hexagon centre is (50,50); its flat-top apothem
+// is ≈ 43 (the top/bottom edge midpoints) and its circumradius is 50 (the left/right
+// vertices). ARM_START sits a small gap PAST the silhouette so the tick reads as a
+// detached crosshair mark; ARM_END is a modest length beyond that. The viewBox is
+// "-8 -8 116 116" with overflow:visible, but the ticks deliberately stay short and do
+// NOT reach the box edge — at the 6rem box, ~58→80 (of 116) is a tidy ~18px tick.
+const ARM_START = 58; // units from centre where the floating tick begins (just past the hex)
+const ARM_END = 80; // units from centre where the tick ends — a short, clean reach
+// Four ticks in N / E / S / W order. Built from the radii above so the geometry stays
+// in one place; dx/dy is the unit direction.
 const ARM_DIRS: ReadonlyArray<{ id: string; dx: number; dy: number }> = [
   { id: 'n', dx: 0, dy: -1 },
   { id: 'e', dx: 1, dy: 0 },
@@ -185,22 +179,13 @@ interface ArmSegment {
   x2: number;
   y2: number;
 }
-const ARM_SEGMENTS: ReadonlyArray<ArmSegment> = ARM_DIRS.flatMap((d) => [
-  {
-    key: `${d.id}-in`,
-    x1: C + d.dx * ARM_INNER_START,
-    y1: C + d.dy * ARM_INNER_START,
-    x2: C + d.dx * ARM_INNER_END,
-    y2: C + d.dy * ARM_INNER_END,
-  },
-  {
-    key: `${d.id}-out`,
-    x1: C + d.dx * ARM_OUTER_START,
-    y1: C + d.dy * ARM_OUTER_START,
-    x2: C + d.dx * ARM_OUTER_END,
-    y2: C + d.dy * ARM_OUTER_END,
-  },
-]);
+const ARM_SEGMENTS: ReadonlyArray<ArmSegment> = ARM_DIRS.map((d) => ({
+  key: d.id,
+  x1: C + d.dx * ARM_START,
+  y1: C + d.dy * ARM_START,
+  x2: C + d.dx * ARM_END,
+  y2: C + d.dy * ARM_END,
+}));
 
 // The INNER (double-)hexagon shown from ACTIVE upward — a smaller concentric hex
 // scaled toward the centre. We reuse the flat-top hexagon shape via a transform in
@@ -250,10 +235,6 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   const tags = placement.tags && placement.tags.length > 0 ? placement.tags : null;
   const cta = placement.cta ? `${placement.cta} →` : '[ OPEN ]';
 
-  // The per-destination-type inner glyph, painted with the marker's adaptive
-  // currentColor via CSS mask (same mechanism as the HUD rail's --glyph-mask).
-  // Resolved through the same BASE_URL helper the link href uses.
-  const glyphMask = `url(${resolveHref(base, placement.glyph)})`;
   // The always-near micro-label: the eyebrow when present, else the title.
   const microLabel = placement.eyebrow ?? placement.title;
 
@@ -666,11 +647,11 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         viewBox="-8 -8 116 116"
         aria-hidden="true"
       >
-        {/* CROSSHAIR ARMS — four N/E/S/W arms reaching outward past the hex. This is
-            what makes the reticle read as a crosshair, present in EVERY state (faint
-            at idle, brighter on escalation). Each arm is an inner + outer segment
-            with a small gap, so on escalation the arms read as segmented targeting
-            ticks. Stroke colour is currentColor; weight/opacity come from CSS. */}
+        {/* CROSSHAIR TICKS — four short N/E/S/W ticks FLOATING just outside the hex.
+            This is what makes the reticle read as a crosshair, present in EVERY state
+            (faint at idle, brighter + a touch heavier on escalation). One clean tick
+            per direction (reference proportions), NOT long arms across the frame.
+            Stroke colour is currentColor; weight/opacity come from CSS. */}
         <g className="star-marker-arms">
           {ARM_SEGMENTS.map((s) => (
             <line
@@ -757,19 +738,12 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         />
       </svg>
 
-      {/* The per-type inner glyph — owns the resting centre. Painted with the
-          marker's adaptive currentColor via CSS mask (the --glyph-mask custom prop
-          carries the resolved SVG url). Position:absolute in CSS. Decorative. */}
-      <span
-        className="star-marker-glyph"
-        aria-hidden="true"
-        style={{ '--glyph-mask': glyphMask } as CSSProperties}
-      />
-
-      {/* The gold CORE — the glowing centre. Hidden/dim at idle (the glyph owns the
-          centre), brightens to a small glowing gold core from HOVER up, becomes a
-          small photosphere at ACTIVE, and the brightest core at LOCKED. This is the
-          single gold-core source of truth the custom cursor docks against. */}
+      {/* The gold CORE — the glowing centre, present in EVERY state per the reference
+          (a warm gold dot at the heart of the reticle). Small + dim at idle
+          ("resting · minimal presence"), brightens to a glowing core from HOVER up,
+          a small photosphere at ACTIVE, and the brightest core at LOCKED. This is the
+          single gold-core source of truth the custom cursor docks against. (There is
+          no inner glyph: the chapter is named by the micro-label + info card.) */}
       <span className="star-marker-dot" aria-hidden="true" />
 
       {/* LEADER LINE — a thin connector + endpoint dot extending out to one side,
