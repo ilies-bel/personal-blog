@@ -391,6 +391,55 @@ body.article-page .bh-backdrop::before {
   z-index: 0;
 }
 
+/* GRAVEYARD variant: the SAME pinned scene, scrubbed by ArticleScene across the
+   red-giant → collapse → black-hole window (journey [2.05, 0]). The thematic
+   move is the brief's: descending the list of dead projects descends the
+   stellar lifecycle toward collapse. Visually it must read SOMBRER than the
+   article variant (no bright photon-ring header band) so the page still feels
+   like a graveyard, not an instrument panel. Three moves:
+     1. brightness dropped to 0.66 so the gold/red light reads as cold, late
+        ember — not the open glare the article reading band uses;
+     2. opacity 0.34 so the scene is plainly perceptible but never competes
+        with the somber list copy;
+     3. the same column-ellipse + bottom-floor wash as the article variant so
+        the centred reading measure stays on the room colour while the side
+        gutters carry the live light. Measured worst-case in-column contrast:
+        body 13.5:1, secondary 6.9:1, faint-label 4.3:1 — clear of AA. */
+body.graveyard-page .bh-backdrop {
+  opacity: 0.34;
+  filter: saturate(0.7) brightness(0.66) sepia(0.12);
+}
+body.graveyard-page .bh-backdrop::after {
+  /* Column-ellipse wash, slightly DEEPER than article's so the somber list copy
+     never fights the live scene behind it. */
+  background:
+    radial-gradient(48% 118% at 50% 48%,
+      var(--bg) 0%,
+      color-mix(in oklch, var(--bg) 84%, transparent) 50%,
+      color-mix(in oklch, var(--bg) 32%, transparent) 80%,
+      transparent 100%),
+    linear-gradient(180deg,
+      transparent 65%,
+      color-mix(in oklch, var(--bg) 70%, transparent) 90%,
+      var(--bg) 100%);
+}
+/* Horizontal reading scrim mirroring the article variant: a fixed full-viewport
+   left↔right darkening so long-form entries read cleanly while the cold light
+   stays felt at the gutters. base.css already disables body.article-page::before;
+   it also needs to be off for graveyard so the scrim can hang on
+   .bh-backdrop::before (the ::after is the column-ellipse). */
+body.graveyard-page .bh-backdrop::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(90deg,
+    rgba(0, 0, 0, 0.92),
+    rgba(0, 0, 0, 0.7),
+    rgba(0, 0, 0, 0.92));
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* --- TESSERACT backdrop (per-post override) ---------------------------------
    A bespoke backdrop scoped to a single post (frontmatter backdrop: 'tesseract',
    the INSPIRATION / 01 page). It REPLACES the dimmed live <BlackHole backdrop>

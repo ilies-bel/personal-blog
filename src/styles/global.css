@@ -18,5 +18,6 @@
 @import './hud.css';      /* the final exploration HUD */
 @import './prose.css';    /* article prose + article header */
 @import './article.css';  /* scene-journey article HUD + in-prose MDX islands (extends prose) */
+@import './graveyard.css'; /* scene-journey graveyard treatment — specimen rows + reveal */
 @import './about.css';    /* the about overlay panel */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */

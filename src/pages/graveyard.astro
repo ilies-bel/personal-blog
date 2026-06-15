@@ -1,9 +1,72 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import ArticleScene from '../hero/components/ArticleScene.tsx';
+import GraveyardHud from '../hero/components/GraveyardHud.tsx';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+
+// SPECIMEN LEDGER — the source of truth for the page. The entries render the
+// list, the HUD spy-line reads them, and the templating below stays flat. Order
+// is the visual order of the cabinet drawers; the descent through the list IS
+// the descent through the stellar-lifecycle journey [2.05 (red giant) → 0
+// (black hole)] driven by ArticleScene.
+interface Specimen {
+  id: string;
+  name: string;          // mono-caps display name (HUD readout + entry header)
+  link: { href: string; label: string };
+  image: { src: string; alt: string; caption: string };
+  interred: string;      // year of death / abandonment (mono caps)
+  cause: string;         // short mono-caps cause-of-death tag
+  body: readonly string[];   // ordered paragraphs of running copy
+  lesson: string;        // the one-line "what it taught me" — rendered last
+}
+
+const specimens: readonly Specimen[] = [
+  {
+    id: 'keywordlens',
+    name: 'KeywordLens',
+    link: { href: 'https://getkeywordlens.com/', label: 'getkeywordlens.com' },
+    image: {
+      src: img('graveyard/keywordlens.png'),
+      alt: 'KeywordLens interface showing keyword demand analysis for stock media platforms',
+      caption: 'KeywordLens: stock media keyword demand tool',
+    },
+    interred: '2023',
+    cause: 'Market collapsed',
+    body: [
+      'A SEMrush for stock media. It analyzed searches across the major stock platforms to surface high-demand, low-competition niches, so photographers could shoot what actually sells instead of guessing.',
+      "It died the month generative AI went mainstream. The whole premise was helping people find the right photo to shoot. When anyone could generate the exact image they needed on demand, the market I was optimizing for stopped existing. Not a pivot. The ground moved.",
+    ],
+    lesson:
+      "you can execute well and still be on the wrong side of a shift you didn't see coming. Timing isn't a detail. It's the whole bet.",
+  },
+  {
+    id: 'heydaniel',
+    name: 'HeyDaniel',
+    link: { href: 'https://heydaniel.app/', label: 'heydaniel.app' },
+    image: {
+      src: img('graveyard/heydaniel.png'),
+      alt: 'HeyDaniel app interface showing context-aware reminders and task capture',
+      caption: 'HeyDaniel: context-aware reminder assistant',
+    },
+    interred: '2024',
+    cause: 'No market validation',
+    body: [
+      "A context-aware reminder assistant. You'd send it a task by Telegram, a screenshot, or a note, and it would surface the right one based on where you were and what your day looked like. Walk into a shop, your list appears. Capturing cost nothing, remembering cost nothing.",
+      "It worked. For me. Generalizing it for other people would have meant a lot more engineering, and I never got any market validation to justify the work. So I stopped building it as a product. I still use it every day.",
+    ],
+    lesson:
+      "I'll happily pour engineering into a problem before checking whether anyone else has it. Validation first, build second. (Also: a tool that only serves you isn't a failure. It just isn't a business.)",
+  },
+];
+
+// The HUD reads its scroll-spy targets from the entry ids — passed in document
+// order so `SPECIMEN 02 / 02` matches the visual order down the page.
+const hudEntries = specimens.map((s) => ({ id: s.id, name: s.name.toUpperCase() }));
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
 ---
 
 <BaseLayout
@@ -12,6 +75,21 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   type="website"
   bodyClass="graveyard-page"
 >
+  {/* BACKDROP — the same live hero engine the article scene-JOURNEY uses, here
+      pinned to a SOMBER lifecycle window: descending the list of dead projects
+      descends the stellar lifecycle from the RED GIANT (the bloated, dying
+      star, stage 2.05) down through collapse to the BLACK HOLE itself (stage
+      0). client:only so the page text + the corner chrome read fully without
+      JS — the canvas is atmosphere, never the content. The dim wash + somber
+      column-ellipse live in hero.css under body.graveyard-page .bh-backdrop. */}
+  <ArticleScene client:only="react" journey={[2.05, 0]} />
+
+  {/* COCKPIT — the graveyard ledger HUD. Same window-event seam as ArticleHud,
+      same mono-gold instrument tokens. Passive readout: SPECIMEN N / total,
+      the active entry name, INTERRED label. Its own island; reads scroll from
+      the window event ArticleScene dispatches. */}
+  <GraveyardHud client:only="react" entries={hudEntries} />
+
   <section class="graveyard-hero" aria-labelledby="graveyard-title">
     <p class="graveyard-kicker">Graveyard</p>
     <h1 id="graveyard-title">Not everything survives.</h1>
@@ -19,63 +97,105 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   </section>
 
   <div class="graveyard-list" aria-label="Failed and abandoned projects">
+    {specimens.map((s, i) => (
+      <article class="graveyard-entry" id={s.id} data-specimen-index={pad2(i + 1)}>
+        {/* SPECIMEN DRAWER LABEL — the mono-caps row that lifts the page from
+            "blog list" to "logged ledger." Renders BEFORE the headline so it
+            reads like the label slot on a cabinet drawer. */}
+        <p class="graveyard-entry-specimen" aria-label="Specimen record">
+          <span class="graveyard-entry-specimen-id">SPECIMEN {pad2(i + 1)}</span>
+          <span class="graveyard-entry-specimen-sep" aria-hidden="true">·</span>
+          <span>INTERRED {s.interred}</span>
+          <span class="graveyard-entry-specimen-sep" aria-hidden="true">·</span>
+          <span>CAUSE: {s.cause}</span>
+        </p>
 
-    <article class="graveyard-entry" id="keywordlens">
-      <header class="graveyard-entry-header">
-        <h2 class="graveyard-entry-name">KeywordLens</h2>
-        <div class="graveyard-entry-links">
-          <a href="https://getkeywordlens.com/" class="graveyard-link" target="_blank" rel="noopener noreferrer">getkeywordlens.com</a>
+        <header class="graveyard-entry-header">
+          <h2 class="graveyard-entry-name">{s.name}</h2>
+          <div class="graveyard-entry-links">
+            <a href={s.link.href} class="graveyard-link" target="_blank" rel="noopener noreferrer">
+              {s.link.label}
+            </a>
+          </div>
+        </header>
+
+        <div class="graveyard-entry-body">
+          <figure class="graveyard-figure">
+            <img
+              src={s.image.src}
+              alt={s.image.alt}
+              class="graveyard-screenshot"
+              loading="lazy"
+            />
+            <figcaption>{s.image.caption}</figcaption>
+          </figure>
+
+          <div class="graveyard-copy">
+            {s.body.map((paragraph) => <p>{paragraph}</p>)}
+            <p class="graveyard-lesson">
+              <span class="graveyard-lesson-label">What it taught me:</span>
+              {' '}{s.lesson}
+            </p>
+          </div>
         </div>
-      </header>
-
-      <div class="graveyard-entry-body">
-        <figure class="graveyard-figure">
-          <img
-            src={img('graveyard/keywordlens.png')}
-            alt="KeywordLens interface showing keyword demand analysis for stock media platforms"
-            class="graveyard-screenshot"
-            loading="lazy"
-          />
-          <figcaption>KeywordLens: stock media keyword demand tool</figcaption>
-        </figure>
-
-        <div class="graveyard-copy">
-          <p>A SEMrush for stock media. It analyzed searches across the major stock platforms to surface high-demand, low-competition niches, so photographers could shoot what actually sells instead of guessing.</p>
-          <p>It died the month generative AI went mainstream. The whole premise was helping people find the right photo to shoot. When anyone could generate the exact image they needed on demand, the market I was optimizing for stopped existing. Not a pivot. The ground moved.</p>
-          <p class="graveyard-lesson"><span class="graveyard-lesson-label">What it taught me:</span> you can execute well and still be on the wrong side of a shift you didn't see coming. Timing isn't a detail. It's the whole bet.</p>
-        </div>
-      </div>
-    </article>
-
-    <article class="graveyard-entry" id="heydaniel">
-      <header class="graveyard-entry-header">
-        <h2 class="graveyard-entry-name">HeyDaniel</h2>
-        <div class="graveyard-entry-links">
-          <a href="https://heydaniel.app/" class="graveyard-link" target="_blank" rel="noopener noreferrer">heydaniel.app</a>
-        </div>
-      </header>
-
-      <div class="graveyard-entry-body">
-        <figure class="graveyard-figure">
-          <img
-            src={img('graveyard/heydaniel.png')}
-            alt="HeyDaniel app interface showing context-aware reminders and task capture"
-            class="graveyard-screenshot"
-            loading="lazy"
-          />
-          <figcaption>HeyDaniel: context-aware reminder assistant</figcaption>
-        </figure>
-
-        <div class="graveyard-copy">
-          <p>A context-aware reminder assistant. You'd send it a task by Telegram, a screenshot, or a note, and it would surface the right one based on where you were and what your day looked like. Walk into a shop, your list appears. Capturing cost nothing, remembering cost nothing.</p>
-          <p>It worked. For me. Generalizing it for other people would have meant a lot more engineering, and I never got any market validation to justify the work. So I stopped building it as a product. I still use it every day.</p>
-          <p class="graveyard-lesson"><span class="graveyard-lesson-label">What it taught me:</span> I'll happily pour engineering into a problem before checking whether anyone else has it. Validation first, build second. (Also: a tool that only serves you isn't a failure. It just isn't a business.)</p>
-        </div>
-      </div>
-    </article>
-
+      </article>
+    ))}
   </div>
+
+  {/* NO-JS FALLBACK — the entries are hidden-by-default in graveyard.css so the
+      reveal transition can run; without JS the IntersectionObserver never sets
+      data-revealed, so we force them visible. Same defensive trick as the
+      project's other client:only branches. */}
+  <noscript>
+    <style is:inline>{`
+      .graveyard-entry { opacity: 1 !important; transform: none !important; }
+    `}</style>
+  </noscript>
 </BaseLayout>
+
+{/* SCROLL REVEAL — entries fade + rise into place as they enter the spy window.
+    Pure inline IO; honours OS reduced-motion (skips the transition by setting
+    data-revealed immediately on every entry, while the CSS @media query gates
+    the transition off so the swap is instant). Re-runs on ClientRouter swaps so
+    a back-nav into /graveyard re-arms the observer on the fresh DOM. */}
+<script>
+  function initGraveyardReveal() {
+    if (!document.body.classList.contains('graveyard-page')) return;
+    const entries = Array.from(
+      document.querySelectorAll<HTMLElement>('.graveyard-entry'),
+    );
+    if (entries.length === 0) return;
+
+    const reduceMotion =
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion || typeof IntersectionObserver === 'undefined') {
+      // Reduced motion or no observer support: ship them all in instantly. The
+      // HUD spy still works (it has its own observer in GraveyardHud).
+      entries.forEach((el) => el.setAttribute('data-revealed', 'true'));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (records) => {
+        records.forEach((record) => {
+          if (record.isIntersecting) {
+            record.target.setAttribute('data-revealed', 'true');
+            observer.unobserve(record.target);
+          }
+        });
+      },
+      // Trigger as the entry's top edge crosses ~85% of the viewport — early
+      // enough that the rise feels generous, not jumpy. Margin is asymmetric:
+      // we want to reveal as the entry RISES into view from below, not as it
+      // exits past the top.
+      { rootMargin: '0px 0px -15% 0px', threshold: 0 },
+    );
+    entries.forEach((el) => observer.observe(el));
+  }
+  document.addEventListener('astro:page-load', initGraveyardReveal);
+  initGraveyardReveal();
+</script>
 
 <style>
   .graveyard-page .wrap {
@@ -229,7 +349,11 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     padding: 1rem 1.1rem;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
+    /* Slight lift off the live backdrop: the panel reads as a specimen-card
+       drawer, distinct from the page surface, without crushing readability. */
+    background: color-mix(in oklch, var(--bg) 78%, transparent);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     font-size: 0.96rem !important;
   }
 

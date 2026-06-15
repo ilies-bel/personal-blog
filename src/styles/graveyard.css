@@ -1,0 +1,86 @@
+/* graveyard.css — the art-direction lift for /graveyard.
+   The page extends the SCENE-JOURNEY treatment used on articles: the live hero engine
+   sits dimmed behind a single readable column, ArticleScene scrubs its getStage
+   from red giant down to the black hole as you descend the list of dead projects,
+   and the chrome speaks the hero's mono-gold instrument grammar. This file
+   ONLY adds graveyard-specific surface — the backdrop dim wash lives in hero.css
+   (body.graveyard-page .bh-backdrop), the HUD rail in article.css (.article-hud-*)
+   is reused as-is (GraveyardHud adds a `.graveyard-hud` modifier for any future
+   tints). Nothing here weakens the measured AA contrast in hero.css. */
+
+/* The .wrap shell on standard pages sits at the default stacking context. The
+   graveyard page mounts the live backdrop (z-index 0), so the reading column
+   must be lifted above it — same trick as .prose in prose.css. The chrome
+   (subnav / footer) already has its own z (chrome.css). */
+body.graveyard-page .wrap {
+  position: relative;
+  z-index: 1;
+}
+
+/* SPECIMEN HEADER — each `<article class="graveyard-entry">` carries a mono-caps
+   line above its title that reads like a drawer label on a collection cabinet:
+   "SPECIMEN 01 · INTERRED 2023 · CAUSE: market collapsed." Same token ramp as
+   the rest of the chrome (--font-mono, --tracking-caps, --highlight for the
+   specimen number, --fg-faint for the body). Tight rhythm so it sits under the
+   top hairline of the entry without crowding the headline. */
+.graveyard-entry-specimen {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.05rem;
+  margin: 0 0 0.85rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.graveyard-entry-specimen-id {
+  color: var(--highlight);
+}
+.graveyard-entry-specimen-sep {
+  color: var(--fg-faint);
+  opacity: 0.55;
+}
+
+/* SCROLL REVEAL — entries fade + rise into place as they enter the spy window.
+   The script in graveyard.astro toggles [data-revealed] on each entry; the
+   transform/opacity transition is on this attribute. Reduced motion gates the
+   transition off (rules in @media block at the bottom) and ships the entries in
+   place instantly — the IntersectionObserver still runs to keep the HUD
+   accurate. The token --ease-out-quint is the project's standard ease. */
+.graveyard-entry {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.7s var(--ease-out-quint),
+    transform 0.7s var(--ease-out-quint);
+}
+.graveyard-entry[data-revealed='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* NO-JS / SSR FALLBACK — the inline script sets data-revealed; without JS the
+   entries must still be readable. The `.no-js` class isn't used elsewhere, so
+   the simpler defence is a `<noscript>` style block in the page itself. We
+   ALSO honour prefers-reduced-motion below: instant in, no rise. */
+
+/* Reduced motion: ship the entries in instantly. The IntersectionObserver in
+   the page script still wires the HUD readout (so the cockpit stays accurate);
+   only the visual transition is gated off. */
+@media (prefers-reduced-motion: reduce) {
+  .graveyard-entry {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Graveyard HUD modifier — currently a no-op tint hook; GraveyardHud mounts as
+   `.article-hud .graveyard-hud` so the rail geometry + tokens come for free
+   from article.css, and any future graveyard-specific accent (e.g. ember-red
+   tarnish) can hang here without touching article.css. */
+.article-hud.graveyard-hud {
+  /* Reserved for graveyard-specific HUD tints. */
+}

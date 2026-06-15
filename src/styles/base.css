@@ -59,8 +59,12 @@ body:not(.bare)::after {
 /* Article pages carry the live black-hole backdrop, which already supplies the
    warm graphite atmosphere. The standard corner glow would double up and muddy
    it, so it's dropped here; the faint grid (::after) stays — it adds quiet
-   structure and never competes with the dim backdrop. */
-body.article-page::before { display: none; }
+   structure and never competes with the dim backdrop. The graveyard page mounts
+   the same live scene (driven by ArticleScene across the collapse window) so it
+   shares the override — otherwise the warm corner pool would fight the cold
+   late-ember light the graveyard backdrop is supposed to feel like. */
+body.article-page::before,
+body.graveyard-page::before { display: none; }
 
 ::selection {
   background: color-mix(in oklch, var(--accent) 48%, transparent);
