@@ -4,7 +4,17 @@ description: "Base paths, GitHub Actions, and the small config gotchas that trip
 pubDate: 2026-05-14
 tags: ["devops", "github", "astro"]
 draft: false
+scene:
+  # Read the essay as an ignition arc: it opens in the collapsed dense core of a
+  # local build (the black hole) and resolves outward to the bright, diffuse
+  # nebula of a deployed, publicly-reachable site. Each section is a step further
+  # out of the dark — config → automation → the switch that flips it live — so
+  # scrolling the post scrubs that ignition through the [from, to] window in
+  # getStage transition-space (0 = black hole … 3.5 = nebula).
+  journey: [0, 3.5]
 ---
+
+import SceneFigure from '../../components/mdx/SceneFigure.tsx';
 
 GitHub Pages is free, fast, and perfect for a personal site, but framework
 builds have a few sharp edges on it. Here's the setup I use, including the
@@ -63,3 +73,5 @@ Two manual steps that aren't in any config file:
 
 Get those right and you've got a zero-cost, auto-deploying static site with a
 green checkmark on every push. Hard to beat.
+
+<SceneFigure stage={3.5} caption="It goes live: the build leaves the local dark and the site is reachable on the open internet" client:visible />
