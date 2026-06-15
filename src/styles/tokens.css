@@ -22,7 +22,8 @@
      to ~0.44/0.36, the dark scenes only to ~0.62/0.78), so 'dimmed' read at two
      brightnesses. These rail-only tokens are NOT overridden per scene, so the rail's
      resting rows sit at the single dimmest level everywhere. */
-  --hud-rail-dim: oklch(0.44 0.012 78);     /* dimmest non-current number/title */
+  --hud-rail-dim: oklch(0.44 0.012 78);     /* dimmest non-current number/title — FILLS/bg only */
+  --hud-rail-dim-text: oklch(0.56 0.012 78); /* resting nav number/title text — WCAG 4.5:1 vs --bg */
   --hud-rail-dim-sub: oklch(0.36 0.012 78); /* dimmest non-current subtext */
   /* Hero-overlay text — the ONLY copy that floats over the warm/orange star states
      (manifesto big line + whisper, identity, the bottom HUD compass). Warm bone

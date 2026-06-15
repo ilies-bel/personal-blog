@@ -247,7 +247,7 @@ body:not(.hud-active) .hud-nav::before {
    above win on the selected row. The quiet icon rail previously left non-current titles at
    the brighter --hud-main and subtext at --hud-muted — now they match the powered menu. */
 .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-title {
-  color: var(--hud-rail-dim);
+  color: var(--hud-rail-dim-text);
 }
 .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-destination {
   color: var(--hud-rail-dim-sub);
@@ -319,7 +319,7 @@ body.hud-active .hud-nav-copy {
    --fg-faint via currentColor) and the destination at the dim --fg-dim tone. The
    [data-current='true'] block below re-brightens the current row (higher specificity)
    and the :hover / :focus-visible rules still lift any hovered row. */
-body.hud-active .hud-nav-title { color: var(--hud-rail-dim); }
+body.hud-active .hud-nav-title { color: var(--hud-rail-dim-text); }
 body.hud-active .hud-nav-destination { color: var(--hud-rail-dim-sub); }
 /* The CURRENT row in the active menu is the ONLY one lifted to full brightness.
    Adding [data-current] gives these higher specificity than the blanket
@@ -461,10 +461,10 @@ body.hud-active .hud-nav-row:nth-child(5) .hud-nav-copy { transition-delay: calc
    and :hover/:focus-visible still brighten any pointed row (those rules have a glow +
    colour lift of their own). */
 .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-number {
-  color: var(--hud-rail-dim);
+  color: var(--hud-rail-dim-text);
 }
 body.hud-active .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-number {
-  color: var(--hud-rail-dim);
+  color: var(--hud-rail-dim-text);
 }
 
 /* PROGRESSIVE DISCOVERY (FIX 2): while the HUD is OFF (the quiet icon rail before the

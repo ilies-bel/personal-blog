@@ -244,7 +244,7 @@ body.at-opening .overlay-blog {
 .overlay-blog-link {
   display: inline-flex;
   align-items: center;
-  color: var(--hud-rail-dim);
+  color: var(--hud-rail-dim-text);
   text-decoration: none;
   transition:
     color 0.16s ease,
