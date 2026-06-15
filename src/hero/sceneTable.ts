@@ -888,7 +888,7 @@ export const SCENES: readonly LifecycleScene[] = [
       // black-hole HUD nav row's destination below.)
       down: 'Under pressure, structure remains.',
       up: 'Under pressure, structure remains.',
-      whisper: 'Even the repo you were proud of can collapse.',
+      whisper: 'software engineer building systems that stay readable as they grow.',
     },
   },
 ];
