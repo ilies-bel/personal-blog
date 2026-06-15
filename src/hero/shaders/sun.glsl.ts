@@ -258,26 +258,25 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // and lerp gold->blue by uBlue. Cools to the gold ramp above as it grows (uBlue->0).
     // No-op for the settled yellow sun.
     //
-    // SATURATED-BLUE RETUNE: the seed is rendered at ≈0.4% scale and its emission is
+    // COLD-WHITE RETUNE: the seed is rendered at ≈0.4% scale and its emission is
     // lifted HARD by uSeedGlow (col *= uSeedGlow, up to ≈3.2× a few lines below). The old
-    // ramp's bright stops were near-WHITE (b3 0.72,0.86,1.00 / b4 0.92,0.97,1.00), so that
-    // multiply pushed all three channels past 1.0 and the bright core CLIPPED to white —
-    // the newborn never read blue. Fix: keep BLUE the clearly dominant channel at EVERY
-    // stop and hold red+green well BELOW it on the bright stops, so even after the seed-glow
-    // multiply (and tone-map) clips blue toward 1.0, red/green stay lower and the core stays
-    // unmistakably BLUE rather than washing to white. Brightness is carried by the high blue
-    // channel + the seed-glow lift, not by lifting red/green toward white.
-    vec3 b0 = vec3(0.04, 0.09, 0.34);  // cool deep blue (umbral) — bluer, darker R/G
-    vec3 b1 = vec3(0.10, 0.26, 0.78);  // mid blue — R/G pulled down vs old 0.18,0.34
-    vec3 b2 = vec3(0.20, 0.44, 0.98);  // bright azure — strongly blue-dominant
-    vec3 b3 = vec3(0.34, 0.60, 1.00);  // bright blue (was pale blue-WHITE 0.72,0.86,1.0)
-    vec3 b4 = vec3(0.52, 0.74, 1.00);  // hot blue core (was near-white 0.92,0.97,1.0)
+    // saturated-blue ramp held R/G well below B at every stop, which read as a distinctly
+    // blue orb. Fix: lift R and G much closer to B on the BRIGHT stops so the body reads as
+    // a cold white with only a faint blue undertone. Keep the deep/umbral stops cooler so
+    // surface texture (granulation/mottle, built from field 'm') still has depth and the dot
+    // does not flatten to a solid disc. b4 stays just shy of (1,1,1) with B marginally
+    // highest so after the seed-glow lift the core reads cold white, not neutral white.
+    vec3 b0 = vec3(0.10, 0.16, 0.32);  // cool deep blue-grey (umbral) — keeps depth
+    vec3 b1 = vec3(0.34, 0.46, 0.72);  // cool steel-blue mid
+    vec3 b2 = vec3(0.62, 0.74, 0.94);  // pale cold blue body
+    vec3 b3 = vec3(0.82, 0.90, 1.00);  // near-white, faint cool cast
+    vec3 b4 = vec3(0.94, 0.97, 1.00);  // cold white core (B just nudges past R/G)
     vec3 bcol = b0;
     bcol = mix(bcol, b1, smoothstep(0.14,0.40,m));
     bcol = mix(bcol, b2, smoothstep(0.34,0.58,m));
     bcol = mix(bcol, b3, smoothstep(0.55,0.78,m));
     bcol = mix(bcol, b4, smoothstep(0.80,0.96,m));
-    bcol += limbWide * vec3(0.20, 0.40, 0.78);   // cool limb glow — bluer (R cut, B up)
+    bcol += limbWide * vec3(0.40, 0.52, 0.74);   // cool-white limb glow (was 0.20,0.40,0.78)
     bcol *= 1.25;                             // young star is luminous
     // bcol is the FULL granulated photosphere on the blue palette (built from 'm'), so the
     // seed shows the real yellow-sun surface texture tinted blue — exactly what we want, not
