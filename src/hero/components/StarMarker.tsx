@@ -648,6 +648,16 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       onBlur={() => {
         focusedRef.current = false;
       }}
+      onKeyDown={(event) => {
+        // Escape dismisses the info card without navigating and without blurring
+        // the element, so the keyboard user stays in place (next Tab continues from
+        // this marker). The rAF loop reads focusedRef next frame and drops the lock.
+        // Respect the same loader gate that onFocus/onClick use.
+        if (event.key !== 'Escape') return;
+        if (!loaderGone) return;
+        focusedRef.current = false;
+        touchLockedRef.current = false;
+      }}
     >
       {/* Adaptive backing plate — a restrained blurred disc behind the reticle,
           tuned per data-bg so the marker separates from black / bright / noisy
