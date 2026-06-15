@@ -254,8 +254,16 @@ body.at-opening .overlay-blog {
 .overlay-blog-link:focus-visible { color: var(--fg); }
 .overlay-blog-link:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
   border-radius: var(--radius-sm);
+}
+/* CURRENT page link — full --fg-overlay + persistent underline so the active
+   overlay-blog link is unmistakable. Same system as subnav and footer. */
+.overlay-blog-link[aria-current='page'] {
+  color: var(--fg-overlay);
+}
+.overlay-blog-link[aria-current='page'] .overlay-blog-label {
+  background-size: 100% 1px;
 }
 /* HUD-active (black hole) brightens AND lifts the section labels in place of
    the old fold-out-from-zero-width reveal. The lift is small (~2px) — a quiet

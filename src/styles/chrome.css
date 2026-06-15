@@ -160,12 +160,18 @@
 .subnav-tick-br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
 
 /* LOCKED (current) section — the hero's target-lock treatment: corner ticks +
-   a hairline frame, brighter --fg, and the mono index revealed. */
+   a hairline frame, full --fg-overlay brightness, the mono index revealed, and a
+   PERSISTENT underline so the current section is unmistakable at a glance. */
 .subnav-link[aria-current='page'] {
-  color: var(--fg);
+  color: var(--fg-overlay);
 }
 .subnav-link[aria-current='page'] .subnav-lock { display: block; }
 .subnav-link[aria-current='page'] .subnav-index { display: inline-block; }
+/* Persistent underline on the current section — the same gold sweep shown at
+   rest (not just on hover), so the current item is obvious. */
+.subnav-link[aria-current='page'] .subnav-label {
+  background-size: 100% 1px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .subnav-label { transition: none; }
@@ -209,6 +215,15 @@
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
+/* CURRENT page link — same system as the subnav: full --fg-overlay + persistent
+   underline so the active footer link is unmistakable. */
+.site-footer a[aria-current='page'] {
+  color: var(--fg-overlay);
+}
+.site-footer a[aria-current='page'] .site-footer-label {
+  background-size: 100% 1px;
+}
+
 /* The gold underline sweep, mirrored from .subnav-label so header and footer
    speak with one hover gesture. */
 .site-footer-label {
