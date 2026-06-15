@@ -679,14 +679,17 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
             />
           ))}
         </g>
-        {/* IDLE: dotted-outline hexagon. Cross-faded to the solid hex from hover up. */}
+        {/* IDLE: finely-dotted hexagon — even round dots (round caps + a near-zero
+            dash so each segment renders as a crisp dot), tightly spaced for the
+            refined "minimal presence" look from the reference (the old 2.5/4 dash read
+            coarse/cheap). Cross-faded to the solid hex from hover up. */}
         <polygon
           className="star-marker-hex-dotted"
           points={HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.45"
-          strokeDasharray="2.5 4"
+          strokeWidth="1.6"
+          strokeDasharray="0.01 3.4"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />

@@ -1303,12 +1303,17 @@ body.hud-booting .hud-boot-scan {
    drives the reticle geometry. The four crosshair ARMS read in every state.
    --------------------------------------------------------------------------- */
 .star-marker {
-  /* Off-white for the whole OUTER reticle — resting dotted hex, locked solid hex,
-     edge ticks AND the centre dot at rest (same --fg off-white family the custom
-     cursor's hexagon uses). The Voyager-gold (--highlight) is reserved STRICTLY
-     for the animated INNER hexagon + the locked accents (card, dot-on-lock). */
-  --marker-line: var(--fg);
-  --marker-gold: var(--highlight);
+  /* WHITE for the whole OUTER reticle — resting dotted hex, locked solid hex, edge
+     ticks. A FIXED near-white, NOT var(--fg): in the yellow-star "bright zone" the
+     global --fg flips to dark graphite (for HUD text on the bright canvas), which was
+     dirtying the marker to a muddy brown. The marker has its OWN adaptive system
+     (data-bright flips it near-black only when it sits ON a bright surface), so it
+     must not also inherit the bright-zone --fg darkening. Pin it crisp-white here;
+     data-bright still overrides to near-black where needed. Gold (--marker-gold) is
+     a fixed warm gold for the inner hex + locked accents, likewise NOT --highlight
+     (which also darkens in the bright zone). */
+  --marker-line: oklch(0.97 0.012 85);
+  --marker-gold: oklch(0.82 0.13 78);
   /* Reticle box — ~77px. Sized DOWN 20% from 6rem (it read too big/thick); still an
      unmistakable target on every scene but lighter and more refined. The proximity
      engage/hover radii in StarMarker.tsx derive from the MEASURED box width, so they
