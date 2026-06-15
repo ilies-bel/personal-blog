@@ -833,7 +833,7 @@ export const SCENES: readonly LifecycleScene[] = [
       glyphSrc: 'glyphs/glyph-black-hole.svg',
       motion: 'pulse',
       label: 'BLACK HOLE',
-      destination: 'Inspiration',
+      destination: 'Colophon',
       stage: 0,
       href: 'posts/thanks-for-scrolling-to-the-bottom',
     },
