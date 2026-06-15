@@ -1691,7 +1691,62 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   }
 
   onResize();
-  frame();
+
+  // ASYNC SHADER COMPILE — start the rAF only after the GPU has parsed/linked the
+  // scene materials, so the FIRST interactive frame is never blocked by a synchronous
+  // shader compile (cold-GPU stalls of 100–400ms had been landing in INP and the
+  // "first interaction" budget). The intro veil + dive overlay already absorbs the
+  // one-or-two-frame delay before the first painted frame, so the perceived cost is
+  // zero. compileAsync resolves once KHR_parallel_shader_compile reports the program
+  // is ready (or immediately on drivers without the extension), and covers both the
+  // scene materials AND every full-screen shader pass in the post chain (RenderPass /
+  // Bloom / Grade / Nova) because their materials are pulled into a throwaway warm-up
+  // scene below. The reduced-motion and low-tier paths share the SAME kickoff — they
+  // build the same renderer and a (cheaper) post chain, so both still benefit.
+  //
+  // ROBUSTNESS — we never let warm-up failure dead-end the scene:
+  //  • renderer.compileAsync is r152+; older builds (and some headless test stubs)
+  //    don't expose it, so we feature-detect and fall back to synchronous kickoff
+  //    (the previous behaviour, byte-identical timing).
+  //  • A rejected/throwing compileAsync is swallowed by try/catch — the first
+  //    composer.render() will fall back to the old behaviour (compile on first use).
+  //  • If dispose() runs while we're awaiting compile, the `stopped` flag stops
+  //    frame() from ever firing, so we never schedule work onto a torn-down scene.
+  //  • The WebGL-unavailable probe path (above) throws BEFORE this block is reached,
+  //    so compileAsync only runs against a successfully-constructed renderer.
+  const startRenderLoop = async (): Promise<void> => {
+    try {
+      if (typeof renderer.compileAsync === 'function') {
+        await renderer.compileAsync(scene, camera);
+        // Warm the post-chain pass materials too. EffectComposer passes are blitted
+        // through full-screen quads; collecting any pass.material into a throwaway
+        // scene and async-compiling it pulls those programs through KHR parallel
+        // compile as well. The throwaway scene/geometry are disposed; pass materials
+        // remain owned by their pass (do NOT dispose them — the composer still uses
+        // them every frame).
+        const passMaterials: THREE.ShaderMaterial[] = [];
+        for (const pass of postRig.composer.passes) {
+          const mat = (pass as { material?: THREE.ShaderMaterial }).material;
+          if (mat) passMaterials.push(mat);
+        }
+        if (passMaterials.length > 0) {
+          const warmScene = new THREE.Scene();
+          const warmGeo = new THREE.PlaneGeometry(2, 2);
+          for (const mat of passMaterials) warmScene.add(new THREE.Mesh(warmGeo, mat));
+          await renderer.compileAsync(warmScene, camera);
+          warmGeo.dispose();
+        }
+      }
+    } catch {
+      // Defensive: any failure in async compile means we fall back to compile-on-first-
+      // render (previous behaviour). Never block the scene from starting.
+    }
+    // dispose() may have fired while we were awaiting compile; honour `stopped` so we
+    // never kick off frame() against a torn-down scene. Same defence as the
+    // visibilitychange / context-restored re-kicks below.
+    if (!stopped) frame();
+  };
+  void startRenderLoop();
 
   // Arm the cinematic dive. Snapshots the live camera pose so the plunge starts
   // seamlessly from wherever the scroll camera currently sits, then lets frame()'s
