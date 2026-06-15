@@ -1,12 +1,12 @@
 /* About — an overlay panel floating in the hero's room. The dimmed signature
    object (.bh-backdrop, hero.css) sits behind a single calm reading column:
    lots of dark negative space, the panel held off-centre like a viewfinder
-   readout, persistent brand top-left, a bracket Close top-right. */
+   readout, persistent brand top-left, a mono Close control top-right. */
 
 .about-lead { font-size: var(--text-title); color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
 
-/* Close: a viewfinder-style bracketed label, fixed top-right, mirroring the
-   hero's corner chrome. Returns to the home scene. */
+/* Close: a plain mono label, fixed top-right, mirroring the shared chrome
+   control pattern. Returns to the home scene. */
 .about-close {
   position: fixed;
   top: clamp(1rem, 3vw, 2rem);
@@ -25,30 +25,10 @@
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
   transition: color 0.18s ease;
 }
-/* The brackets: two short L-shaped corners that tighten inward on hover (a small
-   viewfinder "focus" gesture). */
-.about-close-bracket {
-  width: 0.7rem;
-  height: 0.7rem;
-  border: 1px solid var(--line);
-  border-right: none;
-  border-bottom: none;
-  transition: border-color 0.18s ease, transform 0.24s var(--ease-out-quint);
-}
-.about-close-bracket--end {
-  border: 1px solid var(--line);
-  border-left: none;
-  border-top: none;
-}
-.about-close:hover { color: var(--fg); }
-.about-close:hover .about-close-bracket {
-  border-color: var(--accent);
-  transform: translateX(2px);
-}
-.about-close:hover .about-close-bracket--end {
-  border-color: var(--accent);
-  transform: translateX(-2px);
-}
+/* No bracket decoration — the close control is a plain mono label with a gold
+   accent on hover and the shared focus ring. Corner brackets are reserved for
+   current/locked targets only (subnav lock, StarMarker reticle). */
+.about-close:hover { color: var(--accent); }
 .about-close:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;

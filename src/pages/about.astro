@@ -24,12 +24,11 @@ const home = href('').replace(/\/+$/, '') || '/';
      the same asset as the hero, here as quiet atmosphere, not the showpiece. */}
   <BlackHole client:only="react" backdrop />
 
-  {/* Close: returns to the hero scene this panel floats over. Bracket framing
-     echoes a viewfinder readout; it replaces the standard nav for this page. */}
+  {/* Close: returns to the hero scene this panel floats over. Plain mono label
+     with gold-accent hover — the bracket gesture is reserved for current/locked
+     targets (subnav lock, StarMarker reticle). */}
   <a class="about-close" href={home} aria-label="Close and return to the home scene">
-    <span class="about-close-bracket" aria-hidden="true"></span>
     <span class="about-close-label">Close</span>
-    <span class="about-close-bracket about-close-bracket--end" aria-hidden="true"></span>
   </a>
 
   <main class="about-shell">

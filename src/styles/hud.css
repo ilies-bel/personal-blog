@@ -1519,6 +1519,7 @@ body.hud-active .star-marker {
     stroke-width 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
+/* corner brackets = current/locked target only */
 /* CROSSHAIR ARMS — four N/E/S/W arms that read in EVERY state (this is what makes
    the reticle a crosshair). Inner + outer segments share one group; the GAP between
    them grows visually as the stroke brightens on escalation. Faint at idle, brighter

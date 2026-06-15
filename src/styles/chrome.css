@@ -146,6 +146,7 @@
   inset: 0.18rem 0.3rem;
   pointer-events: none;
 }
+/* corner brackets = current/locked target only */
 .subnav-tick {
   position: absolute;
   width: 0.32rem;
