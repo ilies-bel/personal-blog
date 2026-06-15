@@ -4,11 +4,21 @@ description: "Most of a blog should ship zero JavaScript. Astro's islands archit
 pubDate: 2026-05-22
 tags: ["astro", "performance", "architecture"]
 draft: false
+scene:
+  # Read the essay as a condensation: it opens on the diffuse nebula (a whole SPA
+  # runtime, scattered everywhere) and resolves inward to the black hole (the dense,
+  # essential core — ship almost nothing). The backdrop scrubs that arc as you scroll.
+  journey: [3.5, 0]
 ---
+
+import IslandsDemo from '../../components/mdx/IslandsDemo.tsx';
+import SceneFigure from '../../components/mdx/SceneFigure.tsx';
 
 A blog is 95% text and 5% interactivity. So why do so many of them ship a full
 single-page-app framework to render a paragraph? Astro's answer (*islands*) is
 the cleanest take on this I've used, and it's why this site is built on it.
+
+<SceneFigure stage={3.5} caption="A whole SPA runtime: diffuse, scattered everywhere" client:visible />
 
 ## The problem with hydrating everything
 
@@ -32,10 +42,19 @@ Each of those becomes an independent "island" that hydrates on its own
 schedule: `client:load` immediately, `client:visible` when scrolled into view,
 `client:idle` when the browser is free. The prose between them stays inert HTML.
 
+Here are two islands proving exactly that. The first hydrates the moment the
+page loads; the second waits until it scrolls into view. Watch the timestamps —
+and notice every word around them shipped no JavaScript at all:
+
+<IslandsDemo label="client:load" client:load />
+
+<IslandsDemo label="client:visible" client:visible />
+
 ## What that buys you
 
-- **Tiny payloads.** This page's article text ships zero JS. Only the hero
-  island carries a runtime, and it's loaded off the critical path.
+- **Tiny payloads.** This page's article text ships zero JS. Only the islands
+  above (and the backdrop scene) carry a runtime, and they're loaded off the
+  critical path.
 - **Great Core Web Vitals**, which search engines reward.
 - **A clean mental model.** "Is this thing interactive? Then it's an island."
 
@@ -44,6 +63,8 @@ schedule: `client:load` immediately, `client:visible` when scrolled into view,
 Islands don't share React context; each is its own root. If two islands need to
 talk, you reach for a module-level store (or `useSyncExternalStore`) instead of
 a provider wrapping the tree. Once you internalize that, the model is a joy.
+
+<SceneFigure stage={0} caption="The essential core: ship almost nothing" client:visible />
 
 For a content-first site that needs a few sprinkles of interactivity, I haven't
 found anything that hits the performance/DX balance better.

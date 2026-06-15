@@ -1,0 +1,257 @@
+/* article.css — the scene-JOURNEY article treatment: the reading-frame HUD, the
+   in-prose MDX islands, and the scroll-reactive backdrop brighten. Scoped to posts
+   that opt in (the layout adds [data-scene-journey] on .prose + mounts .article-hud).
+   This file EXTENDS prose.css; it never weakens the measured dim wash in hero.css
+   (body.article-page .bh-backdrop), so the reading column keeps its AA contrast floor.
+
+   Everything here speaks the hero's instrument language — mono-gold, hairline strokes,
+   the --hud-* / --accent tokens, --ease-out-quint — so the reading frame reads as the
+   SAME cockpit as the hero, not a second design. */
+
+/* ===========================================================================
+   READING-FRAME HUD — a passive instrument fixed to the left margin. Mirrors the
+   hero nav-rail geometry (a thin vertical line + a mono readout), but it NAVIGATES
+   nothing: it is a "you are here" gauge for one article. Pointer-transparent so it
+   never intercepts text selection / link clicks in the column beside it.
+   =========================================================================== */
+.article-hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 4; /* above the backdrop (0) + reading column (1); below the dive overlay */
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding-left: clamp(0.85rem, 2.4vw, 1.75rem);
+  pointer-events: none;
+  /* Boot in softly on arrival rather than snapping — same temperament as the hero
+     HUD igniting at the bottom of the home page. */
+  animation: article-hud-boot 0.7s var(--ease-out-quint) both;
+  animation-delay: 0.25s;
+}
+@keyframes article-hud-boot {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* The progress RAIL — a 1px tarnished line with a gold fill that grows top→down with
+   article scroll. The fill height is driven by the --article-progress custom property
+   (0..1) the ArticleHud sets inline. */
+.article-hud-rail {
+  position: relative;
+  width: 1px;
+  height: min(46vh, 360px);
+  background: var(--hud-line);
+}
+.article-hud-rail-fill {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 1px;
+  height: calc(var(--article-progress, 0) * 100%);
+  background: linear-gradient(
+    180deg,
+    var(--accent-strong),
+    var(--accent)
+  );
+  /* A faint bloom off the leading edge so the gauge reads as lit, like the hero rail. */
+  box-shadow: 0 0 8px color-mix(in oklch, var(--accent) 60%, transparent);
+  transition: height 0.12s linear;
+}
+
+/* The READOUT — vertical mono caps, set sideways like an instrument label down the
+   left edge. Index over total, the live section title, then the celestial-beat name. */
+.article-hud-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 11rem;
+}
+.article-hud-index {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-caps);
+  color: var(--highlight);
+}
+.article-hud-section {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  color: var(--hud-main);
+  text-shadow: 0 0 12px var(--hud-shadow);
+}
+.article-hud-beat {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-rail-dim);
+}
+/* Bright-zone parity with the hero: when the article's scene window scrubs through a
+   bright beat (supernova flash / yellow star), flip the readout to a dark graphite
+   stroke so it stays legible against the bleached canvas. Same idea as hud.css
+   [data-zone] — just the article readout's two text rungs. */
+.article-hud[data-zone='bright'] .article-hud-section,
+.article-hud[data-zone='bright'] .article-hud-index {
+  color: oklch(0.22 0.02 80);
+  text-shadow: 0 0 10px rgba(255, 248, 232, 0.55);
+}
+
+/* On narrow viewports the left rail would crowd the reading column — collapse it to a
+   slim bottom progress bar (the readout text hides; the gauge stays). */
+@media (max-width: 860px) {
+  .article-hud {
+    top: auto;
+    bottom: 0;
+    height: auto;
+    width: 100%;
+    padding: 0;
+    align-items: flex-end;
+  }
+  .article-hud-rail {
+    width: 100%;
+    height: 2px;
+  }
+  .article-hud-rail-fill {
+    width: calc(var(--article-progress, 0) * 100%);
+    height: 2px;
+  }
+  .article-hud-readout { display: none; }
+}
+
+/* ===========================================================================
+   SCROLL-REACTIVE BACKDROP — on scene-journey posts the dim wash eases a touch
+   brighter at the very top (the header band) and settles as you read. We do NOT
+   lower the contrast floor inside the reading measure (that ellipse stays); we only
+   lift the global opacity slightly so the live scrub is felt as living atmosphere,
+   not a still. Reduced motion keeps it flat.
+   =========================================================================== */
+body.article-page .prose[data-scene-journey] {
+  /* Give the reading column a touch more breathing room at the top so the opening
+     scene beat is felt before the headline. */
+  padding-top: clamp(3rem, 10vw, 6.5rem);
+}
+
+/* ===========================================================================
+   MDX ISLAND: <IslandsDemo/> — a live hydration toy. Reads as an instrument panel
+   inset into the prose (the --bg-soft panel + hairline from prose.css's code blocks),
+   with a status dot that goes from cold to gold when the island hydrates.
+   =========================================================================== */
+.islands-demo {
+  margin: 2rem 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  /* The panel arms (border warms) once hydrated — a quiet confirmation the JS landed. */
+  transition: border-color 0.4s var(--ease-out-quint);
+}
+.islands-demo[data-hydrated='true'] {
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
+}
+.islands-demo-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.islands-demo-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--hud-rail-dim);
+  transition: background 0.4s var(--ease-out-quint), box-shadow 0.4s var(--ease-out-quint);
+}
+.islands-demo[data-hydrated='true'] .islands-demo-dot {
+  background: var(--accent-strong);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--accent) 70%, transparent);
+}
+.islands-demo-label { color: var(--fg-dim); }
+.islands-demo-state { margin-left: auto; color: var(--fg-faint); }
+.islands-demo-button {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.12s var(--ease-out-quint);
+}
+.islands-demo-button:hover:not(:disabled) { background: var(--accent-strong); }
+.islands-demo-button:active:not(:disabled) { transform: translateY(1px); }
+.islands-demo-button:disabled {
+  color: var(--fg-faint);
+  background: color-mix(in oklch, var(--line) 70%, transparent);
+  cursor: not-allowed;
+}
+.islands-demo-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.prose .islands-demo-note {
+  margin: 0.85rem 0 0;
+  font-size: var(--text-label);
+  color: var(--fg-faint);
+}
+
+/* ===========================================================================
+   MDX FIGURE: <SceneFigure/> — an inline mini-canvas pinning one lifecycle beat.
+   The contained version of the hero engine, at reading scale, framed like a plate.
+   =========================================================================== */
+.scene-figure {
+  margin: 2.25rem 0;
+}
+.scene-figure-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+}
+/* The engine appends its own <canvas> into the stage host; pin it to fill the frame. */
+.scene-figure-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+/* Idle / static (reduced motion or no WebGL): a quiet starfield placeholder so the
+   plate is never an empty black box. */
+.scene-figure[data-mode='static'] .scene-figure-stage,
+.scene-figure[data-mode='idle'] .scene-figure-stage {
+  background:
+    radial-gradient(1px 1px at 20% 30%, var(--fg-faint), transparent),
+    radial-gradient(1px 1px at 70% 60%, var(--fg-faint), transparent),
+    radial-gradient(1px 1px at 45% 80%, var(--hud-rail-dim), transparent),
+    radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+}
+.prose .scene-figure-caption {
+  margin: 0.75rem 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  text-align: center;
+}
+
+/* Reduced motion: no HUD boot slide, no panel/dot easing — instant, calm states. */
+@media (prefers-reduced-motion: reduce) {
+  .article-hud { animation: none; }
+  .article-hud-rail-fill,
+  .islands-demo,
+  .islands-demo-dot,
+  .islands-demo-button { transition: none; }
+}

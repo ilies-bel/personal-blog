@@ -17,5 +17,6 @@
 @import './hero.css';     /* the black-hole hero canvas + manifesto beats + cinematic chrome */
 @import './hud.css';      /* the final exploration HUD */
 @import './prose.css';    /* article prose + article header */
+@import './article.css';  /* scene-journey article HUD + in-prose MDX islands (extends prose) */
 @import './about.css';    /* the about overlay panel */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */

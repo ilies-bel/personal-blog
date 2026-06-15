@@ -200,149 +200,15 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Site footer — elevated from a quiet instrument strip to a deliberate
-   closing band. Two layers:
-   1. .site-footer-cta  — large mono-gold "Get in touch" CTA framed by
-      L-brackets (the hero's instrument language, matching .article-back and
-      .about-close bracket affordances). Scroll-reveals on viewport entry;
-      brackets tighten gold on hover like the viewfinder focus gesture.
-   2. .site-footer-meta — the original brand + social coda, now separated
-      from the CTA by an inner hairline.
-   The outer border-top (--hud-line) still frames the whole footer against
-   the page, symmetrically with the subnav border-bottom.
+   Site footer — the subnav's closing counterpart: one quiet instrument row
+   under a top hairline (the SAME --hud-line as the header rule, so the page is
+   framed by matching lines). Brand-side mono copyright readout, right-side
+   links as small mono-uppercase labels wearing the .subnav-label underline
+   sweep. No extra content — year, name, the three socials.
    ────────────────────────────────────────────────────────────────────────── */
 .site-footer {
   margin-top: 5rem;
-  border-top: 1px solid var(--hud-line);
-}
-
-/* —— CTA band —————————————————————————————————————————————————————————— */
-.site-footer-cta {
-  padding: 4rem 0 3.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1.25rem;
-}
-
-.site-footer-cta-kicker {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--fg-faint);
-}
-
-/* Viewfinder-bracket frame — same L-corner language as .article-back-bracket /
-   .about-close-bracket, scaled to hug a display-sized CTA. */
-.site-footer-cta-frame {
-  display: flex;
-  align-items: stretch;
-  gap: 1rem;
-}
-
-.site-footer-cta-bracket {
-  flex-shrink: 0;
-  width: 1.25rem;
-  transition: border-color 0.18s ease, transform 0.28s var(--ease-out-quint);
-}
-.site-footer-cta-bracket--start {
-  border-top: 1px solid var(--line);
-  border-left: 1px solid var(--line);
-}
-.site-footer-cta-bracket--end {
-  border-bottom: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-}
-
-/* Primary CTA link — discernible accessible name via aria-label on the <a>. */
-.site-footer-cta-link {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.5rem 0;
-  text-decoration: none;
-  color: inherit;
-}
-.site-footer-cta-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-  border-radius: var(--radius-sm);
-}
-
-/* The headline — large mono-gold display text. AA contrast on dark ground:
-   --accent (oklch 0.73 0.095 78) against --bg (~oklch 0.13) is ≈ 8:1. */
-.site-footer-cta-text {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  font-weight: 400;
-  letter-spacing: var(--tracking-tight);
-  line-height: var(--leading-tight);
-  text-transform: uppercase;
-  color: var(--accent);
-  transition: color 0.38s var(--ease-out-quint);
-}
-.site-footer-cta-link:hover .site-footer-cta-text,
-.site-footer-cta-link:focus-visible .site-footer-cta-text {
-  color: var(--highlight);
-}
-
-/* Email sub-label */
-.site-footer-cta-email {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: lowercase;
-  color: var(--fg-faint);
-  transition: color 0.22s ease;
-}
-.site-footer-cta-link:hover .site-footer-cta-email,
-.site-footer-cta-link:focus-visible .site-footer-cta-email {
-  color: var(--fg-dim);
-}
-
-/* Brackets tighten gold on hover — the same viewfinder-focus gesture used
-   by .about-close on hover (start pulls left, end pulls right). */
-.site-footer-cta-frame:has(.site-footer-cta-link:hover) .site-footer-cta-bracket--start,
-.site-footer-cta-frame:has(.site-footer-cta-link:focus-visible) .site-footer-cta-bracket--start {
-  border-color: var(--accent);
-  transform: translateX(-3px);
-}
-.site-footer-cta-frame:has(.site-footer-cta-link:hover) .site-footer-cta-bracket--end,
-.site-footer-cta-frame:has(.site-footer-cta-link:focus-visible) .site-footer-cta-bracket--end {
-  border-color: var(--accent);
-  transform: translateX(3px);
-}
-
-/* Scroll-reveal: the CTA fades and rises as it enters the viewport.
-   Uses CSS scroll-driven animations (Chrome 115+, Safari 18+, Firefox 127+);
-   browsers without @supports skip this silently — the element simply appears. */
-@keyframes site-footer-cta-enter {
-  from { opacity: 0; transform: translateY(1.8rem); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@supports (animation-timeline: view()) {
-  .site-footer-cta {
-    animation: site-footer-cta-enter 0.8s var(--ease-out-quint) both;
-    animation-timeline: view();
-    animation-range: entry 0% entry 55%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .site-footer-cta        { animation: none !important; }
-  .site-footer-cta-bracket,
-  .site-footer-cta-text,
-  .site-footer-cta-email  { transition: none; }
-}
-
-/* —— Meta coda (brand + socials) ——————————————————————————————————————— */
-.site-footer-meta {
   padding-top: 1.4rem;
-  padding-bottom: 1.4rem;
   border-top: 1px solid var(--hud-line);
   display: flex;
   align-items: baseline;
@@ -355,13 +221,10 @@
   text-transform: uppercase;
   color: var(--fg-faint);
 }
-
 .site-footer-links {
   display: flex;
   gap: 1.6rem;
 }
-/* All anchor elements in the footer share these baseline styles. The CTA link
-   overrides color and hover state with higher-specificity rules above. */
 .site-footer a {
   color: var(--fg-dim);
   text-decoration: none;
@@ -369,9 +232,6 @@
 }
 .site-footer a:hover,
 .site-footer a:focus-visible { color: var(--fg); }
-/* CTA link has its own hover colors — prevent the generic rule from fighting. */
-.site-footer .site-footer-cta-link:hover,
-.site-footer .site-footer-cta-link:focus-visible { color: inherit; }
 .site-footer a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

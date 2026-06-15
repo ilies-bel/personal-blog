@@ -613,44 +613,18 @@ const glyphFor: Record<string, string> = {
             <slot />
           </main>
 
-          {/* Closing band footer — two layers:
-              (1) .site-footer-cta: a deliberate contact CTA moment in the hero's
-                  mono-gold instrument language — large "Get in touch" headline,
-                  L-bracket viewfinder frame, email sub-label, scroll-reveal on entry.
-              (2) .site-footer-meta: the original brand + social coda under a hairline.
-              Pinned across SPA swaps like the header (transition:name + animate none)
-              so the chrome holds still while only the page content moves. */}
+          {/* Quiet instrument footer — one row in the subnav's language: top
+              hairline, a mono copyright readout brand-side, small mono-uppercase
+              link labels right (same underline-sweep hover as .subnav-link). Pinned
+              across SPA swaps like the header (transition:name + animate none) so
+              the chrome holds still while only the page content moves. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
-
-            {/* — Primary contact CTA — the cinematic closing beat — */}
-            <div class="site-footer-cta">
-              <p class="site-footer-cta-kicker">Open to new work</p>
-              <div class="site-footer-cta-frame">
-                <span class="site-footer-cta-bracket site-footer-cta-bracket--start" aria-hidden="true"></span>
-                {SOCIALS.email && (
-                  <a
-                    class="site-footer-cta-link"
-                    href={`mailto:${SOCIALS.email}`}
-                    aria-label={`Get in touch — send an email to ${SOCIALS.email}`}
-                  >
-                    <span class="site-footer-cta-text" aria-hidden="true">Get in touch</span>
-                    <span class="site-footer-cta-email" aria-hidden="true">{SOCIALS.email}</span>
-                  </a>
-                )}
-                <span class="site-footer-cta-bracket site-footer-cta-bracket--end" aria-hidden="true"></span>
-              </div>
-            </div>
-
-            {/* — Meta coda — brand copyright + social links — */}
-            <div class="site-footer-meta">
-              <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
-              <nav class="site-footer-links" aria-label="Social links">
-                {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}
-                {SOCIALS.twitter && <a href={SOCIALS.twitter}><span class="site-footer-label">Twitter</span></a>}
-                {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}><span class="site-footer-label">Email</span></a>}
-              </nav>
-            </div>
-
+            <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
+            <nav class="site-footer-links" aria-label="Social links">
+              {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}
+              {SOCIALS.twitter && <a href={SOCIALS.twitter}><span class="site-footer-label">Twitter</span></a>}
+              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}><span class="site-footer-label">Email</span></a>}
+            </nav>
           </footer>
         </div>
       )
