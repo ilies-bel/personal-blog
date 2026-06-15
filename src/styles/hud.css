@@ -70,9 +70,9 @@ body.at-opening .hud-system[data-visible='true'] {
 /* Short desktop viewports: the EXPANDED (hud-active) rail widens its row pitch to
    5rem, making the band ~24.5rem tall — too tall to clear the bottom-left copy on
    short screens. Lift the band a little higher AND cap the expanded pitch so it
-   still clears. Desktop only (min-width 46.01rem) so the mobile horizontal strip
+   still clears. Desktop only (min-width 60.01rem) so the mobile horizontal strip
    is untouched. */
-@media (min-width: 46.01rem) and (max-height: 48rem) {
+@media (min-width: 60.01rem) and (max-height: 48rem) {
   .hud-system { top: clamp(5.5rem, 18vh, 9rem); }
   body.hud-active .hud-system { --rail-row-gap: 0.9rem; --rail-row-pitch: 4.3rem; }
 }
@@ -983,10 +983,16 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   color: color-mix(in oklch, var(--hud-gold) 50%, var(--hud-line));
 }
 
-@media (max-width: 46rem) {
-  /* The bigger rail (#5) is a DESKTOP concern. On mobile the rail is a compact
+@media (max-width: 60rem) {
+  /* The bigger rail (#5) is a DESKTOP concern. On mobile/tablet the rail is a compact
      horizontal strip, so reset the geometry knobs back to the old compact sizes
-     here — the desktop sizing never reaches this layout. */
+     here — the desktop sizing never reaches this layout. (Breakpoint raised 46rem →
+     60rem so the whole compact HUD — horizontal rail + the scene-name readout — and the
+     small-caption manifesto in hero.css apply together up to ~960px: on tablet /
+     landscape-phone / split-screen widths the desktop big headline + bottom compass
+     were colliding with the bottom-left manifesto stack. One shared cutoff keeps the
+     manifesto treatment and the HUD layout switching at the SAME width so they never
+     disagree.) */
   .hud-system {
     --rail-col: 2.35rem;
     --rail-row-h: 2.55rem;
@@ -1080,7 +1086,12 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
     display: flex;
     justify-content: center;
     gap: 0.75rem;
-    margin: -0.15rem 0 0;
+    /* The readout is the FIRST grid row of .hud-system, directly above the number
+       rail (the rail's own grid gap is only 0.2rem). A small bottom margin lifts the
+       readout clear of the digits so the scene name never brushes the rail at the
+       short bottom of a phone viewport; no top margin (it must not push up into the
+       manifesto whisper above it). */
+    margin: 0 0 0.45rem;
     color: var(--fg-dim);
     font-family: var(--font-mono);
     font-size: var(--text-micro);
@@ -1122,7 +1133,7 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
     transition: none;
   }
 }
-@media (prefers-reduced-motion: reduce) and (max-width: 46rem) {
+@media (prefers-reduced-motion: reduce) and (max-width: 60rem) {
   .hud-system,
   .hud-system[data-visible='true'] {
     transform: none;
@@ -1866,7 +1877,7 @@ body.hud-active .star-marker {
 }
 /* Narrow viewport / coarse pointer: the card is a bottom sheet, so a side leader
    line pointing at it reads wrong — hide it (same rationale as the card connector). */
-@media (max-width: 46rem), (pointer: coarse) {
+@media (max-width: 60rem), (pointer: coarse) {
   .star-marker-leader {
     display: none;
   }
@@ -2087,12 +2098,12 @@ body.hud-active .star-marker {
    window: a ~23rem panel beside a marker near an edge runs off-screen. That clip
    happens on ANY narrow viewport, not just a phone — a desktop user who narrows
    their window hits it too. So the bottom-sheet re-anchor below is gated on the
-   shared 46rem mobile breakpoint (the same one the rest of the HUD uses, line 622)
+   shared 60rem compact-HUD breakpoint (the same one the rest of the HUD uses)
    AS WELL AS a coarse pointer, so it fires for a narrowed fine-pointer desktop
    window, not only on touch devices. (The touch-ONLY affordances — the ≥44px hit
    pad, the resting-hex opacity lift, the CTA tap padding — stay in the coarse-only
    block further down; only the CARD POSITIONING/FIT lives here.) Desktop WIDE
-   (>46rem, fine pointer) keeps the side-tether + connector + flip untouched.
+   (>60rem, fine pointer) keeps the side-tether + connector + flip untouched.
 
    CONTAINING-BLOCK NOTE: the card is position:fixed, but the .star-marker <a>
    has `translate: -50% -50%` (a transform), which makes the <a> the containing
@@ -2110,7 +2121,7 @@ body.hud-active .star-marker {
    the `50vw`/`50vh` fallbacks only apply on the very first frame before the rAF
    writes them, and centre the band sensibly so there's no off-screen flash.
    --------------------------------------------------------------------------- */
-@media (max-width: 46rem), (pointer: coarse) {
+@media (max-width: 60rem), (pointer: coarse) {
   .star-marker-card,
   .star-marker[data-side='right'] .star-marker-card,
   .star-marker[data-side='left'] .star-marker-card {
@@ -2174,7 +2185,7 @@ body.hud-active .star-marker {
    reduced-motion blocks above — the card snaps in. Gated on the SAME narrow-OR-
    coarse condition as the sheet itself so the snap applies in the width-gated path
    too. Covers BOTH the OS media query and the JS-driven data-reduced flag. */
-@media (max-width: 46rem) and (prefers-reduced-motion: reduce),
+@media (max-width: 60rem) and (prefers-reduced-motion: reduce),
   (pointer: coarse) and (prefers-reduced-motion: reduce) {
   .star-marker-card,
   .star-marker[data-side='right'] .star-marker-card,
@@ -2183,7 +2194,7 @@ body.hud-active .star-marker {
     transform: none;
   }
 }
-@media (max-width: 46rem), (pointer: coarse) {
+@media (max-width: 60rem), (pointer: coarse) {
   .star-marker[data-reduced='true'] .star-marker-card,
   .star-marker[data-reduced='true'][data-side='right'] .star-marker-card,
   .star-marker[data-reduced='true'][data-side='left'] .star-marker-card,

@@ -775,6 +775,36 @@ body.scene-ready.at-opening .bh-focus-dot {
   .bh-beat { bottom: clamp(1.5rem, 6vh, 3rem); max-width: 92vw; }
 }
 
+/* MOBILE / TABLET manifesto headline — quiet caption, not the subject (60rem, the
+   shared compact-HUD breakpoint in hud.css — the rail switches to its horizontal strip
+   + scene-name readout at the SAME width, so the manifesto treatment and the HUD layout
+   can never disagree). On a phone/tablet the desktop --text-hero clamp (≈48px) wrapped
+   the longest beats to 4–6 lines, ate the bottom third of the screen and (in the
+   737–960px band) collided the headline + whisper with the bottom compass. Here the
+   headline becomes a small caption (~22–26px) so the animation stays the subject and the
+   longest lines never exceed ~3 lines. SCOPED to .bh-beat-line only — --text-hero is
+   left untouched globally (it still drives page h1s elsewhere). We relax the line-height
+   a hair (1.18, vs --leading-tight) so the smaller type still breathes at this size. */
+@media (max-width: 60rem) {
+  .bh-beat-line {
+    font-size: clamp(1.35rem, 4.2vw, 1.7rem); /* ≈21.6px (small phone) → 27.2px (tablet) */
+    line-height: 1.18;                        /* slightly looser than --leading-tight at this size */
+  }
+  /* LIFT the manifesto clear of the bottom HUD strip. On mobile/tablet both the
+     manifesto block AND the HUD (the scene-name readout + the horizontal number rail)
+     are bottom-anchored, so at the default ~3rem offset they STACK on top of each
+     other — the whisper landed on the digits and the readout on the headline. The HUD
+     strip occupies ~110px up from the viewport bottom (rail at safe-area + 3rem, readout
+     in the row above it), so park the manifesto above that band: safe-area + ~8.5rem so
+     the whisper's last line clears the readout with a comfortable gap. This 60rem rule
+     comes AFTER the 34rem block above in source order, so it wins on phones/tablets
+     (≤34rem included) — it supersedes that block's tighter bottom offset. */
+  .bh-beat {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem);
+    max-width: 92vw;
+  }
+}
+
 /* Reduced motion: keep the atmosphere, drop the motion. The manifesto overlay keeps
    its normal PINNED layout (one line at the bottom-left, pinned over the matching
    poster) — the React island already drives a DISCRETE one-beat-at-a-time hard cut

@@ -810,7 +810,11 @@ export const SCENES: readonly LifecycleScene[] = [
       id: 'red',
       glyphSrc: 'glyphs/glyph-red-giant.svg',
       motion: 'drift',
-      label: 'GRAVEYARD',
+      // The HUD label is the CELESTIAL body (matching NEBULA / YELLOW STAR / BLACK
+      // HOLE / THE BEGINNING); the destination is the section it links to. This scene's
+      // section happens to be the graveyard, so label MUST be 'RED GIANT' (not
+      // 'GRAVEYARD') — otherwise the readout renders the redundant 'GRAVEYARD · GRAVEYARD'.
+      label: 'RED GIANT',
       destination: 'Graveyard',
       stage: 2.05,
       href: 'graveyard',

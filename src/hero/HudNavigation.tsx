@@ -684,9 +684,37 @@ export default function HudNavigation({
     }, 0),
   );
 
+  // MOBILE scene-name readout copy. On the desktop the always-on bottom .hud-compass
+  // names the current scene; on mobile that compass is display:none (hud.css compact-HUD
+  // block) and the horizontal number rail's per-button labels only reveal on hover —
+  // which never fires on touch. So a phone visitor would otherwise see bare digits
+  // (1 2 3 4 5) with no idea what they are. This resolves the SAME scene the highlight
+  // tracks (effectiveCurrentId = the click-travel target while a travel is in flight,
+  // else the live scroll-spy currentId) so the readout follows both scroll and taps.
+  // currentId can be null at the very top of the scroll before the spy resolves, so
+  // guard the lookup and render the readout only once there is a scene to name.
+  const mobileReadout = effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null;
+
   return (
     <>
     <div className="hud-system" data-visible={visible}>
+      {/* MOBILE-ONLY scene-name readout — replaces the desktop bottom .hud-compass on
+          the compact phone layout. It is the FIRST child of .hud-system (a display:grid
+          column that stacks top→bottom in DOM order) so it sits ABOVE the number rail's
+          row. Wired to the long-dead .hud-nav-mobile-readout CSS (hud.css line 533
+          default display:none → the 46rem block flips it to flex, mono, --text-micro,
+          with span:first-child brighter) — so it is hidden on desktop and shown only on
+          mobile by EXISTING CSS, no extra visibility logic. It lives inside .hud-system,
+          so it inherits the rail's [data-visible] / body.at-opening gating for free. The
+          two spans match the markup the CSS expects (scene name brighter, destination
+          dimmer). aria-hidden: pure decorative duplication of the rail buttons' own
+          labels (mirrors the .hud-compass aria-hidden rationale). */}
+      {mobileReadout && (
+        <div className="hud-nav-mobile-readout" aria-hidden="true">
+          <span>{mobileReadout.label}</span>
+          <span>{mobileReadout.destination}</span>
+        </div>
+      )}
       <nav
         className="hud-nav"
         aria-label="Explore portfolio stages"
