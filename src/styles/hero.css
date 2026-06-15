@@ -470,7 +470,6 @@ body.article-page .bh-backdrop::before {
    binds no rAF / pointer / resize listeners, so there is no CSS animation to gate
    here. The frozen corridor inherits the same vignette + scrim + grain. */
 
-
 /* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
 .bh-identity {
   position: fixed;
