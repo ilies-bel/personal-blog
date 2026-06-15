@@ -1686,44 +1686,46 @@ body.hud-active .star-marker {
   /* Gold from the moment it appears (hover up) — it is the warm targeting core. */
   background: var(--marker-gold);
   box-shadow:
-    0 0 var(--core-glow, 6px) var(--core-glow-spread, 1.5px)
+    0 0 var(--core-glow, 9px) var(--core-glow-spread, 2px)
       color-mix(in oklch, var(--marker-gold) 55%, transparent),
-    0 0 3px 0 color-mix(in oklch, var(--marker-gold) 92%, transparent);
+    0 0 3px 0 color-mix(in oklch, var(--marker-gold) 92%, transparent),
+    0 0 16px 3px color-mix(in oklch, var(--marker-gold) 30%, transparent);
   /* PRESENT IN EVERY STATE (reference: a warm gold dot at the heart of the reticle,
-     even at rest). Idle = a small, dim, low-contrast core ("resting · minimal
-     presence"); the state rules below brighten + grow it as the pointer escalates. */
-  opacity: 0.7;
-  --core-scale: 0.5;
-  --core-glow: 4px;
-  --core-glow-spread: 1px;
+     even at rest). Idle = a self-luminous gold emitter — clearly visible against the
+     starfield at rest; the state rules below brighten + grow it as the pointer escalates. */
+  opacity: 0.92;
+  --core-scale: 0.62;
+  --core-glow: 9px;
+  --core-glow-spread: 2px;
   transition:
     opacity 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
     transform 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
     box-shadow 0.24s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
-/* HOVER: a clearly glowing gold core appears. */
+/* HOVER: a clearly glowing gold core — noticeably brighter than idle. */
 .star-marker[data-state='hover'] .star-marker-dot {
-  opacity: 0.9;
+  opacity: 0.96;
   --core-scale: 0.85;
-  --core-glow: 8px;
+  --core-glow: 12px;
+  --core-glow-spread: 2.5px;
 }
 /* ACTIVE: a brighter photosphere. */
 .star-marker[data-state='active'] .star-marker-dot {
   opacity: 1;
   --core-scale: 1;
-  --core-glow: 11px;
-  --core-glow-spread: 2px;
+  --core-glow: 14px;
+  --core-glow-spread: 3px;
 }
 /* LOCKED: the brightest gold core — the dot that docks with the cursor. Wins over
    data-bright on EVERY state. */
 .star-marker[data-state='locked'] .star-marker-dot {
   opacity: 1;
   --core-scale: 1.1;
-  --core-glow: 14px;
-  --core-glow-spread: 2.5px;
+  --core-glow: 18px;
+  --core-glow-spread: 4px;
   box-shadow:
-    0 0 14px 2.5px color-mix(in oklch, var(--marker-gold) 60%, transparent),
-    0 0 4px 0 color-mix(in oklch, var(--marker-gold) 96%, transparent);
+    0 0 18px 4px color-mix(in oklch, var(--marker-gold) 65%, transparent),
+    0 0 5px 0 color-mix(in oklch, var(--marker-gold) 98%, transparent);
 }
 
 /* (The per-type inner glyph was removed: the reticle's resting centre is now the
