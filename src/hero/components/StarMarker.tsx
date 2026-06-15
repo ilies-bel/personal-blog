@@ -60,7 +60,7 @@ import {
   settledIdForStage,
   type MarkerPlacement,
 } from '../HudNavigation';
-import { LOADER_GONE_BODY_CLASS } from '../lib/constants';
+import { HUD_ACTIVE_BODY_CLASS, LOADER_GONE_BODY_CLASS } from '../lib/constants';
 import { resolveHref } from '../lib/url';
 import type { MarkerFrame } from '../scene/types';
 import { useSceneState, useSceneActions } from './SceneStateContext';
@@ -362,6 +362,15 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       const gate = anchored ? frame.visible : frame.gateOk;
       const nextVisible = gate && settledIdForStage(frame.stage) === placement.state;
 
+      // HUD-power gate. Until the HUD is armed (body.hud-active, set by the boot FSM
+      // at the black hole / bottom of the scroll) the markers hold their quiet IDLE
+      // look — "low contrast · minimal presence". While inactive they neither
+      // escalate (hover/active) NOR lock (no card / cursor-dock), matching the
+      // dim-until-HUD treatment the marker brightness already uses. Read straight
+      // off the body class each frame (cheap) so it tracks the FSM without a stale
+      // closure. Once the HUD powers up the full proximity state machine resumes.
+      const hudActive = document.body.classList.contains(HUD_ACTIVE_BODY_CLASS);
+
       // Screen position. Fixed-spot markers ignore the projected x/y and sit at a
       // viewport fraction (recomputed each frame so a resize tracks). The anchored
       // pale-blue-dot marker rides the projected star origin instead.
@@ -415,7 +424,9 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       const distSq = p ? (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) : -1;
 
       let nextLocked = lastLocked;
-      if (!nextVisible) {
+      if (!nextVisible || !hudActive) {
+        // Not settled on screen, OR the HUD isn't armed yet: never locked. Drop any
+        // held touch lock so the marker can't sit locked behind a powered-down HUD.
         nextLocked = false;
         touchLockedRef.current = false;
       } else if (touchLockedRef.current) {
@@ -443,7 +454,8 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // state can't chatter as the pointer hovers a boundary. The tiers sit strictly
       // OUTSIDE the lock radius, so this never changes WHEN the lock fires.
       let nextState: MarkerState = lastState;
-      if (!nextVisible) {
+      if (!nextVisible || !hudActive) {
+        // Off-screen OR HUD not armed → hold the quiet IDLE look (no escalation).
         nextState = 'idle';
       } else if (nextLocked) {
         nextState = 'locked';
