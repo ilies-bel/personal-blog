@@ -601,7 +601,7 @@ export interface LifecycleScene {
 // at the physical bottom). The projections below
 // preserve the former HUD_NAV_ITEMS / MARKER_PLACEMENTS / BEATS order exactly:
 // nav rows are one-per-scene in this order; markers are flattened in this order
-// (nebula owns three); beats are one-per-scene in this order.
+// (one per scene); beats are one-per-scene in this order.
 export const SCENES: readonly LifecycleScene[] = [
   {
     id: 'beginning',
@@ -672,62 +672,23 @@ export const SCENES: readonly LifecycleScene[] = [
       href: 'writing',
     },
     markers: [
-      // NEBULA / writing — THREE placeholder markers (one per recent article), all
-      // linking to /writing for now. Pulled OUT of the dense gas into the sparse /
-      // near-empty regions so each hexagon reads against dark background.
+      // NEBULA / writing — ONE marker in the upper-RIGHT sparse region (0.82, 0.22),
+      // clear of the centred manifesto headline on all viewport sizes. A single neutral
+      // entry point to the writing index rather than per-article placeholders.
       {
-        id: 'nebula-01',
+        id: 'nebula',
         state: 'nebula',
         vx: 0.82,
         vy: 0.22,
         href: 'writing',
-        title: 'WRITING / 01',
+        title: 'WRITING',
         subtitle: 'Notes & essays',
         bg: 'noisy',
         glyph: 'glyphs/glyph-marker-writing.svg',
-        eyebrow: 'WRITING / 01',
+        eyebrow: 'WRITING',
         headline: 'Notes from the build.',
         body: 'Essays on software that stays readable as it grows.',
         tags: ['Essays', 'Craft'],
-        cta: 'Read the writing',
-        dive: true,
-      },
-      {
-        id: 'nebula-02',
-        state: 'nebula',
-        vx: 0.19,
-        vy: 0.4,
-        href: 'writing',
-        title: 'WRITING / 02',
-        subtitle: 'Notes & essays',
-        bg: 'noisy',
-        glyph: 'glyphs/glyph-marker-writing.svg',
-        eyebrow: 'WRITING / 02',
-        headline: 'Thinking in systems.',
-        body: 'Boundaries, interfaces, and the cost of complexity over time.',
-        tags: ['Systems', 'Design'],
-        cta: 'Read the writing',
-        dive: true,
-      },
-      {
-        id: 'nebula-03',
-        // Lower-RIGHT, but ABOVE the manifesto headline. The old (0.58, 0.80) sat in
-        // the lower-centre, where on narrow viewports (mobile/tablet/laptop) the
-        // headline fills the bottom ~40% full-width and the reticle landed on the
-        // copy. Pulled up + right (0.78 / 0.55) into clear space — below WRITING/01
-        // (0.82, 0.22), right of WRITING/02 (0.19, 0.40), clear of the headline band.
-        state: 'nebula',
-        vx: 0.78,
-        vy: 0.55,
-        href: 'writing',
-        title: 'WRITING / 03',
-        subtitle: 'Notes & essays',
-        bg: 'noisy',
-        glyph: 'glyphs/glyph-marker-writing.svg',
-        eyebrow: 'WRITING / 03',
-        headline: 'Working with the machine.',
-        body: 'On AI-assisted code, and keeping the center understandable.',
-        tags: ['AI', 'Practice'],
         cta: 'Read the writing',
         dive: true,
       },
