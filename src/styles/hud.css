@@ -1309,12 +1309,13 @@ body.hud-booting .hud-boot-scan {
      for the animated INNER hexagon + the locked accents (card, dot-on-lock). */
   --marker-line: var(--fg);
   --marker-gold: var(--highlight);
-  /* Reticle box — ~96px so the hexagon is an unmistakable target that dominates its
-     spot on every scene (was 4.5rem/72px, which read as a tiny dim blob against the
-     black-hole glow / nebula gas / yellow photosphere). The proximity engage/hover
-     radii in StarMarker.tsx derive from the MEASURED box width, so they scale with
-     this automatically — the capture script's tier offsets were updated to match. */
-  --marker-size: 6rem;
+  /* Reticle box — ~77px. Sized DOWN 20% from 6rem (it read too big/thick); still an
+     unmistakable target on every scene but lighter and more refined. The proximity
+     engage/hover radii in StarMarker.tsx derive from the MEASURED box width, so they
+     scale with this automatically. Stroke widths use non-scaling-stroke (screen px),
+     so they were reduced ~20% in lockstep to keep the relative weight on the smaller
+     hex. */
+  --marker-size: 4.8rem;
   /* Whole-marker dim multiplier: markers ride a touch dimmer until the HUD powers
      up, then snap to full. RAISED 0.6 → 0.85 so a marker is clearly visible on
      EVERY scene even before the HUD arms (it only arms at the black hole / bottom
@@ -1480,7 +1481,7 @@ body.hud-active .star-marker {
    and a touch heavier toward locked. Drawn in the off-white --marker-line. */
 .star-marker-arms line {
   color: var(--marker-line);
-  stroke-width: 1.8;
+  stroke-width: 1.45;
 }
 /* idle: a faint but UNMISTAKABLE cross — the arms are the signature element and were
    the weakest, so idle now clearly reads as a crosshair rather than near-vanishing. */
@@ -1490,17 +1491,17 @@ body.hud-active .star-marker {
 /* hover: the arms brighten + the gap reads as segmented targeting ticks. */
 .star-marker[data-state='hover'] .star-marker-arms line {
   opacity: 0.82;
-  stroke-width: 2;
+  stroke-width: 1.6;
 }
 /* active: stronger arms. */
 .star-marker[data-state='active'] .star-marker-arms line {
   opacity: 0.92;
-  stroke-width: 2.3;
+  stroke-width: 1.85;
 }
 /* locked: the fullest, boldest arms. */
 .star-marker[data-state='locked'] .star-marker-arms line {
   opacity: 1;
-  stroke-width: 2.6;
+  stroke-width: 2.1;
 }
 
 /* IDLE hexagon — the dotted outline. Cross-fades to the solid hex from hover up.

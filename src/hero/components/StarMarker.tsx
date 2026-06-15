@@ -661,7 +661,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
               x2={s.x2}
               y2={s.y2}
               stroke="currentColor"
-              strokeWidth="1.6"
+              strokeWidth="1.3"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
             />
@@ -673,7 +673,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           points={HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.8"
+          strokeWidth="1.45"
           strokeDasharray="2.5 4"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
@@ -684,7 +684,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           points={HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="1.6"
           vectorEffect="non-scaling-stroke"
         />
         {/* ACTIVE and up: a second concentric INNER hexagon (the double-hex). Reuses
@@ -695,7 +695,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           points={INNER_HEX_POINTS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.6"
+          strokeWidth="1.3"
           vectorEffect="non-scaling-stroke"
         />
         {/* LOCKED: tick marks on three edge midpoints — the "tripod" confirm cue,
@@ -710,7 +710,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
               x2={t.x2}
               y2={t.y2}
               stroke="currentColor"
-              strokeWidth="1.8"
+              strokeWidth="1.45"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
             />
@@ -724,7 +724,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           cy={C}
           r={INNER_RING_RADIUS}
           fill="none"
-          strokeWidth="2"
+          strokeWidth="1.6"
           vectorEffect="non-scaling-stroke"
         />
         {/* LOCKED: gold inner hexagon — rotates + breathes (CSS). Also the element
@@ -733,7 +733,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           className="star-marker-hex-gold"
           points={HEX_POINTS}
           fill="none"
-          strokeWidth="2"
+          strokeWidth="1.6"
           vectorEffect="non-scaling-stroke"
         />
       </svg>
