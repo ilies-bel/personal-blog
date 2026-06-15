@@ -72,6 +72,16 @@ const subnavItems: SubnavItem[] = [
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).
 const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
+// Map each section label to its scene-marker glyph file — the source-of-truth
+// shapes used by the hero StarMarker reticle. Both navbars render via CSS mask
+// so icons are pixel-identical to the hero markers (same files, same render path).
+const glyphFor: Record<string, string> = {
+  Home: 'glyph-marker-story.svg',
+  Writing: 'glyph-marker-writing.svg',
+  Projects: 'glyph-marker-projects.svg',
+  Graveyard: 'glyph-marker-graveyard.svg',
+  About: 'glyph-marker-about.svg',
+};
 ---
 
 <!doctype html>
@@ -122,57 +132,41 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
                 Identical visual mass; the lifecycle motif stays but disciplined. */}
             <div class="overlay-blog-links">
               <a class="overlay-blog-link" href={href('about')} aria-label="About">
-                {/* THE BEGINNING / pale blue dot — thin ring + small filled speck. */}
-                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="16" cy="16" r="2" fill="currentColor" stroke="none" />
-                </svg>
+                {/* Scene-marker glyph — person bust (glyph-marker-about.svg).
+                    Rendered via CSS mask so the shape is pixel-identical to the
+                    hero StarMarker reticle. */}
+                <span
+                  class="overlay-blog-icon overlay-blog-icon--glyph"
+                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-about.svg')})`}
+                  aria-hidden="true"
+                ></span>
                 <span class="overlay-blog-label">About</span>
               </a>
               <a class="overlay-blog-link" href={href('writing')} aria-label="Writing">
-                {/* NEBULA — thin ring + a concentric inner hint and two small orbiting
-                    specks. Same weight/mass as About but distinct (gas, not a dot). */}
-                <svg
-                  class="overlay-blog-icon"
-                  viewBox="0 0 32 32"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                {/* Scene-marker glyph — pen (glyph-marker-writing.svg). */}
+                <span
+                  class="overlay-blog-icon overlay-blog-icon--glyph"
+                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-writing.svg')})`}
                   aria-hidden="true"
-                >
-                  <circle cx="16" cy="16" r="9" />
-                  <circle cx="16" cy="16" r="4" />
-                  <circle cx="16" cy="6" r="0.9" fill="currentColor" stroke="none" />
-                  <circle cx="25" cy="20" r="0.9" fill="currentColor" stroke="none" />
-                </svg>
+                ></span>
                 <span class="overlay-blog-label">Writing</span>
               </a>
               <a class="overlay-blog-link" href={href('projects')} aria-label="Projects">
-                {/* YELLOW STAR — a 4-point star OUTLINE sized to fit the ~20px circle
-                    (vertices at r~10), 1.5 stroke, round joins. */}
-                <svg
-                  class="overlay-blog-icon"
-                  viewBox="0 0 32 32"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linejoin="round"
+                {/* Scene-marker glyph — stacked squares (glyph-marker-projects.svg). */}
+                <span
+                  class="overlay-blog-icon overlay-blog-icon--glyph"
+                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-projects.svg')})`}
                   aria-hidden="true"
-                >
-                  <path d="M16 6 Q17 15 26 16 Q17 17 16 26 Q15 17 6 16 Q15 15 16 6 Z" />
-                </svg>
+                ></span>
                 <span class="overlay-blog-label">Projects</span>
               </a>
               <a class="overlay-blog-link" href={href('graveyard')} aria-label="Graveyard">
-                {/* RED GIANT — a swollen limb read as a half-toned circle (◐): a ring
-                    OUTLINE with the left hemisphere filled. Same weight, NOT a solid
-                    teardrop, same mass as the others. */}
-                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M16 7 A 9 9 0 0 0 16 25 Z" fill="currentColor" stroke="none" opacity="0.85" />
-                </svg>
+                {/* Scene-marker glyph — headstone (glyph-marker-graveyard.svg). */}
+                <span
+                  class="overlay-blog-icon overlay-blog-icon--glyph"
+                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-graveyard.svg')})`}
+                  aria-hidden="true"
+                ></span>
                 <span class="overlay-blog-label">Graveyard</span>
               </a>
             </div>
@@ -597,64 +591,14 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
                         <span class="subnav-tick subnav-tick-bl"></span>
                         <span class="subnav-tick subnav-tick-br"></span>
                       </span>
-                      {/* Lifecycle-motif glyph — the SAME set as the hero corner rail,
-                          on one shared optical grid (~20px circle centred at 16,16). */}
-                      {item.label === 'Home' && (
-                        /* BLACK HOLE / origin — a thin ring with a filled dark core
-                           and a short accretion tick (matches the lifecycle motif). */
-                        <svg class="subnav-icon" viewBox="0 0 32 32" aria-hidden="true">
-                          <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-                          <circle cx="16" cy="16" r="3.4" fill="currentColor" stroke="none" />
-                          <path d="M6 16 L9.5 16 M22.5 16 L26 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
-                        </svg>
-                      )}
-                      {item.label === 'Writing' && (
-                        /* NEBULA — thin ring + concentric inner hint + two specks. */
-                        <svg
-                          class="subnav-icon"
-                          viewBox="0 0 32 32"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          aria-hidden="true"
-                        >
-                          <circle cx="16" cy="16" r="9" />
-                          <circle cx="16" cy="16" r="4" />
-                          <circle cx="16" cy="6" r="0.9" fill="currentColor" stroke="none" />
-                          <circle cx="25" cy="20" r="0.9" fill="currentColor" stroke="none" />
-                        </svg>
-                      )}
-                      {item.label === 'Projects' && (
-                        /* YELLOW STAR — a 4-point star OUTLINE on the shared grid. */
-                        <svg
-                          class="subnav-icon"
-                          viewBox="0 0 32 32"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M16 6 Q17 15 26 16 Q17 17 16 26 Q15 17 6 16 Q15 15 16 6 Z" />
-                        </svg>
-                      )}
-                      {item.label === 'Graveyard' && (
-                        /* RED GIANT — a half-toned circle (◐): ring outline, left
-                           hemisphere filled. Same mass as the others. */
-                        <svg class="subnav-icon" viewBox="0 0 32 32" aria-hidden="true">
-                          <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-                          <path d="M16 7 A 9 9 0 0 0 16 25 Z" fill="currentColor" stroke="none" opacity="0.85" />
-                        </svg>
-                      )}
-                      {item.label === 'About' && (
-                        /* THE BEGINNING / pale blue dot — thin ring + filled speck. */
-                        <svg class="subnav-icon" viewBox="0 0 32 32" aria-hidden="true">
-                          <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-                          <circle cx="16" cy="16" r="2" fill="currentColor" stroke="none" />
-                        </svg>
-                      )}
+                      {/* Scene-marker glyph — same file rendered by the hero StarMarker
+                          reticle. CSS mask makes the shape pixel-identical to the hero
+                          marker; currentColor flows from the link for dim→bright tracking. */}
+                      <span
+                        class="subnav-icon"
+                        style={`--glyph-mask:url(${href('glyphs/' + glyphFor[item.label])})`}
+                        aria-hidden="true"
+                      ></span>
                       <span class="subnav-label">{item.label}</span>
                       {/* Two-digit mono index — only shown on the locked section. */}
                       <span class="subnav-index" aria-hidden="true">{subnavIndex(i)}</span>

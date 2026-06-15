@@ -269,6 +269,21 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
     transform 0.32s var(--ease-out-quint),
     filter 0.2s ease;
 }
+/* Scene-marker glyph variant — section link icons only (.overlay-blog-links).
+   Rendered via CSS mask so the shape is pixel-identical to the hero StarMarker
+   reticle (same SVG file, same mask render path). The Links <summary> and Power
+   button remain inline <svg> elements and are unaffected by this scoped rule. */
+.overlay-blog-icon--glyph {
+  background-color: currentColor;
+  -webkit-mask-image: var(--glyph-mask);
+  mask-image: var(--glyph-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
 .overlay-blog-label {
   display: inline-block;
   max-width: 0;

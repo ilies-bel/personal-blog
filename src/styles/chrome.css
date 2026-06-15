@@ -110,13 +110,23 @@
   border-radius: var(--radius-sm);
 }
 
-/* Lifecycle-motif glyph — same set + weight as the hero corner rail. currentColor
-   flows from the link so it tracks dim → bright with the row. */
+/* Scene-marker glyph — rendered via CSS mask so the icon shape is pixel-identical
+   to the hero StarMarker reticle (same SVG file, same mask render path).
+   currentColor flows from the link so it tracks dim → bright with the row. */
 .subnav-icon {
   width: 1.15rem;
   height: 1.15rem;
-  display: block;
+  display: inline-block;
   flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-image: var(--glyph-mask);
+  mask-image: var(--glyph-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
   filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.55));
   transition: transform 0.32s var(--ease-out-quint), filter 0.2s ease;
 }
