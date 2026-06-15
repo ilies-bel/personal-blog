@@ -757,16 +757,26 @@ export const SCENES: readonly LifecycleScene[] = [
       href: 'projects',
     },
     markers: [
-      // YELLOW STAR / projects — ONE marker, upper-left quadrant of the photosphere.
+      // YELLOW STAR / projects — ONE marker in the DARK orbital zone upper-RIGHT of
+      // the photosphere, NOT on the blazing disc. The settled sun fills the centre /
+      // centre-right of the frame; sitting the marker ON it washed the reticle out
+      // (the near-black bright-flip strokes vanish on the glowing surface). Per the
+      // reference's yellow guidance ("stable orbital zone, off-centre, keep AWAY from
+      // the brightest core, label in clean space") it now sits on the faint orbital
+      // ring against the clean dark sky upper-right, where it reads crisply and the
+      // card opens into empty space. bg is 'noisy' (NOT 'bright'): off the disc it
+      // wants LIGHT strokes (bright would flip them near-black and they'd vanish into
+      // the dark sky), plus 'noisy' gives the strongest dark backing plate to carve
+      // the reticle out of any orbital-ring glow that spills into the corner.
       {
         id: 'yellow',
         state: 'yellow',
-        vx: 0.4,
-        vy: 0.38,
+        vx: 0.74,
+        vy: 0.32,
         href: 'projects',
         title: 'PROJECTS',
         subtitle: 'Things I build',
-        bg: 'bright',
+        bg: 'noisy',
         glyph: 'glyphs/glyph-marker-projects.svg',
         eyebrow: 'PROJECTS / 01',
         headline: 'Things I build.',

@@ -1694,26 +1694,34 @@ body.hud-active .star-marker {
   background: radial-gradient(circle, color-mix(in oklch, var(--bg) 70%, transparent) 0%, transparent 70%);
   opacity: 0.55;
 }
-/* BRIGHT: a soft DARK halo that deepens local contrast behind the near-black
-   reticle so it reads on the bright photosphere / orange limb. Restrained — a
-   radial fade to transparent, never a hard disc. Applies to BOTH bright markers
-   (yellow star + red giant): both sit on bright surfaces and want a dark seat. */
+/* BRIGHT: a DENSE dark seat that deepens local contrast behind the near-black
+   reticle so it reads on a blazing photosphere / orange limb. The earlier version
+   (52% → 30% → transparent @ 0.72) was too faint — the reticle washed out on the
+   glowing surface. Now a fuller, darker disc: near-solid bg at the centre, held
+   dense across the reticle, fading only at the rim so it still reads as a soft seat
+   rather than a hard plate. Applies to the red-giant marker on the bright limb. */
 .star-marker[data-bg='bright'] .star-marker-plate {
-  width: calc(var(--marker-size) * 1.25);
-  height: calc(var(--marker-size) * 1.25);
+  width: calc(var(--marker-size) * 1.35);
+  height: calc(var(--marker-size) * 1.35);
   background: radial-gradient(circle,
-    color-mix(in oklch, var(--bg) 52%, transparent) 0%,
-    color-mix(in oklch, var(--bg) 30%, transparent) 50%,
-    transparent 76%);
-  opacity: 0.72;
+    color-mix(in oklch, var(--bg) 88%, transparent) 0%,
+    color-mix(in oklch, var(--bg) 70%, transparent) 42%,
+    color-mix(in oklch, var(--bg) 40%, transparent) 64%,
+    transparent 82%);
+  opacity: 0.92;
 }
-/* NOISY: a larger, denser dark disc to carve the marker out of the busy gas/limb —
-   the strongest plate of the three. */
+/* NOISY: the largest, densest dark disc — carves the marker out of busy gas / limb /
+   orbital-ring glow. The strongest plate of the three (nebula writing markers + the
+   yellow-star marker in its dark orbital corner both use it). */
 .star-marker[data-bg='noisy'] .star-marker-plate {
-  width: calc(var(--marker-size) * 1.4);
-  height: calc(var(--marker-size) * 1.4);
-  background: radial-gradient(circle, color-mix(in oklch, var(--bg) 70%, transparent) 0%, color-mix(in oklch, var(--bg) 50%, transparent) 50%, transparent 80%);
-  opacity: 0.78;
+  width: calc(var(--marker-size) * 1.45);
+  height: calc(var(--marker-size) * 1.45);
+  background: radial-gradient(circle,
+    color-mix(in oklch, var(--bg) 85%, transparent) 0%,
+    color-mix(in oklch, var(--bg) 64%, transparent) 48%,
+    color-mix(in oklch, var(--bg) 38%, transparent) 68%,
+    transparent 84%);
+  opacity: 0.86;
 }
 
 /* Always-near MICRO-LABEL — a tiny mono caption just under the reticle so every
