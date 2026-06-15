@@ -28,6 +28,20 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
           <span class="projects-link-sep" aria-hidden="true">/</span>
           <span class="projects-pkg"><span class="projects-pkg-label">npm</span> @ilies-bel/fleet</span>
         </div>
+        <dl class="projects-meta">
+          <div class="projects-meta-item">
+            <dt>Role</dt>
+            <dd>Solo — design, build, ship</dd>
+          </div>
+          <div class="projects-meta-item">
+            <dt>Stack</dt>
+            <dd>Containers · gateway proxy · git worktrees</dd>
+          </div>
+          <div class="projects-meta-item">
+            <dt>Status</dt>
+            <dd>Open source · shipped</dd>
+          </div>
+        </dl>
       </header>
 
       <div class="projects-entry-body">
@@ -53,6 +67,20 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       <header class="projects-entry-header">
         <h2 class="projects-entry-name">Mars <span class="projects-badge">private</span></h2>
         <span class="projects-private-note">B2B product. No public link.</span>
+        <dl class="projects-meta">
+          <div class="projects-meta-item">
+            <dt>Role</dt>
+            <dd>Solo — design, build, ship</dd>
+          </div>
+          <div class="projects-meta-item">
+            <dt>Stack</dt>
+            <dd>Multi-agent orchestration · task graph</dd>
+          </div>
+          <div class="projects-meta-item">
+            <dt>Status</dt>
+            <dd>Private · in use</dd>
+          </div>
+        </dl>
       </header>
 
       <div class="projects-entry-body">
@@ -550,6 +578,52 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     color: var(--highlight);
     display: block;
     margin-bottom: 0.4rem;
+  }
+
+  /* Metadata strip — quiet mono fact row under each project headline.
+     Mirrors .projects-pkg-label / .projects-proud-label token style;
+     intentionally quieter (fg-faint labels, no box). */
+  .projects-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0;
+    margin: 0.6rem 0 0;
+    padding: 0;
+    font-family: var(--font-mono);
+  }
+
+  .projects-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45em;
+    padding: 0 0.75rem;
+  }
+
+  .projects-meta-item:first-child {
+    padding-left: 0;
+  }
+
+  .projects-meta-item:not(:first-child) {
+    border-left: 1px solid var(--line);
+  }
+
+  .projects-meta dt {
+    font-size: 0.65rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    font-weight: 400;
+    margin: 0;
+    padding: 0;
+  }
+
+  .projects-meta dd {
+    color: var(--fg-dim);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    margin: 0;
+    padding: 0;
   }
 
   @media (max-width: 58rem) {
