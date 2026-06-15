@@ -93,7 +93,7 @@ export const starFragmentShader = /* glsl */ `
     vec2 c = gl_PointCoord-0.5; if(length(c)>0.5) discard;
     float a = smoothstep(0.5,0.0,length(c));
     // per-star family tint (warm-graphite majority / crisp near-white / rare cool).
-    gl_FragColor = vec4(vTint*vB*a*1.05, 1.0);
+    gl_FragColor = vec4(vTint*vB*a*1.0, 1.0);
   }
 `;
 

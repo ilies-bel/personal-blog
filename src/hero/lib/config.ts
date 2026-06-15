@@ -84,10 +84,11 @@ export const CFG: Config = {
   saturation: 0.38,
   olive: 1.3, // cold-silver grade strength at the black hole (ITEM 2: drives the cool cast)
   warp: 0.76,
-  starBright: 2.5, // ITEM 2: dropped ~30% (3.6 -> 2.5) so the black-hole opening reads as
-  //   pressure + silence, not a busy warm star scene. The lensed starfield is hidden during
-  //   nebula/dot and the star states use the sun-rig dome, so this mainly quiets the BH field.
-  starDensity: 5.2,
+  starBright: 1.7, // ITEM 2: dropped further (3.6 -> 2.5 -> 1.7) so the lensed starfield
+  //   recedes behind the hole and attention centers on the dark center rather than the
+  //   busy sparkly field. The lensed starfield is hidden during nebula/dot and the star
+  //   states use the sun-rig dome, so this only quiets the BH field.
+  starDensity: 3.4, // thinned (5.2 -> 3.4) so the star count drops and the field becomes sparser
 };
 
 // Fixed screen-space look offset.
