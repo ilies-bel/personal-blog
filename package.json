@@ -34,6 +34,7 @@
     "@types/three": "^0.184.1",
     "esbuild": "^0.25.12",
     "knip": "^6.14.2",
+    "png-to-ico": "^3.0.1",
     "typescript": "^6.0.3"
   }
 }
