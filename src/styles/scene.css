@@ -232,22 +232,23 @@ body.at-opening .overlay-blog {
   pointer-events: none;
 }
 
-/* Section links as quiet glyph icons (currentColor flows from the link). The label
-   is folded to zero width at rest and unfurls — icon → icon+label — only at the
-   black hole (body.bare.hud-active), so the corner stays a whisper while scrolling
-   the lifecycle and becomes an explicit menu at the bottom hero (or when the power
-   button forces it). The icons themselves stay VISIBLE throughout the whole scroll. */
+/* Section links as text labels — visible in EVERY mode (no decorative icons).
+   At rest: small mono-uppercase, dim (--hud-rail-dim). At the black hole
+   (body.bare.hud-active): brighter (--fg) and lifted a hair so the rail
+   reads as the explicit menu it becomes. Gold underline sweeps in on hover. */
 .overlay-blog-links {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 1.1rem;
 }
 .overlay-blog-link {
   display: inline-flex;
   align-items: center;
-  color: var(--fg-dim);
+  color: var(--hud-rail-dim);
   text-decoration: none;
-  transition: color 0.16s ease;
+  transition:
+    color 0.16s ease,
+    transform 0.32s var(--ease-out-quint);
 }
 .overlay-blog-link:hover,
 .overlay-blog-link:focus-visible { color: var(--fg); }
@@ -256,49 +257,39 @@ body.at-opening .overlay-blog {
   outline-offset: 3px;
   border-radius: var(--radius-sm);
 }
+/* HUD-active (black hole) brightens AND lifts the section labels in place of
+   the old fold-out-from-zero-width reveal. The lift is small (~2px) — a quiet
+   "the menu is awake" signal, not a jump. The functional Links/Power controls
+   carry .overlay-blog-link too, so they brighten with the rail; the lift is
+   scoped to the section-link <a>s inside .overlay-blog-links. */
 body.bare.hud-active .overlay-blog-link { color: var(--fg); }
+body.bare.hud-active .overlay-blog-links .overlay-blog-link {
+  transform: translateY(-2px);
+}
+/* Functional control glyphs only — the Links <summary> "two planets" SVG, the
+   Power button SVG, and the ReducedMotionToggle SVG all carry .overlay-blog-icon.
+   Section icons were removed; this rule now sizes only the controls' glyphs. */
 .overlay-blog-icon {
   width: 1.3rem;
   height: 1.3rem;
   display: block;
   flex: 0 0 auto;
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.7));
-  /* The icon nudges right on hover (#6) — a small, eased translate so the link
-     leans toward its label as it brightens. Reduced-motion safe (dropped below). */
-  transition:
-    transform 0.32s var(--ease-out-quint),
-    filter 0.2s ease;
+  transition: filter 0.2s ease;
 }
-/* Scene-marker glyph variant — section link icons only (.overlay-blog-links).
-   Rendered via CSS mask so the shape is pixel-identical to the hero StarMarker
-   reticle (same SVG file, same mask render path). The Links <summary> and Power
-   button remain inline <svg> elements and are unaffected by this scoped rule. */
-.overlay-blog-icon--glyph {
-  background-color: currentColor;
-  -webkit-mask-image: var(--glyph-mask);
-  mask-image: var(--glyph-mask);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-}
+/* Section labels — small mono-uppercase, visible in EVERY mode (no fold-out).
+   currentColor flows from .overlay-blog-link so dim→bright tracking is automatic
+   (rest: --hud-rail-dim; hud-active: --fg). The gold underline-sweep on hover
+   stays — drawn as a 0%→100% background gradient anchored to the label's bottom
+   edge so the label box clips it cleanly. */
 .overlay-blog-label {
   display: inline-block;
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: var(--text-hud);
   letter-spacing: 0.04em;
+  text-transform: uppercase;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
-  /* A gold underline that SWEEPS in on hover. Drawn as a bottom-anchored background
-     gradient sized 0%→100% width — kept INSIDE the label box so the label's own
-     overflow:hidden never clips it (a bottom-offset ::after would be clipped). The
-     fold reveal (max-width/opacity, set on hud-active) is unchanged; the hover
-     micro-interaction composes on top. */
   background-image: linear-gradient(
     to right,
     var(--accent-strong),
@@ -307,40 +298,19 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
   background-repeat: no-repeat;
   background-position: left calc(100% - 0.02rem);
   background-size: 0% 1px;
-  transition:
-    max-width 0.4s var(--ease-out-quint),
-    opacity 0.25s ease,
-    margin-left 0.4s var(--ease-out-quint),
-    transform 0.32s var(--ease-out-quint),
-    background-size 0.32s var(--ease-out-quint);
+  transition: background-size 0.32s var(--ease-out-quint);
 }
-body.bare.hud-active .overlay-blog-label {
-  max-width: 7rem;
-  opacity: 1;
-  margin-left: 0.4rem;
-}
-/* HOVER / FOCUS micro-interaction (#6, #7): the icon nudges right, the label slides
-   a hair to follow, and the gold underline sweeps left→right. Applies to the
-   section links AND the socials summary (both carry .overlay-blog-link). Only
-   meaningful once the labels are open (hud-active), but harmless when folded — the
-   underline simply sweeps under a zero-width label. */
-.overlay-blog-link:hover .overlay-blog-icon,
-.overlay-blog-link:focus-visible .overlay-blog-icon {
-  transform: translateX(0.12rem);
-}
+/* HOVER / FOCUS: the gold underline sweeps left→right. Applies to the section
+   links AND the socials summary (both carry .overlay-blog-link). */
 .overlay-blog-link:hover .overlay-blog-label,
 .overlay-blog-link:focus-visible .overlay-blog-label {
-  transform: translateX(0.1rem);
   background-size: 100% 1px;
 }
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-icon,
-  .overlay-blog-label { transition: none; }
-  /* Drop the motion but keep the brightening; the underline simply appears. */
-  .overlay-blog-link:hover .overlay-blog-icon,
-  .overlay-blog-link:focus-visible .overlay-blog-icon,
-  .overlay-blog-link:hover .overlay-blog-label,
-  .overlay-blog-link:focus-visible .overlay-blog-label { transform: none; }
+  .overlay-blog-label,
+  .overlay-blog-link { transition: none; }
+  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
 }
 
 /* Socials live behind a native <details> dropdown — the "two planets" glyph toggles

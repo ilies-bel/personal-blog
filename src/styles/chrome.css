@@ -69,7 +69,7 @@
    restore the warm --fg + drop the canvas text-shadow; mirror that for .subnav.) */
 .subnav-brand { flex: 0 0 auto; }
 
-/* The section rail — glyph + label rows separated by hairline dividers. */
+/* The section rail — text-label rows separated by hairline dividers. */
 .subnav-rail { flex: 0 1 auto; min-width: 0; }
 .subnav-list {
   display: flex;
@@ -110,27 +110,6 @@
   border-radius: var(--radius-sm);
 }
 
-/* Scene-marker glyph — rendered via CSS mask so the icon shape is pixel-identical
-   to the hero StarMarker reticle (same SVG file, same mask render path).
-   currentColor flows from the link so it tracks dim → bright with the row. */
-.subnav-icon {
-  width: 1.15rem;
-  height: 1.15rem;
-  display: inline-block;
-  flex: 0 0 auto;
-  background-color: currentColor;
-  -webkit-mask-image: var(--glyph-mask);
-  mask-image: var(--glyph-mask);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.55));
-  transition: transform 0.32s var(--ease-out-quint), filter 0.2s ease;
-}
-
 /* Mono-uppercase label — a gold underline sweeps in on hover/focus (mirrors the
    .overlay-blog-label reveal, but the label here is ALWAYS shown, so only the
    underline animates). Drawn as a bottom-anchored background gradient sized
@@ -148,8 +127,6 @@
   background-size: 0% 1px;
   transition: background-size 0.32s var(--ease-out-quint);
 }
-.subnav-link:hover .subnav-icon,
-.subnav-link:focus-visible .subnav-icon { transform: translateX(0.1rem); }
 .subnav-link:hover .subnav-label,
 .subnav-link:focus-visible .subnav-label { background-size: 100% 1px; }
 
@@ -182,21 +159,15 @@
 .subnav-tick-br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
 
 /* LOCKED (current) section — the hero's target-lock treatment: corner ticks +
-   a hairline frame, brighter --fg, the icon lit, and the mono index revealed. */
+   a hairline frame, brighter --fg, and the mono index revealed. */
 .subnav-link[aria-current='page'] {
   color: var(--fg);
-}
-.subnav-link[aria-current='page'] .subnav-icon {
-  filter: drop-shadow(0 0 8px color-mix(in oklch, var(--accent) 45%, transparent));
 }
 .subnav-link[aria-current='page'] .subnav-lock { display: block; }
 .subnav-link[aria-current='page'] .subnav-index { display: inline-block; }
 
 @media (prefers-reduced-motion: reduce) {
-  .subnav-icon,
   .subnav-label { transition: none; }
-  .subnav-link:hover .subnav-icon,
-  .subnav-link:focus-visible .subnav-icon { transform: none; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

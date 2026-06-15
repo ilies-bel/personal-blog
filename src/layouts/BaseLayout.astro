@@ -72,16 +72,6 @@ const subnavItems: SubnavItem[] = [
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).
 const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
-// Map each section label to its scene-marker glyph file — the source-of-truth
-// shapes used by the hero StarMarker reticle. Both navbars render via CSS mask
-// so icons are pixel-identical to the hero markers (same files, same render path).
-const glyphFor: Record<string, string> = {
-  Home: 'glyph-marker-story.svg',
-  Writing: 'glyph-marker-writing.svg',
-  Projects: 'glyph-marker-projects.svg',
-  Graveyard: 'glyph-marker-graveyard.svg',
-  About: 'glyph-marker-about.svg',
-};
 ---
 
 <!doctype html>
@@ -125,48 +115,21 @@ const glyphFor: Record<string, string> = {
               planets" <details> dropdown holds the social links (zero-JS, native), and
               a power button toggles the hud-active morph in place without scrolling. */}
           <nav class="overlay-blog" aria-label="Sections">
-            {/* The four section icons are redrawn on ONE shared optical grid so the
-                row reads as a set: each motif fits a ~20px circle centred at (16,16)
-                (radius ~9–10 max), all stroke="currentColor" stroke-width="1.5"
-                fill="none" with round joins/caps, only a small center accent filled.
-                Identical visual mass; the lifecycle motif stays but disciplined. */}
+            {/* Text-only section labels — no decorative icons. The four links
+                show small mono-uppercase labels at rest (dim) and brighten/lift
+                when the HUD activates at the black hole (body.bare.hud-active).
+                The functional Links/Power controls below KEEP their inline SVGs. */}
             <div class="overlay-blog-links">
-              <a class="overlay-blog-link" href={href('about')} aria-label="About">
-                {/* Scene-marker glyph — person bust (glyph-marker-about.svg).
-                    Rendered via CSS mask so the shape is pixel-identical to the
-                    hero StarMarker reticle. */}
-                <span
-                  class="overlay-blog-icon overlay-blog-icon--glyph"
-                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-about.svg')})`}
-                  aria-hidden="true"
-                ></span>
+              <a class="overlay-blog-link" href={href('about')}>
                 <span class="overlay-blog-label">About</span>
               </a>
-              <a class="overlay-blog-link" href={href('writing')} aria-label="Writing">
-                {/* Scene-marker glyph — pen (glyph-marker-writing.svg). */}
-                <span
-                  class="overlay-blog-icon overlay-blog-icon--glyph"
-                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-writing.svg')})`}
-                  aria-hidden="true"
-                ></span>
+              <a class="overlay-blog-link" href={href('writing')}>
                 <span class="overlay-blog-label">Writing</span>
               </a>
-              <a class="overlay-blog-link" href={href('projects')} aria-label="Projects">
-                {/* Scene-marker glyph — stacked squares (glyph-marker-projects.svg). */}
-                <span
-                  class="overlay-blog-icon overlay-blog-icon--glyph"
-                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-projects.svg')})`}
-                  aria-hidden="true"
-                ></span>
+              <a class="overlay-blog-link" href={href('projects')}>
                 <span class="overlay-blog-label">Projects</span>
               </a>
-              <a class="overlay-blog-link" href={href('graveyard')} aria-label="Graveyard">
-                {/* Scene-marker glyph — headstone (glyph-marker-graveyard.svg). */}
-                <span
-                  class="overlay-blog-icon overlay-blog-icon--glyph"
-                  style={`--glyph-mask:url(${href('glyphs/glyph-marker-graveyard.svg')})`}
-                  aria-hidden="true"
-                ></span>
+              <a class="overlay-blog-link" href={href('graveyard')}>
                 <span class="overlay-blog-label">Graveyard</span>
               </a>
             </div>
@@ -591,14 +554,6 @@ const glyphFor: Record<string, string> = {
                         <span class="subnav-tick subnav-tick-bl"></span>
                         <span class="subnav-tick subnav-tick-br"></span>
                       </span>
-                      {/* Scene-marker glyph — same file rendered by the hero StarMarker
-                          reticle. CSS mask makes the shape pixel-identical to the hero
-                          marker; currentColor flows from the link for dim→bright tracking. */}
-                      <span
-                        class="subnav-icon"
-                        style={`--glyph-mask:url(${href('glyphs/' + glyphFor[item.label])})`}
-                        aria-hidden="true"
-                      ></span>
                       <span class="subnav-label">{item.label}</span>
                       {/* Two-digit mono index — only shown on the locked section. */}
                       <span class="subnav-index" aria-hidden="true">{subnavIndex(i)}</span>
