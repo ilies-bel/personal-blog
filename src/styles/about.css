@@ -144,6 +144,86 @@
   line-height: 1.55;
 }
 
+/* The personal moment: a sign-off in Instrument Serif italic with a hand-drawn
+   flourish underline. Default state is the reduced-motion / no-JS baseline —
+   fully visible from the first frame. The animated reveal is opt-in via the
+   .has-signature-anim class set by about.astro's inline script (only when motion
+   is allowed AND JS ran), at which point the signature starts hidden and the
+   .is-drawn toggle (added by IntersectionObserver) plays the reveal. */
+.about-signature {
+  position: relative;
+  margin: clamp(2rem, 5vh, 3rem) 0 0;
+  padding-left: clamp(0.5rem, 4vw, 3rem);
+  /* Right-of-axis alignment matches how a signature sits at the foot of a
+     letter — pushed off the body column, not centred. */
+  text-align: left;
+  /* The container is a tight stack: the name, then the flourish below it. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15em;
+  /* Don't let it grow into the contact section's airspace; the gap below is
+     handled by .about-contact's margin-top. */
+  line-height: 1;
+  color: var(--fg);
+}
+.about-signature-name {
+  display: inline-block;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(2.4rem, 6vw, 3.8rem);
+  line-height: 1;
+  /* A whisper of warmth pulls the signature toward the brass accents in the
+     scene without making it shout. */
+  color: color-mix(in oklch, var(--fg) 88%, var(--accent) 12%);
+  /* Small optical lift so the flourish underline kisses the baseline. */
+  margin-bottom: 0.1em;
+}
+.about-signature-flourish {
+  display: block;
+  width: clamp(7rem, 18vw, 12rem);
+  height: auto;
+  color: color-mix(in oklch, var(--accent) 70%, var(--fg) 30%);
+  opacity: 0.78;
+  overflow: visible;
+}
+
+/* Animated branch — only active when JS+motion is allowed (body class set in
+   about.astro). The signature begins hidden, then .is-drawn (added when it
+   enters the viewport) plays the reveal: name first via clip-path, flourish
+   draws in after via stroke-dashoffset. Both use --ease-out-quint. */
+.about-page.has-signature-anim .about-signature-name {
+  clip-path: inset(0 100% 0 -0.15em);
+  transition: clip-path 0.95s var(--ease-out-quint);
+}
+.about-page.has-signature-anim .about-signature.is-drawn .about-signature-name {
+  clip-path: inset(0 -0.15em 0 -0.15em);
+}
+.about-page.has-signature-anim .about-signature-flourish path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.85s var(--ease-out-quint);
+  transition-delay: 0.55s;
+}
+.about-page.has-signature-anim .about-signature.is-drawn .about-signature-flourish path {
+  stroke-dashoffset: 0;
+}
+
+/* Safety net: if the user toggles prefers-reduced-motion AFTER the body class
+   was set (some OSes don't notify), the animated branch is short-circuited so
+   the signature remains visible. */
+@media (prefers-reduced-motion: reduce) {
+  .about-page.has-signature-anim .about-signature-name {
+    clip-path: none;
+    transition: none;
+  }
+  .about-page.has-signature-anim .about-signature-flourish path {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+}
+
 /* Generous separation marks the gear-change from voice to action. */
 .about-contact {
   margin-top: clamp(2.5rem, 7vh, 4rem);
