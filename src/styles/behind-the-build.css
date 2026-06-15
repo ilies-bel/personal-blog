@@ -1,0 +1,305 @@
+/* behind-the-build.css — the case-study page that documents the hero/article
+   WebGL system by RUNNING it. Visually it is article.css (the scene-journey
+   reading frame); this partial adds only the shader gallery, the budget table,
+   the FPS meter readout, and the fallback ladder — each scoped to body.behind-
+   the-build so the regular article pages are untouched. */
+
+/* ---------------------------------------------------------------
+   Shader gallery — one panel per .glsl file. Each panel is a self
+   contained block: name + filename, then a SceneFigure plate, a
+   short blurb, and a <details> revealing the GLSL source. The grid
+   is single-column at narrow widths and 2-up on wider screens, so
+   the prose column rhythm is preserved on mobile while the desktop
+   read gets a denser scan layer.
+   --------------------------------------------------------------- */
+body.behind-the-build .btb-shader-gallery {
+  margin: 2.5rem 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+@media (min-width: 1080px) {
+  body.behind-the-build .btb-shader-gallery {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+body.behind-the-build .btb-shader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+body.behind-the-build .btb-shader-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+body.behind-the-build .btb-shader-name code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--accent);
+}
+body.behind-the-build .btb-shader-file {
+  color: var(--fg-faint);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+body.behind-the-build .btb-shader-desc {
+  margin: 0;
+  color: var(--fg-dim);
+}
+body.behind-the-build .btb-shader-source {
+  margin-top: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+}
+body.behind-the-build .btb-shader-source > summary {
+  padding: 0.55rem 0.9rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  cursor: pointer;
+  list-style: none;
+}
+body.behind-the-build .btb-shader-source > summary::-webkit-details-marker {
+  display: none;
+}
+body.behind-the-build .btb-shader-source[open] > summary {
+  border-bottom: 1px solid var(--line);
+  color: var(--accent);
+}
+body.behind-the-build .btb-shader-source-note {
+  color: var(--fg-faint);
+  text-transform: none;
+}
+body.behind-the-build .btb-shader-code {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  max-height: 28rem;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: 1.55;
+  color: var(--fg);
+  background: transparent;
+  white-space: pre;
+}
+
+/* ---------------------------------------------------------------
+   Performance budgets — a tarnished hairline table in the mono
+   instrument language. Lives inside the prose column, so it respects
+   the article's measure ceiling and reads as another instrument
+   panel, not a separate widget.
+   --------------------------------------------------------------- */
+body.behind-the-build .btb-budget-table {
+  width: 100%;
+  margin: 1.75rem 0;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--fg-dim);
+}
+body.behind-the-build .btb-budget-table th,
+body.behind-the-build .btb-budget-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+body.behind-the-build .btb-budget-table thead th {
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 35%, var(--line));
+}
+body.behind-the-build .btb-budget-table tbody th[scope='row'] {
+  color: var(--fg);
+  font-weight: normal;
+}
+body.behind-the-build .btb-budget-table tbody td:nth-child(2),
+body.behind-the-build .btb-budget-table tbody td:nth-child(3) {
+  color: var(--accent-strong);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------
+   FPS meter — the live instrument. Resting state shows tier + live
+   fps; the "Run 5s benchmark" button kicks off a sweep and the
+   results render as a row of mono-tab values.
+   --------------------------------------------------------------- */
+body.behind-the-build .fps-meter {
+  margin: 1.5rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  display: grid;
+  gap: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body.behind-the-build .fps-meter[data-running='true'] {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--line));
+}
+body.behind-the-build .fps-meter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+body.behind-the-build .fps-meter-label {
+  color: var(--fg-faint);
+}
+body.behind-the-build .fps-meter-value {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+body.behind-the-build .fps-meter-live {
+  color: var(--accent-strong);
+  font-size: var(--text-label);
+}
+body.behind-the-build .fps-meter-button {
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.95rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+body.behind-the-build .fps-meter-button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+body.behind-the-build .fps-meter-button:disabled {
+  color: var(--fg-faint);
+  background: color-mix(in oklch, var(--line) 70%, transparent);
+  cursor: not-allowed;
+}
+body.behind-the-build .fps-meter-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+body.behind-the-build .fps-meter-result {
+  margin: 0.45rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+}
+body.behind-the-build .fps-meter-result > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+body.behind-the-build .fps-meter-result dt {
+  color: var(--fg-faint);
+}
+body.behind-the-build .fps-meter-result dd {
+  margin: 0;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------
+   Fallback ladder — four panels showing the same beat at progressively
+   reduced capability. Static posters (CSS gradients) so the ladder
+   renders identically with or without WebGL.
+   --------------------------------------------------------------- */
+body.behind-the-build .btb-fallback-ladder {
+  list-style: none;
+  padding: 0;
+  margin: 1.75rem 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 720px) {
+  body.behind-the-build .btb-fallback-ladder {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+body.behind-the-build .btb-fallback {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 1rem;
+  align-items: stretch;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+}
+body.behind-the-build .btb-fallback-poster {
+  border-radius: var(--radius-sm);
+  min-height: 96px;
+}
+body.behind-the-build .btb-fallback--high-tier .btb-fallback-poster {
+  background:
+    radial-gradient(60% 60% at 50% 50%, color-mix(in oklch, var(--accent) 35%, transparent), transparent 70%),
+    radial-gradient(circle at 30% 60%, color-mix(in oklch, var(--accent-strong) 28%, transparent), transparent 50%),
+    radial-gradient(circle at 70% 35%, color-mix(in oklch, var(--ember) 32%, transparent), transparent 50%),
+    radial-gradient(circle at 50% 50%, oklch(0.12 0.01 80), oklch(0.08 0.01 80));
+}
+body.behind-the-build .btb-fallback--low-tier .btb-fallback-poster {
+  background:
+    radial-gradient(45% 45% at 50% 50%, color-mix(in oklch, var(--accent) 25%, transparent), transparent 75%),
+    radial-gradient(circle at 50% 50%, oklch(0.13 0.01 80), oklch(0.08 0.01 80));
+}
+body.behind-the-build .btb-fallback--reduced-motion .btb-fallback-poster {
+  background:
+    radial-gradient(circle at 50% 50%, oklch(0.20 0.005 80), oklch(0.10 0.005 80));
+}
+body.behind-the-build .btb-fallback--no-webgl .btb-fallback-poster {
+  background: oklch(0.10 0.005 80);
+  border: 1px dashed var(--line);
+}
+body.behind-the-build .btb-fallback-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+body.behind-the-build .btb-fallback-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+body.behind-the-build .btb-fallback-state {
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--text-label);
+}
+body.behind-the-build .btb-fallback-detail {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--text-micro);
+}
+
+/* ---------------------------------------------------------------
+   Reduced motion: no transitions on the FPS meter button. The page
+   is otherwise quiet by design.
+   --------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  body.behind-the-build .fps-meter-button { transition: none; }
+}

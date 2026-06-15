@@ -19,5 +19,6 @@
 @import './prose.css';    /* article prose + article header */
 @import './article.css';  /* scene-journey article HUD + in-prose MDX islands (extends prose) */
 @import './graveyard.css'; /* scene-journey graveyard treatment — specimen rows + reveal */
+@import './behind-the-build.css'; /* the Behind-the-Build case-study page (shader gallery, budget table, FPS meter, fallback ladder) */
 @import './about.css';    /* the about overlay panel */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */

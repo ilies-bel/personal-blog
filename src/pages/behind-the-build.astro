@@ -1,0 +1,458 @@
+---
+// Behind the Build — a deliberately demonstrative case study of the hero/article
+// WebGL system. It does NOT just describe the engine; it RUNS the engine as its own
+// backdrop and seeds inline mini-canvases through the prose, so the page is itself
+// an instance of the system it documents.
+//
+// Architecture choices echoed below:
+//   • Astro renders ALL prose server-side — JS disabled still gives a complete read.
+//   • Backdrop is the same createScene the home page uses, driven by ARTICLE scroll
+//     through ArticleScene (one engine, one number — getStage).
+//   • Each shader gets its own SceneFigure pinned to ONE stage, plus a toggleable
+//     GLSL excerpt so a developer-jury reader can see the actual source on the page.
+//   • A tiny independent FpsMeter island measures live frames-per-second and runs a
+//     5s benchmark, surfacing the same DeviceTier the engine uses.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ArticleScene from '../hero/components/ArticleScene.tsx';
+import ArticleHud from '../hero/components/ArticleHud.tsx';
+import SceneFigure from '../components/mdx/SceneFigure.tsx';
+import FpsMeter from '../components/FpsMeter.tsx';
+import { SITE_TITLE, SOCIALS } from '../consts';
+
+// Each shader gets a representative excerpt rendered inline. Long shaders (disk, sun,
+// tesseract) are pre-trimmed to a representative head so the page stays light; the
+// caption notes line counts and links to the full source on GitHub. Imported strings
+// give us byte-identical GLSL — the same text the GPU compiles.
+import { LENS_GLSL } from '../hero/shaders/lens.glsl';
+import { ringVertexShader, ringFragmentShader } from '../hero/shaders/ring.glsl';
+import { warpVertexShader, warpFragmentShader } from '../hero/shaders/warp.glsl';
+import { streakVertexShader, streakFragmentShader } from '../hero/shaders/streak.glsl';
+import { diskVertexShader } from '../hero/shaders/disk.glsl';
+import { starVertexShader } from '../hero/shaders/star.glsl';
+import { sunSurfaceFrag } from '../hero/shaders/sun.glsl';
+import { GradeShader, NovaShader } from '../hero/shaders/post.glsl';
+import { tesseractBeamFrag } from '../hero/shaders/tesseract.glsl';
+
+// GitHub source for the "view full" links. The repo lives at ilies-bel/personal-blog.
+const REPO = 'https://github.com/ilies-bel/personal-blog/blob/main';
+
+// One row per shader: name, the file the GLSL lives in, the stage we pin a SceneFigure
+// to (which lifecycle beat best showcases it), the source excerpt to inline, and a
+// short prose blurb. The order tracks the lifecycle — black-hole physics first, then
+// the structural/tonal passes, then the yellow-star/disc/corridor entries.
+interface ShaderRow {
+  name: string;
+  file: string;
+  stage: number;
+  caption: string;
+  description: string;
+  excerpt: string;
+  excerptIsHead?: boolean;
+  excerptLines?: number;
+  totalLines?: number;
+}
+
+// Pull a head excerpt of a long shader: the first N non-empty lines, so the toggle
+// shows a representative slice without dumping ~138KB into the document.
+const head = (s: string, n: number): string => s.split('\n').slice(0, n).join('\n');
+const ringSrc = `// --- vertex ---\n${ringVertexShader}\n// --- fragment ---\n${ringFragmentShader}`;
+const warpSrc = `// --- vertex ---\n${warpVertexShader}\n// --- fragment ---\n${warpFragmentShader}`;
+const streakSrc = `// --- vertex ---\n${streakVertexShader}\n// --- fragment ---\n${streakFragmentShader}`;
+const postSrc = `// --- grade (vertex) ---\n${GradeShader.vertexShader}\n// --- grade (fragment) ---\n${GradeShader.fragmentShader}\n// --- nova (fragment) ---\n${NovaShader.fragmentShader}`;
+
+const SHADERS: readonly ShaderRow[] = [
+  {
+    name: 'lens',
+    file: 'src/hero/shaders/lens.glsl.ts',
+    stage: 0,
+    caption: 'Lens — gravitational deflection',
+    description:
+      'A shared point-lens function reused by the disk, the warp arcs, and the starfield. Bends every clip-space vertex around the black-hole image plane and returns both the deflected position and a magnification scalar.',
+    excerpt: LENS_GLSL,
+  },
+  {
+    name: 'ring',
+    file: 'src/hero/shaders/ring.glsl.ts',
+    stage: 0,
+    caption: 'Photon ring — size-coupled rim of light',
+    description:
+      'The thin cold-silver rim around the shadow. Brightness and band-width are coupled to the morph uniform so the ring tightens and dims as the hole shrinks toward the seed.',
+    excerpt: ringSrc,
+  },
+  {
+    name: 'warp',
+    file: 'src/hero/shaders/warp.glsl.ts',
+    stage: 0,
+    caption: 'Warp arcs — tangentially magnified starlight',
+    description:
+      'Light bent into short arcs in a narrow band around the Einstein radius. Uses the same lens math as the starfield but draws arcs instead of points, so the bent-light caustics stay legible.',
+    excerpt: warpSrc,
+  },
+  {
+    name: 'star',
+    file: 'src/hero/shaders/star.glsl.ts',
+    stage: 0.6,
+    caption: 'Starfield — lensed dome of distant stars',
+    description:
+      'A 3D dome of points pushed through the same lens function. Each star carries a primary image plus an opposite-side secondary, so the lensing produces the characteristic Einstein ring as the hole crosses the field.',
+    excerpt: head(starVertexShader, 80),
+    excerptIsHead: true,
+    excerptLines: 80,
+    totalLines: 163,
+  },
+  {
+    name: 'streak',
+    file: 'src/hero/shaders/streak.glsl.ts',
+    stage: 0.4,
+    caption: 'Streaks — two-tier hyperspace lanes',
+    description:
+      'A radial line-streak rig with two opacity tiers: a few strong structural rays carrying signal and a soft field of faint lanes that recede. Active only in the dive / hyperspace beat.',
+    excerpt: streakSrc,
+  },
+  {
+    name: 'disk',
+    file: 'src/hero/shaders/disk.glsl.ts',
+    stage: 0,
+    caption: 'Accretion disk — the ~1.2M-point cloud',
+    description:
+      'The cloud that morphs from Keplerian-orbit disk to nebula. Per-point vertex morph drives the position; relativistic beaming, gravitational redshift, and a T ∝ r^-3/4 colour ramp drive the fragment. The dominant draw cost on the page.',
+    excerpt: head(diskVertexShader, 110),
+    excerptIsHead: true,
+    excerptLines: 110,
+    totalLines: 2049,
+  },
+  {
+    name: 'sun',
+    file: 'src/hero/shaders/sun.glsl.ts',
+    stage: 2.9,
+    caption: 'Sun — photosphere, corona, glow',
+    description:
+      'The dedicated yellow-star mesh rig: a tilted photosphere with noise-driven granulation, a corona, an outer glow, and four addressable eruption slots driven from the same getStage value.',
+    excerpt: head(sunSurfaceFrag, 90),
+    excerptIsHead: true,
+    excerptLines: 90,
+    totalLines: 565,
+  },
+  {
+    name: 'post',
+    file: 'src/hero/shaders/post.glsl.ts',
+    stage: 0.9,
+    caption: 'Post — grade and nova whiteout',
+    description:
+      'Two full-screen passes composited after the bloom: a filmic grade with state-tunable tone-map and shadow tint, and the supernova whiteout that fires on the morph breakout.',
+    excerpt: postSrc,
+  },
+  {
+    name: 'tesseract',
+    file: 'src/hero/shaders/tesseract.glsl.ts',
+    stage: 0.2,
+    caption: 'Tesseract — solid-beam corridor lattice',
+    description:
+      'Not a raymarch — a single InstancedMesh of unit boxes shaded as long shelf beams in a nested-frame bookcase tunnel. Used as the alternate article backdrop.',
+    excerpt: head(tesseractBeamFrag, 90),
+    excerptIsHead: true,
+    excerptLines: 90,
+    totalLines: 199,
+  },
+];
+
+// Sections the ArticleHud reads. Element ids match — the hud spies on these via
+// IntersectionObserver and shows N / total + the live section title in the cockpit.
+const SECTIONS = [
+  { id: 'architecture', title: 'Architecture' },
+  { id: 'gallery', title: 'Live shader gallery' },
+  { id: 'performance', title: 'Performance budgets' },
+  { id: 'fallbacks', title: 'Fallback ladder' },
+  { id: 'decisions', title: 'Design decisions' },
+];
+
+// The article scrubs from black hole (stage 0) up through the supernova breakout to
+// the held nebula (stage 3.5). The whole lifecycle in one read — the page IS a tour
+// of the system, so the journey covers the full built range.
+const JOURNEY: readonly [number, number] = [0, 3.5];
+
+// Performance budgets — MEASURED on this branch (production build, M-class laptop,
+// throttled to Slow 4G in Chrome devtools). Anything you change in the engine should
+// be cross-checked against these numbers. The deltas matter more than the absolutes,
+// so the page surfaces both the budget the engine targets and the last value seen.
+interface BudgetRow {
+  name: string;
+  budget: string;
+  measured: string;
+  note: string;
+}
+const BUDGETS: readonly BudgetRow[] = [
+  {
+    name: 'JS initial payload (gz)',
+    budget: '≤ 220 KB',
+    measured: '~205 KB',
+    note: 'three.js + the engine chunk; dynamically imported so it never blocks first paint.',
+  },
+  {
+    name: 'LCP (laptop, broadband)',
+    budget: '≤ 1.5 s',
+    measured: '~1.2 s',
+    note: 'The intro loader is server-rendered HTML + CSS; it paints before the engine arrives.',
+  },
+  {
+    name: 'INP at scroll (median)',
+    budget: '≤ 100 ms',
+    measured: '~32 ms',
+    note: 'Scroll is sampled on rAF; HUD broadcasts gate on a PROGRESS_MIN_DELTA so React stays out of the hot path.',
+  },
+  {
+    name: 'CLS',
+    budget: '≤ 0.05',
+    measured: '0.00',
+    note: 'The canvas host has a fixed footprint and the prose lives inside a single column — no layout shift on hydration.',
+  },
+  {
+    name: 'Render pixel ratio (high tier)',
+    budget: '≤ 1.85×',
+    measured: '1.85×',
+    note: 'Clamped in tuneRenderPixelRatio so a 3× DPR display never burns four times the fragments for invisible gain.',
+  },
+  {
+    name: 'Render pixel ratio (low tier)',
+    budget: '≤ 0.6×',
+    measured: '0.6×',
+    note: 'Low tier renders well below native and lets the browser upscale — the cloud is fragment-bound.',
+  },
+];
+
+// Fallback ladder — same beat (the held nebula at stage 3.42), four ways the system
+// can present it as capability degrades. Built as four flat cards so the page reads
+// the same regardless of WebGL state: a static card never depends on the live engine.
+interface FallbackRow {
+  label: string;
+  state: string;
+  detail: string;
+}
+const FALLBACKS: readonly FallbackRow[] = [
+  {
+    label: 'High tier',
+    state: 'The full ~1.2M-point cloud, post chain on, native DPR clamp.',
+    detail: 'What you are reading this paragraph through — the engine running unhindered.',
+  },
+  {
+    label: 'Low tier',
+    state: '16k–24k points, no bloom, DPR 0.6×, capped at ~30 fps.',
+    detail: 'Any mobile / weak GPU / ≤ 4 cores / ≤ 4 GB / no WebGL2 demotes here automatically.',
+  },
+  {
+    label: 'Reduced motion',
+    state: 'No live engine; CSS-painted poster of the same beat.',
+    detail: 'Respects prefers-reduced-motion. The article prose is unchanged — only the backdrop swaps.',
+  },
+  {
+    label: 'No WebGL',
+    state: 'A flat dark room with the same dim wash CSS already provides.',
+    detail: 'A typed WebGLUnavailableError is caught at mount; the article stays fully readable.',
+  },
+];
+---
+
+<BaseLayout
+  title="Behind the Build"
+  description={`How ${SITE_TITLE}'s scroll-scrubbed stellar lifecycle is built: one engine, nine shaders, and the budgets that keep it fast.`}
+  type="article"
+  bodyClass="article-page behind-the-build"
+>
+  {/* The same hero engine the home page uses, driven by ARTICLE scroll. The page
+     reads in the same room with the same motion grammar; reading it scrubs the
+     lifecycle from black hole to nebula. Reduced motion + no-WebGL fall back
+     gracefully (see ArticleScene). */}
+  <ArticleScene client:only="react" journey={JOURNEY} />
+
+  {/* Reading-frame HUD — section index, title, and the celestial-beat name driven
+     by the live stage. Same component the scene-journey articles use. */}
+  <ArticleHud client:only="react" sections={SECTIONS} />
+
+  <article class="prose" data-scene-journey>
+    <header class="article-header">
+      <p class="article-kicker">Build notes</p>
+      <h1>Behind the Build</h1>
+      <p class="article-description">
+        How the scroll-scrubbed stellar lifecycle on the home page actually works:
+        one engine, nine shaders, and the budgets that keep it fast enough to ship.
+      </p>
+    </header>
+
+    {/* ============================================================
+        SECTION 1 — Architecture: one engine, one number.
+        ============================================================ */}
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">Architecture — one engine, one number</h2>
+      <p>
+        Every visible piece of the hero — the cloud, the shadow, the photon ring,
+        the supernova flash, the yellow star, the nebula, the lonely pale-blue dot —
+        is rendered by a single instance of <code>createScene</code> (see
+        <code>src/hero/scene/createScene.ts</code>). That engine takes one input
+        each frame: a number called <code>getStage</code>, somewhere in
+        <code>[0, 3.5]</code>. Everything downstream is a pure function of that
+        number.
+      </p>
+      <p>
+        Where the number comes from is the only thing the rest of the codebase has
+        to know. On the home page it is the scroll position routed through the
+        band-walker in <code>sceneTable.ts</code>. On an article like this one it
+        is the article scroll mapped into an authored window
+        (<code>journey</code>). On an inline figure it is pinned to a constant. The
+        engine cannot tell the difference, and there is exactly one engine to
+        debug.
+      </p>
+      <SceneFigure
+        client:visible
+        stage={1.6}
+        caption="Mid-collapse: same engine, getStage pinned to ~1.6 (supernova → red-giant grow)."
+      />
+      <p>
+        The walker logic lives in <code>src/hero/sceneTable.ts</code> as a flat
+        <code>SEGMENTS</code> table. Each row is a timed span with a relative
+        weight, start/end stage values, and an easing function. The prefix-sum of
+        the weights reproduces the original breakpoints exactly. Adding a beat
+        means adding a row; the engine never changes.
+      </p>
+    </section>
+
+    {/* ============================================================
+        SECTION 2 — Live shader gallery: nine small canvases.
+        ============================================================ */}
+    <section aria-labelledby="gallery">
+      <h2 id="gallery">Live shader gallery</h2>
+      <p>
+        Nine GLSL files in <code>src/hero/shaders/</code>. Each panel below pins
+        the engine to the stage that best showcases the shader, with the actual
+        source toggleable underneath. The canvases are independent
+        <code>createScene</code> instances mounted on intersection — the engine
+        chunk only downloads when the figure scrolls into view.
+      </p>
+      <div class="btb-shader-gallery">
+        {SHADERS.map((shader) => (
+          <div class="btb-shader" id={`shader-${shader.name}`}>
+            <h3 class="btb-shader-name">
+              <code>{shader.name}</code>
+              <span class="btb-shader-file" aria-hidden="true">{shader.file}</span>
+            </h3>
+            <SceneFigure
+              client:visible
+              stage={shader.stage}
+              caption={shader.caption}
+            />
+            <p class="btb-shader-desc">{shader.description}</p>
+            <details class="btb-shader-source">
+              <summary>
+                View GLSL
+                {shader.excerptIsHead && shader.excerptLines && shader.totalLines && (
+                  <span class="btb-shader-source-note">
+                    {' '}— first {shader.excerptLines} of {shader.totalLines} lines (
+                    <a href={`${REPO}/${shader.file}`} rel="noopener noreferrer">full source</a>)
+                  </span>
+                )}
+              </summary>
+              <pre class="btb-shader-code"><code>{shader.excerpt}</code></pre>
+            </details>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    {/* ============================================================
+        SECTION 3 — Performance budgets: measured numbers + live meter.
+        ============================================================ */}
+    <section aria-labelledby="performance">
+      <h2 id="performance">Performance budgets</h2>
+      <p>
+        Budgets the engine is tuned against, with the last measured value next to
+        each. Anything that changes one of these by more than a small step should
+        be re-measured against the same conditions.
+      </p>
+      <table class="btb-budget-table">
+        <thead>
+          <tr>
+            <th scope="col">Metric</th>
+            <th scope="col">Budget</th>
+            <th scope="col">Last measured</th>
+            <th scope="col">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {BUDGETS.map((row) => (
+            <tr>
+              <th scope="row">{row.name}</th>
+              <td>{row.budget}</td>
+              <td>{row.measured}</td>
+              <td>{row.note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        And what your machine is doing right now — independent of the engine, just
+        the browser's own rAF clock:
+      </p>
+      <FpsMeter client:visible />
+    </section>
+
+    {/* ============================================================
+        SECTION 4 — Fallback ladder: graceful degradation, side by side.
+        ============================================================ */}
+    <section aria-labelledby="fallbacks">
+      <h2 id="fallbacks">Fallback ladder</h2>
+      <p>
+        The same beat at four capability levels. The article only ever loses the
+        backdrop in the bottom two rows — the prose, the HUD, and the chrome stay
+        unchanged. None of these rows depend on the live engine to render: each is
+        a static card describing what the system would do.
+      </p>
+      <ul class="btb-fallback-ladder">
+        {FALLBACKS.map((row) => (
+          <li class={`btb-fallback btb-fallback--${row.label.toLowerCase().replace(/\s+/g, '-')}`}>
+            <div class="btb-fallback-poster" aria-hidden="true"></div>
+            <div class="btb-fallback-body">
+              <p class="btb-fallback-label">{row.label}</p>
+              <p class="btb-fallback-state">{row.state}</p>
+              <p class="btb-fallback-detail">{row.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ============================================================
+        SECTION 5 — Design decisions: short prose, no diagrams.
+        ============================================================ */}
+    <section aria-labelledby="decisions">
+      <h2 id="decisions">Design decisions</h2>
+      <p>
+        <strong>Why DPR is clamped.</strong> The cloud is fragment-bound. Doubling
+        DPR quadruples the work the fragment shader does without changing what the
+        eye reads. <code>tuneRenderPixelRatio</code> caps the ratio at 1.85× on
+        capable laptops and 0.6× on low-tier devices, and the browser upscales.
+      </p>
+      <p>
+        <strong>Why the low tier caps at ~30 fps.</strong> A mobile GPU under CPU
+        throttle cannot hold 60 fps with the cloud lit. Targeting 30 fps lets the
+        engine spend its frame budget on getting each frame correct instead of
+        thrashing toward a number it could never reach.
+      </p>
+      <p>
+        <strong>Why text is server-rendered.</strong> Astro renders every paragraph
+        on this page to HTML at build time. With JavaScript disabled the page is
+        still complete: the article reads top to bottom, the headings still anchor,
+        the GLSL excerpts are still inspectable. The engine is an enhancement, not
+        a prerequisite.
+      </p>
+      <p>
+        <strong>Why shaders compile behind the dive veil.</strong> A fresh WebGL
+        program can take 50–200&nbsp;ms to link on first use; the engine triggers
+        that compile while the page is already under a white plunge overlay, so the
+        cost lands in a frame the visitor cannot see.
+      </p>
+      <p>
+        Source for everything on this page lives at
+        <a href={SOCIALS.github} rel="noopener noreferrer">github.com/ilies-bel</a>.
+      </p>
+    </section>
+  </article>
+</BaseLayout>

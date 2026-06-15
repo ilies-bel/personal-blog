@@ -68,6 +68,11 @@ const subnavItems: SubnavItem[] = [
   { href: href('writing'), label: 'Writing', active: isWritingActive },
   { href: href('projects'), label: 'Projects', active: isActive('projects') },
   { href: href('graveyard'), label: 'Graveyard', active: isActive('graveyard') },
+  // Behind the Build — the case-study page demonstrating the hero/article WebGL
+  // system. Sits next to About in the reading order: it is one of the long-form
+  // pages a visitor exploring the craft jumps to directly. The label is shortened
+  // to "Behind" so the rail keeps a compact six-row footprint without wrapping.
+  { href: href('behind-the-build'), label: 'Behind', active: isActive('behind-the-build') },
   { href: href('about'), label: 'About', active: isActive('about') },
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).
