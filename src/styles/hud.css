@@ -1488,10 +1488,14 @@ body.hud-active .star-marker {
   color: var(--marker-line);
   stroke-width: 1.45;
 }
-/* idle: a faint but UNMISTAKABLE cross — the arms are the signature element and were
-   the weakest, so idle now clearly reads as a crosshair rather than near-vanishing. */
+/* IDLE arms are HUD-aware (the resting tier differs by whether the HUD is armed):
+   - HUD OFF → the quietest look: arms HIDDEN, just the dotted hex (minimal presence).
+   - HUD ON  → the marker is "live": dotted hex PLUS faint crosshair ticks. */
 .star-marker[data-state='idle'] .star-marker-arms line {
-  opacity: 0.55;
+  opacity: 0;
+}
+.star-marker[data-hud='on'][data-state='idle'] .star-marker-arms line {
+  opacity: 0.5;
 }
 /* hover: the arms brighten + the gap reads as segmented targeting ticks. */
 .star-marker[data-state='hover'] .star-marker-arms line {
@@ -1510,10 +1514,13 @@ body.hud-active .star-marker {
 }
 
 /* IDLE hexagon — the dotted outline. Cross-fades to the solid hex from hover up.
-   Raised so the resting hexagon is clearly present (reference idle proportions),
-   not a near-invisible dotted ghost. */
+   Slightly quieter when the HUD is OFF (the resting "minimal presence" tier) and a
+   touch more present once the HUD is armed. */
 .star-marker-hex-dotted {
-  opacity: 0.85;
+  opacity: 0.7;
+}
+.star-marker[data-hud='on'] .star-marker-hex-dotted {
+  opacity: 0.9;
 }
 .star-marker[data-state='hover'] .star-marker-hex-dotted,
 .star-marker[data-state='active'] .star-marker-hex-dotted,
@@ -1566,16 +1573,26 @@ body.hud-active .star-marker {
 }
 
 /* INNER RING — the concentric gold circle around the core. LOCKED only — the
-   confirmed-selection flourish. */
+   confirmed-selection flourish. On lock it plays the LOCK-IN entrance: the ring
+   sweeps in from oversized + transparent down to its seat, a satisfying "target
+   acquired" snap (the moment-of-lock cue, distinct from the gold hex's idle spin). */
 .star-marker-ring {
   color: var(--marker-gold);
   stroke: currentColor;
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
+  scale: 1;
 }
 .star-marker[data-state='locked'] .star-marker-ring {
   opacity: 0.85;
+  animation: star-marker-lockin 0.42s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+/* LOCK-IN: ring closes from 1.7× + transparent to its seat, with a tiny overshoot. */
+@keyframes star-marker-lockin {
+  0%   { scale: 1.7; opacity: 0; }
+  70%  { scale: 0.94; opacity: 0.95; }
+  100% { scale: 1; opacity: 0.85; }
 }
 
 /* LOCKED: the animated gold inner hexagon — rotates + breathes. Hidden until locked. */
@@ -2002,6 +2019,11 @@ body.hud-active .star-marker {
     opacity: 0.8;
     transform: scale(0.6);
   }
+  /* Lock-in ring sweep: drop the animation, just seat it. */
+  .star-marker[data-state='locked'] .star-marker-ring {
+    animation: none;
+    scale: 1;
+  }
 }
 .star-marker[data-reduced='true'] .star-marker-arms line,
 .star-marker[data-reduced='true'] .star-marker-hex-dotted,
@@ -2025,6 +2047,10 @@ body.hud-active .star-marker {
   animation: none;
   opacity: 0.8;
   transform: scale(0.6);
+}
+.star-marker[data-reduced='true'][data-state='locked'] .star-marker-ring {
+  animation: none;
+  scale: 1;
 }
 
 /* ---------------------------------------------------------------------------

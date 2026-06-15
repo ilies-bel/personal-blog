@@ -302,6 +302,23 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     return () => observer.disconnect();
   }, []);
 
+  // HUD-armed flag (body.hud-active), mirrored to React so it drives the marker's
+  // `data-hud` attribute. The reticle's IDLE baseline differs by HUD state: HUD-off =
+  // the quietest resting look (dotted hex only); HUD-on = a touch more present (dotted
+  // hex + faint crosshair ticks). The full hover/active/locked escalation (and its
+  // lock-in animation) works in BOTH HUD states — only the resting tier changes. The
+  // class is toggled by the boot FSM, so we observe body.class and re-render on flip.
+  const [hudActive, setHudActive] = useState(false);
+  useEffect(() => {
+    const sync = (): void => {
+      setHudActive(document.body.classList.contains(HUD_ACTIVE_BODY_CLASS));
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const onMove = (event: MouseEvent): void => {
       pointerRef.current = { x: event.clientX, y: event.clientY };
@@ -362,15 +379,6 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       const gate = anchored ? frame.visible : frame.gateOk;
       const nextVisible = gate && settledIdForStage(frame.stage) === placement.state;
 
-      // HUD-power gate. Until the HUD is armed (body.hud-active, set by the boot FSM
-      // at the black hole / bottom of the scroll) the markers hold their quiet IDLE
-      // look — "low contrast · minimal presence". While inactive they neither
-      // escalate (hover/active) NOR lock (no card / cursor-dock), matching the
-      // dim-until-HUD treatment the marker brightness already uses. Read straight
-      // off the body class each frame (cheap) so it tracks the FSM without a stale
-      // closure. Once the HUD powers up the full proximity state machine resumes.
-      const hudActive = document.body.classList.contains(HUD_ACTIVE_BODY_CLASS);
-
       // Screen position. Fixed-spot markers ignore the projected x/y and sit at a
       // viewport fraction (recomputed each frame so a resize tracks). The anchored
       // pale-blue-dot marker rides the projected star origin instead.
@@ -424,9 +432,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       const distSq = p ? (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) : -1;
 
       let nextLocked = lastLocked;
-      if (!nextVisible || !hudActive) {
-        // Not settled on screen, OR the HUD isn't armed yet: never locked. Drop any
-        // held touch lock so the marker can't sit locked behind a powered-down HUD.
+      if (!nextVisible) {
         nextLocked = false;
         touchLockedRef.current = false;
       } else if (touchLockedRef.current) {
@@ -454,8 +460,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // state can't chatter as the pointer hovers a boundary. The tiers sit strictly
       // OUTSIDE the lock radius, so this never changes WHEN the lock fires.
       let nextState: MarkerState = lastState;
-      if (!nextVisible || !hudActive) {
-        // Off-screen OR HUD not armed → hold the quiet IDLE look (no escalation).
+      if (!nextVisible) {
         nextState = 'idle';
       } else if (nextLocked) {
         nextState = 'locked';
@@ -555,6 +560,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-reduced={reduced}
       data-locked={locked}
       data-state={state}
+      data-hud={hudActive ? 'on' : 'off'}
       data-bright={isBright}
       data-bg={placement.bg}
       data-side={cardSide}

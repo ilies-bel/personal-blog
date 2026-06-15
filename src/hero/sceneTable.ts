@@ -711,9 +711,14 @@ export const SCENES: readonly LifecycleScene[] = [
       },
       {
         id: 'nebula-03',
+        // Lower-RIGHT, but ABOVE the manifesto headline. The old (0.58, 0.80) sat in
+        // the lower-centre, where on narrow viewports (mobile/tablet/laptop) the
+        // headline fills the bottom ~40% full-width and the reticle landed on the
+        // copy. Pulled up + right (0.78 / 0.55) into clear space — below WRITING/01
+        // (0.82, 0.22), right of WRITING/02 (0.19, 0.40), clear of the headline band.
         state: 'nebula',
-        vx: 0.58,
-        vy: 0.8,
+        vx: 0.78,
+        vy: 0.55,
         href: 'writing',
         title: 'WRITING / 03',
         subtitle: 'Notes & essays',
@@ -811,19 +816,20 @@ export const SCENES: readonly LifecycleScene[] = [
       href: 'graveyard',
     },
     markers: [
-      // RED GIANT / graveyard — ONE marker hugging the DARK side of the limb,
-      // just off the surface. During this beat the giant is camera-parked as a
-      // vast off-centre orb filling the right ~65% of the frame; sit the marker
-      // in the narrow dark gap immediately left of the photosphere edge (upper
-      // third, clear of the manifesto headline below and the HUD rail far left)
-      // so it reads against black yet still reads as the STAR's marker, not a
-      // stray hotspot pinned to the chrome. bg is 'dark', not 'bright': on black
-      // it needs the light-stroke + glow treatment to read.
+      // RED GIANT / graveyard — ONE marker in the DARK space upper-LEFT, NOT on the
+      // limb. The giant is camera-parked and GROWS/drifts LEFT across its settled
+      // window (f≈0.23→0.28): its leftmost edge creeps from ~0.42 to ~0.30 of the
+      // frame, so the old vx 0.3 ended up sitting ON the orange limb by the end of the
+      // hold. Pulled left+up (0.20 / 0.22) into the wedge of black that stays clear
+      // across the WHOLE window — below the top-left identity, above the manifesto
+      // headline, and RIGHT of the HUD rail (vx 0.20 not 0.15 so the reticle clears
+      // the WIDER rail on tablet — rail right edge ≈ 94px / vx 0.12 at 768px). bg
+      // 'dark' (light strokes + glow) so it reads on black.
       {
         id: 'red',
         state: 'red',
-        vx: 0.3,
-        vy: 0.28,
+        vx: 0.2,
+        vy: 0.22,
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
