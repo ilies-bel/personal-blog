@@ -94,6 +94,13 @@ export interface SceneHandle {
    *  and runs the view-transition swap — the cause of the occasional SPA stall on
    *  this page. Disposal (the GL teardown) still happens later, on React unmount. */
   pauseRendering(): void;
+  /** Resume the per-frame render loop after a `pauseRendering()` (mirrors the
+   *  internal visibilitychange re-kick + onContextRestored resume path). Idempotent:
+   *  no-op if the loop is already running. ArticleScene uses this from an
+   *  IntersectionObserver — pause when the article has scrolled fully out of view,
+   *  resume when any of it returns — so the GPU isn't morphing a backdrop nobody
+   *  can see while the tab is still in the foreground. */
+  resumeRendering(): void;
 }
 
 /** Per-frame marker data emitted by the scene, consumed by StarMarker without

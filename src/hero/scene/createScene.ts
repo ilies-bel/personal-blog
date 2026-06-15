@@ -1741,6 +1741,20 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     raf = 0;
   };
 
+  // Reverse of pauseRendering — unpark the loop and re-kick frame() the same way
+  // onVisibilityChange / onContextRestored do. Idempotent: returns immediately if
+  // the loop is already running, and defers to the existing visibilitychange handler
+  // when the tab is hidden (no point starting work the very next tick if the hidden
+  // gate would just stop it again). ArticleScene drives this from an IntersectionObserver
+  // so the article backdrop pauses while scrolled out of view and resumes when any of
+  // the article returns — pause-on-tab-hide is not enough on its own (a foreground tab
+  // scrolled past the canvas was still burning GPU on a backdrop nobody could see).
+  const resumeRendering = (): void => {
+    if (!stopped) return;
+    stopped = false;
+    if (raf === 0 && !document.hidden) frame();
+  };
+
   // --- teardown ---
   // The returned value is the dispose function (same call contract as before) with
   // hitTestGiant bolted on (Object.assign), so HeroIsland can publish the cursor
@@ -1776,7 +1790,7 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
     },
-    { hitTestGiant, beginDive, pauseRendering },
+    { hitTestGiant, beginDive, pauseRendering, resumeRendering },
   );
   return dispose;
 }

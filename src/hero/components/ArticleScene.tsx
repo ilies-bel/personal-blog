@@ -113,6 +113,12 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
 
     let cancelled = false;
     let dispose: SceneHandle | null = null;
+    // Off-screen gate: createScene loads via dynamic import, so the IntersectionObserver
+    // can already have fired pause-while-out-of-view before `dispose` exists. We latch
+    // the desired state here and apply it the moment the handle resolves, so the loop
+    // starts already paused if the reader landed below the article (deep-link to a
+    // fragment past the scroll range, restored scroll position, etc.).
+    let offscreen = false;
 
     // The article-scroll getStage — the ONE new mapping. Everything downstream
     // (camera arc, shader stage, dwell, scene id) is the engine's existing pure
@@ -128,6 +134,8 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
         // navigator. createScene tolerates the minimal hook set (backdrop mode already
         // passes only getStage).
         dispose = createScene(host, isReduced, { getStage }, tier);
+        // Apply the gate state the IO may have already latched before this resolved.
+        if (offscreen) dispose.pauseRendering?.();
       })
       .catch((error: unknown) => {
         // Like HeroIsland's backdrop branch: swallow a missing-WebGL / chunk-load
@@ -144,9 +152,42 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     };
     document.addEventListener('astro:before-swap', onBeforeSwap);
 
+    // Off-screen pause: the backdrop canvas itself is `position: fixed` (it stays at
+    // inset:0 with the viewport), so an IntersectionObserver on `host` would always
+    // report 100% intersection during scroll — useless as a gate. Instead we observe
+    // the `<article>` content (the only element on the page that actually scrolls
+    // past viewport): when no part of the article is in view, nothing the backdrop is
+    // drawing is being read, so we pause the GPU loop; resume the instant any of it
+    // returns. This is cheaper and off-main-thread vs a scroll listener, and complements
+    // the existing tab-hide pause (visibilitychange inside createScene) — neither alone
+    // catches the foreground-tab-scrolled-past case.
+    const article: Element | null =
+      typeof document === 'undefined' ? null : document.querySelector('article.prose');
+    let observer: IntersectionObserver | null = null;
+    if (article && typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[entries.length - 1];
+          if (!entry) return;
+          if (entry.isIntersecting) {
+            offscreen = false;
+            dispose?.resumeRendering?.();
+          } else {
+            offscreen = true;
+            dispose?.pauseRendering?.();
+          }
+        },
+        // threshold 0 + a tiny rootMargin so the resume fires the instant any pixel of
+        // the article re-enters viewport (rather than waiting on a noticeable strip).
+        { threshold: 0, rootMargin: '0px' },
+      );
+      observer.observe(article);
+    }
+
     return () => {
       cancelled = true;
       document.removeEventListener('astro:before-swap', onBeforeSwap);
+      observer?.disconnect();
       unsub();
       tracker.stop();
       dispose?.();
