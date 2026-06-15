@@ -56,7 +56,6 @@ import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
 import StarMarker from './StarMarker';
-import YellowStarRing from './YellowStarRing';
 import {
   PosterSlideshow,
   ReducedMotionToggle,
@@ -705,8 +704,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           <PosterSlideshow progress={progress} base={base} />
         ) : (
           <>
-            <YellowStarRing />
-            {/* One marker per placement, all mounted at once. Each instance gates its
+{/* One marker per placement, all mounted at once. Each instance gates its
                 own visibility on its state being the settled one (the nebula owns three;
                 the others one each) — no mount/unmount thrash, lock ownership is
                 per-marker via the placement id. These ride the LIVE scene's per-frame

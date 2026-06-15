@@ -470,62 +470,6 @@ body.article-page .bh-backdrop::before {
    binds no rAF / pointer / resize listeners, so there is no CSS animation to gate
    here. The frozen corridor inherits the same vignette + scrim + grain. */
 
-/* --- Yellow-star designed ring (ITEM 4) -------------------------------------
-   One subtle designed detail for the yellow-star chapter: a faint orbital /
-   measurement ring + cardinal ticks + a short caliper arc, centred on the viewport
-   (concentric with the centred photosphere during the yellow hold). Barely visible,
-   pale gold, pointer-events:none. The component (YellowStarRing.tsx) gates its mount +
-   opacity to the yellow-star hold; this is purely the look. The whole layer is faint
-   so it reads as a designed annotation, never sci-fi clutter. */
-.yellow-ring {
-  position: fixed;
-  inset: 0;
-  z-index: 9;                /* above the canvas (0), below the manifesto overlay (10) */
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  /* opacity is driven inline by the component's fade; keep a gentle transition so any
-     residual snap eases. */
-  transition: opacity 0.4s var(--ease-out-quint);
-}
-.yellow-ring-svg {
-  /* size the ring box so the r=78 graticule crosses the disc as a measurement annotation
-     (the photosphere fills the frame at the yellow hold; the ring reads as an instrument
-     overlay over the star). min() keeps it sane on wide/tall screens. */
-  width: min(94vh, 74vw);
-  height: min(94vh, 74vw);
-  overflow: visible;
-  /* a soft dark drop-shadow under the thin gold strokes so the graticule stays legible
-     on the BRIGHT pale-gold disc (mirrors the star-marker reticle's dark legibility halo),
-     without itself looking heavy. */
-  filter:
-    drop-shadow(0 0 0.6px rgba(20, 8, 0, 0.85))
-    drop-shadow(0 0 2px rgba(20, 8, 0, 0.5));
-}
-.yellow-ring-orbit {
-  fill: none;
-  /* a cool overlay-bone gold so the graticule reads as a designed instrument line, dark
-     enough to sit on the bright disc; the drop-shadow above carries the legibility halo. */
-  stroke: color-mix(in oklch, var(--highlight) 55%, var(--fg-overlay));
-  stroke-width: 0.6;
-  opacity: 0.4;             /* the ring itself is the faintest element */
-  vector-effect: non-scaling-stroke;
-}
-.yellow-ring-tick {
-  stroke: var(--fg-overlay);
-  stroke-width: 1;
-  opacity: 0.55;
-  vector-effect: non-scaling-stroke;
-}
-.yellow-ring-arc {
-  stroke: var(--fg-overlay);
-  stroke-width: 1.2;
-  opacity: 0.62;           /* the caliper arc is the strongest cue, still restrained */
-  vector-effect: non-scaling-stroke;
-}
-@media (prefers-reduced-motion: reduce) {
-  .yellow-ring { transition: none; }
-}
 
 /* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
 .bh-identity {
