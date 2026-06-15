@@ -98,6 +98,10 @@ body.at-opening .hud-system[data-visible='true'] {
   width: 1px;
   background: linear-gradient(180deg, transparent, var(--hud-line) 20%, var(--hud-line) 80%, transparent);
   pointer-events: none;
+  /* Grow the line smoothly as new rows are discovered (mirrors the number
+     fade-in at 0.45s ease-out-quint).  Only the height is transitioned — the
+     top/mask geometry is static. */
+  transition: height 0.45s var(--ease-out-quint);
   /* Transparent gaps at each glyph center, recomputed from the rail-geometry
      knobs so they track the bigger rows. The element runs from -1.5rem above the
      nav top to +1.5rem below it. First glyph center is --rail-first-center from
@@ -130,6 +134,23 @@ body.at-opening .hud-system[data-visible='true'] {
     transparent calc(var(--c5) - var(--rail-gap-half)),
     transparent calc(var(--c5) + var(--rail-gap-half)),
     black calc(var(--c5) + var(--rail-gap-half))
+  );
+}
+/* PROGRESSIVE LINE LENGTH (HUD OFF): clip the rail line so it ends just past
+   the deepest DISCOVERED glyph center.  --rail-revealed (1-based row count)
+   is set on the <nav> element from the discovered Set in HudNavigation.tsx.
+   Glyph center N sits at rail-first-center + (N-1)*rail-row-pitch from the
+   line's top edge; extending an extra rail-gap-half keeps the node visually
+   ON the line.  The mask gaps are top-anchored so shortening from the bottom
+   leaves all gaps correctly placed.
+   Under body.hud-active the base rule (bottom: -1.5rem) takes over again
+   because this selector no longer matches — no extra rule needed. */
+body:not(.hud-active) .hud-nav::before {
+  bottom: auto;
+  height: calc(
+    var(--rail-first-center) +
+    (var(--rail-revealed) - 1) * var(--rail-row-pitch) +
+    var(--rail-gap-half)
   );
 }
 .hud-nav-list {
@@ -1002,6 +1023,13 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
     background: linear-gradient(90deg, transparent, var(--hud-line), transparent);
     -webkit-mask-image: none;
     mask-image: none;
+  }
+  /* The mobile rail is horizontal; the vertical rail-revealed clipping rule
+     above has higher specificity and would override height: 1px here.
+     Restore the compact horizontal geometry so mobile is unaffected. */
+  body:not(.hud-active) .hud-nav::before {
+    height: 1px;
+    bottom: auto;
   }
   .hud-nav-list {
     display: flex;

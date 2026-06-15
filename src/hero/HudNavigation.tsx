@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
@@ -668,6 +668,22 @@ export default function HudNavigation({
   // previous row.
   const effectiveCurrentId = travelId ?? currentId;
 
+  // Deepest DISCOVERED render-order index (1-based).  HUD_NAV_ITEMS is in
+  // top→bottom order, so array index + 1 is the row number.  We iterate all
+  // items using the same isDiscovered predicate applied per-row in the map
+  // below (isCurrent || discovered.has(item.id)) and take the maximum — NOT
+  // the Set size, so non-contiguous discovery (e.g. only rows 1 and 3) is
+  // handled correctly.  Clamped to ≥ 1 because the current row is always
+  // discovered, ensuring the line never collapses entirely.
+  const revealed = Math.max(
+    1,
+    HUD_NAV_ITEMS.reduce((max, item, i) => {
+      const itemDiscovered =
+        effectiveCurrentId === item.id || discovered.has(item.id);
+      return itemDiscovered ? i + 1 : max;
+    }, 0),
+  );
+
   return (
     <>
     <div className="hud-system" data-visible={visible}>
@@ -675,6 +691,7 @@ export default function HudNavigation({
         className="hud-nav"
         aria-label="Explore portfolio stages"
         aria-hidden={!visible}
+        style={{ '--rail-revealed': revealed } as CSSProperties}
       >
         <ol className="hud-nav-list">
           {HUD_NAV_ITEMS.map((item, i) => {
