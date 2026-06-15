@@ -727,7 +727,12 @@ const glyphFor: Record<string, string> = {
             (removes) it. Bundled (no is:inline) so it re-binds across swaps;
             document-level listener, bound once per script execution. Framed
             (the dev pre-load iframe — see the resurface script) never navigates,
-            but the guard keeps the two scripts' behaviour symmetric. */}
+            but the guard keeps the two scripts' behaviour symmetric.
+          • A NON-DIVE nav resets the persisted overlay here (opacity 0, bloom
+            state/origin cleared) so a back-nav to '/' can never inherit a stale
+            veil from a prior dive — even if astro:page-load fires late or the
+            dev pre-load iframe ate the page-load event. The dived path owns its
+            own overlay choreography and is left untouched. */}
     <script>
       document.addEventListener('astro:before-swap', (event) => {
         if (window.self !== window.top) return;
@@ -744,6 +749,19 @@ const glyphFor: Record<string, string> = {
           // every dive doesn't log an unhandled rejection.
           event.viewTransition.ready.catch(() => {});
           event.viewTransition.skipTransition();
+        }
+        if (!dived) {
+          // Reset the transition:persist'd overlay before the swap so the
+          // incoming page starts clean regardless of how the previous page
+          // left it. The dived path owns its own choreography; leave it alone.
+          const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
+          if (overlay) {
+            overlay.style.transition = 'none';
+            overlay.style.opacity = '0';
+            delete overlay.dataset.bloomState;
+            overlay.style.removeProperty('--bloom-x');
+            overlay.style.removeProperty('--bloom-y');
+          }
         }
       });
     </script>

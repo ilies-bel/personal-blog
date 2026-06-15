@@ -50,19 +50,21 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     </div>
   </div>
 
-  {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout. A
-      tiny zero-import <script is:inline> (mirrors the CustomCursor convention) runs
-      the moment the body parses: it adds body.scene-ready when the scene dispatches
-      scene:ready (its first composited frame).
+  {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout.
+      A bundled <script> (no is:inline) re-runs on every ClientRouter swap back
+      to '/' via astro:page-load (+ one direct call for the initial hard load):
+      it adds body.scene-ready when the scene dispatches scene:ready (its first
+      composited frame).
 
-      FIRST load of the SESSION only, the loader is held for a MINIMUM of
+      FIRST load of the SESSION only, the loader is held for a minimum of
       LOADER_MIN_MS so the boot sequence (LOADING → READY → glide-to-HUD) reads
       fully even when the scene paints fast — the reveal lands at
       max(scene:ready, LOADER_MIN_MS). The floor only RAISES the early bound; a
       slower scene still waits for its real first frame. "First load of the
       session" is tracked in sessionStorage (LOADER_SEEN_STORAGE_KEY): a fresh
       session shows the full boot once, then reloads/returns within the session
-      reveal as soon as scene:ready fires (no floor).
+      reveal as soon as scene:ready fires (no floor). A back-nav WITHIN the
+      session therefore never re-imposes the floor.
 
       A long safety timeout is the hard backstop in BOTH cases — it fires solely
       if scene:ready never arrives (a failed WebGL context / a browser with JS but
@@ -85,31 +87,38 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       loader-gone is eventually set (reduced-motion still fades → still fires;
       the no-WebGL 8s safety reveal also chains the backstop). Idempotent.
 
-      The event name + class literals AND the floor/key constants mirror
-      src/hero/lib/constants.ts (SCENE_READY_EVENT / SCENE_READY_BODY_CLASS /
-      LOADER_GONE_BODY_CLASS / LOADER_MIN_MS / LOADER_SEEN_STORAGE_KEY) — passed
-      via define:vars below so the inline script and the module can never drift. */}
-  <script
-    is:inline
-    define:vars={{
-      readyEvent: SCENE_READY_EVENT,
-      readyClass: SCENE_READY_BODY_CLASS,
-      goneClass: LOADER_GONE_BODY_CLASS,
-      minMs: LOADER_MIN_MS,
-      seenKey: LOADER_SEEN_STORAGE_KEY,
-    }}
-  >
-    (() => {
-      // Timestamp at script start so the floor measures wall time since the page
-      // began loading, not since scene:ready fired.
-      const t0 = performance.now();
+      Constants are imported directly from src/hero/lib/constants.ts — bundled
+      scripts can import modules, so no define:vars is needed and no drift is
+      possible. initLoader() is idempotent: a dataset flag on .scene-loader gates
+      double-init within the same DOM, and loader.isConnected guards reveal/
+      markGone against stale timers firing after a page swap away. */}
+  <script>
+    import {
+      SCENE_READY_EVENT,
+      SCENE_READY_BODY_CLASS,
+      LOADER_GONE_BODY_CLASS,
+      LOADER_MIN_MS,
+      LOADER_SEEN_STORAGE_KEY,
+    } from '../hero/lib/constants';
 
-      // body.loader-gone — set ONCE the dark loader background has fully faded out
-      // (the LAST thing to finish), so the in-scene star markers (live <a> links
-      // sitting under the loader) only become interactive after the scene is truly
-      // revealed. Idempotent (adding twice is harmless).
-      let goneArmed = false;
-      const markGone = () => document.body.classList.add(goneClass);
+    function initLoader(): void {
+      // Only run on the home page — the loader element is present only on '/'.
+      const loader = document.querySelector<HTMLElement>('.scene-loader');
+      if (!loader) return;
+
+      // Idempotent guard: if this loader element was already initialised (same
+      // DOM instance), bail out. The flag lives on the element so it is cleared
+      // automatically when the DOM is swapped (new .scene-loader = fresh element).
+      if (loader.dataset.loaderInit) return;
+      loader.dataset.loaderInit = '1';
+
+      // Stamp body.loader-gone ONCE the dark ::before layer has fully faded out.
+      // isConnected guards against stale timers firing after the page is swapped.
+      const markGone = (): void => {
+        if (!loader.isConnected) return;
+        document.body.classList.add(LOADER_GONE_BODY_CLASS);
+      };
+
       // Arm the loader-gone signal at the moment we reveal (scene-ready added).
       // Two paths race; whichever lands first wins (markGone is idempotent):
       //   1. transitionend of the ::before opacity fade — the EXACT moment the
@@ -120,28 +129,41 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       //      fade end: glide-start(0.32s) + glide-dur(0.7s) + fade-dur(0.7s) ≈ 1.72s
       //      plus a margin ≈ 2.1s after reveal. (The dot+name fade out earlier, in
       //      their own 0→0.3s window before the glide, so they never affect this end.)
-      const armGone = () => {
+      let goneArmed = false;
+      const armGone = (): void => {
         if (goneArmed) return;
         goneArmed = true;
-        const loader = document.querySelector('.scene-loader');
-        if (loader) {
-          loader.addEventListener(
-            'transitionend',
-            (e) => {
-              if (e.propertyName === 'opacity' && e.pseudoElement === '::before') markGone();
-            },
-            { passive: true },
-          );
-        }
+        loader.addEventListener(
+          'transitionend',
+          (e) => {
+            if (e.propertyName === 'opacity' && e.pseudoElement === '::before') markGone();
+          },
+          { passive: true },
+        );
         window.setTimeout(markGone, 2100);
       };
 
       // Idempotent: adding the class twice is harmless. Both the floored path and
       // the safety backstop call this. Revealing also arms the loader-gone signal.
-      const reveal = () => {
-        document.body.classList.add(readyClass);
+      const reveal = (): void => {
+        // isConnected guard: if the page was swapped away since this closure was
+        // created, stale timers must not touch the incoming document.
+        if (!loader.isConnected) return;
+        document.body.classList.add(SCENE_READY_BODY_CLASS);
         armGone();
       };
+
+      // Warm back-nav / fast-hydration race: scene-ready is already on the body
+      // (a previous reveal() call within this DOM phase already ran).
+      // Just arm the loader-gone signal and exit — no need to re-listen.
+      if (document.body.classList.contains(SCENE_READY_BODY_CLASS)) {
+        armGone();
+        return;
+      }
+
+      // Timestamp at init so the floor measures wall time since the page began
+      // loading, not since scene:ready fired.
+      const t0 = performance.now();
 
       // Is this the first load of the session? sessionStorage access is wrapped
       // in try/catch — private mode / disabled storage must never throw and trap
@@ -151,26 +173,31 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       // and the floor is a fixed short hold, not a flag-dependent gate).
       let firstLoad = true;
       try {
-        firstLoad = !window.sessionStorage.getItem(seenKey);
+        firstLoad = !window.sessionStorage.getItem(LOADER_SEEN_STORAGE_KEY);
         // Mark seen NOW so a fast reload within the session skips the floor.
-        if (firstLoad) window.sessionStorage.setItem(seenKey, '1');
+        if (firstLoad) window.sessionStorage.setItem(LOADER_SEEN_STORAGE_KEY, '1');
       } catch (_e) {
         firstLoad = true;
       }
 
       // On first load, gate the reveal behind the floor: when the scene is ready
-      // (or already), wait out whatever remains of LOADER_MIN_MS. On later loads,
-      // reveal the instant the scene is ready.
+      // (or already), wait out whatever remains of LOADER_MIN_MS. On later loads
+      // (back-navs within the session), reveal the instant the scene is ready.
       const onReady = firstLoad
-        ? () => window.setTimeout(reveal, Math.max(0, minMs - (performance.now() - t0)))
+        ? (): void => {
+            window.setTimeout(reveal, Math.max(0, LOADER_MIN_MS - (performance.now() - t0)));
+          }
         : reveal;
-      window.addEventListener(readyEvent, onReady, { once: true });
+      window.addEventListener(SCENE_READY_EVENT, onReady, { once: true });
 
       // Safety backstop ONLY — never the normal path, and it bypasses the floor.
       // Long enough that the engine has surely painted on any real device; if it
       // hasn't (no WebGL), we still lift the loader so the page isn't trapped.
       window.setTimeout(reveal, 8000);
-    })();
+    }
+
+    document.addEventListener('astro:page-load', initLoader);
+    initLoader();
   </script>
 
   {/* On-brand WebGL-unavailable note. Hidden by default; revealed (display:flex) by
