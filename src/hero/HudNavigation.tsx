@@ -128,19 +128,6 @@ interface AimState {
   idle: boolean;
 }
 
-// The ┼ waypoint's polar offset around the ▲ (in CSS px). The bearing is the
-// raw screen-space angle from the cursor to the marker (atan2(dy, dx), with dy
-// measured screen-DOWN), so cos/sin map straight back to screen translate units:
-// a marker to the RIGHT of the cursor → +X offset, ABOVE → −Y offset. The radius
-// scales with the cursor→marker distance and is clamped so the ┼ never overlaps
-// the ▲ (MIN) nor leaves the gauge box (MAX): r = clamp(MIN, dist*SCALE, MAX).
-// SCALE is tuned so the radius spans MIN→MAX across roughly a viewport-half of
-// cursor distance; it SHRINKS toward MIN as the cursor closes on the marker
-// (proximity convergence).
-const WAYPOINT_MIN_OFFSET = 4; // px — closest the ┼ gets to the ▲ (essentially on it)
-const WAYPOINT_MAX_OFFSET = 22; // px — farthest the ┼ rides out from the ▲
-const WAYPOINT_OFFSET_SCALE = 0.04; // px of offset per px of cursor→marker distance
-
 // --- Click-travel highlight lock tuning ------------------------------------
 // How close (px) window.scrollY must be to the target top — and how little it may
 // move between frames — to count as "settled" on the destination. A few px of
@@ -149,10 +136,6 @@ const TRAVEL_SETTLE_EPSILON_PX = 3;
 // Hard fallback (ms): the click-lock ALWAYS releases by now even if the scroll never
 // lands exactly on target. Comfortably longer than the browser's smooth-scroll.
 const TRAVEL_LOCK_TIMEOUT_MS = 1500;
-
-function clamp(value: number, min: number, max: number): number {
-  return value < min ? min : value > max ? max : value;
-}
 
 // --- Target-lock signal (the same global the cursor reads) ------------------
 // When the cursor enters a marker's hexagon (or the link is keyboard-focused),
@@ -395,12 +378,9 @@ export default function HudNavigation({
   // we don't keep a wasted layer alive for the rest of the page.
   const bootReadoutRef = useRef<HTMLDivElement>(null);
 
-  // Live cursor position tracked via a ref (NOT state) so the rAF loop can place
-  // the ┼ waypoint every frame without re-rendering — mirrors StarMarker.pointerRef.
+  // Live cursor position tracked via a ref (NOT state) so the rAF loop can find
+  // the nearest marker each frame without re-rendering — mirrors StarMarker.pointerRef.
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
-  // The ┼ marker waypoint, mutated directly each frame (translate via inline
-  // style) — the only thing that moves. The ▲ cursor anchor is fixed in CSS.
-  const targetRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const onMove = (event: MouseEvent): void => {
@@ -541,8 +521,6 @@ export default function HudNavigation({
       // Candidate markers: those whose state is the settled one on screen RIGHT
       // NOW (same gate StarMarker uses for its own visibility/interactivity).
       let nearest: MarkerPlacement | null = null;
-      let nearestX = 0;
-      let nearestY = 0;
       if (frame && frame.visible && cursor) {
         const settled = settledIdForStage(frame.stage);
         let bestDistSq = Number.POSITIVE_INFINITY;
@@ -556,34 +534,7 @@ export default function HudNavigation({
           if (distSq < bestDistSq) {
             bestDistSq = distSq;
             nearest = placement;
-            nearestX = x;
-            nearestY = y;
           }
-        }
-      }
-
-      // Offset the ┼ waypoint around the fixed ▲ along the cursor→marker bearing.
-      // The vector is computed from the LIVE CURSOR (not the gauge): dx/dy is the
-      // direction the user must move the cursor to reach the marker. We translate
-      // the ┼ by (cos·r, sin·r) — screen y is down, atan2(dy,dx) is already in
-      // screen space, so no sign flip is needed. The radius scales with distance
-      // (clamped MIN..MAX) so the ┼ rides out far when the cursor is far and
-      // converges onto the ▲ as the cursor closes in. Mutate the DOM directly —
-      // no setState — so the waypoint glides render-free.
-      const target = targetRef.current;
-      if (target) {
-        if (nearest && cursor) {
-          const dx = nearestX - cursor.x;
-          const dy = nearestY - cursor.y;
-          const dist = Math.hypot(dx, dy);
-          const r = clamp(dist * WAYPOINT_OFFSET_SCALE, WAYPOINT_MIN_OFFSET, WAYPOINT_MAX_OFFSET);
-          const bearing = Math.atan2(dy, dx);
-          const ox = Math.cos(bearing) * r;
-          const oy = Math.sin(bearing) * r;
-          target.style.transform = `translate(${ox.toFixed(1)}px, ${oy.toFixed(1)}px)`;
-        } else {
-          // No marker to aim at — park the ┼ on the ▲ (the data-idle CSS fades it).
-          target.style.transform = 'translate(0px, 0px)';
         }
       }
 
@@ -877,17 +828,6 @@ export default function HudNavigation({
         data-booting={booting}
         aria-hidden="true"
       >
-        {/* The gauge rose. A faint static crosshair sits behind for the instrument
-            look; over it the ▲ cursor anchor is pinned dead-centre (upright, never
-            moved) and the ┼ marker waypoint is centred then TRANSLATED each rAF to
-            its polar offset (upright — no rotation anywhere). */}
-        <span className="hud-compass-rose">
-          <span className="hud-compass-frame" aria-hidden="true" />
-          <span className="hud-compass-ship" aria-hidden="true">▲</span>
-          <span ref={targetRef} className="hud-compass-target" aria-hidden="true">
-            +
-          </span>
-        </span>
         {idle ? (
           <>
             <p className="hud-compass-read hud-compass-read--idle">
