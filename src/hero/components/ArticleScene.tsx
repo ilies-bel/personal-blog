@@ -196,6 +196,13 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
 
   // Same markup contract as HeroIsland's backdrop return: a single fixed canvas host
   // at the .bh-backdrop z-layer, dimmed by the existing CSS. aria-hidden — atmosphere.
+  //
+  // CLS guard: BOTH the outer .bh-root--backdrop wrapper and the inner .bh-stage are
+  // position:fixed; inset:0 (hero.css), so this entire React subtree sits OUT OF NORMAL
+  // FLOW from the instant React paints it. When the WebGL canvas is appended into the
+  // host on first frame (or when the dive-resurface keyframe animates main's transform),
+  // there is no flow box behind the reading column that could expand/shrink — the
+  // .prose width/position is fully owned by SSR CSS (prose.css), never by this canvas.
   return (
     <div className="bh-root bh-root--backdrop">
       <div className="bh-stage bh-backdrop" ref={hostRef} aria-hidden="true" />

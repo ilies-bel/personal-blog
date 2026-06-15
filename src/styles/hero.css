@@ -289,6 +289,23 @@
   .bh-rm-modal-btn { transition: none; }
 }
 
+/* CLS GUARD — the backdrop host wrapper is taken OUT OF NORMAL FLOW from first paint.
+   The base .bh-root is position:relative because the home hero needs the .scene-track
+   inside it to drive page scroll height. The BACKDROP variant (used by ArticleScene and
+   HeroIsland's backdrop branch on reading pages) has no such content — only the fixed
+   .bh-stage canvas — but as a relative empty <div> it still parses as a flow-level
+   element. With this rule the wrapper is itself fixed/inset:0/pointer-events:none, so
+   when the React island hydrates and inserts this subtree under the (.prose) reading
+   column's sibling, the browser never has a chance to allot it a flow box that could
+   nudge the column. The canvas mount + the dive-resurface keyframe (which moves only
+   transform/opacity/filter, none of which trigger CLS) are therefore guaranteed not to
+   shift visible text — the Awwwards perf bar floor is CLS < 0.02. */
+.bh-root--backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
 /* Backdrop mode (reading pages): the SAME pinned scene, pushed back so front copy
    stays the focus. Dimmed + slightly desaturated, with a vignette wash that deepens
    the room toward the edges so text never fights the canvas. */
