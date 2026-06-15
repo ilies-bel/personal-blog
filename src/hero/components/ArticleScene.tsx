@@ -15,12 +15,12 @@
 // the active section so the chrome (ArticleHud) and a subtle section-break brighten
 // can react. The prose never depends on the canvas: no-WebGL / reduced-motion fall
 // back to a readable page exactly like the hero does.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker, clamp01 } from '../scroll';
 import { BUILT_STAGES } from '../timeline';
 import { detectDeviceTier } from '../lib/config';
 import { isWebGLUnavailableError, type SceneHandle } from '../scene/types';
-import { resolveReducedMotionNow } from './reduced-motion';
+import { PosterSlideshow, resolveReducedMotionNow } from './reduced-motion';
 
 /** Custom-event name the scene publishes each meaningful scroll step. ArticleHud
  *  (a sibling island — islands don't share React context) listens for it on window
@@ -51,6 +51,14 @@ const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 // ever lagging a section change (section spy lives in ArticleHud off this same value).
 const PROGRESS_MIN_DELTA = 1 / 600;
 
+// PosterSlideshow's four lifecycle slots are picked by Math.round(progress * 3) over
+// 0..1. We only need to re-render this island when that index actually changes — at
+// most three transitions across the whole article — so we quantise here instead of
+// piping every scroll tick through React state. Mirrors progressRef/publishedRef's
+// "ref while it doesn't change perception" discipline elsewhere in the file.
+const posterSlotFor = (progress: number): number =>
+  Math.round(clamp01(progress) * 3);
+
 export default function ArticleScene({ journey }: ArticleSceneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Exact article progress (0..1). The scene's getStage reads this every frame; the
@@ -59,9 +67,30 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
   const progressRef = useRef(0);
   const publishedRef = useRef(-1);
 
+  // Mount-time render-mode decision. Both probes are memoised internally and SSR-safe
+  // (this island is client:only "react", so window is present). We pick the branch
+  // ONCE — reduced-motion preference flips DURING reading would only take effect on a
+  // re-mount, matching how the rest of the article's chrome treats the preference.
+  // 'canvas'   → today's live WebGL backdrop (high tier, motion allowed).
+  // 'poster'   → PosterSlideshow driven by article progress (low tier, motion allowed)
+  //              — protects 60fps / graceful-30fps on low-end GPUs the same way
+  //              HeroIsland's reduced-motion branch protects the home page.
+  // 'reduced'  → the existing reduced-motion early-out: no canvas, no slideshow here;
+  //              the page layout's own reduced-motion path paints the backdrop.
+  const [renderMode] = useState<'canvas' | 'poster' | 'reduced'>(() => {
+    if (typeof window === 'undefined') return 'canvas';
+    if (resolveReducedMotionNow()) return 'reduced';
+    return detectDeviceTier() === 'low' ? 'poster' : 'canvas';
+  });
+  // Slideshow re-render trigger — only the slot index, not every frame's progress.
+  const [posterSlot, setPosterSlot] = useState(0);
+  const posterBase = import.meta.env.BASE_URL ?? '/';
+
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    // The slideshow branch doesn't use the canvas host; for the other two branches
+    // the host is required by createScene / the reduced-motion early-return cleanup.
+    if (renderMode !== 'poster' && !host) return;
 
     const [from, to] = journey;
     // Clamp the authored window into the engine's valid getStage range so a typo in
@@ -74,9 +103,6 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // not a flash of stage 0.
     progressRef.current = 0;
 
-    const isReduced = resolveReducedMotionNow();
-    const tier = detectDeviceTier();
-
     const broadcast = (force = false): void => {
       const p = progressRef.current;
       if (!force && Math.abs(p - publishedRef.current) < PROGRESS_MIN_DELTA) return;
@@ -86,6 +112,15 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
           detail: { progress: p, stage: stageFor(p) },
         }),
       );
+      // Low-tier slideshow: nudge React only when the active poster slot changes.
+      // Lives next to broadcast() so the slideshow and ArticleHud see consistent
+      // progress without a second subscription threading the same ref.
+      if (renderMode === 'poster') {
+        setPosterSlot((prev) => {
+          const next = posterSlotFor(p);
+          return next === prev ? prev : next;
+        });
+      }
     };
 
     // The scroll tracker is pure JS, so it is wired the instant this island hydrates;
@@ -104,7 +139,21 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // own copy stand on their own; ArticleHud still tracks scroll (it listens to the
     // same event, which we keep dispatching). The poster cross-fade is owned by the
     // page layout's reduced-motion path, not this canvas host.
-    if (isReduced) {
+    if (renderMode === 'reduced') {
+      return () => {
+        unsub();
+        tracker.stop();
+      };
+    }
+
+    // LOW-TIER POSTER FALLBACK: same protection as HeroIsland's reduced-motion path,
+    // applied for a different reason — a capable user on a weak GPU. Skipping the
+    // GPU engine here is what holds the 60fps / graceful-30fps target on low-end
+    // hardware (createScene's cheap post-chain + capped DPR alone aren't enough on
+    // the very weakest tiers). The poster slot is updated inside broadcast() above,
+    // so the same scroll subscription that drives ArticleHud also drives the
+    // slideshow — no second scroll probe, just like the brief asks.
+    if (renderMode === 'poster') {
       return () => {
         unsub();
         tracker.stop();
@@ -133,9 +182,15 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
         // rail driving previews) — the article HUD is a passive readout, not a
         // navigator. createScene tolerates the minimal hook set (backdrop mode already
         // passes only getStage).
-        dispose = createScene(host, isReduced, { getStage }, tier);
-        // Apply the gate state the IO may have already latched before this resolved.
-        if (offscreen) dispose.pauseRendering?.();
+        // In the 'canvas' branch renderMode has already filtered out reduced-motion
+        // (→ 'reduced') and the low tier (→ 'poster'), so we pass the canvas-branch
+        // invariants directly. The createScene signature still takes them so the same
+        // entry point works for HeroIsland's backdrop / live branches.
+        if (host) {
+          dispose = createScene(host, false, { getStage }, 'high');
+          // Apply the gate state the IO may have already latched before this resolved.
+          if (offscreen) dispose.pauseRendering?.();
+        }
       })
       .catch((error: unknown) => {
         // Like HeroIsland's backdrop branch: swallow a missing-WebGL / chunk-load
@@ -192,10 +247,17 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
       tracker.stop();
       dispose?.();
     };
-  }, [journey]);
+  }, [journey, renderMode]);
 
-  // Same markup contract as HeroIsland's backdrop return: a single fixed canvas host
-  // at the .bh-backdrop z-layer, dimmed by the existing CSS. aria-hidden — atmosphere.
+  // Same markup contract as HeroIsland's backdrop return: a single fixed host at the
+  // .bh-backdrop z-layer, dimmed by the existing CSS. aria-hidden — atmosphere.
+  //
+  // The 'poster' branch swaps the WebGL canvas host for PosterSlideshow, mirroring
+  // HeroIsland's reduced-motion swap; CSS .bh-poster-slideshow already pins it under
+  // body.article-page's dim wash so the reading column stays the same readable layer.
+  // The slideshow's PROGRESS prop here is the QUANTISED slot index re-projected back
+  // to 0..1 (slot/3) — Math.round inside PosterSlideshow then snaps back to exactly
+  // that slot. A direct progress pass would re-render on every scroll tick.
   //
   // CLS guard: BOTH the outer .bh-root--backdrop wrapper and the inner .bh-stage are
   // position:fixed; inset:0 (hero.css), so this entire React subtree sits OUT OF NORMAL
@@ -205,7 +267,11 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
   // .prose width/position is fully owned by SSR CSS (prose.css), never by this canvas.
   return (
     <div className="bh-root bh-root--backdrop">
-      <div className="bh-stage bh-backdrop" ref={hostRef} aria-hidden="true" />
+      {renderMode === 'poster' ? (
+        <PosterSlideshow progress={posterSlot / 3} base={posterBase} />
+      ) : (
+        <div className="bh-stage bh-backdrop" ref={hostRef} aria-hidden="true" />
+      )}
     </div>
   );
 }

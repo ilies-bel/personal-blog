@@ -347,12 +347,18 @@
         Measured worst-case in-column contrast: body 13.8:1, secondary 7.0:1,
         faint-label 4.3:1 — all clear of AA (≥4.5 body / ≥3 large).
    Scoped to body.article-page (the post layout). Tuned by eye against scroll
-   positions where the fixed ring sits behind headings and body copy. */
-body.article-page .bh-backdrop {
+   positions where the fixed ring sits behind headings and body copy.
+   .bh-poster-slideshow is wired into the same three rules so the LOW-TIER
+   poster fallback rendered by ArticleScene gets the IDENTICAL dim wash,
+   column-ellipse, and horizontal scrim treatment — the article column stays
+   readable regardless of which backdrop branch a given device renders. */
+body.article-page .bh-backdrop,
+body.article-page .bh-poster-slideshow {
   opacity: 0.4;
   filter: saturate(0.72) brightness(0.86) sepia(0.18);
 }
-body.article-page .bh-backdrop::after {
+body.article-page .bh-backdrop::after,
+body.article-page .bh-poster-slideshow::after {
   /* Column-ellipse wash: a single elliptical pool of --bg centred on the
      reading measure — narrow on X (≈column width), tall on Y — that deepens the
      CENTRE column toward the room colour while staying TRANSPARENT in the side
@@ -379,7 +385,8 @@ body.article-page .bh-backdrop::after {
    is effectively a fixed full-viewport scrim — matching the intended
    linear-gradient(90deg, …) horizontal darkening. It sits at backdrop z-index 0;
    .prose is lifted to z-index 1 so the reading column is never covered. */
-body.article-page .bh-backdrop::before {
+body.article-page .bh-backdrop::before,
+body.article-page .bh-poster-slideshow::before {
   content: "";
   position: fixed;
   inset: 0;
