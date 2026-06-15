@@ -892,7 +892,7 @@ export default function HudNavigation({
           <>
             <p className="hud-compass-read hud-compass-read--idle">
               <span className="hud-compass-prompt">[ </span>
-              <span className="hud-compass-label">{recovery ? 'SCROLL BACK TO THE POINT' : 'SEEKING SIGNAL'}</span>
+              <span className="hud-compass-label">{recovery ? 'JUMP TO WORK' : 'SCROLL TO EXPLORE'}</span>
               <span className="hud-compass-prompt"> ]</span>
             </p>
             {/* Reserve the second (destination) line's height even when idle so the
