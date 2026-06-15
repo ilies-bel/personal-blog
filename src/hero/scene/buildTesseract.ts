@@ -35,6 +35,11 @@ export interface TesseractRig {
   renderOnce: () => void;
   /** Set the pointer look-around TARGET in -1..1 (centre = 0,0). The loop eases toward it. */
   setLook: (x: number, y: number) => void;
+  /** Set article READING progress in 0..1. The loop eases toward it and dollies the camera
+   *  deeper down the corridor toward the vanishing point as the value rises — a subtle
+   *  scroll-coupled push-in that ties the bespoke backdrop to the article's "begins at the
+   *  end" narrative. The ambient breathe and pointer look-around stay layered on top. */
+  setProgress: (p: number) => void;
   /** Resize the renderer + camera to a CSS pixel box (DPR is capped internally). */
   resize: (width: number, height: number) => void;
   /** Tear down: stop the loop, drop listeners, dispose geometry/materials/renderer. */
@@ -423,6 +428,15 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
   // Pointer look — TARGET (set by the caller) and the eased CURRENT (lerped each frame).
   const lookTarget = new THREE.Vector2(0, 0);
   const lookCurrent = new THREE.Vector2(0, 0);
+  // Reading progress — TARGET (set by the caller from article scroll) and the eased
+  // CURRENT (lerped each frame). The current value biases the camera's Z baseline so the
+  // corridor SLOWLY dollies down toward the vanishing point as you read. Keeps the
+  // ambient breathe + pointer look-around layered on top.
+  let progressTarget = 0;
+  let progressCurrent = 0;
+  // Maximum dolly distance (world units, along -Z) at full progress. Kept well inside
+  // the finite shaft (SHAFT_LEN = 120) — the breathe oscillates around this baseline.
+  const PROGRESS_DOLLY_DEPTH = 22;
 
   let rafId = 0;
   let running = false;
@@ -451,9 +465,14 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
     const panY = baseY - lookCurrent.y * 1.4;
     // gentle bounded breathe IN/OUT along Z (stays well inside the finite shaft). The
     // camera sits a touch back from the mouth so the dark vanishing-point opening reads.
-    const z = 6.0 - 4.0 * (0.5 - 0.5 * Math.cos(advance * 0.12));
+    // Reading progress biases the breathe BASELINE forward, so as you scroll through the
+    // article the camera dollies further down the corridor toward the vanishing point.
+    const breathe = 4.0 * (0.5 - 0.5 * Math.cos(advance * 0.12));
+    const dolly = progressCurrent * PROGRESS_DOLLY_DEPTH;
+    const z = 6.0 - breathe - dolly;
     camera.position.set(panX, panY, z);
-    // aim down the shaft toward the vanishing point, sheared by the look.
+    // aim down the shaft toward the vanishing point, sheared by the look. The look target
+    // is anchored relative to the camera so the vanishing point stays in frame as we dolly.
     camera.lookAt(-baseX * 0.3 + lookCurrent.x * 3.2, -baseY * 0.3 - lookCurrent.y * 2.6, z - 44);
 
     (glowUniforms.uLook.value as THREE.Vector2).copy(lookCurrent);
@@ -477,6 +496,9 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
     // ease the look toward the pointer target (smooth peer-around, never snaps)
     lookCurrent.x += (lookTarget.x - lookCurrent.x) * 0.05;
     lookCurrent.y += (lookTarget.y - lookCurrent.y) * 0.05;
+    // ease the dolly toward the scroll-driven progress target. Slower than the look so a
+    // fast scroll resolves into a gentle glide forward rather than a jerk.
+    progressCurrent += (progressTarget - progressCurrent) * 0.06;
 
     uniforms.uTime.value = (uniforms.uTime.value as number) + dt;
 
@@ -508,6 +530,11 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
     lookTarget.set(x, y);
   };
 
+  const setProgress = (p: number): void => {
+    // Clamp the caller's value into 0..1; the rig owns the safe dolly range internally.
+    progressTarget = Math.min(1, Math.max(0, p));
+  };
+
   const onVisibility = (): void => {
     if (document.hidden) {
       stop();
@@ -530,5 +557,5 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
     renderer.dispose();
   };
 
-  return { canvas, start, stop, renderOnce, setLook, resize, dispose };
+  return { canvas, start, stop, renderOnce, setLook, setProgress, resize, dispose };
 }
