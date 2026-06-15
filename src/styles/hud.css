@@ -181,7 +181,7 @@ body:not(.hud-active) .hud-nav::before {
   display: grid;
   grid-template-columns: var(--rail-col) minmax(0, 1fr);
   align-items: center;
-  width: calc(var(--rail-col) + 0.1rem);
+  width: var(--rail-expanded);
   height: var(--rail-row-h);
   padding: 0;
   color: var(--fg-faint);
@@ -506,9 +506,9 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-number {
   display: grid;
   gap: 0.22rem;
   min-width: 0;
-  max-width: 0;
-  opacity: 0;
-  transform: translateX(-0.45rem);
+  max-width: var(--rail-copy-max);
+  opacity: 1;
+  transform: none;
   overflow: hidden;
   white-space: nowrap;
   transition:
@@ -1080,25 +1080,10 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
     font-size: var(--text-micro);
   }
   .hud-nav-mobile-readout {
-    display: flex;
-    justify-content: center;
-    gap: 0.75rem;
-    /* The readout is the FIRST grid row of .hud-system, directly above the number
-       rail (the rail's own grid gap is only 0.2rem). A small bottom margin lifts the
-       readout clear of the digits so the scene name never brushes the rail at the
-       short bottom of a phone viewport; no top margin (it must not push up into the
-       manifesto whisper above it). */
-    margin: 0 0 0.45rem;
-    color: var(--fg-dim);
-    font-family: var(--font-mono);
-    font-size: var(--text-micro);
-    line-height: 1;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
-  }
-  .hud-nav-mobile-readout span:first-child {
-    color: var(--fg);
+    /* Labels are now always visible on every rail row (hud-nav-copy un-collapsed at
+       rest), so this single-line readout duplicates what each row already shows.
+       Hide it to avoid redundancy. */
+    display: none;
   }
 }
 
