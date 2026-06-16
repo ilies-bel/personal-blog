@@ -1829,10 +1829,26 @@ body.hud-active .star-marker {
   max-width: min(23rem, calc(100vw - 6rem));
   padding: 0.95rem 1.1rem;
   background: color-mix(in oklch, var(--bg) 86%, transparent);
-  border: 1px solid color-mix(in oklch, var(--highlight) 40%, transparent);
+  /* Hard 1px border removed — it would reappear as a crisp ring through the
+     mask below. The feathered mask handles the visual edge instead. */
+  border: none;
   border-radius: var(--radius-sm);
   backdrop-filter: blur(8px);
   text-align: left;
+  /* Feather all four edges so the dark panel boundary dissolves softly into
+     the background rather than stopping at a crisp rounded-rect line.
+     Two intersecting linear gradients fade opposite edge pairs; mask-composite
+     takes their intersection (AND), producing a smooth four-sided feather.
+     The feather zone (~5 % horiz / ~8 % vert) sits within the padding zone
+     so headline and body copy remain at near-full opacity. */
+  -webkit-mask-image:
+    linear-gradient(to right,  transparent 0%, black 5%,  black 95%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black 8%,  black 92%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right,  transparent 0%, black 5%,  black 95%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black 8%,  black 92%, transparent 100%);
+  mask-composite: intersect;
 }
 /* The copy column — eyebrow → headline → desc → tags → cta, stacked. */
 .star-marker-card-text {
