@@ -132,6 +132,8 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uDot: { value: 0 },
     uNebulaGrow: { value: 1 },
     uNebLight: { value: 1 }, // nebula ambient+depth light model strength (0 flat → 1 full)
+    uNebDensity: { value: 1 }, // nebula surviving-gas fraction: 1 still cloud → 0.01 at full collapse
+    uNebVac: { value: -1 }, // collapse vacuum end-state A/B (debug __bhNebVac): -1 off, 0 = land-on-star, 1 = wink-near
     // --- yellow star → red giant flash-swap (transition 3, scroll 3→2). These
     //     drive ONLY the point-cloud's gold→red sphere during the yellow⇄red
     //     slot; all three default to a no-op so every other stage is unchanged.

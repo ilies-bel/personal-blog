@@ -142,6 +142,11 @@ export interface StarState {
   starFormed: number;
   /** cloud brightness multiplier across the collapse (bright infall → fade out). 1 outside. */
   cloudBright: number;
+  /** nebula SURVIVING-gas fraction across the collapse: 1 at the dispersed/still cloud (prog 0)
+   *  → 0.01 at full collapse (prog 1). The shader force-vacuums the grains ranked above this into
+   *  the star (pulled to the core + consumed by accretion), so the cloud streams INTO the star
+   *  rather than vanishing in place. 1 (no-op) outside the window. uNebDensity. */
+  nebDensity: number;
 
   // --- supernova flash (rides the time-based nova envelope) ---
   /** particle-side shock-breakout glow: 1.45 * nova. uFlash. */
@@ -367,6 +372,12 @@ export function lifecycle(input: LifecycleInput): StarState {
   // linear: full gas at window top (prog 0) → 0 exactly as the yellow star completes (prog 1).
   const invDensity = 1 - prog; // linear: full gas at window top → 0 exactly as the yellow star completes
   const cloudBright = 1 + inWindow * ((1 + 0.8 * feedBump) * invDensity - 1);
+  // nebula SURVIVING-gas fraction across the collapse: the diffuse gas KEEPS its current density
+  // at the still/dispersed cloud (prog 0 → 1.0); as the collapse proceeds the shader vacuums the
+  // doomed grains INTO the star until only 1% are still lit at the end (prog 1 → 0.01). LINEAR in
+  // prog. Uses the EXTENDED geo gate (inWindowGeo) so it tracks the collapse geometry through the
+  // floor crossfade; exactly 1.0 (no-op) outside the window, so the bloom/still nebula are untouched.
+  const nebDensity = 1 - inWindowGeo * 0.99 * prog; // 1 at the still cloud → 0.01 at full collapse
   // the shader runs its nebula geometry across the real nebula AND the collapse
   // window, so `pos` holds the analytic nebula placement (the sim's seed/home)
   // whenever the sim blend is active.
@@ -718,6 +729,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     simBlend,
     starFormed,
     cloudBright,
+    nebDensity,
     flash,
     inYRWindow,
     meshSide,

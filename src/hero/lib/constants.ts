@@ -206,6 +206,11 @@ export const DEBUG_WINDOW_KEYS = {
   flashDir: '__bhFlashDir',
   nebulaFlash: '__bhNebulaFlash',
   nebLight: '__bhNebLight',
+  /** A/B the nebula collapse vacuum end-state (compare live during the collapse):
+   *    0 = variant A — grains finish FALLING ONTO the star and wink AT it (no mid-air fade)
+   *    1 = variant B — grains wink as they get CLOSE to the core (faster visible drop)
+   *   <0 / unset = OFF (the raw baked sim, current behaviour). */
+  nebVac: '__bhNebVac',
   backdropStage: '__bhBackdropStage',
   streak: '__bhStreak',
   /** Hold a click eruption (0..1 intensity) at a fixed camera-facing point so the

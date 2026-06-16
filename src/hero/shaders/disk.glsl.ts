@@ -216,6 +216,12 @@ export const diskVertexShader = /* glsl */ `
   uniform float uNebulaGrow; // 0 = pale-blue point, 1 = full nebula volume
   // nebula light model strength (0 = flat self-emission, 1 = full ambient+depth+occlusion)
   uniform float uNebLight;
+  // nebula surviving-gas fraction across the collapse: 1 = still cloud (current density),
+  // 0.01 = end of collapse. Used to consume the REAL collapsing particles into the star so only
+  // ~1% are still lit at the end. 1.0 (no-op) outside the collapse window.
+  uniform float uNebDensity;
+  // DEBUG A/B vacuum end-state (window.__bhNebVac): -1 off, 0 = land-on-star, 1 = wink-near-core.
+  uniform float uNebVac;
   // --- yellow star → red giant flash-swap channels (point-cloud only) ---
   //   uYrMix : 0 = smooth gold sphere (just after the swap), 1 = granular red giant
   //   uYrGrow: 0 = yellow radius (×0.35), 1 = red-giant radius (×1.0)
@@ -1135,6 +1141,31 @@ export const diskVertexShader = /* glsl */ `
       vec4 simP = mix(simA, simB, uSimMix);     // interpolate between the two snapshots
       pos = mix(pos, simP.xyz, uSimBlend);
       vSimLife = simP.w;                          // → frag brightens/dims accreting matter
+
+      // CONSUME-TO-TARGET: the baked sim leaves a trailing fraction of the REAL grains still in
+      // flight (and lit) at the deepest snapshot. To get the cloud down to ~1% lit by the end of
+      // the collapse WITHOUT culling in place and WITHOUT a second particle layer, we finish the
+      // consumption of the doomed fraction on THESE SAME grains. uNebDensity is the surviving
+      // fraction (1 → 0.01). A stable per-grain rank picks which grains are still allowed to live;
+      // grains ranked above uNebDensity are consumed (eat 0→1 over a short individual band).
+      if(uNebVac >= 0.0){
+        float dRank = h31(vec3(aSeed*17.0, aU*3.0, 7.0));     // 0..1 stable per-grain consume order
+        float eat = smoothstep(uNebDensity, min(uNebDensity + 0.05, 1.0), dRank);
+        if(uNebVac < 0.5){
+          // VARIANT A — LAND ON THE STAR: carry the grain the rest of the way along ITS OWN
+          // infall (toward the core, where the sim is already pulling it) and wink it there. No
+          // mid-air fade: the grain finishes its real trajectory onto the star, then is consumed.
+          pos = mix(pos, normalize(pos + 1e-4) * uGiantR * 0.05, eat * uSimBlend);
+          vSimLife = min(vSimLife, 1.0 - eat);                // wink once it has landed
+        } else {
+          // VARIANT B — WINK NEAR THE CORE: leave the grain on the sim's real path, but bring its
+          // accretion wink forward based on how CLOSE it already is to the core, so grains that
+          // have nearly arrived fade out (the far ones keep streaming in). nearCore: 0 far → 1 at
+          // the core. Doomed grains (eat) get their life pulled toward 0 as they near the star.
+          float nearCore = 1.0 - smoothstep(uGiantR * 0.06, uGiantR * 0.55, length(pos));
+          vSimLife = min(vSimLife, 1.0 - eat * nearCore);
+        }
+      }
     }
 
     vec4 viewP  = modelViewMatrix * vec4(pos, 1.0);
