@@ -353,25 +353,19 @@ export function lifecycle(input: LifecycleInput): StarState {
   // (and, via nebulaShader -> uNebula, suppresses the shader's red-giant default there).
   // At the floor prog~1, so it sits at its window-floor value (~0.55) across the band.
   const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
-  // cloud DENSITY/brightness — DECOUPLED from the star's growth so the gas is VISIBLY EATEN
-  // rather than fading out in place (the user's ask: "WAY MORE ABSORBED before disappearing").
-  // The OLD envelope tracked (1 - starFormed): a GLOBAL dimmer that faded the WHOLE cloud as
-  // the star grew, so even un-absorbed gas vanished mid-flight (dim-in-place, not consumed).
-  // Now the sim actually consumes the gas — CAUSE 1: the longer/stronger collapse (MAX_STEPS
-  // 200, uG 32, wider capture) parks the VAST MAJORITY of grains on the core by the deepest
-  // snapshot — and the per-grain accretion wink-out in disk.glsl.ts (vSimLife→0 as a grain
-  // parks) does the work of EMPTYING the cloud one region at a time. So the global envelope
-  // must NOT pre-dim the survivors: it HOLDS near full (~1.0) across almost the whole window
-  // and only eases down in the final stretch (prog ≳ 0.85), riding out the very last stragglers
-  // as the mesh star locks in. Net read: the cloud stays full and bright while its grains
-  // visibly stream in and get swallowed, thinning NATURALLY via absorption — then the last
-  // whisper is gone right as the star completes (R4: still a clean simultaneous handoff, no
-  // gas-gone-then-star-pops and no star-full-then-cloud-lingers, but the emptying is now
-  // DRIVEN by per-grain absorption, not by a uniform fade). feedBump still glows the
-  // mid-window convergence (light pouring into the core). 1 (no-op) outside the window.
+  // cloud DENSITY/brightness — decays LINEARLY across the full collapse window in lockstep
+  // with the star's growth. prog runs 0→1 over the window (stage 3.5 → 3.0); starFormed =
+  // prog^1.5 also reaches 1 at prog=1, so (1 - prog) density makes the last drop of gas land
+  // on the last frame the yellow star reaches full size — a clean simultaneous handoff with no
+  // gas-gone-then-star-pops and no star-full-then-cloud-lingers. The per-grain accretion
+  // wink-out in disk.glsl.ts (vSimLife→0 as a grain parks) still empties individual regions
+  // via absorption; the global envelope now provides an even, proportional dimmer across the
+  // entire window rather than holding near full and only dropping in the final stretch.
+  // feedBump still glows the mid-window convergence (light pouring into the core).
+  // 1 (no-op) outside the window.
   const feedBump = 5.2 * prog * (1 - prog); // 0→1→0, peaks mid-window (brighter convergence)
-  // hold ≈1.0 until prog 0.85, then ease to 0 by prog 1.0 (only the final stragglers fade).
-  const invDensity = 1 - smoothstep01((prog - 0.85) / 0.15); // ≈1 across the window; →0 only in the last stretch
+  // linear: full gas at window top (prog 0) → 0 exactly as the yellow star completes (prog 1).
+  const invDensity = 1 - prog; // linear: full gas at window top → 0 exactly as the yellow star completes
   const cloudBright = 1 + inWindow * ((1 + 0.8 * feedBump) * invDensity - 1);
   // the shader runs its nebula geometry across the real nebula AND the collapse
   // window, so `pos` holds the analytic nebula placement (the sim's seed/home)
