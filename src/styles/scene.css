@@ -274,9 +274,10 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
 body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   transform: translateY(-2px);
 }
-/* Functional control glyphs only — the Links <summary> "two planets" SVG, the
-   Power button SVG, and the ReducedMotionToggle SVG all carry .overlay-blog-icon.
-   Section icons were removed; this rule now sizes only the controls' glyphs. */
+/* Functional control glyphs only — the GitHub/X brand-logo SVGs in the social
+   icon links, the Power button SVG, and the ReducedMotionToggle SVG all carry
+   .overlay-blog-icon. Section icons were removed; this rule now sizes only the
+   controls' glyphs. */
 .overlay-blog-icon {
   width: 1.3rem;
   height: 1.3rem;
@@ -320,50 +321,6 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   .overlay-blog-link { transition: none; }
   body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
 }
-
-/* Socials live behind a native <details> dropdown — the "two planets" glyph toggles
-   it (zero JS, keyboard-accessible). */
-.overlay-blog-socials { position: relative; }
-.overlay-blog-socials-toggle {
-  list-style: none;
-  cursor: pointer;
-  color: var(--fg-dim);
-  display: inline-flex;
-  align-items: center;
-  transition: color 0.16s ease;
-}
-.overlay-blog-socials-toggle::-webkit-details-marker { display: none; }
-.overlay-blog-socials[open] .overlay-blog-socials-toggle,
-.overlay-blog-socials-toggle:hover { color: var(--fg); }
-.overlay-blog-socials-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 999px;
-}
-.overlay-blog-socials-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.6rem 0.8rem;
-  background: color-mix(in oklch, var(--bg) 88%, transparent);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  font-family: var(--font-mono);
-  font-size: var(--text-hud);
-  letter-spacing: 0.04em;
-}
-.overlay-social {
-  color: var(--fg-dim);
-  text-decoration: none;
-  white-space: nowrap;
-  transition: color 0.16s ease;
-}
-.overlay-social:hover,
-.overlay-social:focus-visible { color: var(--fg); }
 
 /* Power button: a CIRCLED power glyph (a thin ring frame echoing the old
    constellation mark) that toggles the hud-active morph in place (sticky

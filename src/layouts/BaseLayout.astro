@@ -112,18 +112,18 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
           </a>
 
           {/* The blog micro-nav, top-right: the four section routes rendered as quiet
-              glyph icons that share the left HUD rail's visual language — a pale-blue
-              dot for About, the nebula speck for Writing, the four-point star for
-              Projects, the red-giant teardrop for Graveyard. The text labels stay
-              folded away and only unfurl (icon → icon+label) once real scroll reaches
-              the black hole, or the power button is engaged (body.hud-active). A "two
-              planets" <details> dropdown holds the social links (zero-JS, native), and
-              a power button toggles the hud-active morph in place without scrolling. */}
+              text labels (mono-uppercase) that dim at rest and brighten/lift once the
+              HUD activates at the black hole (body.hud-active). Two inline brand-logo
+              icon links — a GitHub octocat and an X logo — sit as direct <a> siblings
+              next to the section labels, reusing .overlay-blog-link so they track the
+              same dim→bright color, hover underline-sweep, focus ring, and hud-active
+              lift. A power button toggles the hud-active morph in place without
+              scrolling. */}
           <nav class="overlay-blog" aria-label="Sections">
             {/* Text-only section labels — no decorative icons. The four links
                 show small mono-uppercase labels at rest (dim) and brighten/lift
                 when the HUD activates at the black hole (body.bare.hud-active).
-                The functional Links/Power controls below KEEP their inline SVGs. */}
+                The functional icon links/Power controls below KEEP their inline SVGs. */}
             <div class="overlay-blog-links">
               <a class="overlay-blog-link" href={href('about')}>
                 <span class="overlay-blog-label">About</span>
@@ -139,28 +139,26 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
               </a>
             </div>
 
-            <details class="overlay-blog-socials">
-              {/* The summary carries a visible "Links" label now (folded at rest,
-                  unfurled with the section labels on body.bare.hud-active, same hover
-                  micro-interaction). The visible text is the accessible name, so the
-                  redundant aria-label is dropped — the icon stays aria-hidden, and the
-                  label inside the summary names the toggle (no double-announce). The
-                  <details>/<summary> still drives the dropdown with zero JS. */}
-              <summary class="overlay-blog-socials-toggle overlay-blog-link">
-                {/* Two planets — one orbiting the other. Matched to the section-icon
-                    weight (1.5 stroke, ~20px optical footprint). */}
-                <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                  <circle cx="13" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="24" cy="16" r="3" fill="currentColor" stroke="none" />
+            {/* Two inline brand-logo icon links — GitHub octocat and X logo. Both
+                carry .overlay-blog-link so they inherit the rail's dim→bright color
+                tracking, hover underline-sweep, focus ring, and hud-active lift.
+                The aria-label on each <a> is the only accessible name (no visible
+                text label). Icons use official simple-icons paths, fill="currentColor"
+                so they pick up the rail's currentColor exactly like the power glyph. */}
+            {SOCIALS.github && (
+              <a class="overlay-blog-link overlay-blog-social" href={SOCIALS.github} aria-label="GitHub">
+                <svg class="overlay-blog-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
                 </svg>
-                <span class="overlay-blog-label">Links</span>
-              </summary>
-              <div class="overlay-blog-socials-menu">
-                {SOCIALS.github && <a href={SOCIALS.github} class="overlay-social">GitHub</a>}
-                {SOCIALS.twitter && <a href={SOCIALS.twitter} class="overlay-social">X</a>}
-                {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`} class="overlay-social">Email</a>}
-              </div>
-            </details>
+              </a>
+            )}
+            {SOCIALS.twitter && (
+              <a class="overlay-blog-link overlay-blog-social" href={SOCIALS.twitter} aria-label="X">
+                <svg class="overlay-blog-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </a>
+            )}
 
             {/* Power button: a manual override that TOGGLES the hud-active morph in
                 place (no scrolling). Sticky — once engaged it adds body.hud-forced so
