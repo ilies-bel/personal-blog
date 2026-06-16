@@ -29,6 +29,10 @@ pnpm-debug.log*
 /blob-report/
 /playwright/.cache/
 /screenshots/
+/.playwright-mcp/
+
+# local capture artifacts (density/nebula stage screenshots, not versioned)
+/density-stage-*.png
 
 # third-party Claude skill bundles (installed locally, not version-controlled)
 /.claude/skills/

@@ -215,17 +215,6 @@ export const DEBUG_WINDOW_KEYS = {
    *  PARTICLE red giant so its jet + surface ripple can be inspected without clicking
    *  (pair with __bhMorph at a red-giant stage, e.g. ≈2.3). */
   giantErupt: '__bhGiantErupt',
-  /** Override the red-giant world radius (→ scale) live from the dev panel while
-   *  the scene is pinned at a held giant frame. DEV-ONLY. */
-  giantSize: '__bhGiantSize',
-  /** Nudge the red-giant framing on the X axis (camera + lookAt) during the
-   *  RED_COMPOSITION / COLLAPSE_PULL beat. DEV-ONLY — defaults to undefined so
-   *  production applies no extra offset. Set on window by the dev panel. */
-  giantPosX: '__bhGiantPosX',
-  /** Nudge the red-giant framing on the Y axis (camera + lookAt) during the
-   *  RED_COMPOSITION / COLLAPSE_PULL beat. DEV-ONLY — defaults to undefined so
-   *  production applies no extra offset. Set on window by the dev panel. */
-  giantPosY: '__bhGiantPosY',
   /** Force the device tier ('high' | 'low') so the low-end fallback can be tested on
    *  any machine without spoofing hardware. Read as a STRING via readDebugString and
    *  honoured FIRST by detectDeviceTier (overrides the cheap auto-detect signals). */
