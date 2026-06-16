@@ -16,8 +16,11 @@
 // never overlap them at any width. On pages without that nav it falls back to
 // rendering in place (fixed-position via .overlay-blog-motion in scene.css).
 //
-// The glyph mirrors the resolved state: a film strip with a play triangle when motion is ON,
-// the same film strip struck through by a diagonal slash when motion is reduced (animation off).
+// The glyph is Lucide Icons' `video-off` (MIT-licensed, https://lucide.dev/icons/video-off):
+// a camera struck through by a single diagonal slash. It is STATIC — the same icon in both
+// states — so the slashed camera is the constant mark for the control; only aria-pressed and
+// the aria-label change as the state flips. A thin-stroke 24-grid line icon matching the
+// sibling Power glyph's weight, its slash stays crisp at the ring's ~18px size.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSceneActions, useSceneState } from '../SceneStateContext';
@@ -52,53 +55,22 @@ export default function ReducedMotionToggle() {
       aria-pressed={reduced}
       onClick={() => requestReducedMotion?.(!reduced)}
     >
-      {reduced ? (
-        // STILL: a film strip struck through by a slash (animation stopped).
-        // Rounded-rect body, two columns of sprocket holes on the left/right edges,
-        // and a corner-to-corner diagonal slash as the universal 'disabled' overlay.
-        <svg className="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-          {/* Film strip outer body */}
-          <rect x="8" y="4" width="16" height="24" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-          {/* Sprocket column dividers */}
-          <line x1="12" y1="4" x2="12" y2="28" stroke="currentColor" strokeWidth="1.5"/>
-          <line x1="20" y1="4" x2="20" y2="28" stroke="currentColor" strokeWidth="1.5"/>
-          {/* Sprocket holes — left column */}
-          <rect x="9.25" y="7" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="9.25" y="12" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="9.25" y="17" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="9.25" y="22" width="1.5" height="1.5" fill="currentColor"/>
-          {/* Sprocket holes — right column */}
-          <rect x="21.25" y="7" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="21.25" y="12" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="21.25" y="17" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="21.25" y="22" width="1.5" height="1.5" fill="currentColor"/>
-          {/* Diagonal slash — top-right to bottom-left across the whole glyph */}
-          <line x1="25" y1="3" x2="7" y2="29" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ) : (
-        // MOTION: a running film strip with a play triangle (animation on).
-        // Same rounded-rect body and sprocket holes; a filled right-pointing triangle
-        // in the center window reads as 'film rolling'.
-        <svg className="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-          {/* Film strip outer body */}
-          <rect x="8" y="4" width="16" height="24" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-          {/* Sprocket column dividers */}
-          <line x1="12" y1="4" x2="12" y2="28" stroke="currentColor" strokeWidth="1.5"/>
-          <line x1="20" y1="4" x2="20" y2="28" stroke="currentColor" strokeWidth="1.5"/>
-          {/* Sprocket holes — left column */}
-          <rect x="9.25" y="7" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="9.25" y="12" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="9.25" y="17" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="9.25" y="22" width="1.5" height="1.5" fill="currentColor"/>
-          {/* Sprocket holes — right column */}
-          <rect x="21.25" y="7" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="21.25" y="12" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="21.25" y="17" width="1.5" height="1.5" fill="currentColor"/>
-          <rect x="21.25" y="22" width="1.5" height="1.5" fill="currentColor"/>
-          {/* Play triangle in the center window */}
-          <path d="M13.5 12 L13.5 20 L20 16 Z" fill="currentColor"/>
-        </svg>
-      )}
+      {/* Lucide `video-off` — a camera struck through by a single diagonal slash. Static
+          across both states; the slashed camera is the constant mark for the control. */}
+      <svg
+        className="overlay-blog-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196" />
+        <path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2" />
+        <path d="m2 2 20 20" />
+      </svg>
     </button>
   );
 
