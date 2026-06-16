@@ -296,6 +296,18 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: var(--text-hud);
+  /* Vertically centre the labels against the round controls. The inherited body
+     line-height (~1.7) plus the font's leading left the all-caps mono glyphs — which
+     have no descenders — riding ~2px above the icon centres even once the box is
+     tightened, because the font distributes its leading asymmetrically (more above the
+     cap line than below the baseline). line-height:1 hugs the box; text-box-trim drops
+     the residual half-leading on supporting browsers so the cap-height block centres
+     exactly; the translateY is the fallback nudge that lands the same ~2px correction
+     everywhere else. */
+  line-height: 1;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+  transform: translateY(2px);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
@@ -429,6 +441,14 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
    absent). The flow-based rule wins whenever the button is actually inside the row. */
 .overlay-blog-motion {
   order: 0;  /* flex order 0 → sits just left of the power button (order: 1) */
+}
+/* Separate the two GROUPS in the row: the social links (GitHub/X) on the left and the
+   command buttons (reduced-motion + power) on the right. The reduced-motion toggle is
+   the first command button, so a left margin on it opens a small gap between the groups
+   on top of the row's base gap. Scoped to the in-nav render — the fixed-position
+   fallback (.bh-root > .overlay-blog-motion) stands alone and gets no group margin. */
+.overlay-blog .overlay-blog-motion {
+  margin-left: 0.5rem;
 }
 /* The real power button is the last item in the row; the toggle at order:0 appears
    immediately before it because the portal appends the toggle last in DOM order, so
