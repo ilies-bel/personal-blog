@@ -461,18 +461,24 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
    React island PORTALS it INTO the .overlay-blog flex row (BUG 4 fix: a single fixed
    `right:` offset could not clear that right-anchored, leftward-growing row in both its
    resting + hud-active states, so the toggle used to land on top of the socials/links).
-   As a real flex child it can never collide with the other controls at any width; the
-   `order: -1` makes it the LEFTMOST item in the row (the portal appends it last in the
-   DOM, so the order property — not DOM position — places it) and the small margin gives
-   it the same breathing room as the row's own gap. It reuses .overlay-blog-power for the
-   ring frame + glyph weight.
+   As a real flex child it can never collide with the other controls at any width.
+   The portal always APPENDS the toggle last in the DOM, but we use flex `order` to
+   position it: the real power button gets order:1, the toggle gets order:0 (same as
+   links/socials), so it lands as the last order-0 item — immediately LEFT of the power
+   button. It reuses .overlay-blog-power for the ring frame + glyph weight.
    FALLBACK: on a page with no .overlay-blog nav the portal target is absent and the
    button renders in place inside .bh-root; the fixed-position rule below keeps it a
    tidy top-right corner control in that case (it never collides there — the nav is
    absent). The flow-based rule wins whenever the button is actually inside the row. */
 .overlay-blog-motion {
-  order: -1;                 /* leftmost flex item in the .overlay-blog row */
-  margin-right: 0.05rem;     /* nudge: the row's 0.6rem gap already spaces it from the next icon */
+  order: 0;  /* flex order 0 → sits just left of the power button (order: 1) */
+}
+/* The real power button is the last item in the row; the toggle at order:0 appears
+   immediately before it because the portal appends the toggle last in DOM order, so
+   within the order-0 group the toggle is the final DOM child → visual position just
+   before the order-1 power button. */
+.overlay-blog-power:not(.overlay-blog-motion) {
+  order: 1;
 }
 /* Fallback placement when the toggle is NOT inside the nav row (no portal host on
    the page). Scoped to .bh-root so it only applies to the in-place fallback render;
