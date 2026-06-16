@@ -46,6 +46,44 @@ The hero. Photon ring + lensed accretion disk, drawn by the **point cloud**
 
 ---
 
+### Reverse supernova — `stage 1`
+
+The brief, blinding transition between the red giant and the black hole. Its look
+is **not** drawn by the point cloud's body shader — it is a screen-space
+post-pass, `NovaShader` (`src/hero/shaders/post.glsl.ts`), composited *after* the
+grade. It is keyed to the `nova` envelope (a clockless Gaussian in `stage`,
+centred on `NOVA_CENTER = 0.62`, computed in `createScene.ts` and passed through
+`lifecycle()`), so the whole blast is deterministic and reversible — scrolling
+back up replays it exactly, scrolling down mirrors it (`uNovaDir`).
+
+The pass layers two things over the graded frame:
+
+- a restrained central **whiteout bloom** (`front` × 0.28 + `coreBloom`) — the
+  detonation flash, pulled way down so it no longer washes the disk flat,
+- an expanding **inclined gas shock disk** (`uShock`): a turbulent ring of
+  incandescent gas lying in a flat plane **tilted in 3D toward the camera**, so it
+  reads in PERSPECTIVE — the near (lower) rim large & open, the far (upper) rim
+  compressed & converging (Saturn-rings look), receding into the frame rather than
+  a flat oval. The screen point is mapped onto that plane via a closed-form
+  perspective warp: vertical foreshortened by `sin(uShockDeg)` then a perspective
+  divide keyed to screen height (`uShockPersp` sets the near/far asymmetry);
+  `uShockWide` widens the lateral span. 5-octave fbm drives the clumpy gas,
+  advected outward over `uTime`; a fiery palette maps it deep ember-red (cool
+  outer rim) → burnt orange → amber → hot rose core, composited as emitted light.
+  An in-plane **roll** (`uShockRoll`, degrees) slants the disk's long axis
+  diagonally across the frame (a clock-hand rotation) rather than dead horizontal.
+  The shock radius leads the envelope (`pow(ringE, 0.6)`) so the disk sweeps
+  outward; on the implode side it contracts. `uShock = 0` disables the disk.
+  Tuning knobs: `uShockRoll` (diagonal slant), `uShockDeg` (foreshorten),
+  `uShockPersp` (3D tilt strength), `uShockWide` (lateral spread), `uShock`
+  (intensity).
+
+The point cloud underneath is doing its own physical shock-breakout (the disk
+shader's `uFlash` glow, driven by `look.flash`); the gas disk is the
+*screen-space* companion that reads as the headline beat.
+
+---
+
 ### Red giant — `stage 2`
 
 ![red giant](./red-giant.png)

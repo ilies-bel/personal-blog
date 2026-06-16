@@ -1570,6 +1570,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diskMatSecondary.uniforms.uDotTime.value = ut;
     starMat.uniforms.uTime.value = ut;
     starMatSec.uniforms.uTime.value = ut;
+    // wall-clock for the supernova shock disk's turbulent gas (0 under reduced motion).
+    novaPass.uniforms.uTime.value = ut;
     distantStarUniforms.uTime.value = ut;
     warpMat.uniforms.uTime.value = ut;
     warpMatSec.uniforms.uTime.value = ut;
