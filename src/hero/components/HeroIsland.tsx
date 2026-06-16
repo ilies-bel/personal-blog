@@ -69,9 +69,10 @@ import {
 declare global {
   interface Window {
     /** Published by the live hero (this component) so the standalone custom-cursor
-     *  IIFE can ask whether a screen point is over the red giant's surface — the
-     *  cursor shows its interactive hexagon there. Absent on pages without the
-     *  scrollable hero (about, ...). Key literal = CURSOR_WINDOW_KEYS.hitGiant. */
+     *  IIFE can ask whether a screen point is over either clickable star body (the
+     *  red-giant sphere OR the yellow-star photosphere mesh) — the cursor shows its
+     *  interactive hexagon there. Absent on pages without the scrollable hero (about,
+     *  ...). Key literal = CURSOR_WINDOW_KEYS.hitGiant. */
     __bhHitGiant?: (clientX: number, clientY: number) => boolean;
   }
 }

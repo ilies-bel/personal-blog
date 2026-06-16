@@ -78,9 +78,11 @@ export interface DiveOptions {
 export interface SceneHandle {
   /** Tear down the scene (renderer, rigs, listeners). Same contract as before. */
   (): void;
-  /** True only when the red-giant beat is on screen AND the client point falls on
-   *  the giant's projected surface (a sphere raycast at the world origin). Cheap
-   *  no-op (returns false) outside the red-giant beat. */
+  /** True when the client point falls on either clickable star body:
+   *  • the settled red giant's projected surface (sphere raycast at the world origin)
+   *    when `redGiantClickable` (the calm red-giant resting beat), OR
+   *  • the yellow-star photosphere mesh when `sunClickable` (the settled yellow star).
+   *  Cheap no-op (returns false) outside both resting beats; never depends on HUD state. */
   hitTestGiant(clientX: number, clientY: number): boolean;
   /** Begin the cinematic dive into the clicked marker; no-op if a dive is already
    *  active. Dollies the LIVE camera toward (and just past) the world origin while

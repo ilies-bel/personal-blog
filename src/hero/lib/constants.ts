@@ -228,7 +228,9 @@ export const DEBUG_WINDOW_KEYS = {
 // scene. HeroIsland sets it on mount and deletes it on unmount. The cursor reads
 // the SAME literal name (it can't import this module), so keep the two in sync.
 export const CURSOR_WINDOW_KEYS = {
-  /** (clientX, clientY) → boolean: is the point over the live red-giant surface? */
+  /** (clientX, clientY) → boolean: is the point over either clickable star body?
+   *  Returns true for the live red-giant sphere (redGiantClickable beat) OR the
+   *  yellow-star photosphere mesh (sunClickable beat). Never depends on HUD state. */
   hitGiant: '__bhHitGiant',
 } as const;
 

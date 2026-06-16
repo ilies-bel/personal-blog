@@ -449,12 +449,31 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     return eruptRaycaster.ray.intersectSphere(giantSphere, giantHitPoint) !== null;
   };
 
+  // Sun-mesh hit-test: mirrors the intersectObject call in onPointerDownSun for the
+  // yellow-star photosphere mesh. Reuses the shared scratch ndc/raycaster (same as
+  // giantSphereHit) — no per-call allocation. Called by hitTestGiant only when
+  // sunClickable is true (the settled yellow star or red-giant hold while the mesh is
+  // visible), so the hexagon cursor never appears during dive/transition beats.
+  const sunMeshHit = (clientX: number, clientY: number): boolean => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    eruptPointerNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -(((clientY - rect.top) / rect.height) * 2 - 1),
+    );
+    eruptRaycaster.setFromCamera(eruptPointerNdc, camera);
+    return eruptRaycaster.intersectObject(sunRig.surface, false).length > 0;
+  };
+
   // Cursor hit-test exposed to HeroIsland (→ window.__bhHitGiant → the custom
-  // cursor's hexagon). Cheap no-op unless the settled, full-size, idle red giant is
-  // the body on screen (redGiantClickable — the same beat gate the click path uses),
-  // so the hexagon only appears during the red-giant beat AND over its projected disk.
+  // cursor's hexagon). Returns true for EITHER clickable body:
+  //   • the settled, full-size, idle red giant (redGiantClickable + giantSphereHit)
+  //   • the settled yellow-star photosphere mesh (sunClickable + sunMeshHit)
+  // Both use the same beat gates as their respective click paths, so the hexagon
+  // only appears during a resting/clickable beat AND over the body's projected surface.
   const hitTestGiant = (clientX: number, clientY: number): boolean =>
-    redGiantClickable && giantSphereHit(clientX, clientY);
+    (redGiantClickable && giantSphereHit(clientX, clientY)) ||
+    (sunClickable && sunMeshHit(clientX, clientY));
 
   // Unified pointerdown: the mesh and the particle giant are never both clickable, so
   // we branch on which body is on screen. The handler maps the pointer to canvas NDC
