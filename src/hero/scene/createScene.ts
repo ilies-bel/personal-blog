@@ -1616,6 +1616,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
             uEruptAge[i] = e.age;
           }
         }
+        // DEV live-tuning: window.__wave.flow scales the click-ripple domain warp (how hard
+        // the granulation cells stream with the wavefront) in real time. Absent → unchanged
+        // default of 1. Removed once the look is dialled in.
+        const waveFlow = readDebugNumber(DEBUG_WINDOW_KEYS.waveFlow);
+        if (typeof waveFlow === 'number') sunRig.surfaceMat.uniforms.uWaveFlow.value = waveFlow;
       }
     }
 
