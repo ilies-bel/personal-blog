@@ -73,6 +73,10 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
       uDetail: { value: 1 },
       uErupt: { value: uEruptInit },
       uEruptAge: { value: uEruptAgeInit },
+      // uWaveFlow: master strength of the click-ripple domain warp (the granulation cells
+      // streaming with the wavefront). 0 = surface texture frozen; 1 = tuned default. Lives
+      // purely in object space so there is no atlas/seam. Live-tunable via window.__wave.flow.
+      uWaveFlow: { value: 1 },
     },
     vertexShader: sunSurfaceVert,
     fragmentShader: sunSurfaceFrag,

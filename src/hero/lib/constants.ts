@@ -215,6 +215,19 @@ export const DEBUG_WINDOW_KEYS = {
    *  PARTICLE red giant so its jet + surface ripple can be inspected without clicking
    *  (pair with __bhMorph at a red-giant stage, e.g. ≈2.3). */
   giantErupt: '__bhGiantErupt',
+  /** DEV live-tune: master strength of the yellow-star click-ripple DOMAIN WARP (how hard
+   *  the granulation cells stream with the travelling wavefront). 0 = frozen texture, 1 =
+   *  default. Set window.__waveFlow in the console; removed once the look is dialled in. */
+  waveFlow: '__waveFlow',
+  /** DEV framing panel: override the held red-giant world radius live (only while pinned
+   *  at the held giant). Resolved into a base-scale factor and fed to applyLook. */
+  giantSize: '__bhGiantSize',
+  /** DEV framing panel: nudge the red-giant off-centre composition live on the X axis
+   *  (baked into RED_COMPOSITION; rides the red-giant beat weight so no snap). */
+  giantPosX: '__bhGiantPosX',
+  /** DEV framing panel: nudge the red-giant off-centre composition live on the Y axis
+   *  (baked into RED_COMPOSITION; rides the red-giant beat weight so no snap). */
+  giantPosY: '__bhGiantPosY',
   /** Force the device tier ('high' | 'low') so the low-end fallback can be tested on
    *  any machine without spoofing hardware. Read as a STRING via readDebugString and
    *  honoured FIRST by detectDeviceTier (overrides the cheap auto-detect signals). */

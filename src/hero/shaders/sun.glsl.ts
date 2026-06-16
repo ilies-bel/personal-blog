@@ -117,15 +117,81 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   //   ages and zeroes intensities once spent, so the shader just reads them.
   uniform vec4 uErupt[N_ERUPT];
   uniform float uEruptAge[N_ERUPT];
+  // uWaveFlow: master strength of the click ripple's DOMAIN WARP of the photosphere fBm —
+  // i.e. how hard the granulation cells themselves stream with the travelling wavefront.
+  // 0 = the surface texture is frozen (no-op); 1 = the tuned default. Lives entirely in
+  // object space (vObj), the SAME space as the noise, so there is no atlas / face / seam.
+  uniform float uWaveFlow;
   varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
   void main(){
     vec3 p = vObj * 2.4;
     float t = uTime * 0.05;
+
+    // === CLICK RIPPLE — 3D OBJECT-SPACE DOMAIN WARP ==========================
+    // A click deposits an expanding, decaying ring centred on uErupt[i].xyz. We build the
+    // ring ENTIRELY in object space (the angle from this fragment to the click centre), then
+    // push the fBm sample domain ALONG THE SURFACE so the actual granulation cells bunch up
+    // on the leading edge of the wavefront and stretch out behind it. Because every quantity
+    // here is a function of vObj (the same coordinate the noise uses), the ripple is a clean
+    // circle on the sphere with NO 2D atlas, NO cube faces, and therefore NO seam/"square".
+    // Slots accumulate, so two clicks interfere for free. waveDisp is added into BOTH the
+    // base granulation sample and the displaced network/extra octaves below.
+    vec3  waveDisp = vec3(0.0);   // domain push (object space) — moves the cells
+    float waveCrest = 0.0;        // unsigned wavefront envelope → subtle additive light
+    if (uWaveFlow > 0.0) {
+      for (int i = 0; i < N_ERUPT; i++){
+        float inten = uErupt[i].w;
+        if (inten <= 0.0) continue;                       // idle slot
+        vec3  ed  = normalize(uErupt[i].xyz);             // click centre (object space)
+        float age = uEruptAge[i];
+        float life = clamp(age / ERUPT_LIFE, 0.0, 1.0);
+        // geodesic angle from this fragment to the click centre (0 at centre → π at antipode)
+        float geo = acos(clamp(dot(normalize(vObj), ed), -1.0, 1.0));
+        // the wavefront marches outward in ANGLE with age; reach + speed scale with intensity.
+        // The lead crest sits at 'radius'; everything from the centre out to it is the part of
+        // the surface the wave has already swept through (where the trailing ripples live).
+        float reach  = 1.4 + 1.4 * inten;                 // max angular travel (radians)
+        float radius = reach * life;                      // current lead-crest angle
+        // CIRCULAR TRAVELLING WAVE: instead of one fat bump, this is a proper expanding ripple
+        // train. 'phase' measures how far BEHIND the lead crest this fragment is (>0 inside the
+        // ring, <0 ahead of it / untouched). A few damped sine oscillations packed into a
+        // gaussian envelope give the classic "drop in water" look: a bright lead ring followed
+        // by 1-2 fading concentric rings, all travelling outward together as 'radius' grows.
+        float WAVES   = 2.6;                              // number of concentric rings in the train
+        float WIDTH   = 0.42 + 0.20 * inten;              // radial extent of the whole ripple train
+        float phase   = (radius - geo) / WIDTH;           // 0 at the lead crest, grows back toward centre
+        // envelope: a smooth gaussian decay behind the lead crest, FEATHERED to zero just ahead
+        // of it (no hard edge) so the front of the ripple is soft. Strongest at the front, dying
+        // toward the centre as the energy radiates outward.
+        float ahead   = smoothstep(-0.25, 0.05, phase);   // 0 ahead of the front → 1 just behind it
+        float env     = exp(-phase * phase * 1.6) * ahead;
+        // the oscillation itself — concentric rings. cos so the lead crest (phase≈0) is a peak.
+        float osc     = cos(phase * WAVES * 3.14159);
+        // SIGNED radial displacement: the surface is shoved along the travel direction in a
+        // wave pattern → cells bunch on each ring crest and stretch in each trough.
+        float disp    = osc * env;
+        // global fade: dies over the eruption life AND as the ring nears its travel limit,
+        // so it never pops off at the edge.
+        float fade    = (1.0 - life) * (1.0 - smoothstep(reach*0.78, reach, geo));
+        // tangent direction on the sphere pointing AWAY from the click centre (the direction
+        // the wave travels) — project ed off the surface normal and normalise.
+        vec3  nrm  = normalize(vObj);
+        vec3  tang = ed - nrm * dot(ed, nrm);
+        tang = length(tang) > 1e-4 ? -normalize(tang) : vec3(0.0);  // points outward from centre
+        // push the fBm domain along the surface tangent by the signed wave (object space).
+        waveDisp += tang * (disp * fade * inten);
+        // unsigned envelope on the LEAD crest only → the subtle light ring tracks the front.
+        float lead = exp(-phase * phase * 5.0) * ahead;
+        waveCrest = max(waveCrest, lead * fade * inten);
+      }
+      waveDisp *= 0.5 * uWaveFlow;   // master gain — small: a little domain push moves cells a lot
+    }
+
     vec3 q;
     q.x = fbm(p + vec3(0.0,0.0,t));
     q.y = fbm(p + vec3(5.2,1.3,2.7) + t);
     q.z = fbm(p + vec3(1.7,9.2,3.4) - t);
-    float n = fbm(p + 3.2*q + t*0.5);
+    float n = fbm(p + 3.2*q + waveDisp + t*0.5);
     float m = clamp(n*0.5+0.5, 0.0, 1.0);
 
     // gold (yellow-star) photosphere ramp — a blazing 5772K sun: hot amber troughs,
@@ -177,8 +243,10 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
 
     // chromospheric network: the dark lava filaments between bright cells. Deepened
     // (mask 0.55 → 0.80, darker troughs) so the surface reads as the reference's
-    // high-contrast molten texture, not a smooth gold wash.
-    float ch = fbm(p*1.4 + 2.0*q.yzx + t*0.3);
+    // high-contrast molten texture, not a smooth gold wash. The wave domain-warp (waveDisp,
+    // scaled to this octave's frequency) rides along so the dark lanes stream with the
+    // wavefront too — the network moving is the most legible "the surface ripples" cue.
+    float ch = fbm(p*1.4 + 2.0*q.yzx + waveDisp*1.4 + t*0.3);
     float chMask = smoothstep(0.16, -0.05, ch);
     // ITEM 4: the YELLOW-star network lanes read as a dark GOLD (green lifted 0.018 ->
     // 0.07 off the old orange-red) so the intergranular veins don't pull the body average
@@ -197,14 +265,16 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // raised (0.72 → 0.95) so the troughs stay LUMINOUS — the reference disc is a bright
     // glowing surface, not a dark one with bright speckles. Keeps a strong swing for the
     // cell contrast, but the average is now well above 1.0 so the whole disc reads bright.
-    float gran = fbm(p*7.0 + t*1.0);
-    float gran2 = fbm(p*15.0 - t*0.6);
+    // the granulation octaves ride the SAME wave domain-warp (scaled to each frequency) so
+    // the bright cells bunch/stretch with the front in lock-step with the network above.
+    float gran = fbm(p*7.0 + waveDisp*7.0 + t*1.0);
+    float gran2 = fbm(p*15.0 + waveDisp*15.0 - t*0.6);
     // gran3: a FINER third octave (p*28, ~2x gran2) for the dense fine-scale stippling
     // the reference photosphere shows between the big cells — it busies up the surface
     // so it reads richly mottled rather than smoothly speckled. Small weight (0.07) and
     // the floor is dropped 0.95 → 0.90 to fund the extra ~+0.035 mean it adds, so the
     // average brightness is unchanged (the gold look / network / spots / rim are untouched).
-    float gran3 = fbm(p*28.0 + t*0.4);
+    float gran3 = fbm(p*28.0 + waveDisp*28.0 + t*0.4);
     col *= 0.90 + 0.50*(gran*0.5+0.5) + 0.10*(gran2*0.5+0.5) + 0.07*(gran3*0.5+0.5);
 
     // bright active-region speckle fades out toward the (quiet) red giant. On the
@@ -284,48 +354,23 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     col = mix(col, bcol, clamp(uBlue, 0.0, 1.0));
 
     // === CLICK ERUPTIONS ====================================================
-    // A geyser/prominence at the click point: a travelling surface RIPPLE plus an
-    // additive off-limb PLUME. Both read on the gold star AND the red giant, so they
-    // are added AFTER the gold/red/blue recolour above. Hot eruption colour tilts
-    // toward the surface palette so a tap looks like the surface flaring, not a decal.
+    // The travelling RIPPLE is no longer an additive bright ring (that read as a glowing
+    // decal). It is now the 3D object-space DOMAIN WARP at the top of main() — the actual
+    // granulation cells stream with the wavefront, so the SURFACE TEXTURE reacts. Here we
+    // only add (a) a VERY subtle hot crest riding that same wavefront (waveCrest, so the
+    // moving front catches a little light), and (b) the off-limb geyser PLUME, which is a
+    // separate prominence effect kept as-is.
     vec3 eruptHot = mix(vec3(1.30,1.02,0.55), vec3(1.00,0.46,0.10), uRed); // gold→sodium-orange ember (#E76418, hottest active-region accent)
-    // Recompute the (geyser-side) limb factor: a true off-limb plume should glow most
-    // where the surface grazes the silhouette toward the viewer, so we bias the plume
-    // additive by the wide fresnel limb already computed for the rim.
+    // subtle light on the moving wavefront (the warp is the star of the show; this is salt).
+    col += eruptHot * waveCrest * 0.18;
     for (int i = 0; i < N_ERUPT; i++){
       float inten = uErupt[i].w;
       if (inten <= 0.0) continue;                 // idle slot
       vec3  ed  = normalize(uErupt[i].xyz);       // eruption centre direction (object space)
       float age = uEruptAge[i];
       float life = clamp(age / ERUPT_LIFE, 0.0, 1.0);
-      // chord distance on the unit sphere from this fragment to the eruption centre
-      // (cheaper than acos(dot) and monotonic in the geodesic distance) — 0 at the
-      // centre, up to 2 at the antipode. The ring is a circle in this distance, so it
-      // expands as a true circle ACROSS the curved surface from the click point.
+      // chord distance on the unit sphere from this fragment to the eruption centre.
       float cd  = length(vObj - ed);
-
-      // --- travelling ripple (expanding bright shockwave across the photosphere) ---
-      // Radius grows with age; reach + width + strength scale with intensity so a long
-      // press throws a wider, stronger ring that travels further over the surface.
-      float reach  = 0.45 + 1.15 * inten;         // how far the ring travels (chord units)
-      float radius = reach * age / ERUPT_LIFE;    // ring radius marches outward with age
-      float width  = 0.10 + 0.22 * inten;         // crest thickness widens with intensity
-      // signed offset of this fragment from the ring crest; a Gaussian crest gives the
-      // bright leading edge, and a softer trailing lobe (only behind the crest) reads as
-      // the disturbed surface settling back down after the wave has passed.
-      float off    = cd - radius;
-      float crest  = exp(-pow(off / width, 2.0));                 // bright travelling crest
-      float trail  = exp(-pow(max(off, 0.0) / (width*2.2), 2.0)) * 0.35; // settle behind it
-      // fade the whole wave out over its life, and damp it as it reaches max radius so
-      // it doesn't pop off at the travel limit.
-      float ripFade = (1.0 - life) * (1.0 - smoothstep(reach*0.7, reach, cd));
-      float ripple  = (crest + trail) * ripFade * inten;
-      // brighten the surface where the wave is, and PERTURB the granulation as it passes
-      // (a quick fine ripple in the cells riding the crest) so the texture reacts, not
-      // just the luminance.
-      float gripple = fbm(p*9.0 + ed*4.0 + radius*6.0) * 0.5 + 0.5;
-      col += eruptHot * ripple * (0.85 + 0.6 * gripple);
-      col *= 1.0 + 0.30 * ripple;                 // multiplicative lift → cells brighten with it
 
       // --- geyser plume (bright spray erupting off the surface at the click point) ---
       // An additive glow tightly centred on the eruption direction (gaussian on the chord
