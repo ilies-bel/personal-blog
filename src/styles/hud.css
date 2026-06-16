@@ -487,6 +487,24 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-number {
   opacity: 1;
 }
 
+/* The LABEL (title + destination) is gated by the SAME data-discovered flag as the
+   number, so the text and the number reveal together — not the text up-front with the
+   number fading in behind it. Same fade as .hud-nav-number above (0.45s ease-out-quint),
+   so they rise in lockstep. The row keeps its fixed position/height (only opacity is
+   gated), so the rail never reflows — identical contract to the number's gate. */
+.hud-nav-button[data-discovered='false'] .hud-nav-copy {
+  opacity: 0;
+}
+.hud-nav-button[data-discovered='true'] .hud-nav-copy {
+  opacity: 1;
+}
+/* As with the number: once the HUD powers on, the open menu shows every row's label
+   regardless of discovery — the per-row cascade (max-width/transform) owns that motion. */
+body.hud-active .hud-nav-button[data-discovered='false'] .hud-nav-copy,
+body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-copy {
+  opacity: 1;
+}
+
 /* SELECTED NUMBER LIFT: the bare number replaced the masked glyph, but the glyph's
    current/hover glow rule targets .hud-nav-glyph only — so a selected row's NUMBER
    stayed dim grey while its title lit up. Mirror the glyph treatment for the number:
@@ -511,9 +529,13 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-number {
   transform: none;
   overflow: hidden;
   white-space: nowrap;
+  /* opacity matches the number's progressive-discovery fade (0.45s ease-out-quint,
+     see .hud-nav-number) so the label reveals IN STEP with its row number — the two
+     can't drift apart on discovery. The other props keep the hud-active menu-open
+     timing they always had. */
   transition:
     max-width 0.34s var(--ease-out-quint),
-    opacity 0.2s ease,
+    opacity 0.45s var(--ease-out-quint),
     transform 0.34s var(--ease-out-quint);
 }
 .hud-nav-button:hover .hud-nav-copy,
