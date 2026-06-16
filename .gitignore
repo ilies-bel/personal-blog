@@ -49,11 +49,5 @@ pnpm-debug.log*
 /DESIGN.md
 /PRODUCT.md
 
-# Mars orchestrator runtime state (mars.db, worktrees, locks, logs) — never commit
-/.mars/
-
 # local MCP server registration (machine-specific)
 /.mcp.json
-
-# local domain glossary / context notes
-/CONTEXT.md
