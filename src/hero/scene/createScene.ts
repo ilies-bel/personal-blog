@@ -807,14 +807,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     setDisk('uNebula', look.nebulaShader ? 1 : 0);
     setDisk('uDot', look.dot ? 1 : 0);
     setDisk('uNebulaGrow', look.nebulaGrow);
-    // nebula surviving-gas fraction: 1 at the still cloud → 0.01 by the end of the collapse.
-    // Drives how aggressively the REAL collapsing particles are consumed into the star so only
-    // ~1% are still lit at the end. Still density unchanged (uNebDensity=1 outside the window).
-    setDisk('uNebDensity', look.nebDensity);
-    // DEBUG A/B: window.__bhNebVac picks the vacuum end-state variant (see DEBUG_WINDOW_KEYS.nebVac).
-    // -1 (unset) = off / raw baked sim. Lets the two approaches be compared live during the collapse.
-    const nebVacOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebVac);
-    setDisk('uNebVac', typeof nebVacOverride === 'number' ? nebVacOverride : -1);
     // resolved sim blend (after the gravity-sim sample) + nebula light model strength.
     setDisk('uSimBlend', ctx.simBlend);
     setDisk('uNebLight', ctx.nebLight);

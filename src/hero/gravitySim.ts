@@ -168,6 +168,9 @@ const velocityShader = /* glsl */ `
   uniform float uCurlAmp;    // curl turbulence strength
   uniform float uCollapseDrive; // 0 = relaxed/home, 1 = full collapse
   uniform float uAccretedFrac;  // 0..1 fraction parked on the core (grows mass)
+  uniform float uFinish;        // 0 most of the bake → 1 over the last steps: a gentle terminal
+                                // inward NUDGE (constant magnitude, NOT distance-proportional) that
+                                // keeps stragglers drifting in without synchronizing arrivals.
   uniform float uCoreR;      // accretion core radius (turbulence fades inside)
   uniform float uTime;       // animation clock (curl drift)
   uniform float uFrozenTime; // FROZEN nebula time → stable home target
@@ -200,8 +203,15 @@ const velocityShader = /* glsl */ `
 
     float dist = length(pos);
 
-    // (1) softened central well; mass grows as the cloud feeds the star
-    float M = uM0 * (1.0 + 3.0*uAccretedFrac);
+    // (1) softened central well; mass grows MODERATELY as the cloud feeds the star.
+    // The growth factor was 3.0 (well quadruples by the end) — too hard: a central pull that
+    // ramps that much in the back half yanks ALL remaining grains in together, so the collapse
+    // "syncs up" late (every grain converging at once). But 0.8 was too SOFT — the well never
+    // got strong enough to pull the outermost orbiting grains all the way in, so a shell of gas
+    // survived to the floor (the cloud "never finished"). 1.4 is the middle: enough late pull to
+    // guarantee the whole cloud is consumed, while the 1/r^2 falloff still dominates the TIMING
+    // (inner grains accelerate far harder than outer ones) so arrivals stay STAGGERED, not synced.
+    float M = uM0 * (1.0 + 1.4*uAccretedFrac);
     float soft = dist*dist + uEps*uEps;
     vec3 aGrav = -uG * M * pos / pow(soft, 1.5);
 
@@ -220,6 +230,30 @@ const velocityShader = /* glsl */ `
     // blend the two regimes by the scroll-derived collapse drive
     vec3 acc = mix(aHome, aGrav + aCurl, uCollapseDrive);
 
+    // (4) TERMINAL NUDGE: the softened well (aGrav) weakens near the core, so a few grains never
+    // quite reach uCoreR within the bake and read as a cloud that never finishes. We add a gentle
+    // assist that ramps in over the back half (uFinish eased, no hard regime switch).
+    //
+    // CRITICAL: the nudge is CONSTANT-MAGNITUDE (a fixed inward accel), NOT proportional to the
+    // grain's remaining distance. A distance-proportional spring (the old aPullIn = k*(-pos)) is a
+    // pure SYNCHRONIZER: every grain then decays toward the core on the SAME exponential rate
+    // regardless of where it is, so they all arrive AT THE SAME TIME — exactly the "every particle
+    // converges at once in the second half" artifact. A constant inward nudge instead just biases
+    // every grain inward by a small fixed amount, leaving the 1/r^2 gravity (which accelerates inner
+    // grains far harder) as the dominant timing cue → arrivals stay STAGGERED and the infall reads
+    // as one continuous trickle to the end. Curl eases out with the same ramp for a clean settle.
+    // The nudge must be strong enough to break ORBIT for the outermost grains: with curl
+    // turbulence (uCurlAmp) sustaining tangential motion and the monotonic radius clamp
+    // forbidding outward steps, a far grain can settle into a near-constant-radius orbit that
+    // never falls in (its net radial velocity ≈ 0, so it just rides its shell). A constant
+    // inward bias of uG*0.12 reliably overcomes that balance so EVERY grain spirals down to the
+    // core and parks before the last snapshot — the cloud finishes fully vacuumed. Still constant
+    // magnitude (not distance-proportional), so arrivals stay staggered, not synchronized.
+    vec3 inwardDir = -normalize(pos + 1e-4);             // unit vector toward the core (distance-independent)
+    vec3 aPullIn = uFinish * uG * 0.12 * inwardDir;      // CONSTANT inward bias, strong enough to break orbit —
+                                                         // does NOT scale with distance, so far grains aren't rushed
+    acc = acc + (aPullIn - aCurl*uFinish) * uCollapseDrive;
+
     // semi-implicit Euler (update v here, x in the position pass)
     vel += acc * uDt;
     float damp = mix(uHomeDamp, uDamp, uCollapseDrive);
@@ -236,6 +270,7 @@ const positionShader = /* glsl */ `
   uniform float uDt;
   uniform float uCoreR;
   uniform float uParkRate;
+  uniform float uCollapseDrive; // 0 = relaxed/home (radius may grow back to the cloud), 1 = collapse
 
   void main(){
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -245,7 +280,22 @@ const positionShader = /* glsl */ `
 
     if(life <= 0.001){ gl_FragColor = P; return; } // parked: frozen on the surface
 
+    float rPrev = length(pos);                 // radius BEFORE this step
     pos += V.xyz * uDt;
+
+    // MONOTONIC-INWARD CLAMP: during the collapse a grain must never move FARTHER from the core
+    // than it already was. A few outer grains otherwise net OUTWARD on the first instants (the seed
+    // swirl is tangential to the START position, so after a step it has a small outward radial
+    // component and gravity is weak that far out) — the wrong-way chunk on the far edge. Cancelling
+    // outward VELOCITY leaks (semi-implicit Euler re-introduces it next step); clamping the RADIUS
+    // here is a hard guarantee. We scale the new position back onto the previous radius shell if it
+    // grew, preserving the TANGENTIAL move (the organic spiral) while forbidding any outward step.
+    // Gated by uCollapseDrive so the relaxed/home regime (where grains relax back OUT to the
+    // dispersed cloud on scroll-up) is untouched.
+    float rNew = length(pos);
+    if(uCollapseDrive > 0.5 && rNew > rPrev){
+      pos *= rPrev / max(rNew, 1e-6);
+    }
 
     // accretion: inside the core radius, park ON the (growing) photosphere shell
     // and ramp life → 0 over a few frames so the render side can dim/hand off.
@@ -439,6 +489,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   velVar.material.uniforms.uCurlAmp = { value: 0.8 };
   velVar.material.uniforms.uCollapseDrive = { value: 0 };
   velVar.material.uniforms.uAccretedFrac = { value: 0 };
+  velVar.material.uniforms.uFinish = { value: 0 }; // terminal convergence drive (ramped in the bake loop)
   // ABSORPTION RADIUS — 1.05 -> 1.25× coreR. The user wants the cloud WAY MORE absorbed,
   // so capture must be RELIABLE: with the stronger pull (uG 32) grains arrive at the core
   // FAST, and a razor-thin 1.05 shell let some fast grains skim THROUGH the capture band in
@@ -463,6 +514,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   // a CRISP swallow (the gas winks out fast at the surface) instead of a slow lingering
   // fade that read as the gas dissolving in mid-air rather than being eaten by the star.
   posVar.material.uniforms.uParkRate = { value: 0.14 };
+  posVar.material.uniforms.uCollapseDrive = { value: 0 }; // set to 1 for the bake (gates the monotonic-inward radius clamp)
 
   const error = gpu.init();
   if (error !== null) {
@@ -516,6 +568,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   // visible jump as grains stream in). uTime is frozen, so the bake stays deterministic.
   const SNAP_COUNT = 21;
   velVar.material.uniforms.uCollapseDrive.value = 1;
+  posVar.material.uniforms.uCollapseDrive.value = 1; // bake runs at full collapse → enable the radius clamp
 
   // persistent snapshot render targets — one per baked frame. Built via the GPGPU's
   // own factory so they match its targets EXACTLY (RGBA, same float/half-float type,
@@ -573,7 +626,15 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
         captureSnapshot();
         continue;
       }
-      velVar.material.uniforms.uAccretedFrac.value = Math.min(1, curStep / MAX_STEPS);
+      const stepFrac = curStep / MAX_STEPS;
+      velVar.material.uniforms.uAccretedFrac.value = Math.min(1, stepFrac);
+      // TERMINAL NUDGE: ease uFinish 0→1 across the back HALF of the bake (smoothstep, not a hard
+      // cut) so the small constant inward bias grows GRADUALLY — no abrupt second speed late in the
+      // collapse. It is deliberately gentle (constant magnitude, see the velocity shader) so the
+      // back half stays a STAGGERED trickle rather than a synchronized rush; a few last wisps may
+      // still be in flight at prog=1, which reads as a natural tail-off, not an unfinished cloud.
+      const t = Math.min(1, Math.max(0, (stepFrac - 0.3) / 0.7));
+      velVar.material.uniforms.uFinish.value = t * t * (3 - 2 * t); // smoothstep ease
       gpu.compute();
       curStep++;
       budget--;

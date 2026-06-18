@@ -142,11 +142,6 @@ export interface StarState {
   starFormed: number;
   /** cloud brightness multiplier across the collapse (bright infall → fade out). 1 outside. */
   cloudBright: number;
-  /** nebula SURVIVING-gas fraction across the collapse: 1 at the dispersed/still cloud (prog 0)
-   *  → 0.01 at full collapse (prog 1). The shader force-vacuums the grains ranked above this into
-   *  the star (pulled to the core + consumed by accretion), so the cloud streams INTO the star
-   *  rather than vanishing in place. 1 (no-op) outside the window. uNebDensity. */
-  nebDensity: number;
 
   // --- supernova flash (rides the time-based nova envelope) ---
   /** particle-side shock-breakout glow: 1.45 * nova. uFlash. */
@@ -349,15 +344,18 @@ export function lifecycle(input: LifecycleInput): StarState {
   // growing core (1.5 > 0.85 ⇒ the star always trails the infall). Visual size is
   // `0.012 + 0.988*starFormed` in frame() (a hot pinpoint → full star).
   const starFormed = Math.pow(prog, 1.5);
-  // sim owns the disk across the window and HOLDS near full through the deep end so
-  // the accreting gas keeps reading right up to the floor (no bare-core frame). It
-  // eases in over a wide edge band (/0.16) and only tapers in the final stretch
-  // (1 - 0.45*prog, not 0.85) so the sim-driven infall doesn't thin out early.
-  // simBlend uses the EXTENDED geo gate too, so the sim-collapsed (converged) gas is held
-  // through the floor crossfade instead of snapping back to the analytic dispersed nebula
-  // (and, via nebulaShader -> uNebula, suppresses the shader's red-giant default there).
-  // At the floor prog~1, so it sits at its window-floor value (~0.55) across the band.
-  const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
+  // sim owns the disk across the window and ramps to FULL (1.0) by the floor so the gas the
+  // visitor sees is PURELY the baked sim — which physically vacuums every grain into the core
+  // (the bake parks 100% of grains). The old taper (1 - 0.45*prog) held simBlend at only ~0.55
+  // at the floor, so 45% of the displayed gas was the ANALYTIC dispersed nebula at full density
+  // — and that analytic contribution has no accretion wink-out, so it read as a full cloud that
+  // never vacuums and only vanishes at the hard ownership swap (the exact "it just disappears"
+  // bug). Removing the taper lets the sim fully own the gas at the deep end, so the cloud empties
+  // because the grains actually fell in. It still eases IN over a wide edge band (/0.16) so the
+  // sim takes over smoothly from the still nebula with no pop. Uses the EXTENDED geo gate so the
+  // sim-collapsed gas is held through the floor crossfade (and via nebulaShader keeps uNebula on,
+  // suppressing the shader's red-giant default there).
+  const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16);
   // cloud DENSITY/brightness — decays LINEARLY across the full collapse window in lockstep
   // with the star's growth. prog runs 0→1 over the window (stage 3.5 → 3.0); starFormed =
   // prog^1.5 also reaches 1 at prog=1, so (1 - prog) density makes the last drop of gas land
@@ -372,12 +370,6 @@ export function lifecycle(input: LifecycleInput): StarState {
   // linear: full gas at window top (prog 0) → 0 exactly as the yellow star completes (prog 1).
   const invDensity = 1 - prog; // linear: full gas at window top → 0 exactly as the yellow star completes
   const cloudBright = 1 + inWindow * ((1 + 0.8 * feedBump) * invDensity - 1);
-  // nebula SURVIVING-gas fraction across the collapse: the diffuse gas KEEPS its current density
-  // at the still/dispersed cloud (prog 0 → 1.0); as the collapse proceeds the shader vacuums the
-  // doomed grains INTO the star until only 1% are still lit at the end (prog 1 → 0.01). LINEAR in
-  // prog. Uses the EXTENDED geo gate (inWindowGeo) so it tracks the collapse geometry through the
-  // floor crossfade; exactly 1.0 (no-op) outside the window, so the bloom/still nebula are untouched.
-  const nebDensity = 1 - inWindowGeo * 0.99 * prog; // 1 at the still cloud → 0.01 at full collapse
   // the shader runs its nebula geometry across the real nebula AND the collapse
   // window, so `pos` holds the analytic nebula placement (the sim's seed/home)
   // whenever the sim blend is active.
@@ -729,7 +721,6 @@ export function lifecycle(input: LifecycleInput): StarState {
     simBlend,
     starFormed,
     cloudBright,
-    nebDensity,
     flash,
     inYRWindow,
     meshSide,
