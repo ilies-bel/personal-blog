@@ -51,3 +51,6 @@ pnpm-debug.log*
 
 # local MCP server registration (machine-specific)
 /.mcp.json
+
+# codegraph local index (regenerable via `codegraph init`)
+/.codegraph/
