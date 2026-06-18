@@ -344,15 +344,18 @@ export function lifecycle(input: LifecycleInput): StarState {
   // growing core (1.5 > 0.85 ⇒ the star always trails the infall). Visual size is
   // `0.012 + 0.988*starFormed` in frame() (a hot pinpoint → full star).
   const starFormed = Math.pow(prog, 1.5);
-  // sim owns the disk across the window and HOLDS near full through the deep end so
-  // the accreting gas keeps reading right up to the floor (no bare-core frame). It
-  // eases in over a wide edge band (/0.16) and only tapers in the final stretch
-  // (1 - 0.45*prog, not 0.85) so the sim-driven infall doesn't thin out early.
-  // simBlend uses the EXTENDED geo gate too, so the sim-collapsed (converged) gas is held
-  // through the floor crossfade instead of snapping back to the analytic dispersed nebula
-  // (and, via nebulaShader -> uNebula, suppresses the shader's red-giant default there).
-  // At the floor prog~1, so it sits at its window-floor value (~0.55) across the band.
-  const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16) * (1 - 0.45 * prog);
+  // sim owns the disk across the window and ramps to FULL (1.0) by the floor so the gas the
+  // visitor sees is PURELY the baked sim — which physically vacuums every grain into the core
+  // (the bake parks 100% of grains). The old taper (1 - 0.45*prog) held simBlend at only ~0.55
+  // at the floor, so 45% of the displayed gas was the ANALYTIC dispersed nebula at full density
+  // — and that analytic contribution has no accretion wink-out, so it read as a full cloud that
+  // never vacuums and only vanishes at the hard ownership swap (the exact "it just disappears"
+  // bug). Removing the taper lets the sim fully own the gas at the deep end, so the cloud empties
+  // because the grains actually fell in. It still eases IN over a wide edge band (/0.16) so the
+  // sim takes over smoothly from the still nebula with no pop. Uses the EXTENDED geo gate so the
+  // sim-collapsed gas is held through the floor crossfade (and via nebulaShader keeps uNebula on,
+  // suppressing the shader's red-giant default there).
+  const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16);
   // cloud DENSITY/brightness — decays LINEARLY across the full collapse window in lockstep
   // with the star's growth. prog runs 0→1 over the window (stage 3.5 → 3.0); starFormed =
   // prog^1.5 also reaches 1 at prog=1, so (1 - prog) density makes the last drop of gas land
