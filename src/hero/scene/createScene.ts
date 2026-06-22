@@ -1219,12 +1219,32 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // earlier "scrolling back and forth bugs the animation" failure). uSimBlend morphs
     // the disk from the analytic nebula placement onto the baked sim positions.
     let simBlend = 0;
-    // Pre-warm the baked flipbook as soon as the nebula is on screen (look.nebulaShader
-    // covers the nebula hold AND the collapse window) — the incremental bake then has the
-    // whole nebula beat to finish, so the snapshots are ready by the time the visitor
-    // actually scrolls into the collapse. bake() is resumable + self-completing.
-    if (gravitySim.available && look.nebulaShader && !gravitySim.isBaked()) gravitySim.bake();
-    if (gravitySim.available && (look.simBlend > 0.001 || look.collapse > 0.001)) {
+    // PRE-WARM the baked flipbook EARLY — from the yellow star onward (stage ≥ 2.3, well
+    // before the collapse window at 3.0–3.5). The bake takes ~0.6s; triggering it only once
+    // the nebula was already on screen (look.nebulaShader) left a fast scroller inside the
+    // collapse before it finished — the bake-race behind the "plays backward once" bug. By
+    // starting the (incremental, idempotent, resumable) bake a whole chapter earlier, it is
+    // almost always complete by the time the visitor reaches the collapse, so the gate below
+    // engages the sim immediately with no visible "held dispersed" gap. The OR keeps the
+    // original nebula-on trigger so a visitor who lands directly in the nebula (deep link /
+    // restored scroll) still kicks the bake. Reading the eased `stage` here is fine — this is
+    // a one-shot warm-up trigger, not a per-frame look value.
+    const collapseApproaching = stage >= 2.3;
+    if (gravitySim.available && (collapseApproaching || look.nebulaShader) && !gravitySim.isBaked()) {
+      gravitySim.bake();
+    }
+    // GATE THE COLLAPSE ON A COMPLETE FLIPBOOK. The baked sim is the ONE beat that is not
+    // a pure function of scroll: its snapshots take ~0.6s to bake the first time the
+    // nebula is reached. If we sampled it before the bake finished, sampleAt() clamps to
+    // the deepest snapshot captured SO FAR — so as the remaining snapshots fill in over
+    // the next frames, the rendered gas positions advance ON THEIR OWN (decoupled from
+    // scroll), which reads as the collapse "playing in the wrong direction once" on first
+    // sight (and never again, because the flipbook is then cached). Until isBaked(), we
+    // keep simBlend = 0 so the disk shows the ANALYTIC dispersed nebula (== snapshot 0,
+    // what the sim seeds from anyway) instead of a half-baked, self-playing collapse. Once
+    // the flipbook is whole the collapse engages and is pure-functional like every other
+    // beat — scrub-anywhere, both directions, no rogue motion.
+    if (gravitySim.available && gravitySim.isBaked() && (look.simBlend > 0.001 || look.collapse > 0.001)) {
       const sample = gravitySim.sampleAt(look.collapse);
       if (sample) {
         diskMatPrimary.uniforms.uSimPos.value = sample.texA;
