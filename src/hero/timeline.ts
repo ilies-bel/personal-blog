@@ -1,4 +1,10 @@
-import { clamp01, segment } from './scroll';
+import {
+  clamp01,
+  segment,
+  LIFECYCLE_DIRECTION,
+  lifecycleProgress,
+  type LifecycleDirection,
+} from './scroll';
 import {
   cameraBaseForLifecycleP,
   DOT_HOLD_END,
@@ -23,7 +29,7 @@ import {
 // LIFECYCLE DIRECTION — the single toggle that decides which way time runs.
 //
 // There are two distinct progress values, kept deliberately separate so the
-// story can be reversed later without touching the renderer or the shaders:
+// story can be reversed without touching the renderer or the shaders:
 //
 //   userScrollProgress — the raw scroll position (0 at top, 1 at bottom). This
 //     is what the visitor physically controls; it always increases as they
@@ -33,29 +39,29 @@ import {
 //     1 - userScrollProgress, so the SAME downward scroll walks the lifecycle
 //     the other way.
 //
-// ACTIVE direction — the lifecycle now runs REVERSE as the visitor scrolls DOWN:
+// ACTIVE direction — the lifecycle runs REVERSE as the visitor scrolls DOWN:
 //     black hole -> reverse supernova -> red giant -> yellow star -> nebula ->
 //     pale blue dot
 // So the top of the page (userScrollProgress = 0) OPENS ON THE BLACK HOLE — the
 // big hero you land on — and the bottom (userScrollProgress = 1) RESOLVES TO THE
 // LONELY PALE BLUE DOT, the quiet speck the arc winds down to.
 //
-// The whole inversion is THIS ONE FLAG. Every downstream system (camera poses,
-// the legacy "stage" mapping, scene selection, beats, HUD) reads lifecycleProgress
-// through legacyStageForProgress / cameraPoseForProgress / sceneForProgress, so
-// flipping LIFECYCLE_DIRECTION is the only edit it requires here. The shader
+// The whole inversion is THIS ONE FLAG (LIFECYCLE_DIRECTION). Every downstream
+// system (camera poses, the legacy "stage" mapping, scene selection, beats, HUD)
+// reads lifecycleProgress through legacyStageForProgress / cameraPoseForProgress /
+// sceneForProgress, so flipping the flag is the only edit it requires. The shader
 // "stage" coordinate stays untouched — lifecycle.ts remains a pure function of it.
+//
+// The flag + lifecycleProgress() now LIVE in scroll.ts (the leaf module with no
+// imports) so sceneTable.ts can read the seam WITHOUT importing this file — that
+// import was the one edge in the sceneTable ⇄ timeline cycle, which made a
+// server-rendered consumer (BaseLayout's sub-nav, importing HUD_NAV_ITEMS from
+// sceneTable) hit a TDZ during the Astro prerender. They are RE-EXPORTED here so
+// this module's existing importers (ManifestoOverlay, HudNavigation,
+// magneticSettle) resolve '../timeline' UNCHANGED.
 // ===========================================================================
-export type LifecycleDirection = 'normal' | 'reverse';
-export const LIFECYCLE_DIRECTION: LifecycleDirection = 'reverse';
-
-/** Map the raw scroll value (0..1, increases scrolling down) to the value the
- *  lifecycle renderer consumes. Normal = identity; reverse = mirror. This is the
- *  ONLY place direction is applied — keep it the single seam. */
-export function lifecycleProgress(userScrollProgress: number): number {
-  const p = clamp01(userScrollProgress);
-  return LIFECYCLE_DIRECTION === 'reverse' ? 1 - p : p;
-}
+export { LIFECYCLE_DIRECTION, lifecycleProgress };
+export type { LifecycleDirection };
 
 type Vec3Tuple = readonly [number, number, number];
 

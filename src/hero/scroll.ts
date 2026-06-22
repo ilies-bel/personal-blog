@@ -27,6 +27,32 @@ export function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
+// ===========================================================================
+// LIFECYCLE DIRECTION SEAM
+//
+// The single seam that decides whether the stellar lifecycle plays FORWARD
+// (top = pale blue dot) or in REVERSE (top = the big black hole you land on).
+// It lives HERE — the leaf scroll module with no imports — rather than in
+// timeline.ts so that sceneTable.ts (the pure data layer) can read it WITHOUT
+// importing timeline.ts. That import was the one edge in the
+// sceneTable ⇄ timeline cycle; routing this single function through the leaf
+// breaks the cycle, so a server-rendered consumer (BaseLayout's sub-nav, which
+// imports HUD_NAV_ITEMS from sceneTable) no longer hits a TDZ
+// ("Cannot access 'HUD_NAV_ITEMS' before initialization") during the Astro
+// prerender. timeline.ts RE-EXPORTS both names, so its existing importers
+// (ManifestoOverlay, HudNavigation, magneticSettle) are unchanged.
+// ===========================================================================
+export type LifecycleDirection = 'normal' | 'reverse';
+export const LIFECYCLE_DIRECTION: LifecycleDirection = 'reverse';
+
+/** Map the raw scroll value (0..1, increases scrolling down) to the value the
+ *  lifecycle renderer consumes. Normal = identity; reverse = mirror. This is the
+ *  ONLY place direction is applied — keep it the single seam. */
+export function lifecycleProgress(userScrollProgress: number): number {
+  const p = clamp01(userScrollProgress);
+  return LIFECYCLE_DIRECTION === 'reverse' ? 1 - p : p;
+}
+
 export function segment(globalProgress: number, start: number, end: number): number {
   if (end === start) return globalProgress >= end ? 1 : 0;
   return clamp01((globalProgress - start) / (end - start));
