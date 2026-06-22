@@ -39,7 +39,7 @@
  * .article-hud / .article-hud-rail styles from article.css — same mono-gold instrument
  * language as the other articles' HUD, WITHOUT the section readout (this post has no
  * `##` headings, so a 00/00 sectioned HUD would be nonsense). The mount script sets the
- * rail's --article-progress custom property from window scroll. The rail keeps updating
+ * rail's --scene-progress custom property from window scroll. The rail keeps updating
  * under reduced motion (a CSS height fill is not vestibular motion).
  */
 ---
@@ -58,7 +58,7 @@
 {/* Reading-progress rail. Reuses the .article-hud / .article-hud-rail styling so the
     gauge speaks the same mono-gold instrument language as every other article, WITHOUT
     the section readout (this post has no `##` sections — a sectioned HUD would track
-    00/00 nonsense). The mount script sets `--article-progress` on the rail from window
+    00/00 nonsense). The mount script sets `--scene-progress` on the rail from window
     scroll. Pointer-transparent + position:fixed via .article-hud, so it never crowds
     the prose column. */}
 <div class="article-hud tesseract-progress" data-tesseract-rail aria-hidden="true">
@@ -109,7 +109,7 @@
     sizeToViewport();
 
     // Reading-progress rail — same custom property contract as ArticleHud's rail
-    // (article.css cascades `--article-progress` down to .article-hud-rail-fill's
+    // (article.css cascades `--scene-progress` down to .article-hud-rail-fill's
     // height). Kept here so the rail stays driven even when scroll-coupled dolly is
     // suppressed by reduced motion.
     const rail = document.querySelector<HTMLElement>('[data-tesseract-rail]');
@@ -130,7 +130,7 @@
     };
     const updateProgress = (): void => {
       const p = computeReadProgress();
-      if (rail) rail.style.setProperty('--article-progress', String(p));
+      if (rail) rail.style.setProperty('--scene-progress', String(p));
       // Reduced motion suppresses the scroll-coupled dolly (the rig stays frozen on
       // its single static frame); the rail still moves because a CSS height fill is
       // not vestibular motion. The check is re-evaluated below.
@@ -145,7 +145,7 @@
       if (rail) {
         const onScrollReduced = (): void => {
           const p = computeReadProgress();
-          rail.style.setProperty('--article-progress', String(p));
+          rail.style.setProperty('--scene-progress', String(p));
         };
         onScrollReduced();
         window.addEventListener('scroll', onScrollReduced, { passive: true });

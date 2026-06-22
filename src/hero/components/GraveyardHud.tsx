@@ -1,30 +1,35 @@
 // GraveyardHud — the graveyard-page cockpit, written in the hero's mono-gold HUD
 // language. A SIBLING of ArticleHud (the article version), wired the same way:
 // it is its own island, so it reads scroll from the same window seam
-// `article:progress` that ArticleScene dispatches — the SAME engine driver, just a
+// `scene:progress` that ArticleScene dispatches — the SAME engine driver, just a
 // different chrome consumer. The page never has more than one of (ArticleHud,
 // GraveyardHud) mounted, so the shared event channel can never collide.
 //
 // What the HUD reads like:
 //   • a thin left PROGRESS RAIL that fills with page scroll (mirrors hud.css);
-//   • a SPECIMEN READOUT — `SPECIMEN 02 / 02 · HEYDANIEL` — the active entry index
-//     over total and the active entry's NAME in mono caps (no celestial-beat line —
-//     the graveyard is not a navigator across beats, it is a logged ledger);
-//   • a quiet `INTERRED` label so the readout reads as a specimen drawer, not a
-//     reading gauge.
+//   • a SPECIMEN READOUT — `SPECIMEN 02 / 02 · HEYDANIEL · INTERRED 2024` — the
+//     active entry index over total, the active entry's NAME in mono caps, and the
+//     real interment year from the specimen record. Each readout is a JUMP-LINK to
+//     its entry, so the rail navigates the ledger rather than just narrating it.
 //
-// CROSS-ROOT WIRING: same window-event seam as ArticleHud — ArticleScene throttles
-// the event, this island listens once, the IntersectionObserver tracks which
-// `.graveyard-entry` is in the upper third of the viewport (the "you are here"
-// position) and updates the readout.
-import { useEffect, useState } from 'react';
-import { ARTICLE_PROGRESS_EVENT, type ArticleProgressDetail } from './ArticleScene';
+// HERO-PARITY: like ArticleHud, this reads the live getStage `stage` off the same
+// event and flips the readout's [data-zone] to a dark stroke over bright lifecycle
+// beats — so the cockpit COOLS toward the black hole as you descend the list, the
+// same instrument behaviour as the hero. No graveyard-private colour logic.
+//
+// CROSS-ROOT WIRING: the scroll listener + scroll-spy live in the shared
+// useSceneProgress hook (ArticleHud uses the same), so the two HUDs can't drift.
+import { useMemo } from 'react';
+import { brightZoneFor } from '../timeline';
+import { pad2, useScrollSpy, useSceneProgress } from './useSceneProgress';
 
 interface GraveyardEntry {
-  /** DOM id of the `.graveyard-entry` element (so the spy can observe it). */
+  /** DOM id of the `.graveyard-entry` element (so the spy can observe + link it). */
   id: string;
   /** Mono-caps display name (e.g. `KEYWORDLENS`). */
   name: string;
+  /** Year the project was interred (e.g. `2024`) — shown as `INTERRED 2024`. */
+  interred: string;
 }
 
 interface GraveyardHudProps {
@@ -32,88 +37,52 @@ interface GraveyardHudProps {
   entries: readonly GraveyardEntry[];
 }
 
-const pad2 = (n: number): string => String(n).padStart(2, '0');
-
 export default function GraveyardHud({ entries }: GraveyardHudProps) {
-  const [progress, setProgress] = useState(0);
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  // Listen to ArticleScene's progress broadcasts. One window listener; the scene
-  // throttles the event so this stays cheap.
-  useEffect(() => {
-    const onProgress = (e: Event): void => {
-      const detail = (e as CustomEvent<ArticleProgressDetail>).detail;
-      if (!detail) return;
-      setProgress(detail.progress);
-    };
-    window.addEventListener(ARTICLE_PROGRESS_EVENT, onProgress as EventListener);
-    return () => window.removeEventListener(ARTICLE_PROGRESS_EVENT, onProgress as EventListener);
-  }, []);
-
-  // Entry scroll-spy: observe the real entry elements (each `<article>` carries the
-  // id the layout assigned, e.g. `keywordlens`). The active entry is the last one
-  // whose top has passed the upper third of the viewport — same "you are here" feel
-  // as the hero rail / ArticleHud.
-  useEffect(() => {
-    if (entries.length === 0 || typeof IntersectionObserver === 'undefined') return;
-    const nodes = entries
-      .map((s) => document.getElementById(s.id))
-      .filter((el): el is HTMLElement => el !== null);
-    if (nodes.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      () => {
-        setActiveIndex(activeIndexFromNodes(nodes));
-      },
-      { rootMargin: '-33% 0px -67% 0px', threshold: 0 },
-    );
-    nodes.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [entries]);
+  const { progress, stage } = useSceneProgress();
+  const targetIds = useMemo(() => entries.map((e) => e.id), [entries]);
+  const activeIndex = useScrollSpy(targetIds);
 
   const total = entries.length;
-  const activeName = entries[activeIndex]?.name ?? '';
+  const active = entries[activeIndex];
   const pct = Math.round(progress * 100);
+  // Reuse the hero's bright-zone test so the readout flips to a dark stroke when the
+  // descent scrubs through a bright beat (supernova flash / yellow star) — identical
+  // [data-zone] swap as the hero and ArticleHud, no new colour logic.
+  const zone = brightZoneFor(stage) ? 'bright' : 'dark';
 
   return (
     <aside
       className="article-hud graveyard-hud"
+      data-zone={zone}
       aria-label="Graveyard ledger position"
     >
       {/* PROGRESS RAIL — reuses the article HUD geometry/tokens. The
-          --article-progress custom property drives the fill height in article.css. */}
+          --scene-progress custom property drives the fill height in article.css. */}
       <div
         className="article-hud-rail"
         aria-hidden="true"
-        style={{ '--article-progress': progress } as React.CSSProperties}
+        style={{ '--scene-progress': progress } as React.CSSProperties}
       >
         <span className="article-hud-rail-fill" />
       </div>
 
-      {/* SPECIMEN READOUT — `SPECIMEN 02 / 02` + the active entry name, mono caps.
-          A quiet `INTERRED` label below so the readout reads as a drawer label, not
-          a reading gauge. */}
-      <div className="article-hud-readout">
+      {/* SPECIMEN READOUT — `SPECIMEN 02 / 02` + the active entry name + the real
+          interment year, mono caps. The whole readout is a jump-link to the active
+          entry, so the rail navigates the ledger (pointer-events re-enabled on the
+          link itself; the surrounding chrome stays transparent). */}
+      <a
+        className="article-hud-readout graveyard-hud-readout"
+        href={active ? `#${active.id}` : undefined}
+        aria-label={active ? `Jump to specimen ${activeIndex + 1}: ${active.name}` : undefined}
+      >
         <span className="article-hud-index" aria-hidden="true">
           {total > 0 ? `SPECIMEN ${pad2(activeIndex + 1)} / ${pad2(total)}` : `${pct}%`}
         </span>
-        {activeName && <span className="article-hud-section">{activeName}</span>}
+        {active?.name && <span className="article-hud-section">{active.name}</span>}
         <span className="article-hud-beat" aria-hidden="true">
-          INTERRED
+          {active?.interred ? `INTERRED ${active.interred}` : 'INTERRED'}
         </span>
-      </div>
+      </a>
     </aside>
   );
-}
-
-/** The active entry index = the last entry whose top has crossed the spy line
- *  (top third of the viewport). Pure read of live layout — no React state. */
-function activeIndexFromNodes(nodes: readonly HTMLElement[]): number {
-  const spyLine = window.innerHeight / 3;
-  let index = 0;
-  for (let i = 0; i < nodes.length; i += 1) {
-    if (nodes[i].getBoundingClientRect().top <= spyLine) index = i;
-    else break;
-  }
-  return index;
 }

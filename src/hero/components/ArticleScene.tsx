@@ -22,14 +22,15 @@ import { detectDeviceTier } from '../lib/config';
 import { isWebGLUnavailableError, type SceneHandle } from '../scene/types';
 import { PosterSlideshow, resolveReducedMotionNow } from './reduced-motion';
 
-/** Custom-event name the scene publishes each meaningful scroll step. ArticleHud
- *  (a sibling island — islands don't share React context) listens for it on window
- *  rather than prop-drilling across roots. Mirrors the hero's window-event seam
- *  (HUD_POWER_EVENT et al.) so the two HUDs speak the same dialect. */
-export const ARTICLE_PROGRESS_EVENT = 'article:progress';
+/** Custom-event name the scene publishes each meaningful scroll step. The reading
+ *  HUDs (ArticleHud, GraveyardHud — sibling islands that don't share React context)
+ *  listen for it on window rather than prop-drilling across roots. Named `scene:*`
+ *  (not `article:*`) because the graveyard page consumes the SAME seam; mirrors the
+ *  hero's window-event grammar (HUD_POWER_EVENT et al.) so every HUD speaks it. */
+export const SCENE_PROGRESS_EVENT = 'scene:progress';
 
-export interface ArticleProgressDetail {
-  /** 0 at the top of the article, 1 at the bottom of its scroll range. */
+export interface SceneProgressDetail {
+  /** 0 at the top of the page's scroll range, 1 at the bottom. */
   progress: number;
   /** The getStage transition-space value the scene is currently pinned to —
    *  lerp(journey[0], journey[1], easedProgress). Published so chrome can name the
@@ -108,7 +109,7 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
       if (!force && Math.abs(p - publishedRef.current) < PROGRESS_MIN_DELTA) return;
       publishedRef.current = p;
       window.dispatchEvent(
-        new CustomEvent<ArticleProgressDetail>(ARTICLE_PROGRESS_EVENT, {
+        new CustomEvent<SceneProgressDetail>(SCENE_PROGRESS_EVENT, {
           detail: { progress: p, stage: stageFor(p) },
         }),
       );
