@@ -24,8 +24,12 @@
 // reverse import would create a cycle). The easing instances are the same math
 // as timeline.ts so the regenerated curve is bit-for-bit identical.
 // ===========================================================================
-import { clamp01, segment } from './scroll';
-import { lifecycleProgress } from './timeline';
+// lifecycleProgress is imported from scroll.ts (the leaf module), NOT timeline.ts:
+// importing it from timeline created a sceneTable ⇄ timeline cycle that made a
+// server-rendered consumer (BaseLayout's sub-nav importing HUD_NAV_ITEMS) hit a
+// TDZ during the Astro prerender. scroll.ts now owns the direction seam; this file
+// stays free of any timeline import, so it has no inbound cycle.
+import { clamp01, segment, lifecycleProgress } from './scroll';
 
 // --------------------------------------------------------------------------
 // Easing (the SAME instances the timeline used — identical math, so the
@@ -833,7 +837,11 @@ export const SCENES: readonly LifecycleScene[] = [
       glyphSrc: 'glyphs/glyph-black-hole.svg',
       motion: 'pulse',
       label: 'BLACK HOLE',
-      destination: 'Colophon',
+      // The section the black-hole row links to. "Inspiration" — the same word the
+      // black-hole MARKER card uses (eyebrow 'INSPIRATION / 01', "Why this site
+      // exists") so the rail, the reading-page nav and the on-scene marker all name
+      // this destination identically. (Was 'Colophon', which drifted from the marker.)
+      destination: 'Inspiration',
       stage: 0,
       href: 'posts/thanks-for-scrolling-to-the-bottom',
     },

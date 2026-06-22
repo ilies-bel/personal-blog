@@ -110,10 +110,21 @@
   border-radius: var(--radius-sm);
 }
 
-/* Mono-uppercase label — a gold underline sweeps in on hover/focus (mirrors the
-   .overlay-blog-label reveal, but the label here is ALWAYS shown, so only the
-   underline animates). Drawn as a bottom-anchored background gradient sized
-   0%→100% width so the label's box can clip it cleanly. */
+/* Body·Section PAIR — the two-line stack that mirrors the hero rail's
+   .hud-nav-copy (a vertical grid with the bright body title over the dim section
+   line). Same gap + uppercase mono family so the reading-page nav reads as the
+   same instrument. */
+.subnav-copy {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+/* Mono-uppercase BODY label (the celestial body) — bright title line. A gold
+   underline sweeps in on hover/focus (mirrors the .overlay-blog-label reveal, but
+   the label here is ALWAYS shown, so only the underline animates). Drawn as a
+   bottom-anchored background gradient sized 0%→100% width so the label's box can
+   clip it cleanly. */
 .subnav-label {
   display: inline-block;
   line-height: 1;
@@ -129,6 +140,19 @@
 }
 .subnav-link:hover .subnav-label,
 .subnav-link:focus-visible .subnav-label { background-size: 100% 1px; }
+
+/* Dim SECTION line (the destination the row links to) — the muted second line,
+   matching the hero rail's .hud-nav-destination (smaller tracking-wide mono, a
+   step dimmer than the body title). Stays dim on hover so only the body brightens,
+   exactly like the rail. */
+.subnav-section {
+  display: inline-block;
+  line-height: 1;
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  color: var(--fg-faint);
+  transition: color 0.16s ease;
+}
 
 /* Two-digit mono index + the target-lock corner ticks are HIDDEN by default and
    only revealed on the locked (current) section below. */
@@ -172,9 +196,16 @@
 .subnav-link[aria-current='page'] .subnav-label {
   background-size: 100% 1px;
 }
+/* Current section's dim section line lifts a step (still secondary to the body)
+   so the locked row reads as one brighter unit — mirrors the rail's current-row
+   destination brightening. */
+.subnav-link[aria-current='page'] .subnav-section {
+  color: var(--fg-dim);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .subnav-label { transition: none; }
+  .subnav-label,
+  .subnav-section { transition: none; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

@@ -10,6 +10,12 @@ import CustomCursor from '../components/CustomCursor.astro';
 // transition:persist (the dive overlay, the custom cursor) survive each swap.
 import { ClientRouter } from 'astro:transitions';
 import { SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
+// The hero's lifecycle nav rows (celestial body label + section destination + href),
+// in physical scroll order. The single source of truth for the rail; the reading-
+// page sub-nav projects it below so the two correspond and can never drift. Imported
+// from the PURE data layer (sceneTable.ts), not HudNavigation.tsx, so the Astro
+// frontmatter pulls no React into this layout.
+import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 // The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
 // (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
@@ -50,30 +56,55 @@ const norm = (p: string) => p.replace(/\/+$/, '') || '/';
 const isActive = (p: string) => norm(href(p)) === path;
 const writingRoot = norm(href('writing'));
 const postsRoot = norm(href('posts'));
-const isWritingActive = path === writingRoot || path.startsWith(`${postsRoot}/`);
+// The black hole links to a POST (its own essay, "Inspiration"), so it lives under
+// the /posts/ subtree that the Writing/nebula row otherwise claims. Resolve that one
+// post's path from the same source of truth (the hero's end/black-hole nav row) and
+// EXCLUDE it from the Writing lock, so the inspiration post locks the BLACK HOLE row
+// only — every page lights exactly one section.
+const blackHoleHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? '';
+const blackHolePath = blackHoleHref ? norm(href(blackHoleHref)) : '';
+const isWritingActive =
+  path === writingRoot ||
+  (path.startsWith(`${postsRoot}/`) && path !== blackHolePath);
 
-// Sub-page HUD nav model — the standard (non-bare) reading-page nav. One entry
-// per section, in scroll/lifecycle order, each carrying the SAME lifecycle-motif
-// glyph used by the hero corner rail (`.overlay-blog`): pale-blue-dot = About,
-// nebula = Writing, four-point-star = Projects, red-giant = Graveyard, plus a
-// black-hole origin glyph for Home. `index` is the two-digit mono readout shown
-// on the locked (current) section; `active` reuses the existing isActive helpers.
+// Sub-page HUD nav model — the standard (non-bare) reading-page nav, rebuilt to
+// CORRESPOND with the hero's vertical lifecycle rail. Each row is a Body·Section
+// PAIR: `label` is the celestial body (the bright title line, e.g. 'BLACK HOLE'),
+// `section` is the destination it links to (the dim second line, e.g.
+// 'Inspiration'). The five lifecycle rows are DERIVED from the hero's single
+// source of truth (HUD_NAV_ITEMS in sceneTable.ts) — same labels, same
+// destinations, same top→bottom scroll order — so the rail and this nav can never
+// drift. Two reading-only pages that have no lifecycle stage (Home = the hero
+// scene itself, Behind = the build case study) are appended in the SAME two-line
+// shape with a quiet body line that fits the family.
 interface SubnavItem {
   href: string;
+  /** Bright title line — the celestial body (or the page's own name). */
   label: string;
+  /** Dim second line — the section this row links to. */
+  section: string;
   active: boolean;
 }
+// HUD_NAV_ITEMS is already in physical scroll order (black hole at the top → the
+// beginning at the bottom); each carries its body `label` + section `destination`
+// + `href`. Project it onto the reading-page rail, resolving the deploy-based href
+// and the active state per section. Writing stays active across the posts subtree
+// (isWritingActive); every other lifecycle row matches its own path.
+const lifecycleRows: SubnavItem[] = HUD_NAV_ITEMS.map((item) => ({
+  href: href(item.href),
+  label: item.label,
+  section: item.destination,
+  active: item.id === 'nebula' ? isWritingActive : isActive(item.href),
+}));
 const subnavItems: SubnavItem[] = [
-  { href: href(''), label: 'Home', active: isActive('') },
-  { href: href('writing'), label: 'Writing', active: isWritingActive },
-  { href: href('projects'), label: 'Projects', active: isActive('projects') },
-  { href: href('graveyard'), label: 'Graveyard', active: isActive('graveyard') },
+  ...lifecycleRows,
   // Behind the Build — the case-study page demonstrating the hero/article WebGL
-  // system. Sits next to About in the reading order: it is one of the long-form
-  // pages a visitor exploring the craft jumps to directly. The label is shortened
-  // to "Behind" so the rail keeps a compact six-row footprint without wrapping.
-  { href: href('behind-the-build'), label: 'Behind', active: isActive('behind-the-build') },
-  { href: href('about'), label: 'About', active: isActive('about') },
+  // system. No lifecycle stage of its own, so its body line names what it is (the
+  // making-of) and the section line keeps the readable page name.
+  { href: href('behind-the-build'), label: 'THE MAKING', section: 'Behind', active: isActive('behind-the-build') },
+  // Home — return to the live scene itself (the whole lifecycle), so its body line
+  // names the scene and the section line is 'Home'.
+  { href: href(''), label: 'THE SCENE', section: 'Home', active: isActive('') },
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).
 const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
@@ -111,7 +142,7 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
             <span class="bh-identity-role">{BRAND_ROLE}</span>
           </a>
 
-          {/* The blog micro-nav, top-right: the four section routes rendered as quiet
+          {/* The blog micro-nav, top-right: the five section routes rendered as quiet
               text labels (mono-uppercase) that dim at rest and brighten/lift once the
               HUD activates at the black hole (body.hud-active). Two inline brand-logo
               icon links — a GitHub octocat and an X logo — sit as direct <a> siblings
@@ -120,7 +151,7 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
               lift. A power button toggles the hud-active morph in place without
               scrolling. */}
           <nav class="overlay-blog" aria-label="Sections">
-            {/* Text-only section labels — no decorative icons. The four links
+            {/* Text-only section labels — no decorative icons. The five links
                 show small mono-uppercase labels at rest (dim) and brighten/lift
                 when the HUD activates at the black hole (body.bare.hud-active).
                 The functional icon links/Power controls below KEEP their inline SVGs. */}
@@ -136,6 +167,16 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
               </a>
               <a class="overlay-blog-link" href={href('graveyard')}>
                 <span class="overlay-blog-label">Graveyard</span>
+              </a>
+              {/* Inspiration — the black-hole section ("Why this site exists"). Added
+                  so the micro-nav's content set matches the hero's five lifecycle
+                  sections (the rail's BLACK HOLE → Inspiration row). Content-only,
+                  like the rest of this menu — no celestial-body label here. The href
+                  is the SAME black-hole destination from the hero's source of truth
+                  (blackHoleHref), resolved through href() like every other link, so it
+                  can't drift from the rail. */}
+              <a class="overlay-blog-link" href={href(blackHoleHref)}>
+                <span class="overlay-blog-label">Inspiration</span>
               </a>
             </div>
 
@@ -557,7 +598,13 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
                         <span class="subnav-tick subnav-tick-bl"></span>
                         <span class="subnav-tick subnav-tick-br"></span>
                       </span>
-                      <span class="subnav-label">{item.label}</span>
+                      {/* Body·Section PAIR, mirroring the hero rail: the celestial
+                          body is the bright title line, the section it links to is
+                          the dim second line. */}
+                      <span class="subnav-copy">
+                        <span class="subnav-label">{item.label}</span>
+                        <span class="subnav-section">{item.section}</span>
+                      </span>
                       {/* Two-digit mono index — only shown on the locked section. */}
                       <span class="subnav-index" aria-hidden="true">{subnavIndex(i)}</span>
                     </a>
