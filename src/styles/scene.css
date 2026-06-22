@@ -257,14 +257,50 @@ body.at-opening .overlay-blog {
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
-/* CURRENT page link — full --fg-overlay + persistent underline so the active
-   overlay-blog link is unmistakable. Same system as subnav and footer. */
+/* CURRENT page link — full --fg-overlay brightness marks the active overlay-blog
+   link (no underline; the hero nav doesn't use the gold underline-sweep). */
 .overlay-blog-link[aria-current='page'] {
   color: var(--fg-overlay);
 }
-.overlay-blog-link[aria-current='page'] .overlay-blog-label {
-  background-size: 100% 1px;
+/* TARGET-LOCK FRAME (hover) — the reading nav's corner-tick "lock" motif, ported to
+   the hero section links as a HOVER/focus interaction (the .subnav shows it on its
+   CURRENT section; the hero has no current section, so hover is the natural trigger).
+   The frame is position:absolute, so it overlays the link without changing its box —
+   no row reflow on hover. The section links get a little inset padding so the bracket
+   has room to sit AROUND the label rather than clipping it; the padding is constant
+   (rest + hover), so adding the frame on hover shifts nothing. No index number here:
+   a number appearing on hover would change the link width (the bug we just fixed). */
+.overlay-blog-section {
+  position: relative;
+  padding: 0.3rem 0.5rem;
 }
+.overlay-blog-lock {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out-quint);
+}
+.overlay-blog-tick {
+  position: absolute;
+  width: 0.32rem;
+  height: 0.32rem;
+  border: 1px solid var(--accent);
+  opacity: 0.85;
+}
+.overlay-blog-tick-tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.overlay-blog-tick-tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.overlay-blog-tick-bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.overlay-blog-tick-br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+/* Reveal the lock frame on hover/focus — the "targeting" snap. */
+.overlay-blog-section:hover .overlay-blog-lock,
+.overlay-blog-section:focus-visible .overlay-blog-lock {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-blog-lock { transition: none; }
+}
+
 /* HUD-active (black hole) brightens AND lifts the section labels in place of
    the old fold-out-from-zero-width reveal. The lift is small (~2px) — a quiet
    "the menu is awake" signal, not a jump. The functional Links/Power controls
@@ -311,25 +347,13 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
-  background-image: linear-gradient(
-    to right,
-    var(--accent-strong),
-    color-mix(in oklch, var(--highlight) 80%, var(--accent-strong))
-  );
-  background-repeat: no-repeat;
-  background-position: left calc(100% - 0.02rem);
-  background-size: 0% 1px;
-  transition: background-size 0.32s var(--ease-out-quint);
 }
-/* HOVER / FOCUS: the gold underline sweeps left→right. Applies to the section
-   links AND the socials summary (both carry .overlay-blog-link). */
-.overlay-blog-link:hover .overlay-blog-label,
-.overlay-blog-link:focus-visible .overlay-blog-label {
-  background-size: 100% 1px;
-}
+/* No underline on the hero nav: hover/focus now reads purely through the colour
+   lift (.overlay-blog-link:hover → --fg) and the target-lock corner-tick frame. The
+   gold underline-sweep that the reading nav (.subnav) uses is intentionally NOT
+   mirrored here. */
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-icon,
-  .overlay-blog-label,
   .overlay-blog-link { transition: none; }
   body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
 }

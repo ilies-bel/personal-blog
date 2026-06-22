@@ -69,22 +69,54 @@
    restore the warm --fg + drop the canvas text-shadow; mirror that for .subnav.) */
 .subnav-brand { flex: 0 0 auto; }
 
-/* The section rail — text-label rows separated by hairline dividers. */
-.subnav-rail { flex: 0 1 auto; min-width: 0; }
+/* The section rail — mono-uppercase label rows + the brand-logo icon links, laid
+   out as ONE row to match the hero corner nav (.overlay-blog). The rail is the
+   flex parent so the section <ul> and the socials cluster sit on the same baseline
+   with a consistent gap. */
+.subnav-rail {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .subnav-list {
   display: flex;
-  align-items: stretch;
-  gap: 0;
+  align-items: center;
+  /* No hairline cell-dividers — the hero nav sets items apart with spacing alone,
+     so the reading nav reads as the SAME kit, not a row of bordered cells. */
+  gap: 0.15rem;
   margin: 0;
   padding: 0;
   list-style: none;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-/* Hairline dividers BETWEEN items (not before the first), so the rail reads as a
-   row of cells on the same instrument. */
-.subnav-item + .subnav-item {
-  border-left: 1px solid var(--hud-line);
+
+/* Brand-logo icon links (GitHub / X) — mirror the hero's .overlay-blog-social: drop
+   the section-cell horizontal padding so the glyphs sit tight as a control cluster,
+   and size the SVG to the hero's 1.3rem glyph. Colour + hover/focus come for free
+   from .subnav-link. */
+.subnav-socials {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  margin-left: 0.25rem;
+}
+/* Social icon links must NOT inherit the section links' reserved index slot (the
+   asymmetric right padding); they're tight glyph buttons. The compound selector
+   (.subnav-link.subnav-social) outranks .subnav-link, and the explicit `padding`
+   shorthand fully resets all four sides so no reserved-slot padding leaks in. */
+.subnav-link.subnav-social {
+  padding: 0.5rem;
+}
+.subnav-icon {
+  width: 1.3rem;
+  height: 1.3rem;
+  display: block;
+  flex: 0 0 auto;
 }
 
 .subnav-link {
@@ -92,7 +124,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.95rem;
+  /* Asymmetric horizontal padding: the right side reserves a constant slot for the
+     two-digit index that the CURRENT section reveals (.subnav-index is absolutely
+     positioned into it). Reserving it on EVERY link — not just the active one — is
+     what keeps the rail from shifting when the number appears. */
+  padding: 0.5rem 1.6rem 0.5rem 0.95rem;
   color: var(--fg-dim);
   text-decoration: none;
   font-family: var(--font-mono);
@@ -154,15 +190,25 @@
   transition: color 0.16s ease;
 }
 
-/* Two-digit mono index + the target-lock corner ticks are HIDDEN by default and
-   only revealed on the locked (current) section below. */
+/* Two-digit mono index — only the locked (current) section shows it. The OLD approach
+   toggled display:none → inline-block ONLY on the active item, growing just that item
+   and shoving the rest of the rail sideways (the content shift). The fix: EVERY link
+   permanently reserves the index zone (a constant right slot — see .subnav-link's
+   padding-right below), and the index is absolutely positioned INTO that reserved
+   slot, just after the label. Because the slot exists on every item whether or not its
+   number shows, revealing it on the current section changes nothing's width. */
 .subnav-index {
-  display: none;
+  position: absolute;
+  right: 0.45rem;          /* sits inside the reserved right slot, trailing the label */
+  top: 50%;
+  transform: translateY(-50%);
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: var(--tracking-label);
   color: var(--accent);
-  margin-left: 0.1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 .subnav-lock {
   display: none;
@@ -190,7 +236,7 @@
   color: var(--fg-overlay);
 }
 .subnav-link[aria-current='page'] .subnav-lock { display: block; }
-.subnav-link[aria-current='page'] .subnav-index { display: inline-block; }
+.subnav-link[aria-current='page'] .subnav-index { opacity: 1; }
 /* Persistent underline on the current section — the same gold sweep shown at
    rest (not just on hover), so the current item is obvious. */
 .subnav-link[aria-current='page'] .subnav-label {
@@ -289,14 +335,26 @@
     width: 100%;
   }
 
+  .subnav-rail {
+    /* Stack the section labels and the socials cluster left-aligned under the
+       brand, matching the hero's left-anchored corner stack on narrow screens. */
+    justify-content: flex-start;
+  }
+
   .subnav-list {
     justify-content: flex-start;
-    /* On narrow screens the rail stacks under the brand; keep dividers as a top
-       hairline between wrapped rows so it never reads as a broken pill. */
-    gap: 0;
+    /* Dividers are gone (hero kit), so wrapped rows need a real gap to breathe
+       rather than colliding edge-to-edge. */
+    gap: 0.15rem 0.35rem;
   }
 
   .subnav-link {
     padding-inline: 0.7rem;
+  }
+
+  /* The first section label carries the rail's left edge now that there's no
+     divider; pull the socials in line with the labels' left padding. */
+  .subnav-socials {
+    margin-left: 0;
   }
 }
