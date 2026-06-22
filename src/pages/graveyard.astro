@@ -63,8 +63,14 @@ const specimens: readonly Specimen[] = [
 ];
 
 // The HUD reads its scroll-spy targets from the entry ids — passed in document
-// order so `SPECIMEN 02 / 02` matches the visual order down the page.
-const hudEntries = specimens.map((s) => ({ id: s.id, name: s.name.toUpperCase() }));
+// order so `SPECIMEN 02 / 02` matches the visual order down the page. It also
+// carries the interment year so the readout shows the real `INTERRED 2024`
+// (driven from this same source of truth, not a hardcoded label).
+const hudEntries = specimens.map((s) => ({
+  id: s.id,
+  name: s.name.toUpperCase(),
+  interred: s.interred,
+}));
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 ---

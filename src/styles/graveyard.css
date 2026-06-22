@@ -4,9 +4,10 @@
    from red giant down to the black hole as you descend the list of dead projects,
    and the chrome speaks the hero's mono-gold instrument grammar. This file
    ONLY adds graveyard-specific surface — the backdrop dim wash lives in hero.css
-   (body.graveyard-page .bh-backdrop), the HUD rail in article.css (.article-hud-*)
-   is reused as-is (GraveyardHud adds a `.graveyard-hud` modifier for any future
-   tints). Nothing here weakens the measured AA contrast in hero.css. */
+   (body.graveyard-page .bh-backdrop), the HUD rail geometry + tokens in article.css
+   (.article-hud-*) are reused as-is, and GraveyardHud's `.graveyard-hud` modifier adds
+   just the one thing the graveyard needs that articles don't: a clickable jump-link
+   readout (see the modifier block below). Nothing here weakens the AA contrast. */
 
 /* The .wrap shell on standard pages sits at the default stacking context. The
    graveyard page mounts the live backdrop (z-index 0), so the reading column
@@ -77,10 +78,39 @@ body.graveyard-page .wrap {
   }
 }
 
-/* Graveyard HUD modifier — currently a no-op tint hook; GraveyardHud mounts as
-   `.article-hud .graveyard-hud` so the rail geometry + tokens come for free
-   from article.css, and any future graveyard-specific accent (e.g. ember-red
-   tarnish) can hang here without touching article.css. */
-.article-hud.graveyard-hud {
-  /* Reserved for graveyard-specific HUD tints. */
+/* Graveyard HUD modifier — GraveyardHud mounts as `.article-hud .graveyard-hud`, so
+   the rail geometry, tokens, and the bright-beat [data-zone] flip all come for free
+   from article.css. The graveyard's readout differs in ONE way: it is a JUMP-LINK to
+   the active specimen (the article readout is a passive <div>), so it needs its
+   pointer-events re-enabled and a quiet hover affordance. */
+
+/* The readout is an <a> inside the pointer-transparent .article-hud chrome. Re-enable
+   pointer-events on the link itself (only the link is clickable; the rail + the gap
+   around it stay transparent so they never intercept the reading column beside them). */
+.graveyard-hud-readout {
+  pointer-events: auto;
+  width: max-content;
+  text-decoration: none;
+  /* Inherit the mono-gold readout colours from article.css; the link just adds a
+     barely-there lift on hover so the "this jumps you there" affordance is felt, not
+     loud — matches the hero rail's restraint. */
+  transition: opacity 0.18s var(--ease-out-quint);
+}
+.graveyard-hud-readout:hover,
+.graveyard-hud-readout:focus-visible {
+  opacity: 0.82;
+}
+/* The specimen NAME is the link's headline rung — nudge it to the gold signal on
+   hover/focus so the active row reads as the live target (the index + interred lines
+   stay put, so the motion is a whisper, not a flash). */
+.graveyard-hud-readout:hover .article-hud-section,
+.graveyard-hud-readout:focus-visible .article-hud-section {
+  color: var(--highlight);
+}
+/* Keyboard focus ring — the readout is the only focusable thing in the chrome, so it
+   must show a clear ring (the rail beside it is aria-hidden). */
+.graveyard-hud-readout:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 2px;
 }
