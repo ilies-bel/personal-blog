@@ -29,7 +29,7 @@ Scroll height is 6 viewport-tall stages; scroll progress maps to a fractional
 | 1     | reverse supernova  | point cloud         | — |
 | 2     | **red giant**      | point cloud         | [red-giant.png](./red-giant.png) |
 | 3     | **yellow star**    | **mesh sun rig**    | [yellow-star.png](./yellow-star.png) |
-| 4     | nebula             | point cloud (placeholder) | — |
+| 4     | **nebula**         | point cloud         | [nebula-3.05-formed.jpeg](./nebula-3.05-formed.jpeg) · [3.25](./nebula-3.25-collapsing.jpeg) · [3.50](./nebula-3.50-dispersed.jpeg) |
 | 5     | pale blue dot      | point cloud (placeholder) | — |
 
 State labels live in the `BEATS` array (`state: 'red giant'` at line ~2567,
@@ -125,6 +125,50 @@ dedicated **mesh sun rig**, not the point cloud.
 > `sunRadFac = 0.92`, more flares via `atmoThresh = 0.91`) — that path is the
 > original placeholder. On the current timeline the **mesh sun rig** is what you
 > actually see for the yellow star; the point-cloud yellow path is dormant.
+
+---
+
+### Nebula — `stage 4`
+
+Scrolling **down** the page, the yellow star sheds its gas: the photosphere
+disperses into a cloud of particles that thins and spreads until no central body
+remains. These three frames read the lifecycle in its natural scroll order
+(formed → collapsing → dispersed):
+
+| `stage 3.05` — formed | `stage 3.25` — collapsing | `stage 3.50` — dispersed |
+|---|---|---|
+| ![nebula formed](./nebula-3.05-formed.jpeg) | ![nebula collapsing](./nebula-3.25-collapsing.jpeg) | ![nebula dispersed](./nebula-3.50-dispersed.jpeg) |
+| star intact, gas bursting outward | gas condensing toward a faint core | diffuse cloud, no central body |
+
+- **Renderer:** **point cloud** (same `diskVertexShader` / `diskFragmentShader`
+  as the red giant), gated on by `uNebula`. In `lifecycle()` the gate is
+  `nebula = stage >= NEBULA_ACTIVE_STAGE` (`NEBULA_ACTIVE_STAGE = 3.5`,
+  `sceneTable.ts`); `nebulaShader` (→ `uNebula`) stays on through the collapse
+  floor crossfade so the cloud never reverts to the shader's red-giant default.
+- **Settled hold:** the dispersed cloud rests around **stage 3.42**, with the
+  marker window `[3.38, 3.50]` (the `settledWindow` on the nebula segment in
+  `sceneTable.ts`).
+- **The collapse is the reverse beat.** The three frames above run in *scroll*
+  order, but the code's first-class motion is the **reverse** (scrolling **up**,
+  nebula → yellow star): a GPGPU **gravitational collapse** across
+  stage 3.5 (dispersed) → 3.05 (fully-fed star). Its drivers, all pure functions
+  of `stage` (`lifecycle.ts`, the *nebula → yellow star* block):
+  - `collapse` (→ `uCollapseDrive`) — the GPGPU well/spring; `pow(prog, 0.85)`,
+    LEADS the star so the gas piles onto the core *before* the star reaches size.
+  - `simBlend` (→ `uSimBlend`) — morphs the disk from the analytic nebula
+    placement to the baked sim positions; ramps to full `1.0` by the floor so the
+    gas actually vacuums into the core instead of a dispersed cloud lingering.
+  - `starFormed` — mesh-star reveal `pow(prog, 1.5)`, lags the gas so the inflow
+    visibly feeds a growing core.
+  - `cloudBright` — cloud brightness across the collapse (bright infall → fade).
+  - Window constants `NEB_COLLAPSE_HI` (3.5) / `NEB_COLLAPSE_LO` (3.0) live in
+    `sceneTable.ts`; everything is hard-gated to `[LO, HI]` so stages below the
+    window don't wrongly turn the red giant / yellow star into "collapsing nebula".
+- **Hyperspace exit:** continuing down toward the pale blue dot, the nebula's own
+  particles smear into radial starlines (`streak` → `uStreak`) over the dezoom.
+
+> The old `point cloud (placeholder)` note for this state is stale — the nebula is
+> a real, sim-driven beat now, not a stand-in.
 
 ---
 
