@@ -322,6 +322,25 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.7));
   transition: filter 0.2s ease;
 }
+/* SOCIAL LOGOS (GitHub octocat / X) — these icon-only links have no visible
+   label, so the section links' underline-sweep can't apply. They get their own
+   hover instead: the glyph lifts + scales a touch and lights up with a gold
+   glow, so the brand mark itself reacts. Scoped to .overlay-blog-social so the
+   Power/ReducedMotion control glyphs (also .overlay-blog-icon) are untouched.
+   transform-box keeps the scale anchored to the glyph's own centre. */
+.overlay-blog-social .overlay-blog-icon {
+  transform-origin: center;
+  transition:
+    filter 0.2s ease,
+    transform 0.32s var(--ease-out-quint);
+}
+.overlay-blog-social:hover .overlay-blog-icon,
+.overlay-blog-social:focus-visible .overlay-blog-icon {
+  transform: translateY(-2px) scale(1.12);
+  filter:
+    drop-shadow(0 0 10px rgba(0, 0, 0, 0.7))
+    drop-shadow(0 0 6px color-mix(in oklch, var(--accent) 70%, transparent));
+}
 /* Section labels — small mono-uppercase, visible in EVERY mode (no fold-out).
    currentColor flows from .overlay-blog-link so dim→bright tracking is automatic
    (rest: --hud-rail-dim; hud-active: --fg). The gold underline-sweep on hover
@@ -356,6 +375,9 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   .overlay-blog-icon,
   .overlay-blog-link { transition: none; }
   body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
+  /* Drop the social-logo lift/scale; the gold glow still confirms hover. */
+  .overlay-blog-social:hover .overlay-blog-icon,
+  .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }
 }
 
 /* Power button: a CIRCLED power glyph (a thin ring frame echoing the old
