@@ -272,7 +272,7 @@
   font-family: var(--font-display);
   /* Row title — the secondary display rung, shared with the featured card h2. */
   font-size: var(--text-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   line-height: 1.12;
   letter-spacing: var(--tracking-tight);
   text-wrap: balance;
@@ -298,16 +298,20 @@
   margin-top: 0.2rem;
 }
 
+/* Tag chips speak the HUD's square instrument language (uppercase micro mono,
+   hard corners) — rounded pills belonged to a different, softer design system. */
 .writing-tags span {
   display: inline-flex;
   align-items: center;
   min-height: 1.55rem;
-  padding: 0.16rem 0.55rem;
+  padding: 0.16rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: 2px;
   color: var(--fg-faint);
   font-family: var(--font-mono);
-  font-size: var(--text-label);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
   line-height: 1;
   background: color-mix(in oklch, var(--bg-soft) 64%, transparent);
   transition:

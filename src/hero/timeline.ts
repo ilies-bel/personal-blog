@@ -57,8 +57,8 @@ import {
 // import was the one edge in the sceneTable ⇄ timeline cycle, which made a
 // server-rendered consumer (BaseLayout's sub-nav, importing HUD_NAV_ITEMS from
 // sceneTable) hit a TDZ during the Astro prerender. They are RE-EXPORTED here so
-// this module's existing importers (ManifestoOverlay, HudNavigation,
-// magneticSettle) resolve '../timeline' UNCHANGED.
+// this module's existing importers (ManifestoOverlay, HudNavigation) resolve
+// '../timeline' UNCHANGED.
 // ===========================================================================
 export { LIFECYCLE_DIRECTION, lifecycleProgress };
 export type { LifecycleDirection };

@@ -221,7 +221,7 @@
 .bh-rm-modal-title {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   font-size: var(--text-title);
   line-height: var(--leading-snug);
   letter-spacing: var(--tracking-tight);
@@ -557,9 +557,9 @@ body.graveyard-page .bh-backdrop::before {
 }
 .bh-identity-name {
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   font-size: var(--text-subtitle);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   line-height: 1;
   /* Cool-neutral overlay bone (Task 3a): holds authority over the orange star where
      warm --fg washes out. Reading-page reuse (.site-header) overrides to warm --fg
@@ -752,7 +752,7 @@ body.scene-ready.at-opening .bh-focus-dot {
   display: block;
   grid-area: 1 / 1;
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   font-size: var(--text-hero);
   line-height: var(--leading-tight);
   letter-spacing: var(--tracking-normal);

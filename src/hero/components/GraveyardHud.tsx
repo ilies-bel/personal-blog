@@ -45,6 +45,11 @@ export default function GraveyardHud({ entries }: GraveyardHudProps) {
   const total = entries.length;
   const active = entries[activeIndex];
   const pct = Math.round(progress * 100);
+  // The readout narrates the LEDGER, not the page header — at the top of the page
+  // its fixed-left column sits straight on the intro dek (the graveyard's content
+  // starts at the left gutter, unlike the centered article column). Keep it dark
+  // until the visitor has actually descended toward the first specimen.
+  const engaged = progress > 0.08;
   // Reuse the hero's bright-zone test so the readout flips to a dark stroke when the
   // descent scrubs through a bright beat (supernova flash / yellow star) — identical
   // [data-zone] swap as the hero and ArticleHud, no new colour logic.
@@ -54,6 +59,7 @@ export default function GraveyardHud({ entries }: GraveyardHudProps) {
     <aside
       className="article-hud graveyard-hud"
       data-zone={zone}
+      data-engaged={engaged ? 'true' : 'false'}
       aria-label="Graveyard ledger position"
     >
       {/* PROGRESS RAIL — reuses the article HUD geometry/tokens. The

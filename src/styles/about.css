@@ -1,39 +1,11 @@
 /* About — an overlay panel floating in the hero's room. The dimmed signature
    object (.bh-backdrop, hero.css) sits behind a single calm reading column:
    lots of dark negative space, the panel held off-centre like a viewfinder
-   readout, persistent brand top-left, a mono Close control top-right. */
+   readout, persistent brand top-left, the shared corner nav top-right (the same
+   .overlay-blog system as the home scene — one nav everywhere, the former
+   bespoke Close control is gone). */
 
-.about-lead { font-size: var(--text-title); color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
-
-/* Close: a plain mono label, fixed top-right, mirroring the shared chrome
-   control pattern. Returns to the home scene. */
-.about-close {
-  position: fixed;
-  top: clamp(1rem, 3vw, 2rem);
-  right: clamp(1rem, 4vw, 3rem);
-  z-index: 21;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.35rem 0.2rem;
-  font-family: var(--font-mono);
-  /* Quiet mono chrome label — the same label rung as the article-back affordance. */
-  font-size: var(--text-label);
-  letter-spacing: 0.08em;
-  color: var(--fg-dim);
-  text-decoration: none;
-  text-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
-  transition: color 0.18s ease;
-}
-/* No bracket decoration — the close control is a plain mono label with a gold
-   accent on hover and the shared focus ring. Corner brackets are reserved for
-   current/locked targets only (subnav lock, StarMarker reticle). */
-.about-close:hover { color: var(--accent); }
-.about-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-  border-radius: 3px;
-}
+.about-lead { font-size: var(--text-display); color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
 
 /* The shell centres the panel and guarantees the dark negative space around it.
    Above the fixed backdrop canvas (z-0), below the corner chrome. */
@@ -44,6 +16,11 @@
   display: grid;
   place-items: center;
   padding: clamp(5rem, 14vh, 9rem) var(--gutter) clamp(3rem, 8vh, 5rem);
+}
+/* Phones: the corner nav becomes a wrapped band under the brand (scene.css), so
+   the centred panel must never rise into it — reserve the band's height. */
+@media (max-width: 34rem) {
+  .about-shell { padding-top: 11rem; }
 }
 
 /* The reading panel: a calm column held by faint bracket corners (pseudo-
@@ -95,10 +72,11 @@
 .about-panel .about-lead {
   margin: 0 0 1.5rem;
   font-family: var(--font-display);
-  font-size: var(--text-title);
-  font-weight: var(--weight-bold);
-  line-height: 1.28;
-  letter-spacing: var(--tracking-tight);
+  /* The page's h1 — the display rung; the serif needs the size to breathe. */
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: 1.16;
+  letter-spacing: 0;
   color: var(--fg);
   text-wrap: balance;
 }
@@ -133,8 +111,8 @@
   display: block;
   margin-bottom: 0.55rem;
   color: var(--fg);
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
   line-height: 1.15;
 }
 .about-principles p {
@@ -230,7 +208,7 @@
 }
 .about-contact-title {
   margin: 0 0 1rem;
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: var(--text-subtitle);
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-tight);

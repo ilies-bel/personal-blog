@@ -175,19 +175,30 @@ body.article-page .prose[data-scene-journey] {
 }
 .islands-demo-label { color: var(--fg-dim); }
 .islands-demo-state { margin-left: auto; color: var(--fg-faint); }
+/* Instrument control, not a web button: outlined gold, hard corners, uppercase
+   mono — the filled rounded beige version belonged to a softer design system. */
 .islands-demo-button {
   font-family: var(--font-mono);
   font-size: var(--text-label);
-  letter-spacing: 0.06em;
-  color: var(--bg);
-  background: var(--accent);
-  border: none;
-  border-radius: var(--radius-sm);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  background: color-mix(in oklch, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, transparent);
+  border-radius: 2px;
   padding: 0.5rem 0.9rem;
   cursor: pointer;
-  transition: background 0.18s ease, transform 0.12s var(--ease-out-quint);
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.12s var(--ease-out-quint);
 }
-.islands-demo-button:hover:not(:disabled) { background: var(--accent-strong); }
+.islands-demo-button:hover:not(:disabled) {
+  color: var(--bg);
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
 .islands-demo-button:active:not(:disabled) { transform: translateY(1px); }
 .islands-demo-button:disabled {
   color: var(--fg-faint);

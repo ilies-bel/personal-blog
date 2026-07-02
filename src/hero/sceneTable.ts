@@ -524,7 +524,7 @@ export interface MarkerPlacement {
   glyph: string;
   // --- Richer card copy (all optional; each falls back to title/subtitle) ----
   /** The mono uppercase, letter-spaced gold label at the top of the card (e.g.
-   *  'ABOUT / 01'). Falls back to `title` when absent. */
+   *  'ABOUT'). Falls back to `title` when absent. */
   eyebrow?: string;
   /** The big bone headline — the dominant element (e.g. 'Hi, I’m Iliès.'). Falls
    *  back to `title` when absent. */
@@ -632,7 +632,7 @@ export const SCENES: readonly LifecycleScene[] = [
         subtitle: 'Who I am',
         bg: 'dark',
         glyph: 'glyphs/glyph-marker-about.svg',
-        eyebrow: 'ABOUT / 01',
+        eyebrow: 'ABOUT',
         headline: 'Hi, I’m Iliès.',
         body: 'Web software, technical writing, understandable systems.',
         tags: ['Fast', 'Readable', 'Usable'],
@@ -748,7 +748,7 @@ export const SCENES: readonly LifecycleScene[] = [
         subtitle: 'Things I build',
         bg: 'noisy',
         glyph: 'glyphs/glyph-marker-projects.svg',
-        eyebrow: 'PROJECTS / 01',
+        eyebrow: 'PROJECTS',
         headline: 'Things I build.',
         body: 'Shipped software, side projects, and tools that earned their keep.',
         tags: ['Shipped', 'Tools'],
@@ -797,14 +797,14 @@ export const SCENES: readonly LifecycleScene[] = [
       {
         id: 'red',
         state: 'red',
-        vx: 0.2,
+        vx: 0.225,
         vy: 0.22,
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
         bg: 'dark',
         glyph: 'glyphs/glyph-marker-graveyard.svg',
-        eyebrow: 'GRAVEYARD / 01',
+        eyebrow: 'GRAVEYARD',
         headline: 'Things I abandoned.',
         body: 'Dead repos, false starts, and what each one was trying to teach.',
         tags: ['Dead repos', 'Lessons'],
@@ -838,7 +838,7 @@ export const SCENES: readonly LifecycleScene[] = [
       motion: 'pulse',
       label: 'BLACK HOLE',
       // The section the black-hole row links to. "Inspiration" — the same word the
-      // black-hole MARKER card uses (eyebrow 'INSPIRATION / 01', "Why this site
+      // black-hole MARKER card uses (eyebrow 'INSPIRATION', "Why this site
       // exists") so the rail, the reading-page nav and the on-scene marker all name
       // this destination identically. (Was 'Colophon', which drifted from the marker.)
       destination: 'Inspiration',
@@ -864,7 +864,7 @@ export const SCENES: readonly LifecycleScene[] = [
         subtitle: 'Why this site exists',
         bg: 'dark',
         glyph: 'glyphs/glyph-marker-story.svg',
-        eyebrow: 'INSPIRATION / 01',
+        eyebrow: 'INSPIRATION',
         headline: 'Why this site exists.',
         body: 'The idea behind the black hole, and thanks for scrolling this far.',
         tags: ['Story', 'Colophon'],

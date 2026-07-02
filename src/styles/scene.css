@@ -517,19 +517,39 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
    active. The base .overlay-blog-power[aria-pressed='true'] rule already styles this;
    this is just a documentation anchor — no extra declarations needed. */
 
-/* On the smallest screens, fold the four section icons away and keep only the
-   socials + power controls (the labels were never shown there anyway). */
+/* On the smallest screens the HOME canvas folds the section links away and keeps
+   only the socials + power controls (the bottom number rail carries the scene
+   sections there). About is a calm reading panel, so it KEEPS its links — without
+   them the page would have no navigation at all on a phone. As one fixed top-right
+   row they would wrap straight over the fixed brand lockup, so on About the whole
+   corner nav drops to a WRAPPED BAND below the brand (absolute, not fixed — it
+   scrolls away with the page like the reading pages' stacked subnav). */
 @media (max-width: 34rem) {
-  .overlay-blog-links { display: none; }
+  body:not(.about-page) .overlay-blog-links { display: none; }
+  body.bare.about-page .overlay-blog {
+    position: absolute;
+    top: 4.9rem;
+    left: clamp(1rem, 4vw, 3rem);
+    right: clamp(1rem, 4vw, 3rem);
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  body.bare.about-page .overlay-blog-links {
+    flex-wrap: wrap;
+    gap: 0.2rem 0.9rem;
+    justify-content: flex-start;
+  }
 }
 
 /* Per-page overlay visibility. On the home the manifesto identity (.bh-identity,
    hero.css) replaces the small wordmark, so the wordmark is hidden and the
    micro-nav is shown. About runs the scene in backdrop mode (no .bh-identity), so
-   the wordmark owns the top-left and the micro-nav yields to the bracket Close. */
+   the wordmark owns the top-left; it shares the SAME corner nav as the home scene
+   (one nav system) — only the power button is dropped there (it toggles the home
+   HUD morph, which has no meaning over the About backdrop). */
 body.bare .overlay-brand { display: none; }
 body.bare.about-page .overlay-brand { display: inline-flex; }
-body.bare.about-page .overlay-blog { display: none; }
+body.bare.about-page .overlay-blog-power { display: none; }
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page
@@ -541,7 +561,7 @@ body.bare.about-page .overlay-blog { display: none; }
 .scene-fallback-name {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   /* Mirrors the identity name lockup (same rung as .bh-identity-name). */
   font-size: var(--text-subtitle);
   letter-spacing: 0.02em;
@@ -606,7 +626,7 @@ body.webgl-unavailable .webgl-fallback {
 }
 .webgl-fallback-body {
   margin: 0.4rem 0 0;
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: clamp(0.95rem, 1.6vw, 1.05rem);
   line-height: 1.5;
   color: var(--fg-dim);

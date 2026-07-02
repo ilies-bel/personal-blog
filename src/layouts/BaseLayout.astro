@@ -16,8 +16,8 @@ import { SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
 // from the PURE data layer (sceneTable.ts), not HudNavigation.tsx, so the Astro
 // frontmatter pulls no React into this layout.
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
-// The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
-// (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
+// The sitewide type system: Instrument Serif (display headlines + quote accent),
+// IBM Plex Sans (body/UI), IBM Plex Mono (labels, dates, tags).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
 // live in fonts.css; they're applied sitewide via the --font-* tokens in global.css.
 import '../styles/fonts.css';
@@ -108,6 +108,14 @@ const subnavItems: SubnavItem[] = [
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).
 const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
+
+// Corner nav (bare pages: home + about) — the SAME rows as the reading nav,
+// rendered at a lighter density: single-line SECTION words, same lifecycle order,
+// same source of truth. One nav system, two densities — the celestial body line
+// only appears where a scene rail can anchor it (the reading nav + hero rail).
+// On the home scene the 'Home' row is dropped (you are standing on it); About
+// keeps it as the way back into the scene.
+const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section === 'Home'));
 ---
 
 <!doctype html>
@@ -162,52 +170,26 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
                 overlays on hover without shifting the row. No index number (a number
                 appearing on hover would change the link's width). */}
             <div class="overlay-blog-links">
-              <a class="overlay-blog-link overlay-blog-section" href={href('about')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">About</span>
-              </a>
-              <a class="overlay-blog-link overlay-blog-section" href={href('writing')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">Writing</span>
-              </a>
-              <a class="overlay-blog-link overlay-blog-section" href={href('projects')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">Projects</span>
-              </a>
-              <a class="overlay-blog-link overlay-blog-section" href={href('graveyard')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">Graveyard</span>
-              </a>
-              {/* Inspiration — the black-hole section ("Why this site exists"). Added
-                  so the micro-nav's content set matches the hero's five lifecycle
-                  sections (the rail's BLACK HOLE → Inspiration row). Content-only,
-                  like the rest of this menu — no celestial-body label here. The href
-                  is the SAME black-hole destination from the hero's source of truth
-                  (blackHoleHref), resolved through href() like every other link, so it
-                  can't drift from the rail. */}
-              <a class="overlay-blog-link" href={href(blackHoleHref)}>
-                <span class="overlay-blog-label">Inspiration</span>
-              </a>
+              {/* ONE nav system, two densities: these are the SAME rows the reading
+                  nav (.subnav) renders, mapped from the same cornerItems/subnavItems
+                  list — here as single-line SECTION words in lifecycle order (the
+                  celestial-body first line belongs to surfaces with a scene rail).
+                  aria-current lights the section you are on (About, on that page). */}
+              {cornerItems.map((item) => (
+                <a
+                  class="overlay-blog-link overlay-blog-section"
+                  href={item.href}
+                  aria-current={item.active ? 'page' : undefined}
+                >
+                  <span class="overlay-blog-lock" aria-hidden="true">
+                    <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
+                    <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
+                    <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
+                    <span class="overlay-blog-tick overlay-blog-tick-br"></span>
+                  </span>
+                  <span class="overlay-blog-label">{item.section}</span>
+                </a>
+              ))}
             </div>
 
             {/* Two inline brand-logo icon links — GitHub octocat and X logo. Both

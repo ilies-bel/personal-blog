@@ -3,13 +3,13 @@
 // build time so search crawlers see complete, correct metadata without
 // executing any of the client-side interrogation JavaScript.
 import { SITE_TITLE, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, SITE_LANG } from '../consts';
-// Import the PRIMARY display face (Space Grotesk, latin subset) so Vite resolves
-// the final fingerprinted, base-prefixed URL. Preloading just this one face
-// (used by the fixed hero overlay text — the identity name + manifesto big line,
-// both above the fold) fetches it before CSS parses, cutting the FOUT swap.
-// Only the latin subset of the display font — latin-ext/mono/serif aren't needed
-// for first paint, and over-preloading would delay more important resources.
-import spaceGroteskLatin from '../styles/fonts/space-grotesk-latin.woff2';
+// Import the above-the-fold faces so Vite resolves their final fingerprinted,
+// base-prefixed URLs. Two preloads: the display serif (the identity name +
+// manifesto big line float over the hero from the first frame) and the body sans
+// (every paragraph). Latin subsets only — latin-ext/mono aren't needed for first
+// paint, and over-preloading would delay more important resources.
+import instrumentSerifLatin from '../styles/fonts/instrument-serif-latin.woff2';
+import plexSansLatin from '../styles/fonts/ibm-plex-sans-latin.woff2';
 
 interface Props {
   title: string;
@@ -68,10 +68,11 @@ const jsonLd =
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="generator" content={Astro.generator} />
 
-<!-- Preload the primary display face (Space Grotesk, latin) to minimize the FOUT
-     swap on the fixed hero overlay text. crossorigin is required on font preloads
-     even same-origin (fonts always fetch in CORS mode) to avoid a double-fetch. -->
-<link rel="preload" href={spaceGroteskLatin} as="font" type="font/woff2" crossorigin />
+<!-- Preload the above-the-fold faces (display serif + body sans, latin) to
+     minimize the FOUT swap. crossorigin is required on font preloads even
+     same-origin (fonts always fetch in CORS mode) to avoid a double-fetch. -->
+<link rel="preload" href={instrumentSerifLatin} as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={plexSansLatin} as="font" type="font/woff2" crossorigin />
 
 <!-- Primary meta -->
 <title>{fullTitle}</title>

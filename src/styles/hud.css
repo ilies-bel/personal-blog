@@ -1705,7 +1705,10 @@ body.hud-active .star-marker {
    marker's visibility and fades OUT on lock, when the full card takes over. */
 .star-marker-microlabel {
   position: absolute;
-  top: calc(100% + 0.15rem);
+  /* Clear the SOUTH crosshair arm: the reticle SVG overflows its 40px box (arms run
+     to viewBox 130 ≈ 7.6px past the edge), so anything closer than ~0.5rem gets the
+     arm drawn straight through its first text line. */
+  top: calc(100% + 0.7rem);
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-mono);

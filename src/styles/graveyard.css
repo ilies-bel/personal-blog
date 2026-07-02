@@ -84,6 +84,30 @@ body.graveyard-page .wrap {
    the active specimen (the article readout is a passive <div>), so it needs its
    pointer-events re-enabled and a quiet hover affordance. */
 
+/* ENGAGED GATE — at the top of the page the fixed-left readout sits straight on the
+   intro dek (the graveyard column starts at the left gutter, unlike the centered
+   article column), so the HUD stays dark until the visitor descends toward the first
+   specimen (data-engaged, set from scroll progress in GraveyardHud). This REPLACES
+   article.css's one-shot boot animation: the same soft slide-in now plays when the
+   ledger is reached instead of on page load. */
+.graveyard-hud {
+  animation: none;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition:
+    opacity 0.5s var(--ease-out-quint),
+    transform 0.5s var(--ease-out-quint);
+}
+.graveyard-hud[data-engaged='true'] {
+  opacity: 1;
+  transform: none;
+}
+/* While dark, the jump-link must not be an invisible click/tab target. */
+.graveyard-hud[data-engaged='false'] .graveyard-hud-readout {
+  pointer-events: none;
+  visibility: hidden;
+}
+
 /* The readout is an <a> inside the pointer-transparent .article-hud chrome. Re-enable
    pointer-events on the link itself (only the link is clickable; the rail + the gap
    around it stay transparent so they never intercept the reading column beside them). */

@@ -18,7 +18,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { navigate } from 'astro:transitions/client';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES, legacyStageForProgress, resolve, brightZoneFor } from '../timeline';
-import { createMagneticSettle } from '../magneticSettle';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { sceneForProgress } from '../sceneTable';
 import { detectDeviceTier } from '../lib/config';
@@ -404,12 +403,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // mirrors how getStage/getProgress flow into the scene. No scrollbar is touched.
     const getDwell = (): number => resolve(progressRef.current).dwell;
 
-    // MAGNETIC SETTLE — subtle "catch" when the visitor nearly stops near a scene
-    // centre. No preventDefault anywhere; the scroll tracker stays the source of
-    // truth. Under reduced motion createMagneticSettle returns a no-op stub so no
-    // conditional needed here. Wired after getProgress is live.
-    const settle = createMagneticSettle(getProgress, isReduced);
-
     // REDUCED-MOTION CONTRACT: under the resolved reduced-motion preference we do NOT
     // mount the WebGL engine at all — no createScene import, no rAF loop. The still
     // poster slideshow (rendered below) stands in for the live hero while the
@@ -425,7 +418,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       const disposeReduced = mountReducedMotionHero();
       return () => {
         cancelled = true;
-        settle.stop(); // no-op stub under reduced motion
         disposeReduced();
         unsub();
         tracker.stop();
@@ -496,7 +488,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     document.addEventListener('astro:before-swap', onBeforeSwap);
     return () => {
       cancelled = true;
-      settle.stop();
       document.removeEventListener('astro:before-swap', onBeforeSwap);
       unsub();
       tracker.stop();
