@@ -614,21 +614,23 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-copy {
 }
 /* Local text scrim (Task 3b): a soft dark pool centred behind the bottom compass
    so its readout keeps authority on the brightest orange-star frame, the same
-   restrained treatment as the manifesto block. Bleeds past the box and fades to
-   transparent at every edge so it never reads as a panel; sits behind the rose +
-   readout (z -1) and never catches pointer events. */
+   restrained treatment as the manifesto block. The element is oversized well past
+   the visible pool and the gradient reaches full transparency at 86% of its radius
+   — comfortably INSIDE the box — because the previous version (ellipse 120% tall,
+   transparent only at 100%) was still ~15% black where the box ended, stamping a
+   straight rectangle edge over the bright red-giant / yellow-star frames. */
 .hud-compass::before {
   content: '';
   position: absolute;
   z-index: -1;
-  inset: -1.1rem -2.2rem;
+  inset: -3rem -5rem;
   pointer-events: none;
   background:
-    radial-gradient(80% 120% at 50% 60%,
+    radial-gradient(50% 52% at 50% 55%,
       rgba(0, 0, 0, 0.42) 0%,
-      rgba(0, 0, 0, 0.24) 46%,
-      rgba(0, 0, 0, 0.08) 72%,
-      transparent 100%);
+      rgba(0, 0, 0, 0.24) 38%,
+      rgba(0, 0, 0, 0.08) 62%,
+      transparent 86%);
 }
 /* The compass is the page's single bottom-centre scroll-state instrument, visible
    throughout the cinematic scroll. Hidden ONLY until the scene's first frame paints
@@ -1008,11 +1010,34 @@ body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
   .hud-nav-destination {
     font-size: var(--text-micro);
   }
+  /* MOBILE scene-name readout — the strip's rows collapse to bare numbered glyphs
+     once the HUD is active (body.hud-active .hud-nav-copy is width 0 above), which
+     left the home nav as five UNLABELED dots. This single mono line above the strip
+     names the CURRENT scene + its destination (e.g. "RED GIANT · GRAVEYARD"), so the
+     numbers always have a legend. Hidden while the rail still shows its own labels
+     (pre-activation) to avoid duplication. */
   .hud-nav-mobile-readout {
-    /* Labels are now always visible on every rail row (hud-nav-copy un-collapsed at
-       rest), so this single-line readout duplicates what each row already shows.
-       Hide it to avoid redundancy. */
     display: none;
+  }
+  body.hud-active .hud-nav-mobile-readout {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 0.55em;
+    margin-bottom: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--fg);
+    text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  }
+  body.hud-active .hud-nav-mobile-readout span + span {
+    color: var(--fg-faint);
+  }
+  body.hud-active .hud-nav-mobile-readout span + span::before {
+    content: '· ';
+    color: var(--fg-faint);
   }
 }
 
@@ -1640,6 +1665,15 @@ body.hud-active .star-marker {
   box-shadow:
     0 0 18px 4px color-mix(in oklch, var(--marker-gold) 65%, transparent),
     0 0 5px 0 color-mix(in oklch, var(--marker-gold) 98%, transparent);
+}
+
+/* THE BEGINNING marker frames the REAL pale blue dot (it is projection-anchored
+   dead on the speck). A gold core here would sit exactly on top of the scene's
+   payoff and turn the famous blue point amber — so this reticle has no core of
+   its own; the WebGL speck plays that role. All other escalation cues (hex,
+   arms, card) still carry the interaction feedback. */
+.star-marker[data-marker='beginning'] .star-marker-dot {
+  display: none;
 }
 
 /* (The per-type inner glyph was removed: the reticle's resting centre is now the

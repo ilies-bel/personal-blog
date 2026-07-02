@@ -252,7 +252,12 @@ export function tuneParticlesForDevice(tier: DeviceTier = 'high'): number {
   // 16k/24k is the floor before the cloud visibly thins for nothing.) The ratio-based
   // densityCompensation below auto-scales to the smaller count, and the cheap
   // quarter-res bloom + grain-fattening still smooth the thinned cloud into gas.
-  if (tier === 'low') return width < 480 ? 16_000 : 24_000;
+  // 16k/24k proved too thin even with the re-tuned density compensation: at ratio
+  // ≈75× the red giant still resolved as discrete dots with black gaps (confetti).
+  // 28k/40k closes the gaps with MORE grains rather than ever-fatter sprites — at
+  // these sizes the additive fill cost is comparable (28k×3.3² ≈ 16k×4.0²) but the
+  // coverage is real, and vertex count at 28-40k is negligible on any GPU.
+  if (tier === 'low') return width < 480 ? 28_000 : 40_000;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
   if (width < 480) return 95_000;
   if (isMobile) return 150_000;
@@ -316,19 +321,20 @@ export function densityCompensation(
   if (!lowTier || actualCount <= 0 || actualCount > LOW_TIER_MAX_PARTICLES) {
     return { brightGain: 1, pointGain: 1 };
   }
-  const ratio = fullCount / actualCount; // how many grains were dropped (≈8.6× at 140k, ≈13× at 90k)
-  // Brightness: ratio^0.30 (≈1.9× at 140k, ≈2.1× at 90k) gives the thinned cloud a
-  // MODEST additive top-up. Much gentler than the old ratio^0.48 (≈4.2×): now that the
-  // cheap bloom spreads each grain's light and there are 2× more grains, the cloud
-  // already accumulates most of the brightness on its own — over-boosting it (the old
-  // tuning) is what flat-whited the lit core and read as chunk. Capped at 2.4×.
-  const brightGain = Math.min(2.4, Math.pow(ratio, 0.30));
-  // Size: ratio^0.32 (≈2.0× at 140k, ≈2.2× at 90k) fattens each grain enough to overlap
-  // its neighbours into continuous gas, but only MODESTLY — the bloom now does the final
-  // smoothing, so we no longer need the old ratio^0.52 (≈4.5×) sprite-bloating that turned
-  // grains into big hard discs. The disk shader widens each grain's gaussian CORE in step
-  // (disk.glsl softP/softN, driven by uPointGain) so the fattened grains overlap smoothly.
-  // Capped at 2.6×.
-  const pointGain = Math.min(2.6, Math.pow(ratio, 0.32));
+  const ratio = fullCount / actualCount; // how many grains were dropped (≈50× at 24k, ≈75× at 16k)
+  // HISTORY / WHY THE CAPS MOVED: these exponents+caps were tuned when the low
+  // buckets were 90k/140k (ratios ≈8.6-13×, gains landing ≈1.9-2.2×, caps 2.4/2.6
+  // never engaged). The buckets were later cut hard to 16k/24k for CPU-throttle
+  // performance — ratios jumped to ≈50-75× — but the caps stayed, clamping the
+  // compensation at a level tuned for 5× more grains. Result: the mobile red giant
+  // rendered as sparse orange CONFETTI on black (the audit finding). The caps now
+  // sit just above what ratio^exp yields at the 16k bucket, so the fractional-power
+  // curve — not the clamp — sets the gain at every real bucket.
+  // Brightness: ratio^0.30 (≈3.2× at 24k, ≈3.65× at 16k).
+  const brightGain = Math.min(3.8, Math.pow(ratio, 0.30));
+  // Size: ratio^0.32 (≈3.5× at 24k, ≈4.0× at 16k) — the disk shader widens each
+  // grain's gaussian CORE in step (disk.glsl softP/softN, driven by uPointGain) so
+  // the fattened grains overlap into a continuous surface instead of discrete dots.
+  const pointGain = Math.min(4.2, Math.pow(ratio, 0.32));
   return { brightGain, pointGain };
 }

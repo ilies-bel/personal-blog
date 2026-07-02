@@ -542,8 +542,8 @@ export function lifecycle(input: LifecycleInput): StarState {
   // colour #DDEBFF and its breathing pulse live in disk.glsl.ts and just need light
   // to survive on; the seed-gate there controls how many points draw the speck.)
   const DOT_EXPOSURE = 0.46; // was 0.28 — lift the whole frame so the speck isn't tone-mapped to black
-  const DOT_BLOOM_STRENGTH = 0.18; // was 0.03 — a soft halo around the speck (humble, not a flare)
-  const DOT_BLOOM_RADIUS = 0.30; // was 0.10 — widen the halo a touch so the few-pixel cluster glows softly
+  const DOT_BLOOM_STRENGTH = 0.05; // near-off: UnrealBloom's low-res mips stamp a SQUARE gradient around a few-pixel source (bilinear texel upsample). The dot's halo is drawn in-scene by round gaussian sprites instead (disk.glsl.ts DOT_HALO_GATE).
+  const DOT_BLOOM_RADIUS = 0.16; // 0.30 -> 0.16: the wide radius smeared a huge muddy GREY disc across the whole ending frame
 
   // --- shared star backdrop (yellow star + red giant) ----------------------
   // The twinkling far star dome (the sun rig's dome) is the BACKGROUND for the

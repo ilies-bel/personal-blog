@@ -589,6 +589,11 @@ export default function HudNavigation({
   const phase = sceneForProgress(progress).phase;
   const atTop = progress <= SCROLL_HINT_DISMISS_AT;
   const recovery = idle && phase === 'transition' && !atTop;
+  // FINALE: deep inside the closing dot hold (raw scroll ≥ 96%) the journey is
+  // over — "SCROLL TO EXPLORE" would point at nothing. The idle readout flips to
+  // an arrival: the beat's name, plus the one true fact about scrolling back up
+  // (going up from the bottom plays the stellar lifecycle in its natural order).
+  const atEnd = progress >= 0.96;
 
   // CUE → LIVE: the standing scroll cue dismisses on the FIRST real scroll. It
   // reuses the existing scroll-hint dismiss seam — once progress passes
@@ -829,6 +834,20 @@ export default function HudNavigation({
         aria-hidden="true"
       >
         {idle ? (
+          atEnd ? (
+            <>
+              {/* FINALE readout — the arrival beat at the bottom of the journey. */}
+              <p className="hud-compass-read hud-compass-read--idle">
+                <span className="hud-compass-prompt">[ </span>
+                <span className="hud-compass-label">THE BEGINNING</span>
+                <span className="hud-compass-prompt"> ]</span>
+              </p>
+              <p className="hud-compass-dest">
+                <span className="hud-compass-arrow">↑</span>
+                <span>play it forward</span>
+              </p>
+            </>
+          ) : (
           <>
             <p className="hud-compass-read hud-compass-read--idle">
               <span className="hud-compass-prompt">[ </span>
@@ -845,6 +864,7 @@ export default function HudNavigation({
               &nbsp;
             </p>
           </>
+          )
         ) : (
           <>
             <p className="hud-compass-read">

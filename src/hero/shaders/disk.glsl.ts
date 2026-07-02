@@ -1617,9 +1617,29 @@ export const diskVertexShader = /* glsl */ `
       // DOT_SEED_GATE / DOT_SIZE_MUL are the taste levers: raise the gate or the size to
       // make the speck bigger/brighter, lower them to make it quieter. (Light to render it
       // comes from the DOT_* grade in lifecycle.ts; colour #DDEBFF + breath in the frag.)
-      const float DOT_SEED_GATE = 0.0006;  // fraction of the cloud that draws the speck (~0.06%)
-      const float DOT_SIZE_MUL  = 0.18;    // per-point size multiplier (small soft point)
-      gl_PointSize = (aSeed < DOT_SEED_GATE) ? clamp(baseSize * DOT_SIZE_MUL, 0.7, 1.8) : 0.0;
+      // ROUND-SPECK RETUNE: the old gate (0.0006, ~700 pts) at 0.7-1.8 px stacked into a
+      // hard-edged white SQUARE (each point is 1-2 device pixels — the round falloff can't
+      // resolve below ~3 px, so the additive pile-up read as a solid square sprite). Fewer
+      // points (~350), each LARGER (2.2-4.5 px) with a gaussian profile in the fragment
+      // shader, fuse into one small soft ROUND glow — the famous speck, not a pixel block.
+      //
+      // HALO SPRITES: the speck's soft glow is drawn IN-SCENE by a second tiny subset of
+      // points rendered as large (26 px), very dim gaussian sprites. The post bloom CANNOT
+      // make this halo: at its low mip resolutions the few-pixel speck is a single texel,
+      // and bilinear upsampling stamps a SQUARE gradient around it (the audit's square
+      // glow). In-scene gaussians are perfectly round at any size; the bloom is dialled
+      // near-off for the dot in lifecycle.ts.
+      const float DOT_SEED_GATE = 0.0003;   // fraction of the cloud that draws the speck (~0.03%)
+      const float DOT_HALO_GATE = 0.00034;  // the next ~50 points become the round halo sprites
+      const float DOT_SIZE_MUL  = 0.55;     // per-point size multiplier (soft round speck)
+      if (aSeed < DOT_SEED_GATE) {
+        gl_PointSize = clamp(baseSize * DOT_SIZE_MUL, 2.2, 4.5);
+      } else if (aSeed < DOT_HALO_GATE) {
+        gl_PointSize = 26.0;
+        vBright *= 0.035; // whisper-dim: ~50 stacked sprites sum to a soft halo, not a glow ball
+      } else {
+        gl_PointSize = 0.0;
+      }
     }
     if(drop) gl_PointSize = 0.0;
   }
@@ -1692,6 +1712,12 @@ export const diskFragmentShader = /* glsl */ `
     // (cloud, not confetti) even when the low tier thins the cloud right out.
     if(vPlaceholder > 1.5 && vPlaceholder < 2.5){
       a = exp(-d*d*(4.5/softN));
+    }
+    // pale blue dot: gaussian profile so the few overlapping speck points fuse into
+    // one small round glow. Without this the dot fell through to the generic
+    // smoothstep, which at 2-4 px point sizes rendered each point as a hard square.
+    if(vPlaceholder > 2.9){
+      a = exp(-d*d*6.0);
     }
 
     // --- black-hole accretion ramp (ITEM 2: COLD silver / bone / faint blue-white,
@@ -1951,10 +1977,11 @@ export const diskFragmentShader = /* glsl */ `
         ncol = mix(ncol, goldStar,  smoothstep(0.45, 0.92, accreteHeat)); // warm white → gold (second leg, into the star)
         pcol = ncol;
       } else {
-        // pale blue dot: the famous faint blue point. ITEM 6: the dot reads as a clean
-        // blue-WHITE speck #DDEBFF (lifted from the dusky 0.52,0.70,0.96) so the closing
-        // signal is crisp and human-scale against the near-black #020304 room.
-        pcol = vec3(0.87, 0.92, 1.0);
+        // pale blue dot: the famous faint blue point. Pushed a step bluer than the old
+        // near-white (0.87,0.92,1.0): the dot grade desaturates (gradeSat 0.72), which
+        // was washing the speck to plain grey-white — starting bluer survives the grade
+        // and lands on a readable PALE BLUE, still far from a saturated sci-fi cyan.
+        pcol = vec3(0.72, 0.84, 1.0);
       }
       col = pcol;
     }

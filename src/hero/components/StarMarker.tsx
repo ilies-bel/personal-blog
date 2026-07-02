@@ -564,6 +564,9 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       data-bright={isBright}
       data-bg={placement.bg}
       data-side={cardSide}
+      // Which placement this reticle frames — lets CSS special-case a marker (the
+      // 'beginning' one suppresses its gold core so the REAL pale blue dot shows).
+      data-marker={placement.id}
       // Until the intro loader is fully gone the marker is INERT — remove it from
       // the tab order (CSS pointer-events:none already blocks click/hover). Once
       // loader-gone fires we restore default focusability (undefined → the <a>'s

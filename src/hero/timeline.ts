@@ -98,9 +98,10 @@ export { smoothstep };
 //
 // Phase bands (in lifecycleProgress space), RE-TIMED to the ART-DIRECTION chapter
 // grid (the raw-scroll band each occupies under the reverse flip is raw = 1 - lifecycle):
-//   0.00-0.10 dot hold / content-unlock (raw 90-100) | 0.10-0.26 dot->nebula grow |
-//   0.26-0.51 nebula (raw 49-74, collapse WIDENED) | 0.51-0.61 yellow ignite+hold (raw 39-49) |
-//   0.61-0.77 red giant grow+orbit+close (raw 23-39) | 0.77-0.85 reverse collapse FLASH (raw 15-23) |
+//   0.00-0.10 dot hold / content-unlock (raw 90-100) | 0.10-0.245 dot->nebula grow |
+//   0.245-0.495 nebula (collapse WIDENED) | 0.495-0.595 yellow ignite+hold |
+//   0.595-0.755 red giant grow+orbit+close | 0.755-0.85 reverse collapse + BLAST WINDOW
+//   (8b gives the nova its own linear span so it reads at scroll speed) |
 //   0.85-1.00 black-hole settle + event-horizon hold / portfolio lure (raw 0-15).
 export function legacyStageForProgress(progress: number): number {
   return legacyStageForProgressFromTable(progress);

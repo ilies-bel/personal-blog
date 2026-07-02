@@ -65,6 +65,12 @@ const easeOutExpo = (t: number): number => {
   const x = clamp01(t);
   return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
 };
+// Gentler accelerating fall than easeInQuart — used by the collapse APPROACH band
+// (8a) so the in-rush still accelerates without compressing its tail as hard.
+const easeInCubic = (t: number): number => {
+  const x = clamp01(t);
+  return x * x * x;
+};
 
 export type Easing =
   | 'linear'
@@ -72,6 +78,7 @@ export type Easing =
   | 'easeOutCubic'
   | 'easeInOutCubic'
   | 'easeInOutSine'
+  | 'easeInCubic'
   | 'easeInQuart'
   | 'easeOutExpo';
 
@@ -84,6 +91,7 @@ const EASE: Record<Easing, (t: number) => number> = {
   easeOutCubic,
   easeInOutCubic,
   easeInOutSine,
+  easeInCubic,
   easeInQuart,
   easeOutExpo,
 };
@@ -173,10 +181,12 @@ export const SEGMENTS: readonly Segment[] = [
     settledWindow: [4.5, 4.7],
   },
   // 2 — NEBULA grow: dot blooms into the cloud, linear on purpose (4.5 -> 3.42).
-  // The PALE-DOT chapter (raw 74-88%): the simple far dot loosening toward the cloud.
+  // The PALE-DOT chapter: the simple far dot loosening toward the cloud. TRIMMED
+  // 0.16 -> 0.145: this long, quiet growth leg donated 0.015 of scroll to the
+  // reverse-supernova blast window (band 8b), which was blink-and-miss at ~70 px.
   {
     sceneId: 'nebula',
-    weight: 0.16,
+    weight: 0.145,
     stageStart: 4.5,
     stageEnd: 3.42,
     easing: 'linear',
@@ -270,17 +280,31 @@ export const SEGMENTS: readonly Segment[] = [
     phase: 'idle',
     settledWindow: [2.03, 2.07],
   },
-  // 8 — END collapse: stage JUMPS to 1.05 here (band 7 ended 2.05) then falls
-  // to 0.5 — the intentional discontinuity. easeInQuart. SHORTENED (0.07 -> 0.04):
-  // the reverse-collapse is a TRANSITION FLASH, not a chapter (ITEM 3) — it should
-  // read as the black-hole lensing line compressing inward into the red-giant surface
-  // in well under a second of scroll, not a held sunburst beat.
+  // 8a — END collapse approach: stage JUMPS to 1.05 here (band 7 ended 2.05) then
+  // falls to the blast threshold (0.72) — the intentional discontinuity. Still an
+  // accelerating ease (the in-rush), but the BLAST itself is split out below.
   {
     sceneId: 'end',
-    weight: 0.04,
+    weight: 0.025,
     stageStart: 1.05,
+    stageEnd: 0.72,
+    easing: 'easeInCubic',
+    phase: 'transition',
+  },
+  // 8b — END supernova BLAST WINDOW: the nova envelope (Gaussian in stage, centre
+  // 0.62 σ0.09 — createScene.ts) lives almost entirely in stage 0.72..0.52. Under
+  // the old single easeInQuart band this whole stretch compressed into ~70 px of
+  // scroll — one wheel flick skipped the headline beat entirely (the audit's
+  // "blink-and-miss nova"). Giving the blast its OWN LINEAR span (~0.03 ≈ half a
+  // viewport of scroll) makes the shock disk readable at normal scroll speed while
+  // the beat still plays as a flash, not a chapter (ITEM 3's intent is kept: the
+  // approach above stays fast and accelerating).
+  {
+    sceneId: 'end',
+    weight: 0.03,
+    stageStart: 0.72,
     stageEnd: 0.5,
-    easing: 'easeInQuart',
+    easing: 'linear',
     phase: 'transition',
   },
   // 9 — END supernova: 0.5 -> 0.32, easeOutCubic. SHORTENED (0.07 -> 0.04) — see seg 8.
@@ -319,7 +343,7 @@ export const SEGMENTS: readonly Segment[] = [
 /** Prefix-sum of the segment weights — the progress breakpoints. Length is
  *  SEGMENTS.length + 1: STARTS[i] is span i's start progress, STARTS[i + 1] its
  *  end. Computed once at module load. Equals (to float precision)
- *  [0, 0.10, 0.26, 0.31, 0.51, 0.58, 0.61, 0.74, 0.77, 0.81, 0.85, 0.93, 1.0]. */
+ *  [0, 0.10, 0.245, 0.295, 0.495, 0.565, 0.595, 0.725, 0.755, 0.78, 0.81, 0.85, 0.93, 1.0]. */
 export const STARTS: readonly number[] = (() => {
   const out: number[] = [0];
   let acc = 0;
@@ -706,8 +730,10 @@ export const SCENES: readonly LifecycleScene[] = [
       // as the cloud settles (~0.27) and out before the yellow ignition; outStart/outEnd
       // shift +0.08 with the collapse span so the copy still clears just before ignition
       // (STAR_IGNITION_START 0.51). `at` re-centred on the longer band.
-      at: 0.39,
-      text: { inStart: 0.28, inEnd: 0.31, outStart: 0.49, outEnd: 0.51 },
+      // (Shifted −0.015 with bands 3-7 when band 2 donated scroll to the nova blast
+      // window — the copy still sits on the settled cloud and clears before ignition.)
+      at: 0.375,
+      text: { inStart: 0.265, inEnd: 0.295, outStart: 0.475, outEnd: 0.495 },
       state: 'nebula',
       // ITEM 8: a clear boundary in the raw material saves a thousand future decisions.
       down: 'One clear boundary can save a thousand future decisions.',
@@ -761,8 +787,10 @@ export const SCENES: readonly LifecycleScene[] = [
       // 0.58 -> 0.61 (raw 39-42%). The headline sits in that stable, still window. The band
       // shifts +0.08 in lockstep with the holds moving forward (the hold's LOOK is unchanged,
       // only its scroll position), so the copy still reads on the blazing settled sun.
-      at: 0.595,
-      text: { inStart: 0.58, inEnd: 0.59, outStart: 0.6, outEnd: 0.61 },
+      // (Shifted −0.015 with bands 3-7 for the nova blast window; the window is
+      // re-fitted inside the new [0.565, 0.595] settled-yellow idle hold.)
+      at: 0.58,
+      text: { inStart: 0.565, inEnd: 0.575, outStart: 0.585, outEnd: 0.595 },
       state: 'yellow star',
       down: 'Systems grow. Interfaces drift. Complexity compounds.',
       up: 'Systems grow. Interfaces drift. Complexity compounds.',
@@ -821,8 +849,10 @@ export const SCENES: readonly LifecycleScene[] = [
       // LOOK unchanged), so the headline window is re-fitted INSIDE the new [0.74, 0.77]
       // hold — it still reads on the surface/active-region close-up beat (ITEM 1's third
       // stage), AFTER the reveal + limb orbit.
-      at: 0.755,
-      text: { inStart: 0.74, inEnd: 0.75, outStart: 0.76, outEnd: 0.77 },
+      // (Shifted −0.015 with bands 3-7 for the nova blast window; re-fitted inside
+      // the new [0.725, 0.755] red idle hold so the copy clears before the collapse.)
+      at: 0.74,
+      text: { inStart: 0.725, inEnd: 0.735, outStart: 0.745, outEnd: 0.755 },
       state: 'red giant',
       // ITEM 8: complexity expands as the giant bloats — the work is to keep the centre readable.
       down: 'Complexity expands. My work is to keep the center readable.',
