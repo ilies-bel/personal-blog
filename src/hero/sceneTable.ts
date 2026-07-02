@@ -976,6 +976,23 @@ export function sceneActivatesHud(id: HudTargetId): boolean {
   return SCENE_BY_ID[id]?.activatesHud === true;
 }
 
+/** The lifecycle STATION nearest an arbitrary shader stage — the scene whose hud
+ *  anchor stage is closest. Used by the reading side (writing index rows, the
+ *  article-end continuation) to name/glyph a post's `scene.journey` endpoints
+ *  (e.g. journey [3.5, 2.05] → NEBULA → RED GIANT) so the list and the article
+ *  backdrop speak the same celestial system. Pure; server-render safe. */
+export interface JourneyStation {
+  label: string;
+  glyphSrc: string;
+}
+export function stationForStage(stage: number): JourneyStation {
+  let best = SCENES[0].hud;
+  for (const scene of SCENES) {
+    if (Math.abs(scene.hud.stage - stage) < Math.abs(best.stage - stage)) best = scene.hud;
+  }
+  return { label: best.label, glyphSrc: best.glyphSrc };
+}
+
 // ===========================================================================
 // CAMERA TABLE
 //

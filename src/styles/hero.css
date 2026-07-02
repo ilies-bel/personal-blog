@@ -354,7 +354,12 @@
    readable regardless of which backdrop branch a given device renders. */
 body.article-page .bh-backdrop,
 body.article-page .bh-poster-slideshow {
-  opacity: 0.4;
+  /* 0.4 → 0.55: with the old opacity (times the heavy side scrim below) the
+     scene-journey backdrop netted out at ~5% luminance — the authored lifecycle
+     scrub was effectively INVISIBLE while reading. The column stays protected by
+     the ::after ellipse + the centre scrim; the extra light lands in the gutters,
+     where the journey is supposed to live. */
+  opacity: 0.55;
   filter: saturate(0.72) brightness(0.86) sepia(0.18);
 }
 body.article-page .bh-backdrop::after,
@@ -390,10 +395,15 @@ body.article-page .bh-poster-slideshow::before {
   content: "";
   position: fixed;
   inset: 0;
+  /* Rebalanced: the old band (0.88 sides / 0.62 centre) crushed the GUTTERS —
+     the one place the scene journey can show — while the centre column was
+     already protected by the ::after ellipse. Now the CENTRE carries the deeper
+     scrim (belt + braces under the text) and the sides open up so the lifecycle
+     scrub reads beside the column. */
   background: linear-gradient(90deg,
-    rgba(0, 0, 0, 0.88),
-    rgba(0, 0, 0, 0.62),
-    rgba(0, 0, 0, 0.88));
+    rgba(0, 0, 0, 0.45),
+    rgba(0, 0, 0, 0.7),
+    rgba(0, 0, 0, 0.45));
   pointer-events: none;
   z-index: 0;
 }
