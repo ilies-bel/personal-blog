@@ -2,14 +2,9 @@
 // full bone across its scroll band (no fade, no direction swap, no opening intro).
 // Copy + timing live colocated per scene in ../sceneTable (shared with index.astro's SSR fallback).
 import { BEATS } from '../sceneTable';
-import { band, fadeInOut } from '../scroll';
+import { band } from '../scroll';
 import { lifecycleProgress } from '../timeline';
 import { useSceneState } from './SceneStateContext';
-
-// The closing pale-blue-dot beat is the ONE line that does NOT hard-cut: it fades
-// out at the very end so the lone speck is alone in black (see its text band in
-// sceneTable). Identified by state so re-ordering the table never breaks the gate.
-const DOT_BEAT_STATE = 'pale blue dot';
 
 export default function ManifestoOverlay() {
   const { progress, reduced, explorationMode } = useSceneState();
@@ -27,7 +22,7 @@ export default function ManifestoOverlay() {
         // build software that stays understandable." on the dot) while it now
         // appears at the correct PHYSICAL scroll position under the reverse arc.
         const lifecycleP = lifecycleProgress(progress);
-        // Three visibility regimes, by path:
+        // Two visibility regimes, by path:
         //
         // 1) REDUCED MOTION shows STILL posters. The authored bands have GAPS between
         //    them; on the live hero those are filled by the morphing canvas, but with
@@ -37,24 +32,16 @@ export default function ManifestoOverlay() {
         //    shows exactly one line at the boundary, never two). The final beat holds to
         //    1 (bottom of page). Exactly one headline is always on screen.
         //
-        // 2) LIVE hero, closing pale-blue-dot line: FADES rather than hard-cuts via the
-        //    authored in/out ramp, so it dims toward nothing in the final frame and the
-        //    lone speck is alone in black.
-        //
-        // 3) LIVE hero, every other beat: the authored narrow band [inStart, outEnd] —
-        //    a hard cut, the deliberate gaps filled by the morphing canvas. Byte-identical.
+        // 2) LIVE hero: the authored narrow band [inStart, outEnd] — a hard cut, the
+        //    deliberate gaps filled by the morphing canvas. This includes the closing
+        //    pale-blue-dot line: it used to fade toward nothing at the very bottom
+        //    ("the lone speck alone in black"), but readers experienced that as the
+        //    finale statement DISAPPEARING when they scrolled all the way down — so it
+        //    now holds at full bone through the bottom frame like every other beat.
         const nextInStart = BEATS[i + 1]?.text.inStart;
         const opacity = reduced
           ? band(lifecycleP, beat.text.inStart, nextInStart !== undefined ? nextInStart - 1e-4 : 1)
-          : beat.state === DOT_BEAT_STATE
-            ? fadeInOut(
-                lifecycleP,
-                beat.text.inStart,
-                beat.text.inEnd,
-                beat.text.outStart,
-                beat.text.outEnd,
-              )
-            : band(lifecycleP, beat.text.inStart, beat.text.outEnd);
+          : band(lifecycleP, beat.text.inStart, beat.text.outEnd);
         const visible = opacity > 0.05;
         return (
           <div

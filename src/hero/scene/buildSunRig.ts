@@ -236,7 +236,11 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
       const k = kMin + t * (kMax - kMin) + (Math.random() - 0.5) * 0.035;
       const kN = (k - kMin) / (kMax - kMin + 1e-6);
       const lean = (0.1 + 0.9 * kN) * ar.archLean + randn() * ar.fan;
-      const np = 110 + Math.floor(k * 430);
+      // Doubled sampling density (110+430k -> 240+680k): with the old counts the
+      // points along an arch left visible gaps at production scale, so each loop
+      // read as a dotted wire. Denser samples fuse into a continuous filament
+      // (per-point brightness is cut in sunLoopFrag to keep total energy level).
+      const np = 240 + Math.floor(k * 680);
       const thick = R * (0.0014 + Math.random() * 0.0026);
       for (let j = 0; j < np; j++) {
         let u = (j + (Math.random() - 0.5) * 0.16) / (np - 1);
@@ -297,47 +301,6 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     }
   };
 
-  // feathery red->orange erupting prominence (dense flame with glowing root)
-  const buildProminence = (c: V3, scale: number): void => {
-    scale = scale || 1.0;
-    CUR.seq = 0.0;
-    const fr = frameBasis(c);
-    const lean = vnorm(vadd(vscale(fr[0], 0.35), vscale(fr[1], 0.15)));
-    const root = Math.round(90 * scale);
-    for (let n = 0; n < root; n++) {
-      const sc = 0.045 * scale;
-      const dir = vnorm(vadd(c, vadd(vscale(fr[0], randn() * sc), vscale(fr[1], randn() * sc))));
-      const rad = R * (1.0 + Math.random() * 0.1 * scale);
-      const s = (rad / R - 1.0) / (0.1 * scale + 1e-6);
-      const col: V3 = [1.0, 0.08 + s * 0.1, 0.01 + s * 0.02];
-      push(vscale(dir, rad), col, 0.5 + Math.random() * 0.5, Math.random(), 0.6 + Math.random() * 0.3);
-    }
-    const nFil = Math.round(30 * scale);
-    for (let f = 0; f < nFil; f++) {
-      const dir0 = vnorm(vadd(c, vadd(vscale(fr[0], randn() * 0.018), vscale(fr[1], randn() * 0.018))));
-      const height = R * (0.18 + Math.random() * 0.18) * scale;
-      const wAmp = R * (0.01 + Math.random() * 0.026);
-      const wFreq = 3.0 + Math.random() * 3.5;
-      const phase = Math.random() * 6.28;
-      const latDir = vnorm(vadd(vscale(fr[0], Math.cos(phase)), vscale(fr[1], Math.sin(phase))));
-      const npf = 100 + Math.floor(Math.random() * 40);
-      for (let j = 0; j < npf; j++) {
-        const s = j / (npf - 1);
-        const rad = R + height * s;
-        const lat = wAmp * Math.sin(s * wFreq * Math.PI + phase) * Math.pow(s, 0.7);
-        const curl = R * 0.055 * scale * Math.pow(s, 1.4);
-        const fray = Math.pow(s, 2.0) * R * 0.024 * randn();
-        let P = vadd(vscale(dir0, rad), vscale(latDir, lat));
-        P = vadd(P, vscale(lean, curl));
-        P = vadd(P, vadd(vscale(fr[0], randn() * fray), vscale(fr[1], randn() * fray)));
-        const col: V3 = [1.0, 0.06 + s * 0.2, 0.004 + s * 0.025];
-        const bright = (0.85 - s * 0.35) * (0.85 + 0.4 * Math.random());
-        const size = 0.46 + Math.random() * 0.34 + (1.0 - s) * 0.55;
-        push(P, col, size, s, bright);
-      }
-    }
-  };
-
   const randDir = (): V3 => {
     const z = 2 * Math.random() - 1,
       ph = Math.random() * Math.PI * 2,
@@ -351,32 +314,26 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     CUR.dir = Math.random() < 0.5 ? 0 : 1;
   };
 
-  // The reference sun's activity is dominated by graceful ARCING coronal LOOPS that
-  // curve off the limb and return to the surface — NOT straight erupting spikes. So
-  // the loop arcades are the hero (kept plentiful) and the straight prominences are
-  // cut right back (they were reading as an urchin of spikes). The loops also arc a
-  // touch higher so the rainbow-arc shape is unmistakable.
-  const NA = 24; // loop arcades — the dominant feature
+  // The activity is graceful ARCING coronal LOOPS that curve off the limb and return
+  // to the surface. Pared back hard from the old 24-arcade + 4-prominence build: at
+  // production scale (the disc is ~250 px) the tall multi-arch arcades read as dotted
+  // wire whisks off the limb, and the saturated-red prominences read as a stray orange
+  // blob sprite whenever one faced the camera. Fewer, LOWER arcades with fewer arches
+  // each keep the limb alive without the wire-frame look; the prominences are gone —
+  // buildLoops' own footpoint knots and sprays carry the eruption energy.
+  const NA = 14; // loop arcades — the only limb activity
   for (let i = 0; i < NA; i++) {
     setLife();
-    const big = i < 8; // a good number of dramatic, tall arcades
+    const big = i < 4; // a few taller feature arcades
     buildLoops({
       c: randDir(),
-      sep: 0.15 + Math.random() * (big ? 0.20 : 0.13), // wider feet → broader arcs
-      nArch: big ? 14 + Math.floor(Math.random() * 8) : 6 + Math.floor(Math.random() * 6),
-      kBase: (big ? 0.46 : 0.26) + Math.random() * 0.18, // arch higher off the limb (taller rainbow)
+      sep: 0.11 + Math.random() * (big ? 0.14 : 0.09), // compact feet → loops stay in scale with the disc
+      nArch: big ? 8 + Math.floor(Math.random() * 5) : 4 + Math.floor(Math.random() * 4),
+      kBase: (big ? 0.24 : 0.16) + Math.random() * 0.08, // low arcs hugging the limb
       archLean: (Math.random() * 2 - 1) * (big ? 0.7 : 0.5),
-      fan: 0.07 + Math.random() * 0.06,
+      fan: 0.05 + Math.random() * 0.05,
       spanAz: Math.random() * Math.PI * 2,
     });
-  }
-  // Straight erupting prominences: CUT from 15 → 4 and made shorter. A few jets read
-  // as energetic; fifteen tall ones read as a spiky sea-urchin that hides the disc.
-  const NP = 4;
-  for (let i = 0; i < NP; i++) {
-    setLife();
-    CUR.dir = 0; // prominences always spray base -> tip
-    buildProminence(randDir(), 0.45 + Math.random() * 0.45); // shorter/denser, not towering spikes
   }
 
   const loopGeo = new THREE.BufferGeometry();
@@ -396,7 +353,10 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
   loopGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), R * 8);
 
   const loopMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uPix: { value: pixelRatio }, uPS: { value: 70.0 }, uFade: { value: 1 } },
+    // uPS 70 -> 150: fatter points so consecutive samples along an arc overlap into a
+    // continuous glowing filament instead of a bead-chain (the wire-whisk artifact).
+    // At the production disc size (~200 px) the old 70 gave ~1 px beads.
+    uniforms: { uTime: { value: 0 }, uPix: { value: pixelRatio }, uPS: { value: 150.0 }, uFade: { value: 1 } },
     vertexShader: sunLoopVert,
     fragmentShader: sunLoopFrag,
     transparent: true,

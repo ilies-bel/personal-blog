@@ -5,7 +5,6 @@ import { SITE_TITLE, SOCIALS } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
-const home = href('').replace(/\/+$/, '') || '/';
 ---
 
 {/* About reads as an overlay panel floating in the same room as the hero: the
@@ -23,13 +22,6 @@ const home = href('').replace(/\/+$/, '') || '/';
   {/* Our signature object, pinned to its calm nebula frame and dimmed by CSS —
      the same asset as the hero, here as quiet atmosphere, not the showpiece. */}
   <BlackHole client:only="react" backdrop />
-
-  {/* Close: returns to the hero scene this panel floats over. Plain mono label
-     with gold-accent hover — the bracket gesture is reserved for current/locked
-     targets (subnav lock, StarMarker reticle). */}
-  <a class="about-close" href={home} aria-label="Close and return to the home scene">
-    <span class="about-close-label">Close</span>
-  </a>
 
   <main class="about-shell">
     <article class="about-panel">
@@ -51,6 +43,15 @@ const home = href('').replace(/\/+$/, '') || '/';
         The homepage is a scroll-controlled stellar lifecycle: a small visual
         argument for restraint, pressure, collapse, and the kind of work that
         keeps its shape.
+      </p>
+
+      {/* The graveyard is deliberately NOT a headline destination in the site
+          nav — it belongs here, in first person, as part of who I am: the work
+          that failed is kept and owned, not hidden. */}
+      <p class="about-body">
+        Not everything I build survives. The projects that didn’t make it are
+        kept in <a href={href('graveyard')}>the graveyard</a> — dated, honoured,
+        and left readable, because owning the dead ends is part of the craft.
       </p>
 
       <div class="about-principles" aria-label="Working principles">
@@ -109,17 +110,7 @@ const home = href('').replace(/\/+$/, '') || '/';
   </main>
 </BaseLayout>
 
-{/* Overlay focus management: this page reads as a pseudo-modal floating over the
-    hero scene, so move initial focus to the Close link on load — keyboard users
-    start inside the overlay, with the natural "return to the scene" action in
-    hand. This is a real page (real nav, real links), not a JS dialog, so we do
-    NOT trap focus; just the one initial focus move, which is instant. */}
 <script>
-  // Overlay focus: pull initial keyboard focus into the Close affordance so the
-  // first keystroke is the natural "return to the scene" action. Instant, not a
-  // motion concern.
-  document.querySelector<HTMLAnchorElement>('.about-close')?.focus();
-
   // The personal moment: tag <body> with .has-signature-anim so the signature
   // starts hidden (clip-path collapsed, flourish stroke offset), then drop the
   // .is-drawn class on the signature when it enters the viewport. Under

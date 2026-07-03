@@ -8,6 +8,7 @@ import TesseractBackdrop from '../../hero/components/TesseractBackdrop.astro';
 import IslandsDemo from '../../components/mdx/IslandsDemo.tsx';
 import SceneFigure from '../../components/mdx/SceneFigure.tsx';
 import SignalsReadout from '../../components/mdx/SignalsReadout.tsx';
+import { stationForStage } from '../../hero/sceneTable';
 
 // Pre-render one static HTML page per post at build time (SSG → SEO-ready).
 export async function getStaticPaths() {
@@ -19,6 +20,19 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
+
+// CONTINUATION — the reading journey must not dead-end at a copyright line. The
+// "next note" walks the index order (newest → oldest, same as /writing), wrapping
+// from the oldest back to the newest; a single-post collection shows nothing.
+const allPosts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+const postIndex = allPosts.findIndex((p) => p.id === post.id);
+const nextPost = allPosts.length > 1 ? allPosts[(postIndex + 1) % allPosts.length] : null;
+// The next note's lifecycle STATION readout (same glyph pair as the writing index).
+const nextJourney = nextPost?.data.scene?.journey;
+const nextFrom = stationForStage(nextJourney ? nextJourney[0] : 0);
+const nextTo = nextJourney ? stationForStage(nextJourney[1]) : null;
 // `headings` feeds the ArticleHud section readout. Astro auto-assigns each heading an
 // `id` equal to its `slug`, so the HUD's IntersectionObserver can spy them by id with
 // no manual id injection in the MDX.
@@ -62,6 +76,7 @@ const sections = headings
   publishedTime={post.data.pubDate}
   modifiedTime={post.data.updatedDate}
   bodyClass="article-page"
+  minimalChrome
 >
   {/* Backdrop layer. Three modes (resolved in the frontmatter block above):
        • scene.journey set    → <ArticleScene>: the LIVE hero engine, its getStage
@@ -114,5 +129,37 @@ const sections = headings
       }
     </header>
     <Content components={mdxComponents} />
+
+    {/* CONTINUATION — the journey keeps moving at the article's end instead of
+        stopping on the copyright line. The next note's title carries ITS OWN
+        post-title transition:name, so clicking through morphs this teaser title
+        into the next article's h1 — the same shared-element choreography the
+        writing index uses. */}
+    {nextPost && (
+      <footer class="article-next" aria-label="Continue reading">
+        <p class="article-next-eyebrow">Next note</p>
+        <a class="article-next-link" href={href(`posts/${nextPost.id}/`)}>
+          <span
+            class="writing-journey"
+            role="img"
+            aria-label={`Scene: ${nextTo ? `${nextFrom.label} to ${nextTo.label}` : nextFrom.label}`}
+          >
+            <span class="writing-journey-glyph" style={`--glyph: url('${href(nextFrom.glyphSrc)}')`} />
+            {nextTo && <span class="writing-journey-arrow">→</span>}
+            {nextTo && (
+              <span class="writing-journey-glyph" style={`--glyph: url('${href(nextTo.glyphSrc)}')`} />
+            )}
+            <span class="writing-journey-label">
+              {nextTo ? `${nextFrom.label} → ${nextTo.label}` : nextFrom.label}
+            </span>
+          </span>
+          <span class="article-next-title" transition:name={`post-title-${nextPost.id}`}>
+            {nextPost.data.title}
+          </span>
+          <span class="article-next-desc">{nextPost.data.description}</span>
+        </a>
+        <a class="article-next-all" href={href('writing')}>[ all writing ]</a>
+      </footer>
+    )}
   </article>
 </BaseLayout>

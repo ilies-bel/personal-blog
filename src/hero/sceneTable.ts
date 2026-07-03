@@ -65,6 +65,12 @@ const easeOutExpo = (t: number): number => {
   const x = clamp01(t);
   return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
 };
+// Gentler accelerating fall than easeInQuart — used by the collapse APPROACH band
+// (8a) so the in-rush still accelerates without compressing its tail as hard.
+const easeInCubic = (t: number): number => {
+  const x = clamp01(t);
+  return x * x * x;
+};
 
 export type Easing =
   | 'linear'
@@ -72,6 +78,7 @@ export type Easing =
   | 'easeOutCubic'
   | 'easeInOutCubic'
   | 'easeInOutSine'
+  | 'easeInCubic'
   | 'easeInQuart'
   | 'easeOutExpo';
 
@@ -84,6 +91,7 @@ const EASE: Record<Easing, (t: number) => number> = {
   easeOutCubic,
   easeInOutCubic,
   easeInOutSine,
+  easeInCubic,
   easeInQuart,
   easeOutExpo,
 };
@@ -173,10 +181,12 @@ export const SEGMENTS: readonly Segment[] = [
     settledWindow: [4.5, 4.7],
   },
   // 2 — NEBULA grow: dot blooms into the cloud, linear on purpose (4.5 -> 3.42).
-  // The PALE-DOT chapter (raw 74-88%): the simple far dot loosening toward the cloud.
+  // The PALE-DOT chapter: the simple far dot loosening toward the cloud. TRIMMED
+  // 0.16 -> 0.145: this long, quiet growth leg donated 0.015 of scroll to the
+  // reverse-supernova blast window (band 8b), which was blink-and-miss at ~70 px.
   {
     sceneId: 'nebula',
-    weight: 0.16,
+    weight: 0.145,
     stageStart: 4.5,
     stageEnd: 3.42,
     easing: 'linear',
@@ -215,7 +225,7 @@ export const SEGMENTS: readonly Segment[] = [
     easing: 'easeInOutSine',
     phase: 'transition',
   },
-  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88). Weight is the
+  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.915). Weight is the
   // documented-grid 0.07 (an earlier art-direction draft shipped 0.08, which pushed the
   // prefix-sum to 1.01 and let the terminal band spill past p=1.0; 0.07 lands STARTS on
   // exactly 1.0 — see the table header).
@@ -223,25 +233,35 @@ export const SEGMENTS: readonly Segment[] = [
     sceneId: 'yellow',
     weight: 0.07,
     stageStart: 3.02,
-    stageEnd: 2.88,
+    stageEnd: 2.915,
     easing: 'easeOutCubic',
     phase: 'transition',
   },
-  // 5 — YELLOW hold: stay at the settled gold (flat 2.88). Weight TRIMMED 0.07 -> 0.03
+  // 5 — YELLOW hold: stay at the settled gold (flat 2.915). Weight TRIMMED 0.07 -> 0.03
   // (3rd iteration): this is a flat IDLE pause — shrinking its scroll duration frees 0.04
-  // for the widened nebula collapse (3b) WITHOUT changing the hold's LOOK (same stage 2.88,
+  // for the widened nebula collapse (3b) WITHOUT changing the hold's LOOK (same stage,
   // same settledWindow). It still holds long enough to read the yellow beat; the dwell makes
   // it feel longer than 0.03 of scroll alone.
+  //
+  // STAGE 2.915, NOT 2.88: the hold used to park at exactly SWAP_STAGE (2.88) — the top
+  // edge of the tight cloud↔mesh cross-dissolve ([2.86, 2.88], see bodyOwnership) AND the
+  // cloud side of transitions.ts's inclusive `stage <= SWAP_STAGE`. Parked there, the
+  // settled sun rendered mid-dissolve, and ease dither around the hold flipped it between
+  // the washed gold particle ball and the crisp textured mesh — the "yellow star light
+  // variations" report. 2.915 parks it in the middle of the pure-MESH band (2.88–2.95),
+  // clear of both the swap dissolve below and the collapse-floor crossfade above (2.95–3.0),
+  // so the held star is ALWAYS the one crisp mesh look.
   {
     sceneId: 'yellow',
     weight: 0.03,
-    stageStart: 2.88,
-    stageEnd: 2.88,
+    stageStart: 2.915,
+    stageEnd: 2.915,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [2.875, 2.9],
+    settledWindow: [2.905, 2.925],
   },
-  // 6 — RED grow: the giant grows, one continuous move (2.88 -> 2.05). WIDENED
+  // 6 — RED grow: the giant grows, one continuous move (2.915 -> 2.05, crossing the
+  // 2.86–2.88 cloud↔mesh dissolve mid-motion where it is masked by the travel). WIDENED
   // (0.07 -> 0.13) so the red-giant band owns raw 23-43%: this is the "reveal the
   // full mass" + "limb orbit/drift along the surface" stretch (ITEM 1's first two
   // beats), giving the camera room to arc around the body instead of snapping to the
@@ -249,7 +269,7 @@ export const SEGMENTS: readonly Segment[] = [
   {
     sceneId: 'red',
     weight: 0.13,
-    stageStart: 2.88,
+    stageStart: 2.915,
     stageEnd: 2.05,
     easing: 'easeInOutCubic',
     phase: 'transition',
@@ -270,17 +290,31 @@ export const SEGMENTS: readonly Segment[] = [
     phase: 'idle',
     settledWindow: [2.03, 2.07],
   },
-  // 8 — END collapse: stage JUMPS to 1.05 here (band 7 ended 2.05) then falls
-  // to 0.5 — the intentional discontinuity. easeInQuart. SHORTENED (0.07 -> 0.04):
-  // the reverse-collapse is a TRANSITION FLASH, not a chapter (ITEM 3) — it should
-  // read as the black-hole lensing line compressing inward into the red-giant surface
-  // in well under a second of scroll, not a held sunburst beat.
+  // 8a — END collapse approach: stage JUMPS to 1.05 here (band 7 ended 2.05) then
+  // falls to the blast threshold (0.72) — the intentional discontinuity. Still an
+  // accelerating ease (the in-rush), but the BLAST itself is split out below.
   {
     sceneId: 'end',
-    weight: 0.04,
+    weight: 0.025,
     stageStart: 1.05,
+    stageEnd: 0.72,
+    easing: 'easeInCubic',
+    phase: 'transition',
+  },
+  // 8b — END supernova BLAST WINDOW: the nova envelope (Gaussian in stage, centre
+  // 0.62 σ0.09 — createScene.ts) lives almost entirely in stage 0.72..0.52. Under
+  // the old single easeInQuart band this whole stretch compressed into ~70 px of
+  // scroll — one wheel flick skipped the headline beat entirely (the audit's
+  // "blink-and-miss nova"). Giving the blast its OWN LINEAR span (~0.03 ≈ half a
+  // viewport of scroll) makes the shock disk readable at normal scroll speed while
+  // the beat still plays as a flash, not a chapter (ITEM 3's intent is kept: the
+  // approach above stays fast and accelerating).
+  {
+    sceneId: 'end',
+    weight: 0.03,
+    stageStart: 0.72,
     stageEnd: 0.5,
-    easing: 'easeInQuart',
+    easing: 'linear',
     phase: 'transition',
   },
   // 9 — END supernova: 0.5 -> 0.32, easeOutCubic. SHORTENED (0.07 -> 0.04) — see seg 8.
@@ -319,7 +353,7 @@ export const SEGMENTS: readonly Segment[] = [
 /** Prefix-sum of the segment weights — the progress breakpoints. Length is
  *  SEGMENTS.length + 1: STARTS[i] is span i's start progress, STARTS[i + 1] its
  *  end. Computed once at module load. Equals (to float precision)
- *  [0, 0.10, 0.26, 0.31, 0.51, 0.58, 0.61, 0.74, 0.77, 0.81, 0.85, 0.93, 1.0]. */
+ *  [0, 0.10, 0.245, 0.295, 0.495, 0.565, 0.595, 0.725, 0.755, 0.78, 0.81, 0.85, 0.93, 1.0]. */
 export const STARTS: readonly number[] = (() => {
   const out: number[] = [0];
   let acc = 0;
@@ -427,6 +461,26 @@ export function settledIdForStage(stage: number): HudTargetId | null {
   return null;
 }
 
+/**
+ * BEAT-band marker gate — the scene whose manifesto copy is on screen at this
+ * LIFECYCLE progress, or null in a between-beats gap. The window is the beat's
+ * own text band [inStart, outEnd], inclusive on both ends — the EXACT band
+ * ManifestoOverlay renders with (`band(lifecycleP, inStart, outEnd)`) — so a
+ * marker gated on this appears and disappears on the same scroll frame as its
+ * beat's text. This replaced settledIdForStage as the STAR-MARKER gate: the two
+ * clocks (settledWindow holds vs text bands) visibly disagreed, with markers
+ * popping in/out while the copy stayed, which read as a bug. settledIdForStage
+ * remains the strict idle-hold signal for the readouts (ArticleHud, resolve()).
+ */
+export function beatIdForLifecycleP(p: number): HudTargetId | null {
+  for (const scene of SCENES) {
+    const beat = scene.beat;
+    if (!beat) continue;
+    if (p >= beat.text.inStart && p <= beat.text.outEnd) return scene.id;
+  }
+  return null;
+}
+
 // ===========================================================================
 // LIFECYCLE STAGE THRESHOLDS
 //
@@ -524,7 +578,7 @@ export interface MarkerPlacement {
   glyph: string;
   // --- Richer card copy (all optional; each falls back to title/subtitle) ----
   /** The mono uppercase, letter-spaced gold label at the top of the card (e.g.
-   *  'ABOUT / 01'). Falls back to `title` when absent. */
+   *  'ABOUT'). Falls back to `title` when absent. */
   eyebrow?: string;
   /** The big bone headline — the dominant element (e.g. 'Hi, I’m Iliès.'). Falls
    *  back to `title` when absent. */
@@ -632,7 +686,7 @@ export const SCENES: readonly LifecycleScene[] = [
         subtitle: 'Who I am',
         bg: 'dark',
         glyph: 'glyphs/glyph-marker-about.svg',
-        eyebrow: 'ABOUT / 01',
+        eyebrow: 'ABOUT',
         headline: 'Hi, I’m Iliès.',
         body: 'Web software, technical writing, understandable systems.',
         tags: ['Fast', 'Readable', 'Usable'],
@@ -645,17 +699,14 @@ export const SCENES: readonly LifecycleScene[] = [
       // In LIFECYCLE space it is the first beat (these bands are lifecycleProgress
       // values), but under the active reverse direction it sits at the PHYSICAL
       // BOTTOM of the page. Copy is readable across the dot's hold (0.00 -> 0.12 =
-      // raw 88-100%, the content-unlock band), then fades as the dot is left behind
-      // into the nebula grow.
+      // raw 88-100%, the content-unlock band), then hard-cuts as the dot is left
+      // behind into the nebula grow — the SAME band() regime as every other beat.
       //
-      // "FADE COPY OUT AT THE VERY END": unlike the other beats (which hard-cut via
-      // band()), the dot beat is rendered with a true IN/OUT fade (ManifestoOverlay
-      // honours these four fields for the 'pale blue dot' state). The IN ramp is
-      // WIDENED to 0.0 -> 0.05 so the line is near-ZERO at the very bottom frame
-      // (lifecycleProgress ≈ 0.0) — the lone speck is alone in black — and rises to
-      // readable only as the visitor scrolls UP slightly off the bottom. inEnd is the
-      // tunable lever for how far up the line takes to bloom in (raise it to keep the
-      // copy faint for longer; lower toward inStart to bring it back fast).
+      // HISTORY: this beat used to carry a special fade-to-nothing at the very
+      // bottom ("the lone speck alone in black"), but readers experienced the
+      // finale statement DISAPPEARING when they scrolled all the way down. The
+      // special regime is gone (ManifestoOverlay renders band(inStart, outEnd));
+      // inEnd/outStart are kept for the window's shape/ordering invariants only.
       at: 0.05,
       text: { inStart: 0.0, inEnd: 0.05, outStart: 0.12, outEnd: 0.17 },
       state: 'pale blue dot',
@@ -706,8 +757,10 @@ export const SCENES: readonly LifecycleScene[] = [
       // as the cloud settles (~0.27) and out before the yellow ignition; outStart/outEnd
       // shift +0.08 with the collapse span so the copy still clears just before ignition
       // (STAR_IGNITION_START 0.51). `at` re-centred on the longer band.
-      at: 0.39,
-      text: { inStart: 0.28, inEnd: 0.31, outStart: 0.49, outEnd: 0.51 },
+      // (Shifted −0.015 with bands 3-7 when band 2 donated scroll to the nova blast
+      // window — the copy still sits on the settled cloud and clears before ignition.)
+      at: 0.375,
+      text: { inStart: 0.265, inEnd: 0.295, outStart: 0.475, outEnd: 0.495 },
       state: 'nebula',
       // ITEM 8: a clear boundary in the raw material saves a thousand future decisions.
       down: 'One clear boundary can save a thousand future decisions.',
@@ -723,7 +776,9 @@ export const SCENES: readonly LifecycleScene[] = [
       motion: 'flicker',
       label: 'YELLOW STAR',
       destination: 'Projects',
-      stage: 2.9,
+      // 2.915 = the settled-hold stage (segment 5) so a nav jump lands exactly ON
+      // the idle hold (inside its settledWindow), not just short of it.
+      stage: 2.915,
       href: 'projects',
     },
     markers: [
@@ -748,7 +803,7 @@ export const SCENES: readonly LifecycleScene[] = [
         subtitle: 'Things I build',
         bg: 'noisy',
         glyph: 'glyphs/glyph-marker-projects.svg',
-        eyebrow: 'PROJECTS / 01',
+        eyebrow: 'PROJECTS',
         headline: 'Things I build.',
         body: 'Shipped software, side projects, and tools that earned their keep.',
         tags: ['Shipped', 'Tools'],
@@ -761,8 +816,10 @@ export const SCENES: readonly LifecycleScene[] = [
       // 0.58 -> 0.61 (raw 39-42%). The headline sits in that stable, still window. The band
       // shifts +0.08 in lockstep with the holds moving forward (the hold's LOOK is unchanged,
       // only its scroll position), so the copy still reads on the blazing settled sun.
-      at: 0.595,
-      text: { inStart: 0.58, inEnd: 0.59, outStart: 0.6, outEnd: 0.61 },
+      // (Shifted −0.015 with bands 3-7 for the nova blast window; the window is
+      // re-fitted inside the new [0.565, 0.595] settled-yellow idle hold.)
+      at: 0.58,
+      text: { inStart: 0.565, inEnd: 0.575, outStart: 0.585, outEnd: 0.595 },
       state: 'yellow star',
       down: 'Systems grow. Interfaces drift. Complexity compounds.',
       up: 'Systems grow. Interfaces drift. Complexity compounds.',
@@ -797,14 +854,14 @@ export const SCENES: readonly LifecycleScene[] = [
       {
         id: 'red',
         state: 'red',
-        vx: 0.2,
+        vx: 0.225,
         vy: 0.22,
         href: 'graveyard',
         title: 'GRAVEYARD',
         subtitle: 'Things I abandoned',
         bg: 'dark',
         glyph: 'glyphs/glyph-marker-graveyard.svg',
-        eyebrow: 'GRAVEYARD / 01',
+        eyebrow: 'GRAVEYARD',
         headline: 'Things I abandoned.',
         body: 'Dead repos, false starts, and what each one was trying to teach.',
         tags: ['Dead repos', 'Lessons'],
@@ -821,8 +878,10 @@ export const SCENES: readonly LifecycleScene[] = [
       // LOOK unchanged), so the headline window is re-fitted INSIDE the new [0.74, 0.77]
       // hold — it still reads on the surface/active-region close-up beat (ITEM 1's third
       // stage), AFTER the reveal + limb orbit.
-      at: 0.755,
-      text: { inStart: 0.74, inEnd: 0.75, outStart: 0.76, outEnd: 0.77 },
+      // (Shifted −0.015 with bands 3-7 for the nova blast window; re-fitted inside
+      // the new [0.725, 0.755] red idle hold so the copy clears before the collapse.)
+      at: 0.74,
+      text: { inStart: 0.725, inEnd: 0.735, outStart: 0.745, outEnd: 0.755 },
       state: 'red giant',
       // ITEM 8: complexity expands as the giant bloats — the work is to keep the centre readable.
       down: 'Complexity expands. My work is to keep the center readable.',
@@ -838,7 +897,7 @@ export const SCENES: readonly LifecycleScene[] = [
       motion: 'pulse',
       label: 'BLACK HOLE',
       // The section the black-hole row links to. "Inspiration" — the same word the
-      // black-hole MARKER card uses (eyebrow 'INSPIRATION / 01', "Why this site
+      // black-hole MARKER card uses (eyebrow 'INSPIRATION', "Why this site
       // exists") so the rail, the reading-page nav and the on-scene marker all name
       // this destination identically. (Was 'Colophon', which drifted from the marker.)
       destination: 'Inspiration',
@@ -864,7 +923,7 @@ export const SCENES: readonly LifecycleScene[] = [
         subtitle: 'Why this site exists',
         bg: 'dark',
         glyph: 'glyphs/glyph-marker-story.svg',
-        eyebrow: 'INSPIRATION / 01',
+        eyebrow: 'INSPIRATION',
         headline: 'Why this site exists.',
         body: 'The idea behind the black hole, and thanks for scrolling this far.',
         tags: ['Story', 'Colophon'],
@@ -944,6 +1003,59 @@ export function dwellForScene(id: HudTargetId): number {
  *  Only the 'end' scene is flagged today, so the request still fires exactly there. */
 export function sceneActivatesHud(id: HudTargetId): boolean {
   return SCENE_BY_ID[id]?.activatesHud === true;
+}
+
+/** The lifecycle STATION nearest an arbitrary shader stage — the scene whose hud
+ *  anchor stage is closest. Used by the reading side (writing index rows, the
+ *  article-end continuation) to name/glyph a post's `scene.journey` endpoints
+ *  (e.g. journey [3.5, 2.05] → NEBULA → RED GIANT) so the list and the article
+ *  backdrop speak the same celestial system. Pure; server-render safe. */
+export interface JourneyStation {
+  label: string;
+  glyphSrc: string;
+}
+export function stationForStage(stage: number): JourneyStation {
+  let best = SCENES[0].hud;
+  for (const scene of SCENES) {
+    if (Math.abs(scene.hud.stage - stage) < Math.abs(best.stage - stage)) best = scene.hud;
+  }
+  return { label: best.label, glyphSrc: best.glyphSrc };
+}
+
+/** LIFECYCLE TIME — stage → the star's age, for the instrument readout. The scroll
+ *  plays the story in REVERSE, so time FALLS as you scroll down (the black hole at
+ *  the top is the far future; the pale blue dot at the bottom is T ≈ 0). Anchors
+ *  are loosely sun-like — cloud collapse within the first ~50 Myr, main sequence
+ *  sampled at the Sun's own 4.6 Gyr, the giant phase near the ~10.6 Gyr end of a
+ *  solar life — with the supernova/black-hole coda as artistic licence (a true
+ *  solar-mass star would settle for a white dwarf). Piecewise-linear, clamped. */
+const LIFECYCLE_TIME_STOPS: readonly (readonly [number, number])[] = [
+  // [stage, age in Gyr] — ascending stage, DESCENDING age (the reverse story).
+  [0.0, 11.2], // black hole — long after the light went out
+  [0.62, 11.0], // the supernova instant
+  [2.05, 10.6], // red giant
+  [2.915, 4.6], // settled yellow star (the Sun, today)
+  [3.42, 0.05], // nebula — the cloud collapsing
+  [4.7, 0.0], // the beginning — a pale blue speck
+];
+export function lifecycleTimeGyr(stage: number): number {
+  const stops = LIFECYCLE_TIME_STOPS;
+  if (stage <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i += 1) {
+    if (stage <= stops[i][0]) {
+      const [s0, t0] = stops[i - 1];
+      const [s1, t1] = stops[i];
+      const k = (stage - s0) / (s1 - s0);
+      return t0 + (t1 - t0) * k;
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+/** Format an age for the mono readout: "T +0" / "T +48 MYR" / "T +4.60 GYR". */
+export function formatLifecycleTime(gyr: number): string {
+  if (gyr < 0.0005) return 'T +0';
+  if (gyr < 1) return `T +${Math.round(gyr * 1000)} MYR`;
+  return `T +${gyr.toFixed(2)} GYR`;
 }
 
 // ===========================================================================

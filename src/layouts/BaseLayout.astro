@@ -16,8 +16,8 @@ import { SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
 // from the PURE data layer (sceneTable.ts), not HudNavigation.tsx, so the Astro
 // frontmatter pulls no React into this layout.
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
-// The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex Mono
-// (labels, dates, tags), Instrument Serif italic (occasional quote / manifesto).
+// The sitewide type system: Instrument Serif (display headlines + quote accent),
+// IBM Plex Sans (body/UI), IBM Plex Mono (labels, dates, tags).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
 // live in fonts.css; they're applied sitewide via the --font-* tokens in global.css.
 import '../styles/fonts.css';
@@ -39,10 +39,16 @@ interface Props {
   // top-left wordmark and hides the home-only micro-nav so Close can own the
   // top-right corner.
   bodyClass?: string;
+  // MINIMAL READING CHROME (article pages): the header keeps only the wordmark +
+  // social icons — no station rail — so a reading page is a quiet room of the same
+  // ship (the hero has no top bar either; the full-width station bar was the one
+  // conventional-navbar moment in the whole DA). The full station nav renders as a
+  // block in the footer instead, after the article's own "Next note" continuation.
+  minimalChrome?: boolean;
 }
 
 const props = Astro.props;
-const { bare = false, bodyClass } = props;
+const { bare = false, bodyClass, minimalChrome = false } = props;
 const bodyClasses = [bare ? 'bare' : null, bodyClass].filter(Boolean).join(' ') || undefined;
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
@@ -85,29 +91,42 @@ interface SubnavItem {
   section: string;
   active: boolean;
 }
-// HUD_NAV_ITEMS is already in physical scroll order (black hole at the top → the
-// beginning at the bottom); each carries its body `label` + section `destination`
-// + `href`. Project it onto the reading-page rail, resolving the deploy-based href
-// and the active state per section. Writing stays active across the posts subtree
-// (isWritingActive); every other lifecycle row matches its own path.
-const lifecycleRows: SubnavItem[] = HUD_NAV_ITEMS.map((item) => ({
-  href: href(item.href),
-  label: item.label,
-  section: item.destination,
-  active: item.id === 'nebula' ? isWritingActive : isActive(item.href),
-}));
+// CURATED SITE NAV — no longer a 1:1 projection of the hero's five stations. The
+// full lifecycle list read as "too many links" in the chrome, and the site menu
+// does not need to mirror the scene order (the hero's rail/markers still do).
+// Three primary destinations lead; everything secondary — the Inspiration essay,
+// the making-of, and the graveyard (deliberately NOT a headline entry; it is also
+// referenced from the About page) — lives behind one INDEX page. Body·Section
+// pairs keep the celestial register where a body exists.
 const subnavItems: SubnavItem[] = [
-  ...lifecycleRows,
-  // Behind the Build — the case-study page demonstrating the hero/article WebGL
-  // system. No lifecycle stage of its own, so its body line names what it is (the
-  // making-of) and the section line keeps the readable page name.
-  { href: href('behind-the-build'), label: 'THE MAKING', section: 'Behind', active: isActive('behind-the-build') },
-  // Home — return to the live scene itself (the whole lifecycle), so its body line
-  // names the scene and the section line is 'Home'.
+  { href: href('projects'), label: 'YELLOW STAR', section: 'Projects', active: isActive('projects') },
+  // Writing stays active across the posts subtree (minus the inspiration post,
+  // which belongs to the Index entry below).
+  { href: href('writing'), label: 'NEBULA', section: 'Writing', active: isWritingActive },
+  { href: href('about'), label: 'THE BEGINNING', section: 'About', active: isActive('about') },
+  {
+    href: href('archive'),
+    label: 'THE ARCHIVE',
+    section: 'Index',
+    active:
+      isActive('archive') ||
+      isActive('graveyard') ||
+      isActive('behind-the-build') ||
+      path === blackHolePath,
+  },
+  // Home — return to the live scene itself (the whole lifecycle).
   { href: href(''), label: 'THE SCENE', section: 'Home', active: isActive('') },
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).
 const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
+
+// Corner nav (bare pages: home + about) — the SAME rows as the reading nav,
+// rendered at a lighter density: single-line SECTION words, same lifecycle order,
+// same source of truth. One nav system, two densities — the celestial body line
+// only appears where a scene rail can anchor it (the reading nav + hero rail).
+// On the home scene the 'Home' row is dropped (you are standing on it); About
+// keeps it as the way back into the scene.
+const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section === 'Home'));
 ---
 
 <!doctype html>
@@ -162,52 +181,26 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
                 overlays on hover without shifting the row. No index number (a number
                 appearing on hover would change the link's width). */}
             <div class="overlay-blog-links">
-              <a class="overlay-blog-link overlay-blog-section" href={href('about')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">About</span>
-              </a>
-              <a class="overlay-blog-link overlay-blog-section" href={href('writing')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">Writing</span>
-              </a>
-              <a class="overlay-blog-link overlay-blog-section" href={href('projects')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">Projects</span>
-              </a>
-              <a class="overlay-blog-link overlay-blog-section" href={href('graveyard')}>
-                <span class="overlay-blog-lock" aria-hidden="true">
-                  <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                  <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                </span>
-                <span class="overlay-blog-label">Graveyard</span>
-              </a>
-              {/* Inspiration — the black-hole section ("Why this site exists"). Added
-                  so the micro-nav's content set matches the hero's five lifecycle
-                  sections (the rail's BLACK HOLE → Inspiration row). Content-only,
-                  like the rest of this menu — no celestial-body label here. The href
-                  is the SAME black-hole destination from the hero's source of truth
-                  (blackHoleHref), resolved through href() like every other link, so it
-                  can't drift from the rail. */}
-              <a class="overlay-blog-link" href={href(blackHoleHref)}>
-                <span class="overlay-blog-label">Inspiration</span>
-              </a>
+              {/* ONE nav system, two densities: these are the SAME rows the reading
+                  nav (.subnav) renders, mapped from the same cornerItems/subnavItems
+                  list — here as single-line SECTION words in lifecycle order (the
+                  celestial-body first line belongs to surfaces with a scene rail).
+                  aria-current lights the section you are on (About, on that page). */}
+              {cornerItems.map((item) => (
+                <a
+                  class="overlay-blog-link overlay-blog-section"
+                  href={item.href}
+                  aria-current={item.active ? 'page' : undefined}
+                >
+                  <span class="overlay-blog-lock" aria-hidden="true">
+                    <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
+                    <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
+                    <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
+                    <span class="overlay-blog-tick overlay-blog-tick-br"></span>
+                  </span>
+                  <span class="overlay-blog-label">{item.section}</span>
+                </a>
+              ))}
             </div>
 
             {/* Two inline brand-logo icon links — GitHub octocat and X logo. Both
@@ -612,7 +605,7 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
               <span class="bh-identity-role">{BRAND_ROLE}</span>
             </a>
             <nav class="subnav-rail" aria-label="Sections">
-              <ul class="subnav-list">
+              {!minimalChrome && <ul class="subnav-list">
                 {subnavItems.map((item, i) => (
                   <li class="subnav-item">
                     <a
@@ -640,7 +633,7 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
                     </a>
                   </li>
                 ))}
-              </ul>
+              </ul>}
 
               {/* Brand-logo icon links — GitHub octocat + X logo, the SAME pair the
                   hero corner nav (.overlay-blog) shows, so the reading header reads
@@ -680,6 +673,24 @@ const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
               across SPA swaps like the header (transition:name + animate none) so
               the chrome holds still while only the page content moves. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
+            {/* MINIMAL-CHROME pages moved the station nav out of the header; it
+                lands here as a quiet full-width block ABOVE the copyright row —
+                same Body·Section pairs, same source of truth (subnavItems), so
+                the reader still has every station at the end of the page. */}
+            {minimalChrome && (
+              <nav class="site-footer-stations" aria-label="Sections">
+                {subnavItems.map((item) => (
+                  <a
+                    class="site-footer-station"
+                    href={item.href}
+                    aria-current={item.active ? 'page' : undefined}
+                  >
+                    <span class="site-footer-station-label">{item.label}</span>
+                    <span class="site-footer-station-section">{item.section}</span>
+                  </a>
+                ))}
+              </nav>
+            )}
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
             <nav class="site-footer-links" aria-label="Social links">
               {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}

@@ -40,7 +40,7 @@ export function clamp01(x: number): number {
 // imports HUD_NAV_ITEMS from sceneTable) no longer hits a TDZ
 // ("Cannot access 'HUD_NAV_ITEMS' before initialization") during the Astro
 // prerender. timeline.ts RE-EXPORTS both names, so its existing importers
-// (ManifestoOverlay, HudNavigation, magneticSettle) are unchanged.
+// (ManifestoOverlay, HudNavigation) are unchanged.
 // ===========================================================================
 export type LifecycleDirection = 'normal' | 'reverse';
 export const LIFECYCLE_DIRECTION: LifecycleDirection = 'reverse';

@@ -1,0 +1,134 @@
+---
+// THE INDEX — the single page behind the header's INDEX entry. The chrome was
+// carrying too many links, and the site menu no longer mirrors the hero's scene
+// order — so the secondary destinations live here as one quiet list: the
+// Inspiration essay (why the site begins at the end), the making-of, and the
+// graveyard LAST (it is deliberately not a headline entry anywhere; the About
+// page references it in its own words).
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { HUD_NAV_ITEMS } from '../hero/sceneTable';
+
+const base = import.meta.env.BASE_URL;
+const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+
+// The inspiration essay's path comes from the hero's own black-hole nav row —
+// the same source of truth BaseLayout uses — so a slug change can't strand this list.
+const inspirationHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? 'writing';
+
+const entries = [
+  {
+    eyebrow: 'INSPIRATION',
+    title: 'Why this begins at the end',
+    desc: 'The two pictures behind the whole site — and why the story plays in reverse.',
+    href: href(inspirationHref),
+  },
+  {
+    eyebrow: 'THE MAKING',
+    title: 'Behind the build',
+    desc: 'The case study: how the scroll-driven stellar lifecycle is actually put together.',
+    href: href('behind-the-build'),
+  },
+  {
+    eyebrow: 'GRAVEYARD',
+    title: 'Dead projects, interred with honours',
+    desc: 'The work that didn’t make it — kept, dated, and owned rather than hidden.',
+    href: href('graveyard'),
+  },
+];
+---
+
+<BaseLayout
+  title="Index"
+  description="Everything that isn’t a headline destination: the inspiration essay, the making-of, and the graveyard."
+>
+  <section class="archive">
+    <header class="archive-head">
+      <p class="archive-kicker">Index</p>
+      <h1>Everything else, in one place.</h1>
+      <p class="archive-lede">
+        The pages that inform the site rather than headline it — where it came
+        from, how it works, and what didn’t survive.
+      </p>
+    </header>
+    <ul class="archive-list">
+      {entries.map((entry) => (
+        <li>
+          <a class="archive-row" href={entry.href}>
+            <span class="archive-eyebrow">{entry.eyebrow}</span>
+            <span class="archive-title">{entry.title}</span>
+            <span class="archive-desc">{entry.desc}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</BaseLayout>
+
+<style>
+  .archive {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 4.5rem 0 3rem;
+  }
+  .archive-kicker {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--highlight);
+    margin: 0 0 1rem;
+  }
+  .archive-head h1 {
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: var(--text-display);
+    margin: 0 0 0.9rem;
+  }
+  .archive-lede {
+    color: var(--fg-dim);
+    max-width: 34rem;
+    margin: 0 0 3rem;
+  }
+  .archive-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--hud-line);
+  }
+  .archive-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1.6rem 0.2rem;
+    border-bottom: 1px solid var(--hud-line);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.2s ease;
+  }
+  .archive-row:hover,
+  .archive-row:focus-visible {
+    background: color-mix(in oklch, var(--fg) 4%, transparent);
+  }
+  .archive-eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .archive-title {
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    color: var(--fg);
+    transition: color 0.2s ease;
+  }
+  .archive-row:hover .archive-title,
+  .archive-row:focus-visible .archive-title {
+    color: var(--accent-strong);
+  }
+  .archive-desc {
+    color: var(--fg-dim);
+    max-width: 36rem;
+  }
+</style>

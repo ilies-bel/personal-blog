@@ -2,8 +2,12 @@ import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
+  formatLifecycleTime,
+  legacyStageForProgressFromTable,
+  lifecycleTimeGyr,
   sceneForProgress,
   settledIdForStage,
+  stationForStage,
   type HudNavItem,
   type HudTargetId,
   type MarkerPlacement,
@@ -12,7 +16,6 @@ import type { MarkerFrame } from './scene/types';
 import { hudIdForStage, lifecycleProgress, progressForLegacyStage } from './timeline';
 import {
   SCROLL_HINT_DISMISS_AT,
-  SCENE_READY_EVENT,
   SCENE_READY_BODY_CLASS,
 } from './lib/constants';
 
@@ -390,31 +393,30 @@ export default function HudNavigation({
     return () => document.removeEventListener('mousemove', onMove);
   }, []);
 
-  // LOADING → READY: advance off the scene's first composited frame. We listen for the
-  // SAME scene:ready event the loader script keys its fade to (so the boot readout swaps
-  // to READY STATE in lockstep with the loader dissolving), and we also check the body
-  // class up front in case the event already fired before this effect attached. A short
-  // interval backstop catches the narrow race where scene:ready fires in the gap BETWEEN
-  // that up-front check and addEventListener (the `once` listener would miss it, leaving
-  // the readout stuck on LOADING): it polls the reliable body.scene-ready class so the text
-  // always advances even on a missed event. Only meaningful while still 'loading'; later
-  // phases ignore it.
+  // LOADING → READY: advance off the loader's REVEAL, i.e. the body.scene-ready CLASS —
+  // NOT the raw scene:ready event. The two are different instants: the event fires on the
+  // scene's first composited frame, but the loader script adds the class at
+  // max(scene:ready, LOADER_MIN_MS) — on a fast first load the class lands seconds AFTER
+  // the event. The glide effect below is armed by this phase change, and the loader's
+  // dot+name fade is keyed to the CLASS (scene.css), so advancing on the raw event sent
+  // the readout gliding straight THROUGH the still-visible wordmark (its dark scrim
+  // blacking the name out mid-travel). Polling the class keeps the whole dissolve — mark
+  // fade → glide → background fade — sequenced against the loader's actual reveal. The
+  // ≤80ms poll granularity is invisible during a loading screen. Only meaningful while
+  // still 'loading'; later phases ignore it.
   useEffect(() => {
     if (bootPhase !== 'loading') return;
     if (sceneIsReady()) {
       setBootPhase('ready');
       return;
     }
-    const advance = (): void => setBootPhase((prev) => (prev === 'loading' ? 'ready' : prev));
-    window.addEventListener(SCENE_READY_EVENT, advance, { once: true });
     const poll = window.setInterval(() => {
       if (sceneIsReady()) {
-        advance();
+        setBootPhase((prev) => (prev === 'loading' ? 'ready' : prev));
         window.clearInterval(poll);
       }
-    }, 100);
+    }, 80);
     return () => {
-      window.removeEventListener(SCENE_READY_EVENT, advance);
       window.clearInterval(poll);
     };
   }, [bootPhase]);
@@ -518,11 +520,11 @@ export default function HudNavigation({
       const frame = markerFrameRef.current;
       const cursor = pointerRef.current;
 
-      // Candidate markers: those whose state is the settled one on screen RIGHT
-      // NOW (same gate StarMarker uses for its own visibility/interactivity).
+      // Candidate markers: those whose beat is on screen RIGHT NOW (frame.beatId —
+      // the same gate StarMarker uses for its own visibility/interactivity).
       let nearest: MarkerPlacement | null = null;
       if (frame && frame.visible && cursor) {
-        const settled = settledIdForStage(frame.stage);
+        const settled = frame.beatId;
         let bestDistSq = Number.POSITIVE_INFINITY;
         for (const placement of MARKER_PLACEMENTS) {
           if (placement.state !== settled) continue;
@@ -589,6 +591,11 @@ export default function HudNavigation({
   const phase = sceneForProgress(progress).phase;
   const atTop = progress <= SCROLL_HINT_DISMISS_AT;
   const recovery = idle && phase === 'transition' && !atTop;
+  // FINALE: deep inside the closing dot hold (raw scroll ≥ 96%) the journey is
+  // over — "SCROLL TO EXPLORE" would point at nothing. The idle readout flips to
+  // an arrival: the beat's name, plus the one true fact about scrolling back up
+  // (going up from the bottom plays the stellar lifecycle in its natural order).
+  const atEnd = progress >= 0.96;
 
   // CUE → LIVE: the standing scroll cue dismisses on the FIRST real scroll. It
   // reuses the existing scroll-hint dismiss seam — once progress passes
@@ -646,8 +653,181 @@ export default function HudNavigation({
   // guard the lookup and render the readout only once there is a scene to name.
   const mobileReadout = effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null;
 
+  // INSTRUMENT FRAME — sitewide on the hero (the black-hole section mock was
+  // approved). Four hairline corner ticks framing the viewport + a live readout
+  // bottom-left: the walker's STAGE, the star's AGE on the lifecycle clock
+  // (billions of years — falling as you scroll, since the story plays in
+  // reverse), and the nearest station. CSS shows it only while the HUD is armed
+  // (body.hud-active) and hides it on compact layouts.
+  const frameStage = legacyStageForProgressFromTable(progress);
+  const frameStation = stationForStage(frameStage);
+  const frameTime = formatLifecycleTime(lifecycleTimeGyr(frameStage));
+
+  // ---- HALF-CIRCLE TICK GAUGE (fixed-lubber heading card) -------------------
+  // The lateral map as a true compass card: the ARROW IS FIXED on the horizontal
+  // centreline (the lubber line) and the tick QUADRANT rotates under it with
+  // scroll — the instrument answers "you are here" the way a heading indicator
+  // does, instead of sliding a caret along a static scale. Minimalist face: no
+  // arc stroke, no box — ticks only, fading with angular distance from the
+  // lubber line so the card emerges ahead and dissolves behind. Geometry is in
+  // fixed SVG units (1 unit = 1px at the 190×600 box) so the HTML hit-area
+  // buttons and the label share coordinates. The old vertical rail markup stays
+  // for the compact (≤60rem) layout; CSS swaps which one renders per breakpoint.
+  const ARC_R = 300;
+  const ARC_SWEEP = 55; // degrees each side of the horizontal centreline
+  // QUANTIZED to 2 decimals (fx): SSR (Node) and the browser disagree on trig
+  // results in the last ulps, and React flags every such coordinate as a
+  // hydration mismatch. Two decimals of an SVG unit are far below visual
+  // precision and identical on both sides. ARC_CX is quantized too — it rides
+  // into every transform string.
+  const fx = (v: number): number => Number(v.toFixed(2));
+  const ARC_CX = fx(-(ARC_R * Math.cos((ARC_SWEEP * Math.PI) / 180)) + 12);
+  const thetaOf = (p: number): number => (p * 2 - 1) * ARC_SWEEP; // p 0 (top) → 1 (bottom)
+  const arcAt = (deg: number, radius: number) => ({
+    x: fx(ARC_CX + radius * Math.cos((deg * Math.PI) / 180)),
+    y: fx(radius * Math.sin((deg * Math.PI) / 180)),
+  });
+  // The card's rotation: bring the CURRENT progress angle onto the lubber line.
+  const caretDeg = fx(thetaOf(Math.min(1, Math.max(0, progress))));
+  // Angular fade around the lubber line — full presence within ~10°, gone past
+  // ~65°. Ticks are static geometry inside the rotating group; only this opacity
+  // (and the group rotation) changes per frame.
+  const arcFade = (deg: number): number => {
+    const d = Math.abs(deg - caretDeg);
+    return fx(Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6));
+  };
+  const ARC_MINOR_TICKS = 44;
+  // Station angles in RAW scroll space — the same stage→scroll conversion the
+  // click-travel uses (progressForLegacyStage is lifecycle-space; the direction
+  // seam flips it to raw).
+  const arcStations = HUD_NAV_ITEMS.map((item, i) => ({
+    item,
+    number: i + 1,
+    theta: fx(thetaOf(lifecycleProgress(progressForLegacyStage(item.stage)))),
+  }));
+  // The label sits FIXED beside the lubber line (the current station is always
+  // there) and names the pointed station (hover/focus), else the current one.
+  const arcShownItem = (pointedId && HUD_NAV_BY_ID[pointedId]) ||
+    (effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null);
+  const ARC_LABEL_X = fx(ARC_CX + ARC_R + 16);
+
   return (
     <>
+    {/* Sibling of .hud-system, NOT a child (the rail hides itself at the opening
+        frame, and .hud-system's transform would trap position:fixed). Gated by
+        body.hud-active in CSS. */}
+    <div className="hud-frame" aria-hidden="true">
+      <span className="hud-frame-tick" data-corner="tl" />
+      <span className="hud-frame-tick" data-corner="tr" />
+      <span className="hud-frame-tick" data-corner="bl" />
+      <span className="hud-frame-tick" data-corner="br" />
+      <span className="hud-frame-readout">
+        <span className="hud-frame-readout-stage">STAGE {frameStage.toFixed(2)}</span>
+        <span className="hud-frame-readout-stage">{frameTime}</span>
+        <span className="hud-frame-readout-station">{frameStation.label}</span>
+      </span>
+    </div>
+    {/* The arc gauge — also a sibling (position:fixed vs .hud-system's transform).
+        Mirrors the rail's data-visible gating; buttons drive the SAME beginTravel
+        click-jump + pointedId aiming the rail rows used. */}
+    <div className="hud-arc" data-visible={visible} aria-hidden={!visible}>
+      <svg className="hud-arc-svg" viewBox="0 -300 190 600" width="190" height="600" aria-hidden="true">
+        {/* THE CARD — everything inside rotates so the current progress angle
+            sits on the fixed lubber line (theta 0, screen-horizontal). */}
+        <g className="hud-arc-rot" transform={`rotate(${-caretDeg} ${ARC_CX} 0)`}>
+          {Array.from({ length: ARC_MINOR_TICKS + 1 }, (_, k) => {
+            const deg = fx(thetaOf(k / ARC_MINOR_TICKS));
+            const a = arcAt(deg, ARC_R - 7);
+            const b = arcAt(deg, ARC_R - 2);
+            return (
+              <line
+                key={k}
+                className="hud-arc-tick"
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                opacity={arcFade(deg)}
+              />
+            );
+          })}
+          {arcStations.map(({ item, number, theta }) => {
+            const a = arcAt(theta, ARC_R - 16);
+            const b = arcAt(theta, ARC_R - 2);
+            const n = arcAt(theta, ARC_R - 30);
+            return (
+              <g
+                key={item.id}
+                className="hud-arc-station"
+                data-current={effectiveCurrentId === item.id}
+                opacity={arcFade(theta)}
+              >
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+                {/* Digits are set along their own radius (local rotate = own
+                    theta), so the station AT the lubber line always reads
+                    upright — compass-card behaviour, not a tilted sticker. */}
+                <text
+                  transform={`translate(${n.x} ${n.y}) rotate(${theta})`}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                >
+                  {String(number).padStart(2, '0')}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+        {/* FIXED lubber line + arrow — the "you are here" datum the card turns
+            under. Never moves. The chevron sits INSIDE the station numbers'
+            radius (R−30) so the current station's digits park between arrow and
+            hairline instead of underneath the arrow. */}
+        <g className="hud-arc-lubber">
+          <line x1={fx(ARC_CX + ARC_R - 18)} y1={0} x2={fx(ARC_CX + ARC_R + 4)} y2={0} />
+          <path
+            d={`M ${fx(ARC_CX + ARC_R - 50)} -4.5 L ${fx(ARC_CX + ARC_R - 41)} 0 L ${fx(ARC_CX + ARC_R - 50)} 4.5`}
+          />
+        </g>
+      </svg>
+      {arcStations.map(({ item, theta }) => {
+        // Hit areas live in SCREEN space, so counter-derive each station's screen
+        // angle under the current rotation. Past ~52° the point's x goes negative
+        // (off the left screen edge — cos(52°)·(R−9) barely clears ARC_CX), so a
+        // station rotated beyond that is hidden rather than left as an invisible
+        // or unclickable zone floating in the void.
+        const rel = fx(theta - caretDeg);
+        const pt = arcAt(rel, ARC_R - 9);
+        const reachable = Math.abs(rel) <= 52;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className="hud-arc-btn"
+            style={{
+              left: `${pt.x}px`,
+              top: `${fx(300 + pt.y)}px`,
+              visibility: reachable ? undefined : 'hidden',
+            }}
+            aria-label={`Travel to ${item.label}`}
+            aria-current={effectiveCurrentId === item.id ? 'location' : undefined}
+            tabIndex={visible && reachable ? 0 : -1}
+            onClick={() => beginTravel(item.id, item.stage)}
+            onMouseEnter={() => setPointedId(item.id)}
+            onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}
+            onFocus={() => setPointedId(item.id)}
+            onBlur={() => setPointedId((prev) => (prev === item.id ? null : prev))}
+          />
+        );
+      })}
+      {arcShownItem && (
+        <span
+          className="hud-arc-label"
+          style={{ left: `${ARC_LABEL_X}px`, top: '300px' }}
+        >
+          <span className="hud-arc-label-title">{arcShownItem.label}</span>
+          <span className="hud-arc-label-dest">{arcShownItem.destination}</span>
+        </span>
+      )}
+    </div>
     <div className="hud-system" data-visible={visible}>
       {/* MOBILE-ONLY scene-name readout — replaces the desktop bottom .hud-compass on
           the compact phone layout. It is the FIRST child of .hud-system (a display:grid
@@ -829,6 +1009,20 @@ export default function HudNavigation({
         aria-hidden="true"
       >
         {idle ? (
+          atEnd ? (
+            <>
+              {/* FINALE readout — the arrival beat at the bottom of the journey. */}
+              <p className="hud-compass-read hud-compass-read--idle">
+                <span className="hud-compass-prompt">[ </span>
+                <span className="hud-compass-label">THE BEGINNING</span>
+                <span className="hud-compass-prompt"> ]</span>
+              </p>
+              <p className="hud-compass-dest">
+                <span className="hud-compass-arrow">↑</span>
+                <span>play it forward</span>
+              </p>
+            </>
+          ) : (
           <>
             <p className="hud-compass-read hud-compass-read--idle">
               <span className="hud-compass-prompt">[ </span>
@@ -845,6 +1039,7 @@ export default function HudNavigation({
               &nbsp;
             </p>
           </>
+          )
         ) : (
           <>
             <p className="hud-compass-read">

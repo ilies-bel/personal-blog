@@ -107,11 +107,15 @@ export const tesseractBeamFrag = /* glsl */ `
     // core light: the bright vanishing point is the ONLY source. Faces turned toward it
     // (end caps, inner faces) catch a warm key; faces perpendicular to it (the long wall
     // faces) fall to a near-black fill. Wrap a touch so the shadow side isn't dead flat.
+    // FILL LOWERED (0.05+0.07 → 0.028+0.045): the old ambient held every face at a
+    // readable mid-brown, which is exactly what made the walls read as flat untextured
+    // boxes ("PS1"). The film's tesseract is mostly BLACK shelf-backs punctuated by hot
+    // light slits — so the darks must actually fall to near-black.
     vec3 coreDir = normalize(vec3(0.0, 0.0, -1.0));
     float nl = dot(N, coreDir);
     float lambert = max(nl, 0.0);
     float wrap = max(nl * 0.5 + 0.5, 0.0);    // soft wrap term for the shadow side
-    float fill = 0.05 + 0.07 * wrap;          // LOW ambient → most faces sit in shadow
+    float fill = 0.028 + 0.045 * wrap;        // most faces sit in true shadow
     float lit = fill + uCore * lambert;
 
     // tight view-facing sheen so steel beams catch a thin rim of light
@@ -123,6 +127,13 @@ export const tesseractBeamFrag = /* glsl */ `
     base = mix(base, base * vec3(0.88, 0.95, 1.10), max(0.0,  vHue)); // cooler (steel)
 
     vec3 col = base * lit + sheen;
+
+    // per-face BOARD texture — thin parallel slats across the beam's short section plus
+    // a coarse value grain along its length, so a face that lands big on screen shows
+    // shelf boards instead of one flat untextured quad (the single biggest "PS1" tell).
+    float slat = sin(vAcross * 30.0 + vHue * 57.0) * 0.5 + 0.5;
+    float grain = hash11(floor(vLong * 24.0) + vHue * 91.0);
+    col *= mix(0.78, 1.08, slat) * mix(0.88, 1.12, grain);
 
     // along-length MOTION SMEAR: the film beams are blurred into long bright/dark streaks
     // down their length. Use mostly LOW-frequency runs (long smears) with a little fine
@@ -138,19 +149,31 @@ export const tesseractBeamFrag = /* glsl */ `
                  (sin(vLong * 5.0 + vHue * 11.0) * 0.5 + 0.5);
     col *= (0.22 + 0.98 * ripple);           // deep troughs → strong streak contrast
     // a SUBSET of beams carry a hot warm light-streak (light leaking between shelves) —
-    // sparse but bright, so the dark walls are punctuated by glints like the film.
-    col += band * 1.1 * uCoreColor * (0.5 + 0.5 * ripple);
+    // sparse but bright, so the dark walls are punctuated by glints like the film. A slow
+    // per-beam FLICKER rides on it (uTime) so the slits read as live leaking light, not
+    // baked-on paint.
+    float flick = 0.85 + 0.15 * sin(uTime * 1.6 + vHue * 40.0);
+    col += band * 1.35 * uCoreColor * (0.5 + 0.5 * ripple) * flick;
     col *= mix(1.0, 0.6, smoothstep(0.55, 1.0, vLong) * vStreak);
 
     // edge leak: bright thin rim along the long top/bottom seams (between shelves),
     // strongest on beams turned toward the camera so it reads as a caught highlight.
+    // This is the film's signature cue (light pouring between shelf backs), so it now
+    // leads the image: hotter than before and slightly warmer than the base wood.
     float seam = smoothstep(0.62, 0.98, vAcross) * vFaceLong;
     float facing = max(dot(N, V), 0.0);
-    col += uCoreColor * seam * uEdgeLeak * (0.4 + 0.8 * facing);
+    col += uCoreColor * seam * uEdgeLeak * (0.5 + 0.9 * facing);
+
+    // NEAR-CAMERA SILHOUETTE: beams within a few units of the lens fall toward black.
+    // Up close a box face fills a huge screen area at full lighting detail-lessness —
+    // the flat facade that read as "PS1 graphics". Letting the nearest geometry go
+    // dark-silhouette gives foreground depth (film language) and hides the flatness.
+    float viewDepth = length(vViewPos);
+    float nearDim = smoothstep(1.2, 7.5, viewDepth);
+    col *= mix(0.18, 1.0, nearDim);
 
     // depth haze: far beams recede into NEAR-BLACK murk, and only the very deepest frames
     // pick up the hot core glow. The shaft stays brooding; the core is the only bright pool.
-    float viewDepth = length(vViewPos);
     float fog = 1.0 - exp(-uFogDensity * viewDepth);
     fog = clamp(fog * 0.45 + vDepth * 0.35, 0.0, 1.0);
     vec3 hazed = mix(col, uFogColor, fog * 0.8);

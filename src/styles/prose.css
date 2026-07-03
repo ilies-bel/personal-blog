@@ -92,16 +92,20 @@
   gap: 0.45rem;
   margin: 1.5rem 0 0;
 }
+/* Tag chips speak the HUD's square instrument language (uppercase micro mono,
+   hard corners) — rounded pills belonged to a different, softer design system. */
 .article-tags span {
   display: inline-flex;
   align-items: center;
   min-height: 1.55rem;
-  padding: 0.16rem 0.55rem;
+  padding: 0.16rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: 2px;
   color: var(--fg-dim);
   font-family: var(--font-mono);
-  font-size: var(--text-label);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
   line-height: 1;
   background: color-mix(in oklch, var(--bg) 55%, transparent);
 }

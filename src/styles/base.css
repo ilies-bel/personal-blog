@@ -79,9 +79,12 @@ a:focus-visible {
   border-radius: var(--radius-sm);
 }
 
-/* Display weight tops out at 700 — Space Grotesk's bold master — so heading bold
-   is real, never a synthesized faux-bold. */
-h1, h2, h3 { line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; }
+/* Headlines wear the display serif (Instrument Serif, ONE 400 master — never
+   bold it, a synthesized serif bold smears the editorial cut). It is condensed
+   and calm at 400, so no negative tracking. h3 stays on the Plex Sans body
+   family: the serif is display-only and gets spindly below ~20px. */
+h1, h2 { font-family: var(--font-display); font-weight: var(--weight-display); line-height: 1.1; letter-spacing: 0; }
+h3 { line-height: 1.15; font-weight: var(--weight-bold); letter-spacing: -0.01em; }
 
 /* Full-bleed shell: the page spans edge-to-edge; only the side gutter holds
    content off the very edge. Text-heavy blocks opt into .measure so a full-bleed

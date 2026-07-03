@@ -13,11 +13,22 @@
 
 .writing-hero {
   display: grid;
-  gap: 1.1rem;
+  /* Two columns: the title block left, the index card right — the card is page
+     metadata, and parking it here fills the hero band's formerly empty right
+     half (the "unbalanced hero" audit finding). Same column ratio the featured
+     band used, so the two bands stay on one grid. */
+  grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.6fr);
+  align-items: end;
+  gap: 1rem;
   margin-top: clamp(4rem, 11vw, 7.5rem);
   /* Hero → featured gap: a gentler fluid step (the old 8vw clamp ballooned to
      5.5rem on wide screens and left the featured card stranded). */
   margin-bottom: clamp(2.25rem, 5vw, 3.75rem);
+}
+
+.writing-hero-copy {
+  display: grid;
+  gap: 1.1rem;
 }
 
 .writing-kicker {
@@ -51,7 +62,9 @@
 
 .writing-featured {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.6fr);
+  /* Single column now: the index card moved up into the hero's right column, so
+     the featured card owns the full band width. */
+  grid-template-columns: 1fr;
   gap: 1rem;
   margin-bottom: clamp(2.5rem, 7vw, 4.5rem);
 }
@@ -243,12 +256,69 @@
   transform: translate(0, 0);
 }
 
+.writing-row-left {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+
 .writing-row time {
   font-family: var(--font-mono);
   font-size: var(--text-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-faint);
+}
+
+/* --- Lifecycle STATION readout (the liant with the hero) --------------------
+   A quiet glyph pair naming which room of the stellar lifecycle the note reads
+   in — its scene.journey endpoints (e.g. ● → ◍ nebula to red giant). The glyph
+   SVGs are black-fill mask sources (the HUD rail's language), so they render as
+   currentColor via CSS mask and brighten with the row on hover. */
+.writing-journey {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--fg-faint);
+  transition: color 0.16s ease;
+}
+
+.writing-journey-glyph {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
+}
+
+.writing-journey-arrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: 1;
+}
+
+/* Text label — used on the featured card's meta line only; the compact rows
+   speak in glyphs alone (the aria-label carries the words). */
+.writing-journey-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.writing-row .writing-journey-label {
+  display: none;
+}
+
+.writing-row:hover .writing-journey {
+  color: color-mix(in oklch, var(--accent-strong) 62%, var(--fg));
+}
+
+/* On the featured card's meta hairline the readout sits inline after the date,
+   separated by the same middle-dot rhythm the index card rows use. */
+.writing-featured-meta .writing-journey {
+  margin-left: 1.1rem;
 }
 
 .writing-row-copy {
@@ -272,7 +342,7 @@
   font-family: var(--font-display);
   /* Row title — the secondary display rung, shared with the featured card h2. */
   font-size: var(--text-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   line-height: 1.12;
   letter-spacing: var(--tracking-tight);
   text-wrap: balance;
@@ -298,16 +368,20 @@
   margin-top: 0.2rem;
 }
 
+/* Tag chips speak the HUD's square instrument language (uppercase micro mono,
+   hard corners) — rounded pills belonged to a different, softer design system. */
 .writing-tags span {
   display: inline-flex;
   align-items: center;
   min-height: 1.55rem;
-  padding: 0.16rem 0.55rem;
+  padding: 0.16rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: 2px;
   color: var(--fg-faint);
   font-family: var(--font-mono);
-  font-size: var(--text-label);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
   line-height: 1;
   background: color-mix(in oklch, var(--bg-soft) 64%, transparent);
   transition:
@@ -337,8 +411,10 @@
 }
 
 @media (max-width: 52rem) {
-  .writing-featured {
+  /* The hero stacks: title block, then the index card beneath it. */
+  .writing-hero {
     grid-template-columns: 1fr;
+    align-items: start;
   }
 
   .writing-featured-card {

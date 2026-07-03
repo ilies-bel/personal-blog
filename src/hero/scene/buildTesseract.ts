@@ -338,7 +338,7 @@ export function buildTesseract(options: TesseractOptions = {}): TesseractRig {
     uFogDensity: { value: 0.009 }, // far beams stay dark; only the deep CORE glows
     uCoreColor: { value: new THREE.Color(1.0, 0.82, 0.52) },
     uFogColor: { value: new THREE.Color(0.075, 0.055, 0.04) }, // far wash is near-black warm murk
-    uEdgeLeak: { value: 0.22 }, // thin bright seam, kept low so additive stacking stays dark
+    uEdgeLeak: { value: 0.42 }, // the shelf-gap light seams now LEAD the image (film cue)
     uStreakAmt: { value: 1.0 },
   };
 

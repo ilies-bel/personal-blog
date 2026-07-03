@@ -248,18 +248,19 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // wavefront too — the network moving is the most legible "the surface ripples" cue.
     float ch = fbm(p*1.4 + 2.0*q.yzx + waveDisp*1.4 + t*0.3);
     float chMask = smoothstep(0.16, -0.05, ch);
-    // ITEM 4: the YELLOW-star network lanes read as a dark GOLD (green lifted 0.018 ->
-    // 0.07 off the old orange-red) so the intergranular veins don't pull the body average
-    // toward orange — the surface stays pale gold. The RED-giant lane (#0D0201, deep ember
-    // red) is UNCHANGED (gated by uRed) so the approved ember surface is untouched.
-    col = mix(col, mix(vec3(0.13,0.07,0.012), vec3(0.044,0.007,0.003), uRed), chMask*0.88); // red-giant lane −5% deeper per grade
+    // The YELLOW-star lane weight is pulled way down (0.88 -> 0.42): at full weight the
+    // low-frequency lanes painted broad grey-brown continents across the disc that read
+    // as a mud-camo pattern, not intergranular veins. At 0.42 they are warm shadow veins
+    // under the granulation. The RED-giant lane (deep ember red) keeps its full 0.88
+    // weight (gated by uRed) so the approved ember surface is untouched.
+    col = mix(col, mix(vec3(0.13,0.07,0.012), vec3(0.044,0.007,0.003), uRed), chMask*mix(0.42, 0.88, uRed)); // red-giant lane −5% deeper per grade
 
-    // sunspots: darker + slightly broader so they punch as the reference's dark pores.
-    // The yellow star keeps its exact neutral-dark pore (#0A0100); the RED GIANT's pores
-    // are pushed to a deep EMBER red (#0D0100 — green dropped, red held) so even the
-    // darkest shadows read molten red, not black. Gated by uRed → yellow star untouched.
-    float spot = smoothstep(0.34, -0.20, ch) * smoothstep(0.48,0.2,m);
-    col = mix(col, mix(vec3(0.04,0.006,0.0), vec3(0.044,0.004,0.0), uRed), spot*0.72); // red-giant pore −5% deeper per grade
+    // sunspots. On the YELLOW star the weight drops 0.72 -> 0.38 and the mask tightens
+    // (0.34 -> 0.10 onset) so pores are a few small discrete dark points, not the broad
+    // near-black patches that fed the mud-camo read. The RED GIANT keeps the original
+    // broad deep-ember pores (both mask and weight lerp back up with uRed).
+    float spot = smoothstep(mix(0.10, 0.34, uRed), -0.20, ch) * smoothstep(0.48,0.2,m);
+    col = mix(col, mix(vec3(0.04,0.006,0.0), vec3(0.044,0.004,0.0), uRed), spot*mix(0.38, 0.72, uRed)); // red-giant pore −5% deeper per grade
 
     // granulation: crisp distinct mottling (lava-cell texture of the reference). Floor
     // raised (0.72 → 0.95) so the troughs stay LUMINOUS — the reference disc is a bright
@@ -280,9 +281,10 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // bright active-region speckle fades out toward the (quiet) red giant. On the
     // yellow star these are the white-hot flare patches of the reference, so they
     // run hot and bright; they cool to a dim glow as the surface reddens (uRed→1).
-    // Tightened threshold (0.86 → 0.90) so the white-hot patches stay as discrete
-    // flare points instead of flooding the whole crest white.
-    float ar = smoothstep(0.90, 0.99, m) * (1.0 - 0.85*uRed);
+    // Threshold tightened again (0.90 → 0.94): at 0.90 the pale patches merged into
+    // beige smudges that read as part of the camo mottle — at 0.94 they are rare,
+    // discrete hot points.
+    float ar = smoothstep(0.94, 0.995, m) * (1.0 - 0.85*uRed);
     // red-giant active regions glow sodium orange (#E76418-ish) — the rare hot patches,
     // confined to the brightest cells by the tight 0.90 threshold above.
     col += ar * mix(vec3(1.15,0.92,0.46), vec3(0.70,0.30,0.07), uRed);
@@ -301,7 +303,11 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // not a bright band lifting the outer third of the body toward gold; the tight edge
     // reaches the hot-edge stop (#FF9E2C) at the silhouette only.
     vec3 limbCol = mix(vec3(1.30,1.10,0.62), vec3(0.906,0.392,0.094), uRed);
-    col = mix(col, limbCol, limbWide*mix(0.55, 0.38, uRed));
+    // Yellow-side wide-band weight cut 0.55 -> 0.30: the strong band lifted the whole
+    // outer third to a uniform gold ring that (with the corona) read as a flat egg-yolk
+    // halo. At 0.30 the limb keeps a gentle luminous wrap while the granulation stays
+    // legible right to the edge; the crisp hot edge line below is untouched.
+    col = mix(col, limbCol, limbWide*mix(0.30, 0.38, uRed));
     col += limbEdge * mix(vec3(1.05,0.78,0.34), vec3(0.45,0.18,0.03), uRed);
 
     // overall luminance: bright gold sun → dim matte red giant (light leads size).
@@ -422,12 +428,12 @@ export const sunGlowFrag = /* glsl */ `
   // loop/corona uFade lever so the whole atmosphere dissolves together.
   uniform float uFade;
   void main(){ vec3 vd=normalize(-vP);
-    // ITEM 4: SOFTER + WIDER glow with LESS pure white. Falloff eased 2.3 -> 2.0 so the
-    // rim ring is a touch wider/softer (a gentle wrapping glow, not a tight white line),
-    // and the lift pulled 1.5 -> 1.25 so the rim no longer bleaches toward white — it
-    // reads as a soft pale-gold corona, keeping the silhouette clean.
-    float i=pow(1.0-max(dot(vd,vN),0.0), 2.0);
-    gl_FragColor=vec4(uColor*i*1.25*uFade, 1.0); }`;
+    // Falloff steepened 2.0 -> 2.8 and lift pulled 1.25 -> 1.0: the wide soft shell was
+    // one of three overlapping rings (shell + limb band + corona rim) that summed into
+    // the flat egg-yolk halo. Tighter + dimmer, it reads as a thin chromosphere breath
+    // hugging the silhouette and lets the corona own the outer glow.
+    float i=pow(1.0-max(dot(vd,vN),0.0), 2.8);
+    gl_FragColor=vec4(uColor*i*1.0*uFade, 1.0); }`;
 
 // --- soft corona haze (camera-facing additive billboard) ---
 
@@ -449,15 +455,19 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     float r = length(pp);
     float a = atan(pp.y, pp.x);
     float df = uDiskFrac;
-    // ITEM 4: SOFTER + WIDER corona for the yellow star. The halo falloff is eased
-    // 16.0 -> 11.0 and the streamer reach 6.0 -> 4.5 so the glow is a soft, wider warm
-    // halo around the pale-gold star (a calmer atmosphere), not the tight clipped ring —
-    // while still anchored to the disc, not a screen-wide wash.
-    float halo = exp(-max(r-df,0.0)*11.0);
+    // TWO-SCALE falloff instead of the old single exp(-x*11): a tight hot rim right at
+    // the photosphere plus a long faint breath that asymptotes into the black. The old
+    // single mid-rate falloff held near-constant brightness for a fixed width and then
+    // dropped — a uniform egg-yolk RING around the disc (the "flat halo"). Two scales
+    // give the glow a luminous core and a genuinely gradual tail, so there is no
+    // readable ring edge anywhere.
+    float x = max(r-df,0.0);
+    float haloRim = exp(-x*20.0);
+    float haloBreath = exp(-x*3.2);
     float st = fbm(vec3(cos(a)*0.8, sin(a)*0.8, uTime*0.02));
     st = st*0.5+0.5;
-    float streamer = pow(st,3.5)*exp(-max(r-df,0.0)*4.5);
-    float corona = halo*0.50 + streamer*0.18;
+    float streamer = pow(st,3.5)*exp(-x*4.5);
+    float corona = haloRim*0.38 + haloBreath*0.13 + streamer*0.18;
     corona *= smoothstep(df-0.02, df+0.04, r);
     corona *= smoothstep(1.0, df+0.05, r);
     vec3 c = mix(vec3(1.20,0.78,0.30), vec3(1.30,1.02,0.52), st*0.7);
@@ -468,11 +478,10 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     // 0 at the rim → 1 at the outer reach; the indigo mix is gated by (1-uRed) so the
     // red giant's haze is untouched.
     float outerFade = smoothstep(df+0.02, df+0.30, r);
-    // DARKENED: deeper, dimmer indigo (was vec3(0.30,0.30,0.60) @ 0.70). The human
-    // could see the surround and asked for it darker — so both the indigo colour and
-    // the outer-fade tint strength are pulled down to a deep, dim indigo.
+    // Deep dim indigo. Tint strength 0.58 -> 0.38: at 0.58 the halo's outer tail went
+    // frankly PURPLE and (with the wash below) stamped a lavender disc around the star.
     vec3 indigo = vec3(0.24, 0.24, 0.50);
-    c = mix(c, indigo, outerFade * 0.58 * (1.0 - uRed));
+    c = mix(c, indigo, outerFade * 0.38 * (1.0 - uRed));
     c = mix(c, vec3(0.92,0.40,0.07), uRed);          // gold/indigo corona → dim sodium-orange haze
     // base pulled DOWN (1.05 → 0.55) so the tight rim glow doesn't add up into a broad
     // bloom-feeding wash; the red giant still dims further to a faint haze (×0.35).
@@ -489,15 +498,19 @@ export const sunCoronaFrag = SUN_NOISE_GLSL + /* glsl */ `
     // present but not blown out). Gated by (1-uRed) so the red giant's surround is
     // untouched, and by uFade so it blooms in with the rest of the atmosphere.
     float washIn  = smoothstep(df - 0.01, df + 0.14, r);          // ramp up just past the rim
-    float washOut = 1.0 - smoothstep(df + 0.22, df + 0.62, r);    // fade back to black before the room
+    // The wash used to die at df+0.62 — a bell with a READABLE outer edge, i.e. a flat
+    // indigo disc stamped around the star. Stretch the fade across the whole remaining
+    // billboard (to r≈0.95) so it dissolves imperceptibly into the room's black.
+    float washOut = 1.0 - smoothstep(df + 0.26, 0.95, r);
     float wash = washIn * washOut;
     // gentle azimuthal variation so it isn't a flat disc; keeps it reading as haze.
     float washMod = 0.80 + 0.20 * st;
-    // DARKENED: deeper, dimmer wash (was vec3(0.16,0.16,0.40) @ 0.42). The human asked
-    // to take the now-visible indigo surround darker — so both the fill colour and its
-    // strength multiplier are pulled down to a deep, dim indigo halo (present, not bright).
+    // Quieted right down (0.28 -> 0.07): on screen even 0.17 still read as a flat
+    // lavender DISC stamped behind the star — the "flat halo" audit finding. At 0.07
+    // spread across the wide fade it is a whisper of indigo in the black that pairs
+    // with the indigo backdrop stars without ever reading as a shape.
     vec3 indigoWash = vec3(0.10, 0.10, 0.30);                     // deeper, dimmer indigo fill
-    outCol += indigoWash * wash * washMod * 0.28 * (1.0 - uRed) * uFade;
+    outCol += indigoWash * wash * washMod * 0.07 * (1.0 - uRed) * uFade;
 
     gl_FragColor = vec4(outCol, 1.0);
   }`;
@@ -588,7 +601,10 @@ export const sunLoopVert = /* glsl */ `
     vec3 wp     = mix(aSeedPos, position, clamp(grow, 0.0, 1.06));
 
     float flick = 0.85 + 0.15*sin(uTime*3.0 + aSeed*6.2831);
-    vB   = aBright*flick*emerge*fade*inWin + 1.7*flash;
+    // flash weight 1.7 -> 0.9: the white-hot jet head at full strength read as a bright
+    // dotted bead-train whipping along the arc (the "wireframe whisk"); at 0.9 the sweep
+    // still reads but the arc stays a glowing filament.
+    vB   = aBright*flick*emerge*fade*inWin + 0.9*flash;
     vHot = flash;
 
     vec4 mv = modelViewMatrix*vec4(wp,1.0);
@@ -603,7 +619,9 @@ export const sunLoopFrag = /* glsl */ `
   void main(){
     float d = length(gl_PointCoord-0.5);
     float a = smoothstep(0.5,0.0,d);
-    a = pow(a,1.25);              // soft core -> overlapping points form a line
+    a = pow(a,1.5);               // softer core: overlapping points fuse into plasma, not beads
     vec3 col = mix(vCol, vec3(1.0,0.96,0.86), clamp(vHot,0.0,0.85));  // white-hot leading edge
-    gl_FragColor = vec4(col*a*vB*1.3*uFade, a*uFade);
+    // 1.05 -> 0.72: the arc sampling density was doubled (buildSunRig), so per-point
+    // emission comes down to hold the filament's total light roughly constant.
+    gl_FragColor = vec4(col*a*vB*0.72*uFade, a*uFade);
   }`;

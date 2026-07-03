@@ -1,7 +1,8 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, type CollectionEntry } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE_TITLE } from '../consts';
+import { stationForStage, type JourneyStation } from '../hero/sceneTable';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
@@ -14,6 +15,21 @@ const [latest, ...archive] = posts;
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sort();
+
+// Each post's backdrop rides the stellar lifecycle: `scene.journey` posts scrub the
+// live engine across a [from, to] stage window; the rest read against the frozen
+// black hole (or the corridor inside it). The list surfaces that as a per-row
+// STATION readout — glyph + name of the journey endpoints — so the index speaks the
+// same celestial system as the hero and the article backdrops (the liant).
+interface PostJourney {
+  from: JourneyStation;
+  to: JourneyStation | null; // null = a held room, not a journey
+}
+const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
+  const journey = post.data.scene?.journey;
+  if (journey) return { from: stationForStage(journey[0]), to: stationForStage(journey[1]) };
+  return { from: stationForStage(0), to: null }; // frozen black-hole room (or the corridor inside it)
+};
 ---
 
 <BaseLayout
@@ -23,29 +39,19 @@ const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sor
   bodyClass="writing-page"
 >
   <section class="writing-hero" aria-labelledby="writing-title">
-    <p class="writing-kicker">Writing</p>
-    <h1 id="writing-title">Notes on software that keeps working.</h1>
-    <p>
-      Short technical essays on content sites, frontend systems, deployment, and
-      the small decisions that make software easier to own.
-    </p>
-  </section>
+    <div class="writing-hero-copy">
+      <p class="writing-kicker">Writing</p>
+      <h1 id="writing-title">Notes on software that keeps working.</h1>
+      <p>
+        Short technical essays on content sites, frontend systems, deployment, and
+        the small decisions that make software easier to own.
+      </p>
+    </div>
 
-  {latest && (
-    <section class="writing-featured" aria-labelledby="latest-title">
-      <a class="writing-featured-card" href={href(`posts/${latest.id}/`)}>
-        <span class="writing-featured-label">Latest note</span>
-        {/* Shared-element morph: this headline carries the latest post's
-            transition:name, so clicking the card sends the title physically
-            travelling into the article h1 (and back on browser-back). The
-            latest post's ARCHIVE ROW below deliberately does NOT carry the
-            name — duplicate view-transition-names on one page abort the whole
-            transition, so the featured card owns the latest post's morph. */}
-        <h2 id="latest-title" transition:name={`post-title-${latest.id}`}>{latest.data.title}</h2>
-        <p>{latest.data.description}</p>
-        <span class="writing-featured-meta">{fmt(latest.data.pubDate)}</span>
-      </a>
-
+    {/* The index card rides the hero's right column (it is page-header metadata,
+        not featured-card metadata) — this balances the hero band, whose right
+        half used to sit empty while the card crowded the featured section. */}
+    {latest && (
       <aside class="writing-index-card" aria-label="Writing index">
         <dl>
           <div>
@@ -62,13 +68,68 @@ const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sor
           </div>
         </dl>
       </aside>
+    )}
+  </section>
+
+  {latest && (
+    <section class="writing-featured" aria-labelledby="latest-title">
+      <a class="writing-featured-card" href={href(`posts/${latest.id}/`)}>
+        <span class="writing-featured-label">Latest note</span>
+        {/* Shared-element morph: this headline carries the latest post's
+            transition:name, so clicking the card sends the title physically
+            travelling into the article h1 (and back on browser-back). The
+            latest post's ARCHIVE ROW below deliberately does NOT carry the
+            name — duplicate view-transition-names on one page abort the whole
+            transition, so the featured card owns the latest post's morph. */}
+        <h2 id="latest-title" transition:name={`post-title-${latest.id}`}>{latest.data.title}</h2>
+        <p>{latest.data.description}</p>
+        <span class="writing-featured-meta">
+          {fmt(latest.data.pubDate)}
+          {(() => {
+            const j = journeyForPost(latest);
+            return (
+              <span
+                class="writing-journey"
+                role="img"
+                aria-label={`Scene: ${j.to ? `${j.from.label} to ${j.to.label}` : j.from.label}`}
+              >
+                <span class="writing-journey-glyph" style={`--glyph: url('${href(j.from.glyphSrc)}')`} />
+                {j.to && <span class="writing-journey-arrow">→</span>}
+                {j.to && (
+                  <span class="writing-journey-glyph" style={`--glyph: url('${href(j.to.glyphSrc)}')`} />
+                )}
+                <span class="writing-journey-label">
+                  {j.to ? `${j.from.label} → ${j.to.label}` : j.from.label}
+                </span>
+              </span>
+            );
+          })()}
+        </span>
+      </a>
     </section>
   )}
 
   <section class="writing-list" aria-label="All writing">
-    {(latest ? [latest, ...archive] : posts).map((post) => (
+    {(latest ? [latest, ...archive] : posts).map((post) => {
+      const j = journeyForPost(post);
+      return (
       <a class="writing-row" href={href(`posts/${post.id}/`)}>
-        <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+        <span class="writing-row-left">
+          <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+          {/* The row's lifecycle STATION readout: which room of the stellar
+              lifecycle this note reads in (its scene.journey endpoints). */}
+          <span
+            class="writing-journey"
+            role="img"
+            aria-label={`Scene: ${j.to ? `${j.from.label} to ${j.to.label}` : j.from.label}`}
+          >
+            <span class="writing-journey-glyph" style={`--glyph: url('${href(j.from.glyphSrc)}')`} />
+            {j.to && <span class="writing-journey-arrow">→</span>}
+            {j.to && (
+              <span class="writing-journey-glyph" style={`--glyph: url('${href(j.to.glyphSrc)}')`} />
+            )}
+          </span>
+        </span>
         <span class="writing-row-copy">
           {/* Per-post shared-element name → the article h1 (posts/[...slug]).
               The latest post's row stays unnamed: its morph belongs to the
@@ -86,6 +147,7 @@ const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sor
           )}
         </span>
       </a>
-    ))}
+      );
+    })}
   </section>
 </BaseLayout>

@@ -32,8 +32,9 @@ Scroll height is 6 viewport-tall stages; scroll progress maps to a fractional
 | 4     | **nebula**         | point cloud         | [nebula-3.05-formed.jpeg](./nebula-3.05-formed.jpeg) · [3.25](./nebula-3.25-collapsing.jpeg) · [3.50](./nebula-3.50-dispersed.jpeg) |
 | 5     | pale blue dot      | point cloud (placeholder) | — |
 
-State labels live in the `BEATS` array (`state: 'red giant'` at line ~2567,
-`state: 'yellow star'` at line ~2574).
+State labels live in the scene table (`src/hero/sceneTable.ts`): each scene's
+`beat.state` field (`'red giant'`, `'yellow star'`, …). `BEATS` is projected
+from `SCENES` there.
 
 ---
 
@@ -107,19 +108,35 @@ ported Ashima-noise photosphere recipe.
 
 ![yellow star](./yellow-star.png)
 
-Tighter, hotter, gold sun-like star with a bright corona and visible
-prominences/flares licking off the limb. This is the **only** state drawn by the
-dedicated **mesh sun rig**, not the point cloud.
+Tighter, hotter, gold sun-like star with a soft warm halo and low coronal loop
+arcades hugging the limb. This is the **only** state drawn by the dedicated
+**mesh sun rig**, not the point cloud.
 
-- **Renderer:** mesh **sun rig** — `buildSunRig()` (definition line ~1499;
-  `interface SunRig` line ~1485; instance `const sunRig = buildSunRig(...)` line
-  ~2153). It is a solid photosphere mesh + inner glow + corona billboard +
-  animated loop/prominence Points.
-- **Radius:** `SUN_RIG_RADIUS = 4.2 * 0.92` (line ~2152).
-- **Swap-in:** the rig is revealed and the point cloud hidden only during the
-  yellow slot: `const sunWindow = !!yellow && !nebula` →
-  `sunRig.group.visible = sunWindow; diskPrimary.visible = !sunWindow`
-  (lines ~2302–2305). This is a **hard swap at stage 2.5**, not a morph.
+- **Renderer:** mesh **sun rig** — `buildSunRig()` (`src/hero/scene/buildSunRig.ts`;
+  shaders in `src/hero/shaders/sun.glsl.ts`; the instance is created in
+  `src/hero/scene/createScene.ts`). It is a solid photosphere mesh + inner glow +
+  corona billboard + animated loop Points. (The old straight red prominences were
+  removed — face-on they read as a stray orange blob; the loop arcades carry all
+  the limb activity now.)
+- **Radius:** `SUN_RIG_RADIUS = RED_GIANT_RADIUS * YELLOW_RED_RADIUS_RATIO`
+  (createScene.ts — one shared ratio, byte-identical with the disk shader's).
+- **Swap-in (STALE-DOC FIX — it is NOT a hard swap at 2.5):** body ownership is
+  the `bodyOwnership()` ladder in `transitions.ts` (proven by the bodyOwnership
+  unit tests). In stage terms:
+  - `stage ≤ SWAP_STAGE (≈2.88)` — CLOUD (the shrinking red giant → gold ball),
+    with a tight cross-dissolve band right at the swap;
+  - `SWAP < stage ≤ 2.95` — MESH (the settled yellow star you actually see);
+  - `2.95 < stage ≤ 3.0` — the collapse-floor crossfade (cloud dissolves over
+    the mesh);
+  - `stage > 3.0` — CLOUD again (nebula side; the mesh only fades UNDER it near
+    the floor).
+  So to inspect the settled mesh star, pin `window.__bhMorph = 2.90` — at 2.7
+  you are still looking at the point cloud's gold ball.
+- **Scroll hold:** the yellow idle segment (sceneTable.ts) parks at **stage
+  2.915** — mid mesh band, deliberately clear of both the 2.86–2.88 swap
+  dissolve and the 2.95–3.0 collapse-floor crossfade. (It used to park at
+  exactly 2.88, ON the dissolve edge, which made the held star flicker between
+  the washed cloud ball and the crisp mesh.)
 
 > Note: the point cloud *can also* render a yellow sun (`vSunRed = 0`,
 > `sunRadFac = 0.92`, more flares via `atmoThresh = 0.91`) — that path is the
@@ -176,8 +193,8 @@ remains. These three frames read the lifecycle in its natural scroll order
 
 | renderer | what it is | draws | key code |
 |----------|-----------|-------|----------|
-| **point cloud** | the ~1.2M-point GPU particle system | black hole, reverse supernova, **red giant**, nebula, dot | `diskVertexShader` / `diskFragmentShader` |
-| **mesh sun rig** | a solid mesh + glow + corona + animated loop Points | **yellow star** only | `buildSunRig()` (~1499) |
+| **point cloud** | the ~1.2M-point GPU particle system | black hole, reverse supernova, **red giant**, nebula, dot | `diskVertexShader` / `diskFragmentShader` (`src/hero/shaders/disk.glsl.ts`, built by `scene/buildDisk.ts`) |
+| **mesh sun rig** | a solid mesh + glow + corona + animated loop Points | **yellow star** only | `buildSunRig()` (`src/hero/scene/buildSunRig.ts` + `shaders/sun.glsl.ts`) |
 
 Both use the **Ashima simplex-noise** photosphere recipe — that shared recipe is
 the reason "sun" leaked into so many names.
@@ -188,18 +205,19 @@ the reason "sun" leaked into so many names.
 
 | code identifier | meaning |
 |---|---|
-| `redGiant` (shader var, ~467) | the point-cloud sun is in **red-giant** mode |
-| `sunOn` (shader var, ~468) | the point-cloud sun (red giant *or* yellow) is active |
+| `redGiant` (disk.glsl.ts shader var) | the point-cloud sun is in **red-giant** mode |
+| `sunOn` (disk.glsl.ts shader var) | the point-cloud sun (red giant *or* yellow) is active |
 | `vSunRed` (varying) | palette select: **1 = red giant**, **0 = gold/yellow** |
-| `sunRadFac` (shader, ~473) | star radius factor: **1.45 red giant**, **0.92 yellow** |
-| `atmoThresh` (shader) | flare density gate: **0.955 red giant** (few), **0.91 yellow** (more) |
-| `sunRig` / `buildSunRig` / `SunRig` | the **mesh** yellow-star renderer |
-| `SUN_RIG_RADIUS` (~2152) | the mesh sun rig's radius |
-| `sunWindow` (frame loop, ~2302) | true only during the yellow-star slot (rig shown, cloud hidden) |
+| `sunRadFac` (disk.glsl.ts) | star radius factor: **1.45 red giant**, **0.92 yellow** |
+| `atmoThresh` (disk.glsl.ts) | flare density gate: **0.955 red giant** (few), **0.91 yellow** (more) |
+| `sunRig` / `buildSunRig` / `SunRig` | the **mesh** yellow-star renderer (`scene/buildSunRig.ts`) |
+| `SUN_RIG_RADIUS` (createScene.ts) | the mesh sun rig's radius |
+| `meshSide` / `bodyOwnership` (transitions.ts / lifecycle.ts) | which body owns the frame — the real mesh/cloud seam |
 | `uYellow` / `yellow` | drives the yellow state (uniform / JS flag) |
 
 ---
 
 _Images regenerated with `scratchpad/shoot-glossary.mjs` (forces `__bhMorph` per
-state and crops the star). Line numbers are approximate — grep the identifier if
-they have drifted._
+state and crops the star). Grep the identifiers — the hero was long ago split out
+of the old monolithic `BlackHole.tsx` into `src/hero/scene/*` + `src/hero/shaders/*`,
+so any remaining absolute line numbers in older notes are stale._

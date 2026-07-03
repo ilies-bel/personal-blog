@@ -221,7 +221,7 @@
 .bh-rm-modal-title {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   font-size: var(--text-title);
   line-height: var(--leading-snug);
   letter-spacing: var(--tracking-tight);
@@ -354,7 +354,12 @@
    readable regardless of which backdrop branch a given device renders. */
 body.article-page .bh-backdrop,
 body.article-page .bh-poster-slideshow {
-  opacity: 0.4;
+  /* 0.4 → 0.55: with the old opacity (times the heavy side scrim below) the
+     scene-journey backdrop netted out at ~5% luminance — the authored lifecycle
+     scrub was effectively INVISIBLE while reading. The column stays protected by
+     the ::after ellipse + the centre scrim; the extra light lands in the gutters,
+     where the journey is supposed to live. */
+  opacity: 0.55;
   filter: saturate(0.72) brightness(0.86) sepia(0.18);
 }
 body.article-page .bh-backdrop::after,
@@ -390,10 +395,15 @@ body.article-page .bh-poster-slideshow::before {
   content: "";
   position: fixed;
   inset: 0;
+  /* Rebalanced: the old band (0.88 sides / 0.62 centre) crushed the GUTTERS —
+     the one place the scene journey can show — while the centre column was
+     already protected by the ::after ellipse. Now the CENTRE carries the deeper
+     scrim (belt + braces under the text) and the sides open up so the lifecycle
+     scrub reads beside the column. */
   background: linear-gradient(90deg,
-    rgba(0, 0, 0, 0.88),
-    rgba(0, 0, 0, 0.62),
-    rgba(0, 0, 0, 0.88));
+    rgba(0, 0, 0, 0.45),
+    rgba(0, 0, 0, 0.7),
+    rgba(0, 0, 0, 0.45));
   pointer-events: none;
   z-index: 0;
 }
@@ -557,9 +567,9 @@ body.graveyard-page .bh-backdrop::before {
 }
 .bh-identity-name {
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   font-size: var(--text-subtitle);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   line-height: 1;
   /* Cool-neutral overlay bone (Task 3a): holds authority over the orange star where
      warm --fg washes out. Reading-page reuse (.site-header) overrides to warm --fg
@@ -738,6 +748,19 @@ body.scene-ready.at-opening .bh-focus-dot {
       rgba(0, 0, 0, 0.28) 42%,
       rgba(0, 0, 0, 0.10) 68%,
       transparent 100%);
+  /* The paint gradient above is BIGGER than the box (120%/130%), so the box edges
+     used to cut it mid-value — invisible on the old pure-black room, but a readable
+     dark RECTANGLE once the per-scene room tints lit the background. Feather every
+     edge to zero with an intersected two-axis mask so the pool can never show a
+     straight edge, whatever the paint does. */
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  mask-composite: intersect;
 }
 
 /* Big line: one line per beat, always shown at full bone (no direction swap).
@@ -752,7 +775,7 @@ body.scene-ready.at-opening .bh-focus-dot {
   display: block;
   grid-area: 1 / 1;
   font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   font-size: var(--text-hero);
   line-height: var(--leading-tight);
   letter-spacing: var(--tracking-normal);
