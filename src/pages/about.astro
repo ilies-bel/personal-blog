@@ -102,9 +102,9 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       <section class="about-contact" id="get-in-touch">
         <h2 class="about-contact-title">Get in touch</h2>
         <ul class="about-contact-list">
-          {SOCIALS.github && <li><a href={SOCIALS.github}>GitHub</a></li>}
-          {SOCIALS.twitter && <li><a href={SOCIALS.twitter}>Twitter / X</a></li>}
-          {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`}>Email</a></li>}
+          {SOCIALS.github && <li><a href={SOCIALS.github} data-decode>GitHub</a></li>}
+          {SOCIALS.twitter && <li><a href={SOCIALS.twitter} data-decode>Twitter / X</a></li>}
+          {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`} data-decode>Email</a></li>}
         </ul>
       </section>
     </article>

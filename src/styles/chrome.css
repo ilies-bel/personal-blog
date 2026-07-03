@@ -213,12 +213,18 @@
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
+/* Target-lock frame — opacity-driven so it can also REVEAL on hover/focus (the
+   hero corner nav's targeting gesture, ported): full strength on the locked
+   (current) section, a lighter acquisition frame while hovering the rest. */
 .subnav-lock {
-  display: none;
   position: absolute;
   inset: 0.18rem 0.3rem;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out-quint);
 }
+.subnav-link:hover .subnav-lock,
+.subnav-link:focus-visible .subnav-lock { opacity: 0.5; }
 /* corner brackets = current/locked target only */
 .subnav-tick {
   position: absolute;
@@ -238,7 +244,7 @@
 .subnav-link[aria-current='page'] {
   color: var(--fg-overlay);
 }
-.subnav-link[aria-current='page'] .subnav-lock { display: block; }
+.subnav-link[aria-current='page'] .subnav-lock { opacity: 1; }
 .subnav-link[aria-current='page'] .subnav-index { opacity: 1; }
 /* Persistent underline on the current section — the same gold sweep shown at
    rest (not just on hover), so the current item is obvious. */
@@ -254,7 +260,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .subnav-label,
-  .subnav-section { transition: none; }
+  .subnav-section,
+  .subnav-lock { transition: none; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

@@ -920,7 +920,7 @@ export default function HudNavigation({
                       body is the dim caption. The rail keeps its physical scroll
                       ORDER (it is a scene instrument); only the pair is flipped. */}
                   <span className="hud-nav-copy">
-                    <span className="hud-nav-title">{item.destination}</span>
+                    <span className="hud-nav-title" data-decode>{item.destination}</span>
                     <span className="hud-nav-destination">{item.label}</span>
                   </span>
                 </button>

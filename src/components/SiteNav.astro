@@ -112,7 +112,7 @@ const X_PATH =
               <span class="overlay-blog-tick overlay-blog-tick-bl" />
               <span class="overlay-blog-tick overlay-blog-tick-br" />
             </span>
-            <span class="overlay-blog-label">{row.label}</span>
+            <span class="overlay-blog-label" data-decode>{row.label}</span>
           </a>
         ))}
       </div>
@@ -162,7 +162,7 @@ const X_PATH =
           href={home}
           aria-label="Close and return to the home scene"
         >
-          <span class="overlay-blog-label">Close</span>
+          <span class="overlay-blog-label" data-decode>Close</span>
         </a>
       )}
     </nav>
@@ -182,7 +182,7 @@ const X_PATH =
               </span>
               {/* Destination·body PAIR — destination bright, celestial body dim. */}
               <span class="subnav-copy">
-                <span class="subnav-label">{row.label}</span>
+                <span class="subnav-label" data-decode>{row.label}</span>
                 <span class="subnav-section">{row.body}</span>
               </span>
               {/* Two-digit mono index — only shown on the locked section. */}

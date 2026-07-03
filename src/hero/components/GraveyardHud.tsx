@@ -84,7 +84,11 @@ export default function GraveyardHud({ entries }: GraveyardHudProps) {
         <span className="article-hud-index" aria-hidden="true">
           {total > 0 ? `SPECIMEN ${pad2(activeIndex + 1)} / ${pad2(total)}` : `${pct}%`}
         </span>
-        {active?.name && <span className="article-hud-section">{active.name}</span>}
+        {active?.name && (
+          <span className="article-hud-section" data-decode>
+            {active.name}
+          </span>
+        )}
         <span className="article-hud-beat" aria-hidden="true">
           {active?.interred ? `INTERRED ${active.interred}` : 'INTERRED'}
         </span>

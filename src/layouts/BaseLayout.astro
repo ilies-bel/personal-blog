@@ -465,9 +465,9 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
             <nav class="site-footer-links" aria-label="Social links">
-              {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}
-              {SOCIALS.twitter && <a href={SOCIALS.twitter}><span class="site-footer-label">Twitter</span></a>}
-              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}><span class="site-footer-label">Email</span></a>}
+              {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label" data-decode>GitHub</span></a>}
+              {SOCIALS.twitter && <a href={SOCIALS.twitter}><span class="site-footer-label" data-decode>Twitter</span></a>}
+              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}><span class="site-footer-label" data-decode>Email</span></a>}
             </nav>
           </footer>
         </div>
@@ -577,6 +577,14 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             veil from a prior dive — even if astro:page-load fires late or the
             dev pre-load iframe ate the page-load event. The dived path owns its
             own overlay choreography and is left untouched. */}
+    {/* DECODE HOVER — the sitewide scramble-resolve gesture for mono labels
+        ([data-decode]). One delegated listener pair on `document`, bound once;
+        see src/scripts/decodeHover.ts for the rules (mono-only, pointer-only,
+        reduced-motion no-op, original text always restored). */}
+    <script>
+      import '../scripts/decodeHover';
+    </script>
+
     <script>
       document.addEventListener('astro:before-swap', (event) => {
         if (window.self !== window.top) return;
