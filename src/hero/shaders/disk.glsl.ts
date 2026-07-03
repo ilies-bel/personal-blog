@@ -1650,6 +1650,11 @@ export const diskFragmentShader = /* glsl */ `
   uniform float uDotTime;   // dedicated always-live clock for the opening dot's breath (uTime is frozen across the nebula window, which includes the dot); 0 under reduced-motion → steady dot
   uniform float uSat;
   uniform float uYrFlash;   // yellow→red swap flash: whitens the gold cloud sphere
+  uniform float uNebFade;   // global gas-density fade across the collapse window (1 full gas →
+  //   0 fully agglomerated). Applied AFTER the per-grain nebula intensity formulas below: their
+  //   constant floors (0.04/0.10 + …·vBright) hold every grain at a minimum no matter how far
+  //   uBright drops, so the collapse density envelope needs this post-floor multiply to truly
+  //   empty the cloud as the gas finishes feeding the star.
   uniform float uPointGain; // low-tier grain-SIZE multiplier (1.0 on high). Shared with the
   //   vertex shader: there it fattens gl_PointSize, here it WIDENS the gaussian core in step
   //   (softP/softN below) so the fattened sparse grains overlap instead of speckling.
@@ -2054,6 +2059,14 @@ export const diskFragmentShader = /* glsl */ `
       inten *= vNebLight;   // ambient+depth light model: dim far / self-occluded gas
     } else if(vPlaceholder > 2.4 && vPlaceholder < 2.9){
       inten = a * clamp(vBright, 0.0, 4.0);          // young-star knot: bright point
+    }
+    // GLOBAL COLLAPSE DENSITY FADE — multiplied in AFTER the nebula formulas above (which
+    // floor per-grain intensity and so cannot be driven to zero through vBright), so the
+    // collapse window's density envelope (lifecycle's nebFade, 1 → 0 as the gas finishes
+    // agglomerating onto the star) truly empties the cloud. Covers the whole nebula family
+    // (diffuse haze, filaments, young-star knots); 1 (no-op) outside the collapse window.
+    if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
+      inten *= clamp(uNebFade, 0.0, 1.0);
     }
     // GPGPU collapse glow — BRIGHTEN-INTO-CORE then a CRISP SWALLOW at the surface: as gas
     // accretes onto the core (vSimLife 1→0) it compresses and heats, so it gets BRIGHTER the

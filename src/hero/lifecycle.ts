@@ -140,8 +140,14 @@ export interface StarState {
   simBlend: number;
   /** mesh star reveal: 0 (no mesh) → 1 (full star) as the cloud finishes feeding it. */
   starFormed: number;
-  /** cloud brightness multiplier across the collapse (bright infall → fade out). 1 outside. */
+  /** cloud EMISSION lift across the collapse (the feedBump convergence glow). Rides
+   *  uBright into vBright, where the frag's per-grain floors make it a brighten-only
+   *  channel. 1 outside the (extended) collapse window. */
   cloudBright: number;
+  /** global gas DENSITY fade across the collapse (1 full gas → 0 fully agglomerated as
+   *  the star completes). uNebFade — applied in the frag AFTER the per-grain intensity
+   *  floors, so unlike uBright it can truly extinguish the cloud. 1 outside. */
+  nebFade: number;
 
   // --- supernova flash (rides the time-based nova envelope) ---
   /** particle-side shock-breakout glow: 1.45 * nova. uFlash. */
@@ -402,20 +408,40 @@ export function lifecycle(input: LifecycleInput): StarState {
   // sim-collapsed gas is held through the floor crossfade (and via nebulaShader keeps uNebula on,
   // suppressing the shader's red-giant default there).
   const simBlend = inWindowGeo * smoothstep01((NEB_COLLAPSE_HI - stage) / 0.16);
-  // cloud DENSITY/brightness — decays LINEARLY across the full collapse window in lockstep
-  // with the star's growth. prog runs 0→1 over the window (stage 3.5 → 3.0); starFormed =
-  // prog^1.5 also reaches 1 at prog=1, so (1 - prog) density makes the last drop of gas land
-  // on the last frame the yellow star reaches full size — a clean simultaneous handoff with no
-  // gas-gone-then-star-pops and no star-full-then-cloud-lingers. The per-grain accretion
-  // wink-out in disk.glsl.ts (vSimLife→0 as a grain parks) still empties individual regions
-  // via absorption; the global envelope now provides an even, proportional dimmer across the
-  // entire window rather than holding near full and only dropping in the final stretch.
-  // feedBump still glows the mid-window convergence (light pouring into the core).
-  // 1 (no-op) outside the window.
+  // cloud DENSITY + BRIGHTNESS across the collapse — SPLIT into two envelopes, because
+  // they travel different pipes with different failure modes:
+  //
+  //   • `cloudBright` — the EMISSION LIFT (the feedBump convergence glow). Rides uBright
+  //     into each grain's vBright, where the frag's per-grain intensity formulas clamp
+  //     and FLOOR it (`0.04 + 0.26·vBright`, `0.10 + 0.34·vBright`): a multiplier > 1
+  //     brightens, but a multiplier → 0 can NEVER extinguish a grain — the constant
+  //     floors hold every grain at ~25% intensity, and ~1M additive grains + bloom stack
+  //     that "residue" back into a full bright cloud. So uBright is the WRONG pipe for
+  //     the density decay (the old combined envelope died in those floors — the gas
+  //     never actually thinned, then POPPED in/out whole at the ownership seams).
+  //   • `nebFade` — the DENSITY envelope (uNebFade): decays LINEARLY across the window in
+  //     lockstep with the star's growth, applied in the frag AFTER the floors as a true
+  //     multiplicative fade, so 0 really means no gas. prog runs 0→1 over the window
+  //     (stage 3.5 → 3.0); starFormed = prog^1.5 also reaches 1 at prog=1, so (1 - prog)
+  //     density makes the last drop of gas land on the last frame the yellow star reaches
+  //     full size — a clean simultaneous handoff with no gas-gone-then-star-pops and no
+  //     star-full-then-cloud-lingers. The per-grain accretion wink-out (vSimLife→0 as a
+  //     grain parks) still empties individual regions via absorption; this global envelope
+  //     is the even, proportional dimmer over the remainder.
+  //
+  // BOTH use the EXTENDED geo gate (inWindowGeo), NOT the raw window: the floor CROSSFADE
+  // band (2.95→3.0, where bodyOwnership dissolves the cloud under the formed mesh) sits
+  // BELOW the raw window, so the raw gate snapped both envelopes back to 1 there — the
+  // near-empty gas the window floor had faded out REAPPEARED AT FULL DENSITY for the few
+  // frames of the dissolve (the "gas pops in whole right at the yellow star" bug). The
+  // extended gate holds the floor values (density 0, no lift) through the band; at its
+  // low edge (2.95) the envelopes snap back to 1, but cloudW = 0 there (pure-mesh band),
+  // so nothing is visible to pop. 1 (no-op) outside the extended window.
   const feedBump = 5.2 * prog * (1 - prog); // 0→1→0, peaks mid-window (brighter convergence)
+  const cloudBright = 1 + inWindowGeo * 0.8 * feedBump;
   // linear: full gas at window top (prog 0) → 0 exactly as the yellow star completes (prog 1).
-  const invDensity = 1 - prog; // linear: full gas at window top → 0 exactly as the yellow star completes
-  const cloudBright = 1 + inWindow * ((1 + 0.8 * feedBump) * invDensity - 1);
+  const invDensity = 1 - prog;
+  const nebFade = 1 + inWindowGeo * (invDensity - 1);
   // the shader runs its nebula geometry across the real nebula AND the collapse
   // window, so `pos` holds the analytic nebula placement (the sim's seed/home)
   // whenever the sim blend is active.
@@ -767,6 +793,7 @@ export function lifecycle(input: LifecycleInput): StarState {
     simBlend,
     starFormed,
     cloudBright,
+    nebFade,
     flash,
     inYRWindow,
     meshSide,

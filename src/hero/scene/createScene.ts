@@ -836,6 +836,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // resolved sim blend (after the gravity-sim sample) + nebula light model strength.
     setDisk('uSimBlend', ctx.simBlend);
     setDisk('uNebLight', ctx.nebLight);
+    // global collapse DENSITY fade — the post-floor multiply that actually empties the
+    // gas as it agglomerates onto the forming star (uBright can't: the frag's per-grain
+    // intensity floors hold a residue that a million additive grains re-stack into a
+    // full cloud). 1 (no-op) outside the collapse window.
+    setDisk('uNebFade', look.nebFade);
 
     // --- yellow star → red giant: FLASH-SWAP transition ----------------------
     setDisk('uYrFlash', look.yrFlash);
@@ -1294,6 +1299,28 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // model strength (with its debug override) fed to applyLook via applyCtx; the
     // actual uSimBlend / uNebLight twin-writes happen in applyLook.
     applyCtx.simBlend = simBlend;
+    // DEBUG: while __bhInspect is set, publish the resolved collapse-handoff scalars on
+    // window.__bhLook so a capture script can assert what a pinned frame actually
+    // computed (this is how the "gas pops in whole at the yellow star" density-envelope
+    // bug was isolated — the numbers said fade≈0 while the pixels said full cloud).
+    // Allocation is gated on the hook, so normal play never pays for it.
+    if (readDebugNumber(DEBUG_WINDOW_KEYS.inspect)) {
+      (window as unknown as Record<string, unknown>).__bhLook = {
+        stage,
+        simAvailable: gravitySim.available,
+        simBaked: gravitySim.isBaked(),
+        lookSimBlend: look.simBlend,
+        lookCollapse: look.collapse,
+        ctxSimBlend: simBlend,
+        cloudBright: look.cloudBright,
+        nebFade: look.nebFade,
+        cloudW: look.cloudW,
+        meshW: look.meshW,
+        starFormed: look.starFormed,
+        nebulaShader: look.nebulaShader,
+        camLen: camera.position.length(),
+      };
+    }
     // nebula light model strength (ambient+depth+self-occlusion). Always full; the
     // factor only touches nebula particles. DEBUG: window.__bhNebLight pins it (0 =
     // flat self-emission, 1 = full light model) so the look can be A/B'd live.

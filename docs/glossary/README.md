@@ -155,7 +155,11 @@ remains. These three frames read the lifecycle in its natural scroll order
 | `stage 3.05` — formed | `stage 3.25` — collapsing | `stage 3.50` — dispersed |
 |---|---|---|
 | ![nebula formed](./nebula-3.05-formed.jpeg) | ![nebula collapsing](./nebula-3.25-collapsing.jpeg) | ![nebula dispersed](./nebula-3.50-dispersed.jpeg) |
-| star intact, gas bursting outward | gas condensing toward a faint core | diffuse cloud, no central body |
+| star intact, last wisps of gas | gas condensing toward a faint core | diffuse cloud, no central body |
+
+> STALE IMAGE (3.05): the frame above predates the `nebFade` density envelope —
+> at 3.05 the gas is now ~97% agglomerated (thin wisps hugging the star, not a
+> bursting cloud). Re-shoot the ladder with `scratchpad/shoot-nebula-handoff.mjs`.
 
 - **Renderer:** **point cloud** (same `diskVertexShader` / `diskFragmentShader`
   as the red giant), gated on by `uNebula`. In `lifecycle()` the gate is
@@ -177,10 +181,24 @@ remains. These three frames read the lifecycle in its natural scroll order
     gas actually vacuums into the core instead of a dispersed cloud lingering.
   - `starFormed` — mesh-star reveal `pow(prog, 1.5)`, lags the gas so the inflow
     visibly feeds a growing core.
-  - `cloudBright` — cloud brightness across the collapse (bright infall → fade).
+  - `cloudBright` (→ `uBright`) — cloud EMISSION lift across the collapse (the
+    mid-window feedBump glow of gas pouring into the core). Brighten-only: the
+    disk frag's per-grain intensity floors mean `uBright` can never extinguish
+    the gas.
+  - `nebFade` (→ `uNebFade`) — cloud DENSITY across the collapse: `1 - prog`,
+    linear from full gas (3.5) to **zero exactly as the star completes** (3.0),
+    applied in the frag *after* the per-grain floors so it truly empties the
+    cloud. This is what makes the yellow-star handoff seamless — the gas
+    agglomerates until it's (almost) gone; before the split the combined
+    envelope died in the floors and the gas popped in/out whole at the seam.
   - Window constants `NEB_COLLAPSE_HI` (3.5) / `NEB_COLLAPSE_LO` (3.0) live in
     `sceneTable.ts`; everything is hard-gated to `[LO, HI]` so stages below the
     window don't wrongly turn the red giant / yellow star into "collapsing nebula".
+    The envelopes + collapse geometry use the EXTENDED gate (down to `LO − 0.05`)
+    so they hold their floor values through the bodyOwnership crossfade band —
+    the raw gate snapped them back to 1 there, which re-lit the faded gas at
+    full density for the few dissolve frames (the "gas appears instantly next
+    to the yellow star" bug, both scroll directions).
 - **Hyperspace exit:** continuing down toward the pale blue dot, the nebula's own
   particles smear into radial starlines (`streak` → `uStreak`) over the dezoom.
 

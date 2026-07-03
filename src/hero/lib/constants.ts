@@ -232,6 +232,13 @@ export const DEBUG_WINDOW_KEYS = {
    *  any machine without spoofing hardware. Read as a STRING via readDebugString and
    *  honoured FIRST by detectDeviceTier (overrides the cheap auto-detect signals). */
   tier: '__bhTier',
+  /** Set truthy (e.g. 1) to make the scene PUBLISH a per-frame `window.__bhLook`
+   *  snapshot of the resolved collapse-handoff scalars (stage, sim availability/bake
+   *  state, the cloudBright/nebFade envelopes, body weights, camera distance) so a
+   *  capture script can assert what a pinned frame actually computed (pairs with
+   *  __bhMorph; see scratchpad/shoot-nebula-handoff.mjs). Unlike the other keys this
+   *  gates an OUTPUT; it costs nothing while unset. */
+  inspect: '__bhInspect',
 } as const;
 
 // --- cross-layer cursor bridge (window.__bh*) ------------------------------

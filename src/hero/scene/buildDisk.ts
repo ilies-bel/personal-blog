@@ -132,6 +132,7 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uDot: { value: 0 },
     uNebulaGrow: { value: 1 },
     uNebLight: { value: 1 }, // nebula ambient+depth light model strength (0 flat → 1 full)
+    uNebFade: { value: 1 }, // global gas-density fade across the collapse window (1 full gas → 0 fully agglomerated). Applied AFTER the frag's per-grain intensity floors, which uBright cannot cross.
     // --- yellow star → red giant flash-swap (transition 3, scroll 3→2). These
     //     drive ONLY the point-cloud's gold→red sphere during the yellow⇄red
     //     slot; all three default to a no-op so every other stage is unchanged.
