@@ -1002,6 +1002,42 @@ export function stationForStage(stage: number): JourneyStation {
   return { label: best.label, glyphSrc: best.glyphSrc };
 }
 
+/** LIFECYCLE TIME — stage → the star's age, for the instrument readout. The scroll
+ *  plays the story in REVERSE, so time FALLS as you scroll down (the black hole at
+ *  the top is the far future; the pale blue dot at the bottom is T ≈ 0). Anchors
+ *  are loosely sun-like — cloud collapse within the first ~50 Myr, main sequence
+ *  sampled at the Sun's own 4.6 Gyr, the giant phase near the ~10.6 Gyr end of a
+ *  solar life — with the supernova/black-hole coda as artistic licence (a true
+ *  solar-mass star would settle for a white dwarf). Piecewise-linear, clamped. */
+const LIFECYCLE_TIME_STOPS: readonly (readonly [number, number])[] = [
+  // [stage, age in Gyr] — ascending stage, DESCENDING age (the reverse story).
+  [0.0, 11.2], // black hole — long after the light went out
+  [0.62, 11.0], // the supernova instant
+  [2.05, 10.6], // red giant
+  [2.915, 4.6], // settled yellow star (the Sun, today)
+  [3.42, 0.05], // nebula — the cloud collapsing
+  [4.7, 0.0], // the beginning — a pale blue speck
+];
+export function lifecycleTimeGyr(stage: number): number {
+  const stops = LIFECYCLE_TIME_STOPS;
+  if (stage <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i += 1) {
+    if (stage <= stops[i][0]) {
+      const [s0, t0] = stops[i - 1];
+      const [s1, t1] = stops[i];
+      const k = (stage - s0) / (s1 - s0);
+      return t0 + (t1 - t0) * k;
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+/** Format an age for the mono readout: "T +0" / "T +48 MYR" / "T +4.60 GYR". */
+export function formatLifecycleTime(gyr: number): string {
+  if (gyr < 0.0005) return 'T +0';
+  if (gyr < 1) return `T +${Math.round(gyr * 1000)} MYR`;
+  return `T +${gyr.toFixed(2)} GYR`;
+}
+
 // ===========================================================================
 // CAMERA TABLE
 //

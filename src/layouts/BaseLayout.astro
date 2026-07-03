@@ -91,25 +91,30 @@ interface SubnavItem {
   section: string;
   active: boolean;
 }
-// HUD_NAV_ITEMS is already in physical scroll order (black hole at the top → the
-// beginning at the bottom); each carries its body `label` + section `destination`
-// + `href`. Project it onto the reading-page rail, resolving the deploy-based href
-// and the active state per section. Writing stays active across the posts subtree
-// (isWritingActive); every other lifecycle row matches its own path.
-const lifecycleRows: SubnavItem[] = HUD_NAV_ITEMS.map((item) => ({
-  href: href(item.href),
-  label: item.label,
-  section: item.destination,
-  active: item.id === 'nebula' ? isWritingActive : isActive(item.href),
-}));
+// CURATED SITE NAV — no longer a 1:1 projection of the hero's five stations. The
+// full lifecycle list read as "too many links" in the chrome, and the site menu
+// does not need to mirror the scene order (the hero's rail/markers still do).
+// Three primary destinations lead; everything secondary — the Inspiration essay,
+// the making-of, and the graveyard (deliberately NOT a headline entry; it is also
+// referenced from the About page) — lives behind one INDEX page. Body·Section
+// pairs keep the celestial register where a body exists.
 const subnavItems: SubnavItem[] = [
-  ...lifecycleRows,
-  // Behind the Build — the case-study page demonstrating the hero/article WebGL
-  // system. No lifecycle stage of its own, so its body line names what it is (the
-  // making-of) and the section line keeps the readable page name.
-  { href: href('behind-the-build'), label: 'THE MAKING', section: 'Behind', active: isActive('behind-the-build') },
-  // Home — return to the live scene itself (the whole lifecycle), so its body line
-  // names the scene and the section line is 'Home'.
+  { href: href('projects'), label: 'YELLOW STAR', section: 'Projects', active: isActive('projects') },
+  // Writing stays active across the posts subtree (minus the inspiration post,
+  // which belongs to the Index entry below).
+  { href: href('writing'), label: 'NEBULA', section: 'Writing', active: isWritingActive },
+  { href: href('about'), label: 'THE BEGINNING', section: 'About', active: isActive('about') },
+  {
+    href: href('archive'),
+    label: 'THE ARCHIVE',
+    section: 'Index',
+    active:
+      isActive('archive') ||
+      isActive('graveyard') ||
+      isActive('behind-the-build') ||
+      path === blackHolePath,
+  },
+  // Home — return to the live scene itself (the whole lifecycle).
   { href: href(''), label: 'THE SCENE', section: 'Home', active: isActive('') },
 ];
 // Two-digit mono index for the locked section (1-based, matches reading order).

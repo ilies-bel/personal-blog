@@ -2,7 +2,9 @@ import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
+  formatLifecycleTime,
   legacyStageForProgressFromTable,
+  lifecycleTimeGyr,
   sceneForProgress,
   settledIdForStage,
   stationForStage,
@@ -651,35 +653,150 @@ export default function HudNavigation({
   // guard the lookup and render the readout only once there is a scene to name.
   const mobileReadout = effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null;
 
-  // INSTRUMENT FRAME — SECTION MOCK (black-hole chapter only). The HUD's mono labels
-  // never had instrument GEOMETRY around them ("cannot feel the HUD style"), so this
-  // mocks the direction on ONE section for judgement before it spreads: four hairline
-  // corner ticks framing the viewport + a live stage readout bottom-left. Gated by the
-  // WALKER's stage (≤ 1.05 = the whole black-hole chapter) rather than the scroll-spy
-  // id, so it works even before the spy resolves at the very top. CSS shows it only
-  // while the HUD is armed (body.hud-active) and hides it on compact layouts.
+  // INSTRUMENT FRAME — sitewide on the hero (the black-hole section mock was
+  // approved). Four hairline corner ticks framing the viewport + a live readout
+  // bottom-left: the walker's STAGE, the star's AGE on the lifecycle clock
+  // (billions of years — falling as you scroll, since the story plays in
+  // reverse), and the nearest station. CSS shows it only while the HUD is armed
+  // (body.hud-active) and hides it on compact layouts.
   const frameStage = legacyStageForProgressFromTable(progress);
-  const atBlackHole = frameStage <= 1.05;
   const frameStation = stationForStage(frameStage);
+  const frameTime = formatLifecycleTime(lifecycleTimeGyr(frameStage));
+
+  // ---- HALF-CIRCLE TICK GAUGE (the desktop rail, re-instrumented) -----------
+  // The lateral map as an aviation-HUD arc: a half-circle of minor ticks hugging
+  // the left edge, the five stations as major ticks (numbered, clickable), and a
+  // caret riding the arc at the LIVE scroll progress — the heading-tape selector
+  // from the flight-instrument reference. Geometry is computed in fixed SVG units
+  // (1 unit = 1px at the 190×600 box) so the HTML hit-area buttons and the label
+  // can share the same coordinates. The old vertical rail markup stays for the
+  // compact (≤60rem) layout; CSS swaps which one renders per breakpoint.
+  const ARC_R = 300;
+  const ARC_SWEEP = 55; // degrees each side of the horizontal centreline
+  const ARC_CX = -(ARC_R * Math.cos((ARC_SWEEP * Math.PI) / 180)) + 12;
+  // QUANTIZED to 2 decimals: SSR (Node) and the browser disagree on trig results
+  // in the last ulps, and React flags every such coordinate as a hydration
+  // mismatch. Two decimals of an SVG unit are far below visual precision and
+  // identical on both sides.
+  const fx = (v: number): number => Number(v.toFixed(2));
+  const arcPoint = (p: number, radius: number) => {
+    const theta = ((p * 2 - 1) * ARC_SWEEP * Math.PI) / 180; // p 0 (top) → 1 (bottom)
+    return {
+      x: fx(ARC_CX + radius * Math.cos(theta)),
+      y: fx(radius * Math.sin(theta)),
+      deg: fx((theta * 180) / Math.PI),
+    };
+  };
+  const arcA = arcPoint(0, ARC_R);
+  const arcB = arcPoint(1, ARC_R);
+  const ARC_PATH = `M ${arcA.x.toFixed(1)} ${arcA.y.toFixed(1)} A ${ARC_R} ${ARC_R} 0 0 1 ${arcB.x.toFixed(1)} ${arcB.y.toFixed(1)}`;
+  const ARC_MINOR_TICKS = 44;
+  // Station positions in RAW scroll space — the same stage→scroll conversion the
+  // click-travel uses (progressForLegacyStage is lifecycle-space; the direction
+  // seam flips it to raw).
+  const arcStations = HUD_NAV_ITEMS.map((item, i) => ({
+    item,
+    number: i + 1,
+    p: lifecycleProgress(progressForLegacyStage(item.stage)),
+  }));
+  const arcCaret = arcPoint(Math.min(1, Math.max(0, progress)), ARC_R - 26);
+  // The label follows the POINTED station (hover/focus), else the current one.
+  const arcShownItem = (pointedId && HUD_NAV_BY_ID[pointedId]) ||
+    (effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null);
+  const arcShownPt = arcShownItem
+    ? arcPoint(lifecycleProgress(progressForLegacyStage(arcShownItem.stage)), ARC_R + 12)
+    : null;
 
   return (
     <>
-    {/* Sibling of .hud-system, NOT a child: the rail hides itself at the opening
-        frame (data-visible / at-opening gates), but the opening IS the black-hole
-        idle this mock frames — its only gates are the chapter check here and
+    {/* Sibling of .hud-system, NOT a child (the rail hides itself at the opening
+        frame, and .hud-system's transform would trap position:fixed). Gated by
         body.hud-active in CSS. */}
-    {atBlackHole && (
-      <div className="hud-frame" aria-hidden="true">
-        <span className="hud-frame-tick" data-corner="tl" />
-        <span className="hud-frame-tick" data-corner="tr" />
-        <span className="hud-frame-tick" data-corner="bl" />
-        <span className="hud-frame-tick" data-corner="br" />
-        <span className="hud-frame-readout">
-          <span className="hud-frame-readout-stage">STAGE {frameStage.toFixed(2)}</span>
-          <span className="hud-frame-readout-station">{frameStation.label}</span>
+    <div className="hud-frame" aria-hidden="true">
+      <span className="hud-frame-tick" data-corner="tl" />
+      <span className="hud-frame-tick" data-corner="tr" />
+      <span className="hud-frame-tick" data-corner="bl" />
+      <span className="hud-frame-tick" data-corner="br" />
+      <span className="hud-frame-readout">
+        <span className="hud-frame-readout-stage">STAGE {frameStage.toFixed(2)}</span>
+        <span className="hud-frame-readout-stage">{frameTime}</span>
+        <span className="hud-frame-readout-station">{frameStation.label}</span>
+      </span>
+    </div>
+    {/* The arc gauge — also a sibling (position:fixed vs .hud-system's transform).
+        Mirrors the rail's data-visible gating; buttons drive the SAME beginTravel
+        click-jump + pointedId aiming the rail rows used. */}
+    <div className="hud-arc" data-visible={visible} aria-hidden={!visible}>
+      <svg className="hud-arc-svg" viewBox="0 -300 190 600" width="190" height="600" aria-hidden="true">
+        <path className="hud-arc-line" d={ARC_PATH} />
+        {Array.from({ length: ARC_MINOR_TICKS + 1 }, (_, k) => {
+          const p = k / ARC_MINOR_TICKS;
+          const a = arcPoint(p, ARC_R - 8);
+          const b = arcPoint(p, ARC_R - 2);
+          return (
+            <line
+              key={k}
+              className="hud-arc-tick"
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+            />
+          );
+        })}
+        {arcStations.map(({ item, number, p }) => {
+          const a = arcPoint(p, ARC_R - 18);
+          const b = arcPoint(p, ARC_R - 2);
+          const n = arcPoint(p, ARC_R - 34);
+          return (
+            <g
+              key={item.id}
+              className="hud-arc-station"
+              data-current={effectiveCurrentId === item.id}
+            >
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+              <text x={n.x} y={n.y} textAnchor="middle" dominantBaseline="central">
+                {number}
+              </text>
+            </g>
+          );
+        })}
+        <g
+          className="hud-arc-caret"
+          transform={`translate(${arcCaret.x.toFixed(1)} ${arcCaret.y.toFixed(1)}) rotate(${arcCaret.deg.toFixed(1)})`}
+        >
+          <path d="M -4 -5 L 6 0 L -4 5 Z" />
+        </g>
+      </svg>
+      {arcStations.map(({ item, p }) => {
+        const pt = arcPoint(p, ARC_R - 10);
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className="hud-arc-btn"
+            style={{ left: `${pt.x.toFixed(1)}px`, top: `${(300 + pt.y).toFixed(1)}px` }}
+            aria-label={`Travel to ${item.label}`}
+            aria-current={effectiveCurrentId === item.id ? 'location' : undefined}
+            tabIndex={visible ? 0 : -1}
+            onClick={() => beginTravel(item.id, item.stage)}
+            onMouseEnter={() => setPointedId(item.id)}
+            onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}
+            onFocus={() => setPointedId(item.id)}
+            onBlur={() => setPointedId((prev) => (prev === item.id ? null : prev))}
+          />
+        );
+      })}
+      {arcShownItem && arcShownPt && (
+        <span
+          className="hud-arc-label"
+          style={{ left: `${(arcShownPt.x + 8).toFixed(1)}px`, top: `${(300 + arcShownPt.y).toFixed(1)}px` }}
+        >
+          <span className="hud-arc-label-title">{arcShownItem.label}</span>
+          <span className="hud-arc-label-dest">{arcShownItem.destination}</span>
         </span>
-      </div>
-    )}
+      )}
+    </div>
     <div className="hud-system" data-visible={visible}>
       {/* MOBILE-ONLY scene-name readout — replaces the desktop bottom .hud-compass on
           the compact phone layout. It is the FIRST child of .hud-system (a display:grid

@@ -2311,3 +2311,134 @@ body.hud-active .hud-frame {
 @media (max-width: 60rem) {
   .hud-frame { display: none; }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   HALF-CIRCLE TICK GAUGE — the desktop lateral map, re-instrumented (aviation
+   heading-arc reference): minor ticks along a half-circle hugging the left edge,
+   five numbered station ticks (clickable), a caret riding the live progress and
+   a label following the pointed/current station. The old vertical rail markup
+   still renders for the compact layout; the swap is pure CSS (below).
+   ────────────────────────────────────────────────────────────────────────────── */
+.hud-arc {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 190px;
+  height: 600px;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-out-quint);
+  pointer-events: none;
+}
+.hud-arc[data-visible='true'] { opacity: 1; }
+body:not(.scene-ready) .hud-arc,
+body.at-opening .hud-arc { opacity: 0; }
+.hud-arc[data-visible='false'] .hud-arc-btn,
+body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
+.hud-arc-svg { display: block; overflow: visible; }
+.hud-arc-line {
+  fill: none;
+  stroke: var(--hud-line);
+  stroke-width: 1;
+}
+.hud-arc-tick {
+  stroke: color-mix(in oklch, var(--fg-faint) 55%, transparent);
+  stroke-width: 1;
+}
+.hud-arc-station line {
+  stroke: var(--fg-dim);
+  stroke-width: 1.5;
+  transition: stroke 0.24s ease;
+}
+.hud-arc-station text {
+  fill: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  transition: fill 0.24s ease;
+}
+.hud-arc-station[data-current='true'] line { stroke: var(--highlight); }
+.hud-arc-station[data-current='true'] text { fill: var(--highlight); }
+.hud-arc-caret path {
+  fill: var(--highlight);
+}
+.hud-arc-btn {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  translate: -50% -50%;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.hud-arc-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.hud-arc-label {
+  position: absolute;
+  translate: 0 -50%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.hud-arc-label-title { color: var(--fg); }
+.hud-arc-label-dest { color: var(--fg-faint); }
+/* Breakpoint swap: the arc is the DESKTOP instrument; the old vertical rail list
+   stays as the compact layout's horizontal strip. Same 60rem seam hud.css already
+   uses for the compact HUD. */
+@media (max-width: 60rem) {
+  .hud-arc { display: none; }
+}
+@media (min-width: 60.0625rem) {
+  .hud-nav { display: none; }
+}
+/* Short viewports: scale the whole gauge down around its left-centre anchor so
+   the arc ends never crowd the corner chrome. Buttons/labels ride the transform. */
+@media (max-height: 680px) {
+  .hud-arc { transform: translateY(-50%) scale(0.82); transform-origin: left center; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   MARKER SIMPLIFICATION — "simple and subtle" at rest: the resting marker is ONLY
+   the small gold core + the tiny mono caption. ALL reticle geometry (dotted hex,
+   crosshair ticks) and the backing plate wait for the pointer — the instrument
+   draws itself in from HOVER up. Overrides the resting-tier rules above.
+   ────────────────────────────────────────────────────────────────────────────── */
+.star-marker-reticle {
+  transition: opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.star-marker[data-state='idle'] .star-marker-reticle {
+  opacity: 0;
+}
+.star-marker[data-state='idle'] .star-marker-plate {
+  opacity: 0;
+}
+/* The resting caption loses this morning's gold brackets (chrome) and settles a
+   step dimmer — a quiet name floating under a speck, not a chip. */
+.star-marker-microlabel::before,
+.star-marker-microlabel::after {
+  content: none;
+}
+.star-marker[data-visible='true'] .star-marker-microlabel {
+  opacity: 0.62;
+}
+.star-marker[data-state='hover'] .star-marker-microlabel,
+.star-marker[data-state='active'] .star-marker-microlabel {
+  opacity: 0.92;
+}
+/* The idle reticle rotation has nothing visible to rotate now — stop the animation
+   so hidden geometry doesn't burn compositor time. */
+.star-marker[data-visible='true'] .star-marker-hex-dotted {
+  animation: none;
+}
