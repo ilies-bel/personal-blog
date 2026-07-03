@@ -2,8 +2,10 @@ import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
+  legacyStageForProgressFromTable,
   sceneForProgress,
   settledIdForStage,
+  stationForStage,
   type HudNavItem,
   type HudTargetId,
   type MarkerPlacement,
@@ -649,8 +651,35 @@ export default function HudNavigation({
   // guard the lookup and render the readout only once there is a scene to name.
   const mobileReadout = effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null;
 
+  // INSTRUMENT FRAME — SECTION MOCK (black-hole chapter only). The HUD's mono labels
+  // never had instrument GEOMETRY around them ("cannot feel the HUD style"), so this
+  // mocks the direction on ONE section for judgement before it spreads: four hairline
+  // corner ticks framing the viewport + a live stage readout bottom-left. Gated by the
+  // WALKER's stage (≤ 1.05 = the whole black-hole chapter) rather than the scroll-spy
+  // id, so it works even before the spy resolves at the very top. CSS shows it only
+  // while the HUD is armed (body.hud-active) and hides it on compact layouts.
+  const frameStage = legacyStageForProgressFromTable(progress);
+  const atBlackHole = frameStage <= 1.05;
+  const frameStation = stationForStage(frameStage);
+
   return (
     <>
+    {/* Sibling of .hud-system, NOT a child: the rail hides itself at the opening
+        frame (data-visible / at-opening gates), but the opening IS the black-hole
+        idle this mock frames — its only gates are the chapter check here and
+        body.hud-active in CSS. */}
+    {atBlackHole && (
+      <div className="hud-frame" aria-hidden="true">
+        <span className="hud-frame-tick" data-corner="tl" />
+        <span className="hud-frame-tick" data-corner="tr" />
+        <span className="hud-frame-tick" data-corner="bl" />
+        <span className="hud-frame-tick" data-corner="br" />
+        <span className="hud-frame-readout">
+          <span className="hud-frame-readout-stage">STAGE {frameStage.toFixed(2)}</span>
+          <span className="hud-frame-readout-station">{frameStation.label}</span>
+        </span>
+      </div>
+    )}
     <div className="hud-system" data-visible={visible}>
       {/* MOBILE-ONLY scene-name readout — replaces the desktop bottom .hud-compass on
           the compact phone layout. It is the FIRST child of .hud-system (a display:grid

@@ -2253,3 +2253,61 @@ body.hud-active .star-marker {
     padding-block: 0.35rem;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   HUD INSTRUMENT FRAME — SECTION MOCK (black-hole chapter only).
+   The direction under evaluation: the HUD's mono labels get instrument GEOMETRY —
+   four hairline corner ticks framing the viewport plus a live STAGE readout,
+   bottom-left, in the compass's mono register. Mounted by HudNavigation only while
+   the walker's stage is inside the black-hole chapter (≤ 1.05); CSS reveals it only
+   once the HUD is armed (body.hud-active) so it participates in the same power-on
+   choreography as the rail. If the direction lands, this kit spreads to every
+   chapter (per-scene readout values) — if not, it deletes in one block.
+   ────────────────────────────────────────────────────────────────────────────── */
+.hud-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 14;               /* under the rail/compass (≥15), over the canvas */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-out-quint) 0.15s;
+}
+body.hud-active .hud-frame {
+  opacity: 1;
+}
+/* Four corner ticks — thin L brackets a hair inside the viewport edge, in the
+   HUD's dim gold. They frame the whole scene as one instrument face. */
+.hud-frame-tick {
+  position: fixed;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: 0 solid color-mix(in oklch, var(--highlight) 60%, transparent);
+  opacity: 0.55;
+}
+.hud-frame-tick[data-corner='tl'] { top: 0.8rem; left: 0.8rem; border-top-width: 1px; border-left-width: 1px; }
+.hud-frame-tick[data-corner='tr'] { top: 0.8rem; right: 0.8rem; border-top-width: 1px; border-right-width: 1px; }
+.hud-frame-tick[data-corner='bl'] { bottom: 0.8rem; left: 0.8rem; border-bottom-width: 1px; border-left-width: 1px; }
+.hud-frame-tick[data-corner='br'] { bottom: 0.8rem; right: 0.8rem; border-bottom-width: 1px; border-right-width: 1px; }
+/* Live stage readout — bottom-left, mono micro, tabular digits so the number
+   ticks over without jitter. Sits below the manifesto block's bottom offset. */
+.hud-frame-readout {
+  position: fixed;
+  left: 2rem;
+  bottom: 0.95rem;
+  display: flex;
+  gap: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.hud-frame-readout-stage {
+  color: color-mix(in oklch, var(--highlight) 80%, var(--fg-faint));
+  font-variant-numeric: tabular-nums;
+}
+/* Compact layouts: the frame is a desktop instrument (corners collide with the
+   mobile chrome; the readout would fight the mobile scene-name line). */
+@media (max-width: 60rem) {
+  .hud-frame { display: none; }
+}
