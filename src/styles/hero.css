@@ -994,3 +994,56 @@ body.scene-ready.at-opening .bh-focus-dot {
     filter: none;
   }
 }
+
+/* ===========================================================================
+   WARP OVERLAY — the hyperspace "jump to lightspeed" streak field for the
+   navigation INTO the About page (src/scripts/warpTransition.ts). A single
+   full-viewport <canvas> present on every page, persisted across ClientRouter
+   swaps (transition:persist) so the same canvas animates straight across the
+   navigation: the jump-out streaks on the origin page and the drop-in streaks
+   on About are one continuous render loop.
+
+   The canvas is otherwise BLANK (nothing is drawn until a jump starts), so a
+   normal load / navigation never sees it. It sits above the corner chrome and
+   the dive bloom so the streaks own the frame during the jump; pointer-events
+   are off so it never blocks the destination. A near-black backing appears only
+   while a jump/arrival is active (data-warp-active) so the streaks read against
+   deep space and the page swap is fully hidden behind them.
+   =========================================================================== */
+.warp-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Above the dive bloom (9999) so a warp is never tinted by a stale veil; still
+     below the custom cursor's own layer. */
+  z-index: 10000;
+  /* Blank until a jump paints into it. The backing colour is transparent at rest
+     and only fills in while active (the attribute the script toggles), so the
+     canvas is invisible on ordinary pages. */
+  background: transparent;
+  /* The near-black space backdrop fades in with the streaks and out on arrival —
+     a short transition here means the script only has to toggle the attribute. */
+  transition: background-color 0.18s linear;
+}
+
+/* While a jump-out or arrival is playing, back the streaks with deep space so the
+   field reads with contrast and the page swap underneath is hidden. */
+.warp-overlay[data-warp-active] {
+  background-color: #01010a;
+}
+/* On arrival the backing lifts a touch slower so it doesn't cut before the
+   decelerating streaks have faded back to points. */
+.warp-overlay[data-warp-active='arrive'] {
+  transition: background-color 0.6s ease-out;
+}
+
+/* Reduced motion: the script skips the whole animation and never sets
+   data-warp-active, so the overlay stays transparent — nothing to gate here. But
+   pin it explicitly transparent in case a stale attribute survives a swap. */
+@media (prefers-reduced-motion: reduce) {
+  .warp-overlay {
+    background: transparent !important;
+  }
+}
