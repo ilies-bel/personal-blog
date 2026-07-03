@@ -1473,10 +1473,13 @@ body.hud-active .star-marker {
   stroke-width: 1.45;
 }
 /* IDLE arms are HUD-aware (the resting tier differs by whether the HUD is armed):
-   - HUD OFF → the quietest look: arms HIDDEN, just the dotted hex (minimal presence).
-   - HUD ON  → the marker is "live": dotted hex PLUS faint crosshair ticks. */
+   - HUD OFF → quiet but never anonymous: FAINT crosshair ticks stay with the dotted
+     hex. (They used to vanish entirely here, which left the resting marker reading
+     as a bare dotted hexagon — the "markers look cheap" report. The ticks are the
+     crosshair identity; at 0.32 they read as instrument, not noise.)
+   - HUD ON  → the marker is "live": the same ticks a step brighter. */
 .star-marker[data-state='idle'] .star-marker-arms line {
-  opacity: 0;
+  opacity: 0.32;
 }
 .star-marker[data-hud='on'][data-state='idle'] .star-marker-arms line {
   opacity: 0.5;
@@ -1502,6 +1505,20 @@ body.hud-active .star-marker {
    touch more present once the HUD is armed. */
 .star-marker-hex-dotted {
   opacity: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* The resting reticle ROTATES — one revolution every 90s, a drift you feel rather
+   than watch, so the marker reads as a live instrument instead of a static sticker.
+   Reuses the gold hex's spin keyframes; gated to VISIBLE markers so hidden ones
+   don't animate, and dropped entirely under reduced motion. The dotted hex fades
+   out from hover up (the solid hex takes over), which retires the motion exactly
+   when the pointer starts working the target. */
+.star-marker[data-visible='true'] .star-marker-hex-dotted {
+  animation: star-marker-spin 90s linear infinite;
+}
+.star-marker[data-reduced='true'] .star-marker-hex-dotted {
+  animation: none;
 }
 .star-marker[data-hud='on'] .star-marker-hex-dotted {
   opacity: 0.9;
@@ -1773,6 +1790,16 @@ body.hud-active .star-marker {
 .star-marker[data-locked='true'] .star-marker-microlabel {
   opacity: 0;
 }
+/* Bracket ticks around the micro-label — the compass's [ READOUT ] register applied
+   to the marker caption, so hotspot labels speak the same instrument language as the
+   bottom readout instead of floating as bare text. Gold, a step dimmer than the text. */
+.star-marker-microlabel::before,
+.star-marker-microlabel::after {
+  color: var(--marker-gold);
+  opacity: 0.75;
+}
+.star-marker-microlabel::before { content: '[ '; }
+.star-marker-microlabel::after { content: ' ]'; }
 /* BRIGHT states: the label is near-black (currentColor), so its halo flips LIGHT
    to stay readable on the bright surface (mirrors the reticle's halo flip). */
 .star-marker[data-bright='true'] .star-marker-microlabel {
