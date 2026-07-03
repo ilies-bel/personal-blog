@@ -56,13 +56,18 @@ const WARP_LINES: Array<{ at: number; label: string }> = [
 const STAR_COUNT = 460;
 
 interface WarpStar {
-  // Direction unit vector from centre + a normalized radius along it (0..1 of the
-  // half-diagonal). Stars stream OUTWARD as speed rises; a streak is drawn from the
-  // star's current radius back toward the centre, its length scaling with speed.
+  // Direction of travel from the centre (each star streaks outward along this ray).
   angle: number;
-  // Base radius seed (0..1). Stars nearer the edge move fastest (perspective), so
-  // the seed also biases speed.
-  seed: number;
+  // DEPTH position along the tunnel, 0 (far, near centre) → 1 (rushing past the
+  // camera at the edge). This ADVANCES every frame by the star's own velocity, and
+  // WRAPS back to ~0 when it exits — so the field is a continuous stream, not one
+  // synchronised expansion. Mutated per frame (this is the whole trick).
+  depth: number;
+  // Per-star velocity multiplier. This is the key to the varied-speed look: a near
+  // star (high vel) SCREAMS past as a long trail and respawns while a far star (low
+  // vel) is still creeping — so at any instant the frame holds a spread of speeds,
+  // exactly "stars passing so fast we only see the trail" mixed with slower ones.
+  vel: number;
   // Per-star brightness + faint colour jitter (the reference has cool violet/teal
   // sparks among the white), so the field isn't a flat white.
   hue: number;
@@ -80,6 +85,9 @@ interface WarpState {
   // Wall-clock start of the current phase, and which phase we're in.
   phase: 'idle' | 'jump' | 'arrive';
   start: number;
+  // Timestamp of the previous drawn frame, for the per-frame dt (framerate-
+  // independent star advance). 0 = no prior frame yet (dt defaults to ~1/60).
+  lastFrame: number;
   navigated: boolean;
   href: string | null;
   // The bottom-centre readout element (mounted beside the canvas) and the timers
@@ -106,9 +114,16 @@ function rand(i: number, salt: number): number {
 function buildStars(): WarpStar[] {
   const stars: WarpStar[] = [];
   for (let i = 0; i < STAR_COUNT; i++) {
+    // vel spread is WIDE (0.35 → ~2.15, squared so most are slow-ish with a fast
+    // tail): the squaring makes the fast streaks a minority, so the frame reads as a
+    // slower field STREAKED THROUGH by a few blisteringly fast trails — the depth
+    // cue. depth is seeded spread across the tunnel so the stream is populated from
+    // frame one (not all bunched at the centre).
+    const v = rand(i, 2);
     stars.push({
       angle: rand(i, 1) * Math.PI * 2,
-      seed: rand(i, 2),
+      depth: rand(i, 5),
+      vel: 0.35 + v * v * 1.8,
       // Mostly white (hue ~0 handled specially), with a minority of cool sparks.
       hue: rand(i, 3),
       bright: 0.45 + rand(i, 4) * 0.55,
@@ -136,6 +151,7 @@ function ensureState(): WarpState | null {
     raf: 0,
     phase: 'idle',
     start: 0,
+    lastFrame: 0,
     navigated: false,
     href: null,
     readout: document.querySelector<HTMLElement>('[data-warp-readout]'),
@@ -187,10 +203,19 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-/** Draw one frame. `speed` scales streak length/outward radius (0 = a still
- *  starfield of points, 1 = full hyperspace stretch). `flash` (0..1) is a central
- *  white bloom for the jump apex. `alpha` fades the whole field for the arrival. */
-function drawFrame(state: WarpState, speed: number, flash: number, alpha: number): void {
+/** Advance + draw one frame. `speed` is the global throttle (0 = the tunnel is
+ *  crawling, 1 = full lightspeed); `dt` is the frame delta in seconds so motion is
+ *  framerate-independent. Each star ADVANCES through the tunnel by its OWN velocity
+ *  × speed, wrapping when it exits — so stars pass at different rates and the fast
+ *  ones read as pure trails. `flash` is the central apex bloom; `alpha` fades the
+ *  whole field on arrival. */
+function drawFrame(
+  state: WarpState,
+  speed: number,
+  dt: number,
+  flash: number,
+  alpha: number,
+): void {
   const { ctx, w, h, dpr, stars } = state;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
@@ -202,21 +227,41 @@ function drawFrame(state: WarpState, speed: number, flash: number, alpha: number
 
   ctx.globalCompositeOperation = 'lighter';
 
-  // BRIGHTNESS ramps with speed so the field starts nearly DARK (faint sub-light
-  // sparks) and only blazes once the acceleration kicks — killing the "too much
-  // light at the beginning". A small floor keeps a few sparks visible at rest.
-  const glow = 0.1 + Math.pow(speed, 1.4) * 0.9;
+  // BRIGHTNESS ramps with speed so the field starts DIM (faint sub-light sparks)
+  // and blazes once the acceleration kicks — killing the "too much light at the
+  // beginning". The 0.28 floor is high enough that the varied-speed trails are
+  // clearly VISIBLE through the middle of the jump (an earlier 0.1 floor left them
+  // invisible until the very end); depth-brightness below still keeps near stars
+  // brighter than far ones so the tunnel reads.
+  const glow = 0.28 + Math.pow(speed, 1.1) * 0.72;
+  // How far the whole field advances this frame. The 1.15 base rate is tuned so a
+  // mid-velocity star crosses the tunnel in a beat at full speed; dt keeps it stable
+  // across framerates. Clamp dt so a stall (tab blur, GC) can't teleport every star.
+  const advance = speed * 1.15 * Math.min(dt, 0.05);
 
   for (const star of stars) {
-    // Fast stars (high seed) sit further out and stretch more, giving the
-    // perspective tunnel: near-centre stars barely move, edge stars scream past.
-    const speedBias = 0.25 + star.seed * 0.75;
-    const reach = speed * speedBias;
-    // The streak's leading (outer) point and trailing (inner) point along the ray.
-    const rOuter = (0.04 + reach * 1.15) * half;
-    // Length grows with speed so points become long lines at the jump apex — and
-    // stretch further at full speed (×1.25) so the tunnel reads faster/longer.
-    const len = (0.015 + reach * 1.25) * half;
+    // ADVANCE this star through the tunnel by its own velocity, and WRAP when it
+    // exits past the camera (depth ≥ 1) back to just past the centre — the wrap is
+    // what makes the stream continuous + the speeds independent. A tiny per-star
+    // phase offset on respawn (via angle) avoids visible banding.
+    star.depth += advance * star.vel;
+    if (star.depth >= 1) {
+      star.depth -= 1; // recycle: reappears near the centre and races out again
+    }
+
+    // Perspective: radius grows with the SQUARE of depth so a star accelerates as it
+    // nears the camera (creeps at the centre, screams at the edge) — a real dolly
+    // through a starfield, not a linear slide.
+    const d = star.depth;
+    const rOuter = (0.02 + d * d * 1.25) * half;
+    // The TRAIL length is the distance the star moved this frame (its instantaneous
+    // speed), so a fast star draws a long streak and a slow one a near-point. This is
+    // the core of "so fast we only see the trail": length == how fast it's going NOW.
+    const instSpeed = advance * star.vel;
+    // Convert that depth-rate into a pixel length via the same perspective slope
+    // (d·2·1.25) so the trail scales with where the star is, plus a floor so a
+    // just-respawned centre star still shows a spark.
+    const len = (0.01 + instSpeed * (0.3 + d * 2.4)) * half;
     const rInner = Math.max(0, rOuter - len);
 
     const dx = Math.cos(star.angle);
@@ -227,8 +272,11 @@ function drawFrame(state: WarpState, speed: number, flash: number, alpha: number
     const y0 = cy + dy * rInner;
 
     // Colour: mostly white; a cool violet/teal minority like the reference frame.
+    // Brightness rises with depth (near stars are brighter) and fades right at the
+    // very edge so a star dims out gracefully instead of popping on wrap.
     let stroke: string;
-    const a = star.bright * alpha * glow;
+    const edgeFade = d > 0.92 ? (1 - d) / 0.08 : 1;
+    const a = star.bright * alpha * glow * (0.35 + d * 0.65) * edgeFade;
     if (star.hue < 0.68) {
       stroke = `rgba(238, 240, 255, ${a})`;
     } else if (star.hue < 0.86) {
@@ -238,8 +286,9 @@ function drawFrame(state: WarpState, speed: number, flash: number, alpha: number
     }
 
     ctx.strokeStyle = stroke;
-    // Streaks thin out as they stretch (motion blur reads as fine lines).
-    ctx.lineWidth = Math.max(0.6, (1.6 - speed) * 1.1 * dpr);
+    // Near stars (high depth) are thicker; all thin out as the field speeds up so
+    // fast trails read as fine light lines.
+    ctx.lineWidth = Math.max(0.5, (0.6 + d * 1.4) * (1.4 - speed * 0.6) * dpr);
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(x0, y0);
@@ -266,13 +315,22 @@ function stopLoop(state: WarpState): void {
   state.raf = 0;
 }
 
-/** Speed curve for the jump. A near-flat dark hold at the start (the field barely
- *  moves — the HUD flickers, the readout counts up), then a HARD exponential lunge
- *  into the light. `pow(t, 3.4)` keeps ~the first third almost still and slams the
- *  last third; the small linear term guarantees a hair of drift from frame one so
- *  it never looks frozen. Clamped ≤ 1. */
+/** Seconds since the previous drawn frame (defaults to ~1/60 on the first frame),
+ *  and record `now` for the next call. Framerate-independent star advance. */
+function frameDelta(state: WarpState, now: number): number {
+  const dt = state.lastFrame ? (now - state.lastFrame) / 1000 : 1 / 60;
+  state.lastFrame = now;
+  return dt;
+}
+
+/** Speed curve for the jump. A brief dark hold at the very start (the field barely
+ *  drifts — the HUD flickers, the readout counts up), then a steady acceleration so
+ *  the varied-speed trails are ON DISPLAY through the middle before it maxes into the
+ *  flash. `pow(t, 1.9)` gives the accelerating feel without crushing all the motion
+ *  into the last frames (an earlier, harsher curve left the middle of the jump nearly
+ *  still + dark); the linear term keeps a hair of drift from frame one. Clamped ≤ 1. */
 function jumpSpeed(t: number): number {
-  return Math.min(1, Math.pow(t, 3.4) + t * 0.06);
+  return Math.min(1, Math.pow(t, 1.9) * 0.9 + t * 0.12);
 }
 
 /** The jump-out loop: a dark, held start that ACCELERATES hard into a white flash;
@@ -301,14 +359,21 @@ function runJump(state: WarpState, href: string): void {
 
   const startCtx = window.performance ? performance.now() : 0;
   state.start = startCtx;
+  state.lastFrame = 0;
 
   const frame = (now: number): void => {
-    const t = Math.min(1, (now - state.start) / JUMP_MS);
+    const dt = frameDelta(state, now);
+    // Clamp to [0,1]. The rAF timestamp of the first frame can be a hair EARLIER
+    // than state.start (rAF `now` is the frame-start time; state.start is captured
+    // when we scheduled it), giving a tiny NEGATIVE t — and jumpSpeed()'s
+    // Math.pow(t, 1.9) on a negative base is NaN, which then poisons every star's
+    // depth. Flooring t at 0 makes the first frame a clean speed-0 frame.
+    const t = Math.max(0, Math.min(1, (now - state.start) / JUMP_MS));
     // Hard-accelerating speed (dark hold → lunge). The flash is confined to the
     // final ~18% and ramps steeply so it BLOOMS at the apex, not gradually.
     const speed = jumpSpeed(t);
     const flash = t > 0.82 ? easeInQuad((t - 0.82) / 0.18) : 0;
-    drawFrame(state, speed, flash, 1);
+    drawFrame(state, speed, dt, flash, 1);
 
     // Navigate at the flash apex. Guarded so it fires exactly once.
     if (!state.navigated && now - state.start >= JUMP_MS - NAV_BEFORE_END_MS) {
@@ -319,10 +384,10 @@ function runJump(state: WarpState, href: string): void {
     if (t < 1) {
       state.raf = requestAnimationFrame(frame);
     } else {
-      // Hold the white peak for a couple of frames until the swap's page-load
-      // fires and hands us into runArrive(). If navigation somehow didn't happen
-      // (engine race), keep painting a static bright frame — arrive will reset it.
-      state.raf = requestAnimationFrame(() => drawFrame(state, 1, 1, 1));
+      // Hold the white peak (streaks kept advancing at full speed) for a couple of
+      // frames until the swap's page-load hands us into runArrive(). If navigation
+      // somehow didn't happen (engine race), keep painting — arrive will reset it.
+      state.raf = requestAnimationFrame((n) => drawFrame(state, 1, frameDelta(state, n), 1, 1));
     }
   };
   state.raf = requestAnimationFrame(frame);
@@ -341,16 +406,19 @@ function runArrive(state: WarpState): void {
   clearLineTimers(state);
   showReadout(state, false);
   state.start = window.performance ? performance.now() : 0;
+  state.lastFrame = 0;
 
   const frame = (now: number): void => {
-    const t = Math.min(1, (now - state.start) / ARRIVE_MS);
+    const dt = frameDelta(state, now);
+    const t = Math.max(0, Math.min(1, (now - state.start) / ARRIVE_MS));
     const e = easeOutCubic(t);
-    // Speed is PINNED at full stretch — no shrink. Only the field's alpha (and the
-    // receding flash) fall, so the streaks dissolve mid-flight at lightspeed.
+    // Speed stays at full lightspeed — the stars keep streaking past at their own
+    // varied rates; only the field's alpha (and the receding flash) fall, so the
+    // trails dissolve mid-flight instead of braking.
     const speed = 1;
     const flash = (1 - e) * 0.45; // the flash recedes as the page appears
     const alpha = 1 - e;
-    drawFrame(state, speed, flash, alpha);
+    drawFrame(state, speed, dt, flash, alpha);
     if (t < 1) {
       state.raf = requestAnimationFrame(frame);
     } else {
