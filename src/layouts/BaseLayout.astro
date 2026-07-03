@@ -79,6 +79,18 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
         render loop. Driven entirely by src/scripts/warpTransition.ts; starts blank
         (nothing drawn) so a normal load never shows it. */}
     <canvas class="warp-overlay" data-warp-overlay transition:persist aria-hidden="true"></canvas>
+    {/* Warp readout — the bottom-centre cockpit callout that narrates the jump
+        ("ENGAGING HYPERDRIVE" → "BEGINNING LIGHTSPEED TRAVEL" → "PUNCH IT"). It
+        reuses the HUD compass's mono type + bottom-centre slot (hud.css) so it
+        reads as the same instrument, and is persisted across the swap like the
+        canvas. Hidden until warpTransition.ts sets data-warp-readout-active. */}
+    <div class="warp-readout hud-compass" data-warp-readout transition:persist aria-hidden="true">
+      <p class="hud-compass-read">
+        <span class="hud-compass-prompt">[ </span>
+        <span class="hud-compass-label" data-warp-label>ENGAGING HYPERDRIVE</span>
+        <span class="hud-compass-prompt"> ]</span>
+      </p>
+    </div>
     {/* Sitewide custom cursor — covers both layout branches below. */}
     <CustomCursor />
     {

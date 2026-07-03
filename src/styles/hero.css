@@ -1047,3 +1047,78 @@ body.scene-ready.at-opening .bh-focus-dot {
     background: transparent !important;
   }
 }
+
+/* WARP READOUT — the bottom-centre cockpit callout during the jump. It piggybacks
+   on .hud-compass (bottom-centre slot + mono type), but must sit ABOVE the warp
+   canvas + its deep-space backing, and it appears on EVERY page (the .hud-compass
+   opacity gates in hud.css only exist on the home scene), so its own opacity is
+   controlled here off the data attribute the script toggles. */
+/* Compound .hud-compass.warp-readout so the z-index + opacity beat the plain
+   .hud-compass rules in hud.css (imported after hero.css — a bare .warp-readout
+   would tie on specificity and lose the cascade, pinning z-index to 18 behind the
+   warp canvas). */
+.hud-compass.warp-readout {
+  /* Above the warp canvas (10000) so the callout reads over the streaks. */
+  z-index: 10001;
+  /* Hidden by default (overrides .hud-compass's opacity:1); the script fades it in
+     for the jump and out on arrival. A fast in, snappier out. */
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out-quint);
+}
+.hud-compass.warp-readout[data-warp-readout-active] {
+  opacity: 1;
+}
+/* The callout blazes bright + warm as it's the only text in a dark, accelerating
+   field — brighter than the resting compass so it cuts through the streaks, with a
+   soft glow + a quick flicker keyed to the same jump the HUD flickers on. */
+.warp-readout .hud-compass-label {
+  color: #f4f6ff;
+  letter-spacing: 0.22em;
+  text-shadow:
+    0 0 12px rgba(0, 0, 0, 0.9),
+    0 0 16px color-mix(in oklch, var(--highlight) 55%, transparent);
+}
+.warp-readout .hud-compass-prompt {
+  color: color-mix(in oklch, var(--highlight) 70%, #fff);
+}
+.warp-readout[data-warp-readout-active] .hud-compass-read {
+  animation: warp-readout-flicker 0.5s steps(2, end) infinite;
+}
+@keyframes warp-readout-flicker {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.72; }
+}
+
+/* ── HUD FLICKER during the jump ────────────────────────────────────────────
+   body.warp-active (set by warpTransition.ts for the jump only) makes the whole
+   sitewide HUD stutter like the ship's instruments straining at the jump. These
+   layers only EXIST + are lit on the home scene (body.hud-active), so on a reading
+   page there's simply nothing to flicker — the streaks + the readout carry it
+   there. Cheap opacity-only keyframes; pointer-events untouched. */
+body.warp-active .hud-frame,
+body.warp-active .hud-arc,
+body.warp-active .hud-system,
+body.warp-active .hud-compass:not(.warp-readout) {
+  animation: warp-hud-flicker 0.28s steps(2, end) infinite;
+}
+@keyframes warp-hud-flicker {
+  0%   { opacity: 1; }
+  22%  { opacity: 0.28; }
+  40%  { opacity: 0.92; }
+  55%  { opacity: 0.15; }
+  70%  { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
+/* Reduced motion: no readout flicker, no HUD stutter (the whole warp is skipped
+   by the script anyway, but pin it so a stale class can't animate). */
+@media (prefers-reduced-motion: reduce) {
+  .warp-readout,
+  .warp-readout[data-warp-readout-active] .hud-compass-read,
+  body.warp-active .hud-frame,
+  body.warp-active .hud-arc,
+  body.warp-active .hud-system,
+  body.warp-active .hud-compass:not(.warp-readout) {
+    animation: none;
+  }
+}

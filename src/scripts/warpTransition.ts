@@ -27,16 +27,30 @@
 const WARP_FLAG = 'bh:warp';
 
 // --- Timing (ms) -----------------------------------------------------------
-// The jump-out: streaks ramp from a still starfield to full hyperspace stretch,
-// ending in a brief white bloom. We navigate at the flash apex so the swap is
-// hidden behind the brightest frame. Kept short — a navigation must feel snappy.
-const JUMP_MS = 900;
-// The arrival deceleration: streaks contract back toward points and the field
-// fades out as the About content resurfaces underneath.
-const ARRIVE_MS = 1100;
+// The jump-out: the field starts almost DARK (a few faint drifting sparks — the
+// ship still at sub-light), holds a beat while the HUD flickers + the readout
+// counts up, THEN accelerates HARD into the light and slams into the white flash.
+// We navigate at the flash apex so the swap is hidden behind the brightest frame.
+// Longer than a snappy nav on purpose — this is a set-piece, not a page turn.
+const JUMP_MS = 1500;
+// The arrival: the streaks STAY fully stretched (no decelerate / contract-back)
+// and the whole field simply fades out as the About content shows through — the
+// jump carries its momentum right onto the page instead of braking.
+const ARRIVE_MS = 750;
 // Navigate this long before the jump animation nominally ends, i.e. right at the
 // white-flash apex, so the (already-prepared) swap lands under the peak brightness.
-const NAV_BEFORE_END_MS = 120;
+const NAV_BEFORE_END_MS = 130;
+
+// The body class that gates the sitewide HUD flicker (hud.css) for the jump.
+const WARP_ACTIVE_CLASS = 'warp-active';
+
+// The bottom-centre readout copy, swapped across the jump so the instrument
+// narrates the jump like a cockpit callout. Timed as fractions of JUMP_MS.
+const WARP_LINES: Array<{ at: number; label: string }> = [
+  { at: 0, label: 'ENGAGING HYPERDRIVE' },
+  { at: 0.34, label: 'BEGINNING LIGHTSPEED TRAVEL' },
+  { at: 0.72, label: 'PUNCH IT' },
+];
 
 // --- Starfield geometry ----------------------------------------------------
 const STAR_COUNT = 460;
@@ -68,6 +82,10 @@ interface WarpState {
   start: number;
   navigated: boolean;
   href: string | null;
+  // The bottom-centre readout element (mounted beside the canvas) and the timers
+  // that swap its callout copy across the jump — cleared on teardown.
+  readout: HTMLElement | null;
+  lineTimers: number[];
 }
 
 declare global {
@@ -120,9 +138,33 @@ function ensureState(): WarpState | null {
     start: 0,
     navigated: false,
     href: null,
+    readout: document.querySelector<HTMLElement>('[data-warp-readout]'),
+    lineTimers: [],
   };
   window.__bhWarp = state;
   return state;
+}
+
+/** Set the bottom-centre callout copy (the label span inside the readout). */
+function setReadout(state: WarpState, label: string): void {
+  const el = state.readout ?? document.querySelector<HTMLElement>('[data-warp-readout]');
+  if (!el) return;
+  state.readout = el;
+  const labelEl = el.querySelector<HTMLElement>('[data-warp-label]');
+  if (labelEl) labelEl.textContent = label;
+}
+
+/** Show/hide the readout by toggling its own active attribute (CSS fades it). */
+function showReadout(state: WarpState, on: boolean): void {
+  const el = state.readout ?? document.querySelector<HTMLElement>('[data-warp-readout]');
+  if (!el) return;
+  state.readout = el;
+  if (on) el.dataset.warpReadoutActive = '1';
+  else delete el.dataset.warpReadoutActive;
+}
+
+function clearLineTimers(state: WarpState): void {
+  while (state.lineTimers.length) window.clearTimeout(state.lineTimers.pop());
 }
 
 function resize(state: WarpState): void {
@@ -160,15 +202,21 @@ function drawFrame(state: WarpState, speed: number, flash: number, alpha: number
 
   ctx.globalCompositeOperation = 'lighter';
 
+  // BRIGHTNESS ramps with speed so the field starts nearly DARK (faint sub-light
+  // sparks) and only blazes once the acceleration kicks — killing the "too much
+  // light at the beginning". A small floor keeps a few sparks visible at rest.
+  const glow = 0.1 + Math.pow(speed, 1.4) * 0.9;
+
   for (const star of stars) {
     // Fast stars (high seed) sit further out and stretch more, giving the
     // perspective tunnel: near-centre stars barely move, edge stars scream past.
     const speedBias = 0.25 + star.seed * 0.75;
     const reach = speed * speedBias;
     // The streak's leading (outer) point and trailing (inner) point along the ray.
-    const rOuter = (0.04 + reach) * half;
-    // Length grows with speed so points become long lines at the jump apex.
-    const len = (0.02 + reach * 0.9) * half;
+    const rOuter = (0.04 + reach * 1.15) * half;
+    // Length grows with speed so points become long lines at the jump apex — and
+    // stretch further at full speed (×1.25) so the tunnel reads faster/longer.
+    const len = (0.015 + reach * 1.25) * half;
     const rInner = Math.max(0, rOuter - len);
 
     const dx = Math.cos(star.angle);
@@ -180,7 +228,7 @@ function drawFrame(state: WarpState, speed: number, flash: number, alpha: number
 
     // Colour: mostly white; a cool violet/teal minority like the reference frame.
     let stroke: string;
-    const a = star.bright * alpha;
+    const a = star.bright * alpha * glow;
     if (star.hue < 0.68) {
       stroke = `rgba(238, 240, 255, ${a})`;
     } else if (star.hue < 0.86) {
@@ -218,7 +266,17 @@ function stopLoop(state: WarpState): void {
   state.raf = 0;
 }
 
-/** The jump-out loop: accelerate streaks to a white flash, navigate at the apex. */
+/** Speed curve for the jump. A near-flat dark hold at the start (the field barely
+ *  moves — the HUD flickers, the readout counts up), then a HARD exponential lunge
+ *  into the light. `pow(t, 3.4)` keeps ~the first third almost still and slams the
+ *  last third; the small linear term guarantees a hair of drift from frame one so
+ *  it never looks frozen. Clamped ≤ 1. */
+function jumpSpeed(t: number): number {
+  return Math.min(1, Math.pow(t, 3.4) + t * 0.06);
+}
+
+/** The jump-out loop: a dark, held start that ACCELERATES hard into a white flash;
+ *  the HUD flickers and the readout narrates the callouts; we navigate at the apex. */
 function runJump(state: WarpState, href: string): void {
   state.phase = 'jump';
   state.href = href;
@@ -226,15 +284,30 @@ function runJump(state: WarpState, href: string): void {
   state.canvas.dataset.warpActive = 'jump';
   resize(state);
 
+  // Flicker the sitewide HUD for the jump (hud.css keys off this body class).
+  document.body.classList.add(WARP_ACTIVE_CLASS);
+
+  // Bottom-centre callouts: show the readout, seed the first line, and schedule the
+  // rest across the jump so it reads like a cockpit sequence.
+  clearLineTimers(state);
+  showReadout(state, true);
+  setReadout(state, WARP_LINES[0].label);
+  for (let i = 1; i < WARP_LINES.length; i++) {
+    const line = WARP_LINES[i];
+    state.lineTimers.push(
+      window.setTimeout(() => setReadout(state, line.label), JUMP_MS * line.at),
+    );
+  }
+
   const startCtx = window.performance ? performance.now() : 0;
   state.start = startCtx;
 
   const frame = (now: number): void => {
     const t = Math.min(1, (now - state.start) / JUMP_MS);
-    // Streaks ramp in with an accelerating ease so the field "lunges".
-    const speed = easeInQuad(t);
-    // Flash is confined to the final third, peaking at the very end.
-    const flash = t > 0.66 ? easeInQuad((t - 0.66) / 0.34) : 0;
+    // Hard-accelerating speed (dark hold → lunge). The flash is confined to the
+    // final ~18% and ramps steeply so it BLOOMS at the apex, not gradually.
+    const speed = jumpSpeed(t);
+    const flash = t > 0.82 ? easeInQuad((t - 0.82) / 0.18) : 0;
     drawFrame(state, speed, flash, 1);
 
     // Navigate at the flash apex. Guarded so it fires exactly once.
@@ -255,21 +328,27 @@ function runJump(state: WarpState, href: string): void {
   state.raf = requestAnimationFrame(frame);
 }
 
-/** The arrival loop: decelerate streaks back to points and fade the field out as
- *  the About content resurfaces. */
+/** The arrival loop: the streaks STAY fully stretched at lightspeed (no decelerate,
+ *  no contract-back) and the whole field simply FADES OUT as the About content shows
+ *  through — the jump keeps its momentum onto the page instead of braking. */
 function runArrive(state: WarpState): void {
   stopLoop(state);
   state.phase = 'arrive';
   state.canvas.dataset.warpActive = 'arrive';
   resize(state);
+  // The HUD flicker + readout belong to the jump only — stand them down on arrival.
+  document.body.classList.remove(WARP_ACTIVE_CLASS);
+  clearLineTimers(state);
+  showReadout(state, false);
   state.start = window.performance ? performance.now() : 0;
 
   const frame = (now: number): void => {
     const t = Math.min(1, (now - state.start) / ARRIVE_MS);
     const e = easeOutCubic(t);
-    // Speed drops from full stretch back to a gentle drift; the field fades out.
-    const speed = 1 - e * 0.92;
-    const flash = (1 - e) * 0.5; // the flash recedes as the page appears
+    // Speed is PINNED at full stretch — no shrink. Only the field's alpha (and the
+    // receding flash) fall, so the streaks dissolve mid-flight at lightspeed.
+    const speed = 1;
+    const flash = (1 - e) * 0.45; // the flash recedes as the page appears
     const alpha = 1 - e;
     drawFrame(state, speed, flash, alpha);
     if (t < 1) {
@@ -372,10 +451,18 @@ function onPageLoad(): void {
   }
   const state = ensureState();
   if (!state) return;
+  // The readout node is re-queried per load (ensureState caches it); refresh the
+  // handle so a swapped-in DOM is picked up.
+  state.readout = document.querySelector<HTMLElement>('[data-warp-readout]');
   if (warped && !prefersReduced()) {
     runArrive(state);
   } else {
+    // Normal load / reduced motion: stand everything down so no streaks, flicker,
+    // or callout linger on a page that wasn't reached via a warp.
     stopLoop(state);
+    clearLineTimers(state);
+    document.body.classList.remove(WARP_ACTIVE_CLASS);
+    showReadout(state, false);
     state.phase = 'idle';
     delete state.canvas.dataset.warpActive;
     state.ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);

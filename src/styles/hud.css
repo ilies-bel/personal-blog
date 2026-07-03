@@ -647,9 +647,9 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-copy {
    display:none further down. The BOOT readout (.hud-compass--boot) is the exception:
    it OWNS the slot during loading (it IS the loader's status line), so it must stay
    lit while body:not(.scene-ready) — :not(.hud-compass--boot) exempts it here. */
-body:not(.scene-ready) .hud-compass:not(.hud-compass--boot),
-body.hud-booting .hud-compass { opacity: 0; transition-delay: 0s; }
-.hud-compass[data-visible='false'] { opacity: 0; transition-delay: 0s; }
+body:not(.scene-ready) .hud-compass:not(.hud-compass--boot):not(.warp-readout),
+body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay: 0s; }
+.hud-compass[data-visible='false']:not(.warp-readout) { opacity: 0; transition-delay: 0s; }
 
 /* --- Boot-to-HUD intro readout ---------------------------------------------
    The same bottom-centre slot + visual language as the live compass, driving the
