@@ -129,7 +129,9 @@
      positioned into it). Reserving it on EVERY link — not just the active one — is
      what keeps the rail from shifting when the number appears. */
   padding: 0.5rem 1.6rem 0.5rem 0.95rem;
-  color: var(--fg-dim);
+  /* Chrome ramp (cool-neutral bone) — the same temperature the hero's chrome
+     reads over the void, so the reading nav is the same instrument. */
+  color: var(--fg-chrome-dim);
   text-decoration: none;
   font-family: var(--font-mono);
   font-size: var(--text-hud);
@@ -139,7 +141,7 @@
   transition: color 0.16s ease;
 }
 .subnav-link:hover,
-.subnav-link:focus-visible { color: var(--fg); }
+.subnav-link:focus-visible { color: var(--fg-chrome); }
 .subnav-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -187,7 +189,7 @@
   line-height: 1;
   font-size: var(--text-micro);
   letter-spacing: 0.1em;
-  color: var(--fg-faint);
+  color: var(--fg-chrome-faint);
   transition: color 0.16s ease;
 }
 
@@ -243,11 +245,11 @@
 .subnav-link[aria-current='page'] .subnav-label {
   background-size: 100% 1px;
 }
-/* Current section's dim section line lifts a step (still secondary to the body)
-   so the locked row reads as one brighter unit — mirrors the rail's current-row
-   destination brightening. */
+/* Current section's dim caption lifts a step (still secondary to the
+   destination) so the locked row reads as one brighter unit — mirrors the
+   rail's current-row brightening. */
 .subnav-link[aria-current='page'] .subnav-section {
-  color: var(--fg-dim);
+  color: var(--fg-chrome-dim);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -275,7 +277,8 @@
   font-size: var(--text-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  /* Chrome ramp — the footer is instrument text, same temperature as the nav. */
+  color: var(--fg-chrome-faint);
 }
 .site-footer-links {
   display: flex;
@@ -314,12 +317,12 @@
   color: var(--fg-overlay);
 }
 .site-footer a {
-  color: var(--fg-dim);
+  color: var(--fg-chrome-dim);
   text-decoration: none;
   transition: color 0.16s ease;
 }
 .site-footer a:hover,
-.site-footer a:focus-visible { color: var(--fg); }
+.site-footer a:focus-visible { color: var(--fg-chrome); }
 .site-footer a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

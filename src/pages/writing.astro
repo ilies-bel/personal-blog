@@ -40,7 +40,15 @@ const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
 >
   <section class="writing-hero" aria-labelledby="writing-title">
     <div class="writing-hero-copy">
-      <p class="writing-kicker">Writing</p>
+      {/* Page designation row — kicker + mono status readout, so the page opens
+          like a labeled instrument screen (the graveyard's SPECIMEN grammar,
+          generalized). SECTION 02 = Writing's slot in the canonical nav order. */}
+      <p class="writing-kicker">
+        <span>Writing</span>
+        <span class="writing-kicker-readout">
+          Section 02 · {posts.length} {posts.length === 1 ? 'note' : 'notes'}{latest && ` · newest ${fmt(latest.data.pubDate)}`}
+        </span>
+      </p>
       <h1 id="writing-title">Notes on software that keeps working.</h1>
       <p>
         Short technical essays on content sites, frontend systems, deployment, and

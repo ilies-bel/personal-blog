@@ -39,12 +39,14 @@ body:not(.bare)::after {
   pointer-events: none;
 }
 
+/* Reading-page atmosphere — ONE quiet tonal lift at the top of the room, no
+   colored light. The old pair of warm gold corner glows here is what washed
+   every non-bare page sepia and split the site into "cool hero / yellow blog";
+   the room now stays the hero's near-black and gold appears only as SIGNAL
+   (current section, hover, readouts). */
 body:not(.bare)::before {
-  background:
-    radial-gradient(42rem 28rem at 82% 8%, color-mix(in oklch, var(--accent) 10%, transparent), transparent 68%),
-    radial-gradient(34rem 24rem at 10% 22%, color-mix(in oklch, var(--highlight) 5%, transparent), transparent 70%),
-    linear-gradient(180deg, color-mix(in oklch, var(--bg-soft) 20%, transparent), transparent 26rem);
-  opacity: 0.78;
+  background: linear-gradient(180deg, color-mix(in oklch, var(--bg-soft) 30%, transparent), transparent 24rem);
+  opacity: 0.8;
 }
 
 body:not(.bare)::after {
@@ -57,12 +59,11 @@ body:not(.bare)::after {
 }
 
 /* Article pages carry the live black-hole backdrop, which already supplies the
-   warm graphite atmosphere. The standard corner glow would double up and muddy
-   it, so it's dropped here; the faint grid (::after) stays — it adds quiet
-   structure and never competes with the dim backdrop. The graveyard page mounts
-   the same live scene (driven by ArticleScene across the collapse window) so it
-   shares the override — otherwise the warm corner pool would fight the cold
-   late-ember light the graveyard backdrop is supposed to feel like. */
+   page's atmosphere. Even the quiet top lift would double up and muddy it, so
+   it's dropped here; the faint grid (::after) stays — it adds quiet structure
+   and never competes with the dim backdrop. The graveyard page mounts the same
+   live scene (driven by ArticleScene across the collapse window) so it shares
+   the override. */
 body.article-page::before,
 body.graveyard-page::before { display: none; }
 

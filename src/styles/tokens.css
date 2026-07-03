@@ -7,10 +7,14 @@
          + IBM Plex Mono (labels/dates/tags). See fonts.css. */
 
 :root {
-  /* Surfaces (warm graphite, no blue-green cast) */
-  --bg: oklch(0.145 0.012 82);          /* black graphite room, sitewide */
-  --bg-soft: oklch(0.19 0.014 82);      /* panel: one tonal step up (no shadows) */
-  --line: oklch(0.34 0.026 82);         /* tarnished hairlines, always 1px */
+  /* Surfaces — the ONE room. Deepened toward the hero's void with the warm cast
+     trimmed (chroma down, hue 82→80) so reading pages sit in the same near-black
+     the scene plays in. Warmth is carried by the gold SIGNALS and the prose ink,
+     not by the walls — the old lighter graphite plus gold corner glows is what
+     read as a sepia "regular site" next to the void-black hero. */
+  --bg: oklch(0.13 0.008 80);           /* deep graphite-void room, sitewide */
+  --bg-soft: oklch(0.17 0.01 80);       /* panel: one tonal step up (no shadows) */
+  --line: oklch(0.32 0.02 80);          /* tarnished hairlines, always 1px */
 
   /* Text ramp (contrast vs --bg noted) */
   --fg: oklch(0.86 0.02 80.1);          /* #d8d0c3 warm bone, body + display */
@@ -33,6 +37,16 @@
      pulling warm into the orange. Used IN PLACE OF --fg on those selectors only; the
      reading pages keep the warm --fg. */
   --fg-overlay: oklch(0.92 0.012 250);  /* cool-neutral bone, holds on the orange star */
+  /* CHROME ramp — the cool-neutral bone family for UI/instrument text (nav,
+     kickers, footer, readouts) on reading pages, extending --fg-overlay down two
+     rungs. The hero's chrome already reads cool-silver over the void; giving the
+     reading chrome the SAME temperature is what makes home and inner pages feel
+     like one instrument. Long-form PROSE keeps the warm --fg ramp — the warmth
+     belongs to the ink, not to the interface. Contrast vs --bg (L 0.13):
+     dim ≈ 9.9:1, faint ≈ 4.6:1 (faint stays micro-label-only, as today). */
+  --fg-chrome: var(--fg-overlay);            /* chrome bright — current/hover */
+  --fg-chrome-dim: oklch(0.75 0.01 250);     /* chrome resting text */
+  --fg-chrome-faint: oklch(0.59 0.01 250);   /* chrome micro labels / captions */
 
   /* Brand */
   --accent: oklch(0.73 0.095 78);       /* aged gold, links/focus/active chrome */
