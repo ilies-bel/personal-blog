@@ -39,10 +39,16 @@ interface Props {
   // top-left wordmark and hides the home-only micro-nav so Close can own the
   // top-right corner.
   bodyClass?: string;
+  // MINIMAL READING CHROME (article pages): the header keeps only the wordmark +
+  // social icons — no station rail — so a reading page is a quiet room of the same
+  // ship (the hero has no top bar either; the full-width station bar was the one
+  // conventional-navbar moment in the whole DA). The full station nav renders as a
+  // block in the footer instead, after the article's own "Next note" continuation.
+  minimalChrome?: boolean;
 }
 
 const props = Astro.props;
-const { bare = false, bodyClass } = props;
+const { bare = false, bodyClass, minimalChrome = false } = props;
 const bodyClasses = [bare ? 'bare' : null, bodyClass].filter(Boolean).join(' ') || undefined;
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
@@ -594,7 +600,7 @@ const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section 
               <span class="bh-identity-role">{BRAND_ROLE}</span>
             </a>
             <nav class="subnav-rail" aria-label="Sections">
-              <ul class="subnav-list">
+              {!minimalChrome && <ul class="subnav-list">
                 {subnavItems.map((item, i) => (
                   <li class="subnav-item">
                     <a
@@ -622,7 +628,7 @@ const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section 
                     </a>
                   </li>
                 ))}
-              </ul>
+              </ul>}
 
               {/* Brand-logo icon links — GitHub octocat + X logo, the SAME pair the
                   hero corner nav (.overlay-blog) shows, so the reading header reads
@@ -662,6 +668,24 @@ const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section 
               across SPA swaps like the header (transition:name + animate none) so
               the chrome holds still while only the page content moves. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
+            {/* MINIMAL-CHROME pages moved the station nav out of the header; it
+                lands here as a quiet full-width block ABOVE the copyright row —
+                same Body·Section pairs, same source of truth (subnavItems), so
+                the reader still has every station at the end of the page. */}
+            {minimalChrome && (
+              <nav class="site-footer-stations" aria-label="Sections">
+                {subnavItems.map((item) => (
+                  <a
+                    class="site-footer-station"
+                    href={item.href}
+                    aria-current={item.active ? 'page' : undefined}
+                  >
+                    <span class="site-footer-station-label">{item.label}</span>
+                    <span class="site-footer-station-section">{item.section}</span>
+                  </a>
+                ))}
+              </nav>
+            )}
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
             <nav class="site-footer-links" aria-label="Social links">
               {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}
