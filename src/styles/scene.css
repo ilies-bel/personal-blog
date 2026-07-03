@@ -560,6 +560,65 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
 .overlay-blog[data-static] .overlay-blog-link[aria-current='page'] { color: var(--fg-overlay); }
 .overlay-blog-section[aria-current='page'] .overlay-blog-lock { opacity: 1; }
 
+/* SCENE TOGGLE — the hero's circular side control, generalized: the same thin
+   ring frame as the power button, wrapping a celestial glyph (ringed body +
+   core). Parks the page's backdrop scene (body.backdrop-off, hero.css) via
+   src/scripts/sceneToggle.ts. aria-pressed=true = scene parked: the glyph gains
+   its slash and the whole control dims — an instrument reading "off", not an
+   alarm. Used in BOTH nav skins (reading rail + about overlay). */
+.scene-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  color: var(--fg-chrome-dim);
+  display: grid;
+  place-items: center;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    opacity 0.2s ease;
+}
+.scene-toggle .overlay-blog-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  filter: none;
+}
+.scene-toggle:hover {
+  color: var(--fg-chrome);
+  border-color: var(--accent);
+}
+.scene-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+.scene-toggle-slash {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+.scene-toggle[aria-pressed='true'] {
+  color: var(--fg-chrome-faint);
+  border-color: var(--line);
+  opacity: 0.75;
+}
+.scene-toggle[aria-pressed='true'] .scene-toggle-slash {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-toggle,
+  .scene-toggle-slash { transition: none; }
+}
+
 /* Close — the About overlay's return-to-scene control, riding the nav row as its
    trailing item behind a hairline divider so the corner reads as ONE instrument
    cluster. Gold on hover (the shared accent gesture), shared focus ring. */

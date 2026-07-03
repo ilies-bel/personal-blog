@@ -22,8 +22,8 @@
 //   surface="scene" — the bare-page corner overlay (home, about). Single-line
 //     mono labels + target-lock hover ticks + socials, optionally followed by
 //     the HUD power button (home) or a Close control (about).
-//   surface="page"  — the reading-page rail: two-line Destination-over-body
-//     pairs, lock ticks + two-digit index on the current section, socials.
+//   surface="page"  — the reading-page rail: the SAME single-line labels and
+//     tick grammar in a sticky header row (full lock on the current section).
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 import { SOCIALS } from '../consts';
 
@@ -36,8 +36,18 @@ interface Props {
   showClose?: boolean;
   /** Scene surface: labels rest at reading brightness — no boot gate (about). */
   isStatic?: boolean;
+  /** Render the circular scene-toggle (parks the page's backdrop scene). On by
+   *  default for the page skin; the home scene skin opts out (its scene IS the
+   *  content and has its own power/motion circles). */
+  showSceneToggle?: boolean;
 }
-const { surface, showPower = false, showClose = false, isStatic = false } = Astro.props;
+const {
+  surface,
+  showPower = false,
+  showClose = false,
+  isStatic = false,
+  showSceneToggle = surface === 'page',
+} = Astro.props;
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
@@ -57,24 +67,22 @@ const blackHolePath = endItem ? norm(href(endItem.href)) : '';
 const isWritingActive =
   path === writingRoot || (path.startsWith(`${postsRoot}/`) && path !== blackHolePath);
 
-// The flip rule: `label` (bright) is the DESTINATION, `body` (dim) is the
-// celestial caption. Index lights for every page it hubs (archive itself, the
-// graveyard, the making-of, the inspiration essay), so every page still locks
-// exactly one section.
+// Menus show the DESTINATION only — the celestial-body names stay in the
+// hero's vertical rail (a scene instrument) and the scenes themselves. Index
+// lights for every page it hubs (archive itself, the graveyard, the making-of,
+// the inspiration essay), so every page still locks exactly one section.
 interface NavRow {
   href: string;
   label: string;
-  body: string;
   active: boolean;
 }
 const rows: NavRow[] = [
-  { href: href('projects'), label: 'Projects', body: 'YELLOW STAR', active: isActive('projects') },
-  { href: href('writing'), label: 'Writing', body: 'NEBULA', active: isWritingActive },
-  { href: href('about'), label: 'About', body: 'THE BEGINNING', active: isActive('about') },
+  { href: href('projects'), label: 'Projects', active: isActive('projects') },
+  { href: href('writing'), label: 'Writing', active: isWritingActive },
+  { href: href('about'), label: 'About', active: isActive('about') },
   {
     href: href('archive'),
     label: 'Index',
-    body: 'THE ARCHIVE',
     active:
       isActive('archive') ||
       isActive('graveyard') ||
@@ -82,7 +90,6 @@ const rows: NavRow[] = [
       path === blackHolePath,
   },
 ];
-const pad2 = (i: number) => String(i + 1).padStart(2, '0');
 
 // Official simple-icons brand paths (GitHub octocat, X logo), fill=currentColor
 // so the glyphs track each skin's link color exactly like the text labels.
@@ -153,6 +160,25 @@ const X_PATH =
         </button>
       )}
 
+      {/* Scene toggle (the hero's circular side control, sitewide): parks the
+          dimmed backdrop scene — persisted, wired in src/scripts/sceneToggle.ts. */}
+      {showSceneToggle && (
+        <button
+          type="button"
+          class="scene-toggle"
+          aria-pressed="false"
+          aria-label="Toggle background scene"
+        >
+          {/* Celestial glyph — a ringed body with its core; the slash appears
+              when the scene is parked (aria-pressed=true, scene.css). */}
+          <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+            <line class="scene-toggle-slash" x1="7" y1="25" x2="25" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </button>
+      )}
+
       {/* Close (about only): the overlay page's return-to-scene control, riding
           the nav row as its trailing item so the top-right corner is ONE
           instrument cluster, not two competing fixed elements. */}
@@ -169,24 +195,20 @@ const X_PATH =
   ) : (
     <nav class="subnav-rail" aria-label="Sections">
       <ul class="subnav-list">
-        {rows.map((row, i) => (
+        {rows.map((row) => (
           <li class="subnav-item">
             <a class="subnav-link" href={row.href} aria-current={row.active ? 'page' : undefined}>
-              {/* Target-lock frame — four corner ticks on the locked (current)
-                  section; Phase 3 also reveals it on hover to match the hero. */}
+              {/* Target-lock frame — four corner ticks: full lock on the current
+                  section, half-strength acquisition on hover/focus. The SAME
+                  single-line label + tick cluster the hero corner nav renders —
+                  no caption, no index, one nav look sitewide. */}
               <span class="subnav-lock" aria-hidden="true">
                 <span class="subnav-tick subnav-tick-tl" />
                 <span class="subnav-tick subnav-tick-tr" />
                 <span class="subnav-tick subnav-tick-bl" />
                 <span class="subnav-tick subnav-tick-br" />
               </span>
-              {/* Destination·body PAIR — destination bright, celestial body dim. */}
-              <span class="subnav-copy">
-                <span class="subnav-label" data-decode>{row.label}</span>
-                <span class="subnav-section">{row.body}</span>
-              </span>
-              {/* Two-digit mono index — only shown on the locked section. */}
-              <span class="subnav-index" aria-hidden="true">{pad2(i)}</span>
+              <span class="subnav-label" data-decode>{row.label}</span>
             </a>
           </li>
         ))}
@@ -209,6 +231,25 @@ const X_PATH =
             </a>
           )}
         </div>
+      )}
+
+      {/* Scene toggle — the hero's circular side control, on every reading
+          page: parks the dimmed backdrop scene (src/scripts/sceneToggle.ts). */}
+      {showSceneToggle && (
+        <button
+          type="button"
+          class="scene-toggle"
+          aria-pressed="false"
+          aria-label="Toggle background scene"
+        >
+          {/* Celestial glyph — a ringed body with its core; the slash appears
+              when the scene is parked (aria-pressed=true, scene.css). */}
+          <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+            <line class="scene-toggle-slash" x1="7" y1="25" x2="25" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </button>
       )}
     </nav>
   )

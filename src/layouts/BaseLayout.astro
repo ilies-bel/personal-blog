@@ -99,6 +99,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             showPower={!isAboutOverlay}
             showClose={isAboutOverlay}
             isStatic={isAboutOverlay}
+            showSceneToggle={isAboutOverlay}
           />
 
           {/* Boot transition layers — driven entirely by body.hud-booting (added for
@@ -583,6 +584,9 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
         reduced-motion no-op, original text always restored). */}
     <script>
       import '../scripts/decodeHover';
+      // Scene toggle — the circular corner control that parks the backdrop
+      // scenes sitewide (body.backdrop-off), persisted across visits/swaps.
+      import '../scripts/sceneToggle';
     </script>
 
     <script>

@@ -111,12 +111,11 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   </main>
 </BaseLayout>
 
+{/* No scripted initial focus: the old Close autofocus painted a visible focus
+    ring on every mouse load (script focus counts as focus-visible), which read
+    as a broken box in the corner. Keyboard users reach the nav via the skip
+    link / first Tab as on every other page. */}
 <script>
-  // Overlay focus: pull initial keyboard focus into the Close affordance (the
-  // nav's trailing Close control) so the first keystroke is the natural
-  // "return to the scene" action. Instant, not a motion concern.
-  document.querySelector<HTMLAnchorElement>('.overlay-blog-close')?.focus();
-
   // The personal moment: tag <body> with .has-signature-anim so the signature
   // starts hidden (clip-path collapsed, flourish stroke offset), then drop the
   // .is-drawn class on the signature when it enters the viewport. Under

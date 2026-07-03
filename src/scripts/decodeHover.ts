@@ -24,6 +24,16 @@
 const GLYPHS = '#/\\|<>[]{}=+*%$@!?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const DURATION_MS = 300;
 
+/** Per-element churn pool. Mono labels can churn through anything (fixed
+ *  advance), but display-font titles (writing rows, entry names) would jitter
+ *  in width on thin/wide glyphs — so the pool is built mostly from the text's
+ *  OWN characters (near-identical widths, reads like a cipher re-sorting
+ *  itself) plus a pinch of digits for the instrument flavor. */
+function poolFor(original: string): string {
+  const own = original.replace(/\s+/g, '');
+  return own.length >= 4 ? own + own.toUpperCase() + '0123456789' : GLYPHS;
+}
+
 /** Live animation state per element, so re-entry restarts cleanly and leave
  *  can cancel. WeakMap: nodes swapped out by ClientRouter just fall away. */
 const running = new WeakMap<HTMLElement, number>();
@@ -31,8 +41,6 @@ const running = new WeakMap<HTMLElement, number>();
 const prefersReducedMotion = (): boolean =>
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-const randomGlyph = (): string => GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
 
 function stop(el: HTMLElement): void {
   const raf = running.get(el);
@@ -48,13 +56,16 @@ function stop(el: HTMLElement): void {
 function start(el: HTMLElement): void {
   if (prefersReducedMotion()) return;
   if (running.has(el)) return; // already decoding — let it finish
-  // Capture the true label once per element; subsequent runs reuse it, so a
-  // half-scrambled frame can never be captured as "the original".
-  if (el.dataset.decodeText === undefined) {
-    el.dataset.decodeText = el.textContent ?? '';
-  }
+  // Capture the true label PER RUN (not once): dynamic readouts (the graveyard
+  // HUD name, scroll-spied titles) change their text between hovers, and a
+  // once-captured value would restore a stale label. While an animation runs
+  // the guard above blocks re-capture, so a half-scrambled frame can never be
+  // taken as "the original".
+  el.dataset.decodeText = el.textContent ?? '';
   const original = el.dataset.decodeText;
   if (!original.trim()) return;
+  const pool = poolFor(original);
+  const randomGlyph = (): string => pool[Math.floor(Math.random() * pool.length)];
 
   const startedAt = performance.now();
   const tick = (now: number): void => {

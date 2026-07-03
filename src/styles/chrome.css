@@ -124,11 +124,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  /* Asymmetric horizontal padding: the right side reserves a constant slot for the
-     two-digit index that the CURRENT section reveals (.subnav-index is absolutely
-     positioned into it). Reserving it on EVERY link — not just the active one — is
-     what keeps the rail from shifting when the number appears. */
-  padding: 0.5rem 1.6rem 0.5rem 0.95rem;
+  padding: 0.5rem 0.95rem;
   /* Chrome ramp (cool-neutral bone) — the same temperature the hero's chrome
      reads over the void, so the reading nav is the same instrument. */
   color: var(--fg-chrome-dim);
@@ -148,22 +144,10 @@
   border-radius: var(--radius-sm);
 }
 
-/* Destination·body PAIR — the two-line stack that mirrors the hero rail's
-   .hud-nav-copy. The DESTINATION is the bright title line (a menu answers
-   "where does this go", so the wording matches the hero corner nav exactly);
-   the celestial body is the dim caption under it — the lifecycle metaphor as
-   flavor, not riddle. Same gap + uppercase mono family as the hero kit. */
-.subnav-copy {
-  display: grid;
-  gap: 0.22rem;
-  min-width: 0;
-}
-
-/* Mono-uppercase DESTINATION label — bright title line. A gold underline
-   sweeps in on hover/focus (mirrors the .overlay-blog-label reveal, but the
-   label here is ALWAYS shown, so only the underline animates). Drawn as a
-   bottom-anchored background gradient sized 0%→100% width so the label's box can
-   clip it cleanly. */
+/* Mono-uppercase DESTINATION label — single line, the same word the hero
+   corner nav shows (no caption, no index — one nav look sitewide). A gold
+   underline sweeps in on hover/focus, drawn as a bottom-anchored background
+   gradient sized 0%→100% width so the label's box can clip it cleanly. */
 .subnav-label {
   display: inline-block;
   line-height: 1;
@@ -180,39 +164,6 @@
 .subnav-link:hover .subnav-label,
 .subnav-link:focus-visible .subnav-label { background-size: 100% 1px; }
 
-/* Dim CELESTIAL-BODY line (the lifecycle stage this section maps to) — the
-   muted second line, matching the hero rail's dim rung (smaller tracking-wide
-   mono, a step dimmer than the destination title). Stays dim on hover so only
-   the destination brightens, exactly like the rail. */
-.subnav-section {
-  display: inline-block;
-  line-height: 1;
-  font-size: var(--text-micro);
-  letter-spacing: 0.1em;
-  color: var(--fg-chrome-faint);
-  transition: color 0.16s ease;
-}
-
-/* Two-digit mono index — only the locked (current) section shows it. The OLD approach
-   toggled display:none → inline-block ONLY on the active item, growing just that item
-   and shoving the rest of the rail sideways (the content shift). The fix: EVERY link
-   permanently reserves the index zone (a constant right slot — see .subnav-link's
-   padding-right below), and the index is absolutely positioned INTO that reserved
-   slot, just after the label. Because the slot exists on every item whether or not its
-   number shows, revealing it on the current section changes nothing's width. */
-.subnav-index {
-  position: absolute;
-  right: 0.45rem;          /* sits inside the reserved right slot, trailing the label */
-  top: 50%;
-  transform: translateY(-50%);
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  letter-spacing: var(--tracking-label);
-  color: var(--accent);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
 /* Target-lock frame — opacity-driven so it can also REVEAL on hover/focus (the
    hero corner nav's targeting gesture, ported): full strength on the locked
    (current) section, a lighter acquisition frame while hovering the rest. */
@@ -245,22 +196,14 @@
   color: var(--fg-overlay);
 }
 .subnav-link[aria-current='page'] .subnav-lock { opacity: 1; }
-.subnav-link[aria-current='page'] .subnav-index { opacity: 1; }
 /* Persistent underline on the current section — the same gold sweep shown at
    rest (not just on hover), so the current item is obvious. */
 .subnav-link[aria-current='page'] .subnav-label {
   background-size: 100% 1px;
 }
-/* Current section's dim caption lifts a step (still secondary to the
-   destination) so the locked row reads as one brighter unit — mirrors the
-   rail's current-row brightening. */
-.subnav-link[aria-current='page'] .subnav-section {
-  color: var(--fg-chrome-dim);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .subnav-label,
-  .subnav-section,
   .subnav-lock { transition: none; }
 }
 
@@ -391,15 +334,7 @@
     gap: 0.15rem 0.35rem;
   }
 
-  /* SINGLE-LINE nav on phones: the celestial caption and the index number fold
-     away, leaving five plain destination labels that fit in one or two short
-     rows instead of a half-viewport block of two-line pairs. The current
-     section still reads: lock ticks + brightness survive the collapse. */
-  .subnav-section { display: none; }
-  .subnav-index { display: none; }
-
   .subnav-link {
-    /* Symmetric padding — no reserved right slot now that the index is gone. */
     padding: 0.45rem 0.7rem;
   }
   .subnav-lock { inset: 0.14rem 0.22rem; }

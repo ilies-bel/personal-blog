@@ -1,5 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import BlackHole from '../hero/BlackHole.tsx';
+import PageHud from '../components/PageHud.astro';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -12,6 +14,17 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   type="website"
   bodyClass="projects-page"
 >
+  {/* Static celestial backdrop — the scene frozen at the YELLOW STAR frame
+      (stage 2.9, Projects' own celestial body in the nav model), heavily dimmed
+      behind the ledger. client:only: the page reads fully without JS; the corner
+      scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
+  <BlackHole client:only="react" backdrop backdropStage={2.9} />
+
+  {/* Cockpit gauge — the same side instrument the scene-journey articles and
+      the graveyard fly with: scroll-progress rail + a readout naming the
+      project currently in view (spied via data-hud-title on each entry). */}
+  <PageHud index="SECTION 01 / 05" beat="PROJECTS · 2 SHIPPED" spy="[data-hud-title]" />
+
   <section class="projects-hero" aria-labelledby="projects-title">
     {/* Page designation row — kicker + mono status readout, so the page opens
         like a labeled instrument screen. SECTION 01 = Projects' slot in the
@@ -26,9 +39,9 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
   <div class="projects-list" aria-label="Shipped projects">
 
-    <article class="projects-entry" id="fleet">
+    <article class="projects-entry" id="fleet" data-hud-title="Fleet">
       <header class="projects-entry-header">
-        <h2 class="projects-entry-name">Fleet</h2>
+        <h2 class="projects-entry-name"><span data-decode>Fleet</span></h2>
         <div class="projects-entry-links">
           <a href="https://github.com/ilies-bel/fleet" class="projects-link" target="_blank" rel="noopener noreferrer">github.com/ilies-bel/fleet</a>
           <span class="projects-link-sep" aria-hidden="true">/</span>
@@ -69,9 +82,9 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       </div>
     </article>
 
-    <article class="projects-entry" id="mars">
+    <article class="projects-entry" id="mars" data-hud-title="Mars">
       <header class="projects-entry-header">
-        <h2 class="projects-entry-name">Mars <span class="projects-badge">private</span></h2>
+        <h2 class="projects-entry-name"><span data-decode>Mars</span> <span class="projects-badge">private</span></h2>
         <span class="projects-private-note">B2B product. No public link.</span>
         <dl class="projects-meta">
           <div class="projects-meta-item">

@@ -58,14 +58,15 @@ body:not(.bare)::after {
   opacity: 0.28;
 }
 
-/* Article pages carry the live black-hole backdrop, which already supplies the
-   page's atmosphere. Even the quiet top lift would double up and muddy it, so
-   it's dropped here; the faint grid (::after) stays — it adds quiet structure
-   and never competes with the dim backdrop. The graveyard page mounts the same
-   live scene (driven by ArticleScene across the collapse window) so it shares
-   the override. */
+/* Every reading page now carries a scene backdrop (frozen frames on the list
+   pages, live journeys on articles/graveyard), which supplies the atmosphere.
+   The quiet top lift would double up and muddy it, so it's dropped on all of
+   them; the faint grid (::after) stays — it adds quiet structure and never
+   competes with the dim backdrop. */
 body.article-page::before,
-body.graveyard-page::before { display: none; }
+body.graveyard-page::before,
+body.writing-page::before,
+body.projects-page::before { display: none; }
 
 ::selection {
   background: color-mix(in oklch, var(--accent) 48%, transparent);
