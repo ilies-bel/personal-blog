@@ -108,21 +108,25 @@ export interface SceneHandle {
 /** Per-frame marker data emitted by the scene, consumed by StarMarker without
  *  triggering React re-renders (written to a ref, read on rAF). x/y are CSS pixels
  *  relative to the viewport (position: fixed coordinate space). stage is the current
- *  eased legacy stage value so the component can determine which settled state is
- *  active without re-importing timeline logic. visible combines the on-screen check
- *  with the settled-window gate: false means hide the marker entirely. */
+ *  eased legacy stage value (kept for readouts). visible combines the on-screen
+ *  check with the beat-band gate: false means hide the marker entirely. */
 export interface MarkerFrame {
   x: number;
   y: number;
   stage: number;
   visible: boolean;
-  /** Settled-window + no-nova gate WITHOUT the on-screen test. Fixed-spot markers
+  /** Beat-band + no-nova gate WITHOUT the on-screen test. Fixed-spot markers
    *  (authored at a viewport fraction, always on-screen by construction) read this
    *  instead of `visible`, so they aren't suppressed when the star's WORLD-ORIGIN
    *  projects off-screen — e.g. the camera-parked red giant on a narrow/mobile
    *  viewport, where the orb fills the frame but its centre projects past the NDC
    *  edge, making the origin-based `onScreen` false. */
   gateOk: boolean;
+  /** The scene whose manifesto BEAT copy is on screen right now — computed by
+   *  beatIdForLifecycleP from the same RAW scroll the text overlay reads — or
+   *  null in a between-beats gap. StarMarker/HudNavigation compare this against
+   *  a placement's state, so a marker's show/hide is frame-locked to its text. */
+  beatId: HudTargetId | null;
 }
 
 export interface SceneHooks {

@@ -461,6 +461,26 @@ export function settledIdForStage(stage: number): HudTargetId | null {
   return null;
 }
 
+/**
+ * BEAT-band marker gate — the scene whose manifesto copy is on screen at this
+ * LIFECYCLE progress, or null in a between-beats gap. The window is the beat's
+ * own text band [inStart, outEnd], inclusive on both ends — the EXACT band
+ * ManifestoOverlay renders with (`band(lifecycleP, inStart, outEnd)`) — so a
+ * marker gated on this appears and disappears on the same scroll frame as its
+ * beat's text. This replaced settledIdForStage as the STAR-MARKER gate: the two
+ * clocks (settledWindow holds vs text bands) visibly disagreed, with markers
+ * popping in/out while the copy stayed, which read as a bug. settledIdForStage
+ * remains the strict idle-hold signal for the readouts (ArticleHud, resolve()).
+ */
+export function beatIdForLifecycleP(p: number): HudTargetId | null {
+  for (const scene of SCENES) {
+    const beat = scene.beat;
+    if (!beat) continue;
+    if (p >= beat.text.inStart && p <= beat.text.outEnd) return scene.id;
+  }
+  return null;
+}
+
 // ===========================================================================
 // LIFECYCLE STAGE THRESHOLDS
 //

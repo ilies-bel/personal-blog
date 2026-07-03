@@ -520,11 +520,11 @@ export default function HudNavigation({
       const frame = markerFrameRef.current;
       const cursor = pointerRef.current;
 
-      // Candidate markers: those whose state is the settled one on screen RIGHT
-      // NOW (same gate StarMarker uses for its own visibility/interactivity).
+      // Candidate markers: those whose beat is on screen RIGHT NOW (frame.beatId —
+      // the same gate StarMarker uses for its own visibility/interactivity).
       let nearest: MarkerPlacement | null = null;
       if (frame && frame.visible && cursor) {
-        const settled = settledIdForStage(frame.stage);
+        const settled = frame.beatId;
         let bestDistSq = Number.POSITIVE_INFINITY;
         for (const placement of MARKER_PLACEMENTS) {
           if (placement.state !== settled) continue;

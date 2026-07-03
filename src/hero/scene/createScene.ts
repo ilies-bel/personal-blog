@@ -6,7 +6,8 @@ import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
-import { settledIdForStage, easeInQuart } from '../sceneTable';
+import { beatIdForLifecycleP, easeInQuart } from '../sceneTable';
+import { lifecycleProgress } from '../scroll';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
 import { buildStarfield, buildDistantStar } from './buildStarfield';
@@ -1518,13 +1519,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       const cssX = (ndcX * 0.5 + 0.5) * window.innerWidth + offX;
       const cssY = (1 - (ndcY * 0.5 + 0.5)) * window.innerHeight + offY;
       const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
-      // IDLE-hold-only gate: a marker appears ONLY while the object is holding
-      // still on its recognisable beat, NOT during the transitions in or out of
-      // that hold. The per-scene STAGE tolerances are the settledWindow values on
-      // the idle SEGMENTS in sceneTable.ts; settledIdForStage scans them, so this
-      // gate and HudNavigation's both read the ONE table (no more byte-identical
-      // duplication to keep in sync by hand).
-      const settled = settledIdForStage(stage) !== null;
+      // BEAT-band gate: a marker shows exactly while its scene's manifesto copy
+      // is on screen. beatIdForLifecycleP reads the SAME text bands the overlay
+      // renders with, and it is fed progressTarget — the RAW clamped scroll, the
+      // same signal the overlay's React snapshot mirrors — NOT the eased internal
+      // `progress`, which lags raw scroll by the dwell-damped follow-ease and
+      // would land the marker a beat behind its own text. (This replaced the old
+      // settledWindow gate: two clocks, visibly out of sync.)
+      const beatId = beatIdForLifecycleP(lifecycleProgress(progressTarget));
       // STRICT: never publish a marker as visible while the supernova flash/morph
       // envelope is active. `nova` (the clockless Gaussian flash envelope computed
       // above) > ~0.01 means a blast is on screen — suppress the marker so it can
@@ -1533,8 +1535,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // viewport fraction (always on-screen) so the star ORIGIN going off-screen
       // (camera-parked red giant on a narrow viewport) must not hide it. Anchored
       // markers ride the origin, so they keep the full `visible` (incl. onScreen).
-      const gateOk = settled && nova < 0.01;
-      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk });
+      const gateOk = beatId !== null && nova < 0.01;
+      hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk, beatId });
     }
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------

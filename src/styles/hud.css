@@ -1304,15 +1304,6 @@ body.hud-booting .hud-boot-scan {
      so they were reduced ~20% in lockstep to keep the relative weight on the smaller
      hex. */
   --marker-size: 4.8rem;
-  /* Whole-marker dim multiplier: markers ride a touch dimmer until the HUD powers
-     up, then snap to full. RAISED 0.6 → 0.85 so a marker is clearly visible on
-     EVERY scene even before the HUD arms (it only arms at the black hole / bottom
-     of the scroll, so yellow/nebula/red are reached while still dimmed — 0.6 made
-     them read as faint blobs there). Composed onto the VISIBLE opacity below so it
-     stacks cleanly with the data-visible fade and leaves the per-element opacities
-     (reticle/hexes) untouched. body.hud-active flips it to 1 (full brightness). */
-  --marker-hud-dim: 0.85;
-
   position: fixed;
   z-index: 20;
   display: block;
@@ -1331,10 +1322,14 @@ body.hud-booting .hud-boot-scan {
     opacity 0.14s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 .star-marker[data-visible='true'] {
-  /* Resting visible opacity = the HUD-dim multiplier (0.6 until the HUD is up,
-     1 once body.hud-active is set). Animates 0 → 0.6 on show, then 0.6 → 1 when
-     the HUD powers up, both via the transition below. */
-  opacity: var(--marker-hud-dim, 1);
+  /* ONE constant resting brightness. There used to be a whole-marker dim
+     multiplier here (0.85 until body.hud-active flipped it to 1), which meant the
+     same marker rendered at two different brightnesses depending on whether the
+     HUD had ever powered on — an invisible mode the visitor could only read as
+     inconsistency ("sometimes dimmed and other not"). Markers are now always
+     full-strength when visible; quietness at rest comes from the per-element
+     opacities (hidden reticle, dim label), not from a global dimmer. */
+  opacity: 1;
   pointer-events: auto;
   /* Fade IN (going to opacity:1 / showing): slower, eased. */
   transition:
@@ -1349,11 +1344,6 @@ body.hud-booting .hud-boot-scan {
    loader-gone this rule no longer matches and the [data-visible] rule above governs. */
 body:not(.loader-gone) .star-marker {
   pointer-events: none !important;
-}
-/* Once the HUD has powered up (boot FSM sets body.hud-active at the bottom of the
-   scroll), bring the markers back to full 100% brightness. */
-body.hud-active .star-marker {
-  --marker-hud-dim: 1;
 }
 /* BRIGHT STATES (orange nebula, yellow star, red giant): flip the whole OFF-WHITE
    outer reticle to near-black so it reads against the bright surface. All three
@@ -1472,17 +1462,13 @@ body.hud-active .star-marker {
   color: var(--marker-line);
   stroke-width: 1.45;
 }
-/* IDLE arms are HUD-aware (the resting tier differs by whether the HUD is armed):
-   - HUD OFF → quiet but never anonymous: FAINT crosshair ticks stay with the dotted
-     hex. (They used to vanish entirely here, which left the resting marker reading
-     as a bare dotted hexagon — the "markers look cheap" report. The ticks are the
-     crosshair identity; at 0.32 they read as instrument, not noise.)
-   - HUD ON  → the marker is "live": the same ticks a step brighter. */
+/* IDLE arms: one constant value regardless of HUD power state. (These are
+   currently invisible anyway — the simplification block hides the whole idle
+   reticle — but keeping a single idle look means no marker can ever render
+   differently for the same pointer state. The old HUD-aware split, 0.32 off /
+   0.5 on, was one of the "sometimes dimmed" inconsistencies.) */
 .star-marker[data-state='idle'] .star-marker-arms line {
   opacity: 0.32;
-}
-.star-marker[data-hud='on'][data-state='idle'] .star-marker-arms line {
-  opacity: 0.5;
 }
 /* hover: the arms brighten + the gap reads as segmented targeting ticks. */
 .star-marker[data-state='hover'] .star-marker-arms line {
