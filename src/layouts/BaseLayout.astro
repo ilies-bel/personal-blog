@@ -15,8 +15,8 @@ import { SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
 // overlay (home/about) and the reading-page rail. SiteNav owns the item set,
 // order, wording, and active-state logic; this layout only picks the surface.
 import SiteNav from '../components/SiteNav.astro';
-// The sitewide type system: Instrument Serif (display headlines + quote accent),
-// IBM Plex Sans (body/UI), IBM Plex Mono (labels, dates, tags).
+// The sitewide type system: Space Grotesk (display 700 / body 400), IBM Plex
+// Mono (labels, dates, tags), Instrument Serif italic (quote / signature accent).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
 // live in fonts.css; they're applied sitewide via the --font-* tokens in global.css.
 import '../styles/fonts.css';

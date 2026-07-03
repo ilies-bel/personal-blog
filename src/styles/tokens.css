@@ -81,12 +81,12 @@
   --radius-md: 8px;
   --radius-pill: 999px;
 
-  /* Type stacks (faces in fonts.css). Scientific-editorial: a sharp display
-     serif over a Plex instrument body — the display face is Instrument Serif
-     UPRIGHT (the italic remains the quote accent, same family), body/UI copy is
-     IBM Plex Sans so sans + mono read as one Plex instrument superfamily. */
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  /* Type stacks (faces in fonts.css). The site's OWN voice: Space Grotesk
+     carries display AND body (weight is the only difference), IBM Plex Mono is
+     the instrument readout, Instrument Serif ITALIC is the rare quote /
+     signature accent only — never a display face. */
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-sans);
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --font-quote: "Instrument Serif", Georgia, "Times New Roman", serif;
 
@@ -95,10 +95,8 @@
      surface now snaps to a rung here, so a reader can count the sizes on one hand.
      Fluid rungs use clamp(min, vw, max) and need no per-breakpoint override; the
      fixed rungs hold small UI text crisp. Nine rungs, large → small: */
-  --text-hero: clamp(3.25rem, 5.6vw, 4.6rem);    /* 52–74px — hero statement, page h1 (the
-                                                    condensed display serif runs ~10% narrower
-                                                    than the old sans, so the rung sits larger) */
-  --text-display: clamp(2rem, 3.8vw, 2.8rem);    /* 32–45px — secondary headlines (cards, rows) */
+  --text-hero: clamp(3rem, 5.2vw, 4rem);         /* 48–64px — hero statement, page h1 */
+  --text-display: clamp(1.9rem, 3.6vw, 2.6rem);  /* 30–42px — secondary headlines (cards, rows) */
   --text-title: clamp(1.3rem, 2vw, 1.5rem);      /* 21–24px — section titles, prose h2, leads, quotes */
   --text-subtitle: clamp(1.1rem, 1.5vw, 1.25rem);/* 18–20px — prose h3, sub-headings */
   --text-body: 1rem;                             /* 16px — body sentence (prose, card descriptions) */
@@ -107,11 +105,10 @@
   --text-label: 0.6875rem;                       /* 11px — uppercase chapter labels, kickers, dt */
   --text-micro: 0.625rem;                        /* 10px — non-essential micro labels (tags, readouts) */
 
-  /* Weights — IBM Plex Sans is a variable 400–700 file (real masters, nothing
-     synthesized). Instrument Serif ships ONE 400 master: every display-serif
-     surface must use --weight-display, never bold (a synthesized serif bold
-     would smear the sharp editorial cut). */
-  --weight-display: 400;
+  /* Weights — Space Grotesk ships 400 + 700 as real masters; 500 is the single
+     synthetic in-between we allow. --weight-display resolves to the real bold
+     master (surfaces authored against the serif's single 400 keep working). */
+  --weight-display: 700;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-bold: 700;

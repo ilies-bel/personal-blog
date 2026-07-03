@@ -82,11 +82,10 @@ a:focus-visible {
   border-radius: var(--radius-sm);
 }
 
-/* Headlines wear the display serif (Instrument Serif, ONE 400 master — never
-   bold it, a synthesized serif bold smears the editorial cut). It is condensed
-   and calm at 400, so no negative tracking. h3 stays on the Plex Sans body
-   family: the serif is display-only and gets spindly below ~20px. */
-h1, h2 { font-family: var(--font-display); font-weight: var(--weight-display); line-height: 1.1; letter-spacing: 0; }
+/* Headlines wear the display face — Space Grotesk at its REAL 700 master
+   (--weight-display), never synthesized. Large geometric sans tightens a touch;
+   h3 keeps the body family at bold with softer tracking. */
+h1, h2 { font-family: var(--font-display); font-weight: var(--weight-display); line-height: 1.1; letter-spacing: -0.02em; }
 h3 { line-height: 1.15; font-weight: var(--weight-bold); letter-spacing: -0.01em; }
 
 /* Full-bleed shell: the page spans edge-to-edge; only the side gutter holds
