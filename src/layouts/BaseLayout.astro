@@ -71,6 +71,26 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
         clean). Starts hidden via CSS (opacity 0), so a normal page load / navigation
         never sees it. */}
     <div class="dive-overlay" data-dive-overlay transition:persist aria-hidden="true"></div>
+    {/* Hyperspace warp overlay — a full-viewport canvas that renders the Star-Wars
+        "jump to lightspeed" streaks when navigating INTO the About page. Persisted
+        across the ClientRouter swap (transition:persist) exactly like the dive
+        overlay, so the SAME canvas keeps animating straight across the navigation:
+        the jump-out on the origin page and the drop-in on About are one continuous
+        render loop. Driven entirely by src/scripts/warpTransition.ts; starts blank
+        (nothing drawn) so a normal load never shows it. */}
+    <canvas class="warp-overlay" data-warp-overlay transition:persist aria-hidden="true"></canvas>
+    {/* Warp readout — the bottom-centre cockpit callout that narrates the jump
+        ("ENGAGING HYPERDRIVE" → "BEGINNING LIGHTSPEED TRAVEL" → "PUNCH IT"). It
+        reuses the HUD compass's mono type + bottom-centre slot (hud.css) so it
+        reads as the same instrument, and is persisted across the swap like the
+        canvas. Hidden until warpTransition.ts sets data-warp-readout-active. */}
+    <div class="warp-readout hud-compass" data-warp-readout transition:persist aria-hidden="true">
+      <p class="hud-compass-read">
+        <span class="hud-compass-prompt">[ </span>
+        <span class="hud-compass-label" data-warp-label>ENGAGING HYPERDRIVE</span>
+        <span class="hud-compass-prompt"> ]</span>
+      </p>
+    </div>
     {/* Sitewide custom cursor — covers both layout branches below. */}
     <CustomCursor />
     {
@@ -586,6 +606,10 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
       // Scene toggle — the circular corner control that parks the backdrop
       // scenes sitewide (body.backdrop-off), persisted across visits/swaps.
       import '../scripts/sceneToggle';
+      // Warp transition — the hyperspace-streak jump into the About page. One
+      // capture-phase click listener claims About links and drives the persisted
+      // .warp-overlay canvas across the swap (jump-out → nav → decelerate-in).
+      import '../scripts/warpTransition';
     </script>
 
     <script>
@@ -593,15 +617,22 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
         if (window.self !== window.top) return;
         event.newDocument.documentElement.setAttribute('data-astro-nav', '');
         let dived = false;
+        let warped = false;
         try {
           dived = sessionStorage.getItem('bh:dive') === '1';
+          // The warp jump owns its own choreography (the hyperspace-streak canvas
+          // in warpTransition.ts covers the swap), so like a dive it must SKIP the
+          // native view-transition — otherwise a snapshot cross-fade would double
+          // up under the streaks. The flag is only READ here; warpTransition's
+          // page-load handler consumes (removes) it on arrival.
+          warped = sessionStorage.getItem('bh:warp') === '1';
         } catch (_) {
           /* private mode — treat as a normal nav */
         }
-        if (dived && event.viewTransition) {
+        if ((dived || warped) && event.viewTransition) {
           // Skipping rejects the native transition's `ready` promise (AbortError
           // "Transition was skipped") and nothing else awaits it — swallow it so
-          // every dive doesn't log an unhandled rejection.
+          // every dive/warp doesn't log an unhandled rejection.
           event.viewTransition.ready.catch(() => {});
           event.viewTransition.skipTransition();
         }

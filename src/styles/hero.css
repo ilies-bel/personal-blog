@@ -994,3 +994,131 @@ body.scene-ready.at-opening .bh-focus-dot {
     filter: none;
   }
 }
+
+/* ===========================================================================
+   WARP OVERLAY — the hyperspace "jump to lightspeed" streak field for the
+   navigation INTO the About page (src/scripts/warpTransition.ts). A single
+   full-viewport <canvas> present on every page, persisted across ClientRouter
+   swaps (transition:persist) so the same canvas animates straight across the
+   navigation: the jump-out streaks on the origin page and the drop-in streaks
+   on About are one continuous render loop.
+
+   The canvas is otherwise BLANK (nothing is drawn until a jump starts), so a
+   normal load / navigation never sees it. It sits above the corner chrome and
+   the dive bloom so the streaks own the frame during the jump; pointer-events
+   are off so it never blocks the destination. A near-black backing appears only
+   while a jump/arrival is active (data-warp-active) so the streaks read against
+   deep space and the page swap is fully hidden behind them.
+   =========================================================================== */
+.warp-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Above the dive bloom (9999) so a warp is never tinted by a stale veil; still
+     below the custom cursor's own layer. */
+  z-index: 10000;
+  /* Blank until a jump paints into it. The backing colour is transparent at rest
+     and only fills in while active (the attribute the script toggles), so the
+     canvas is invisible on ordinary pages. */
+  background: transparent;
+  /* The near-black space backdrop fades in with the streaks and out on arrival —
+     a short transition here means the script only has to toggle the attribute. */
+  transition: background-color 0.18s linear;
+}
+
+/* While a jump-out or arrival is playing, back the streaks with deep space so the
+   field reads with contrast and the page swap underneath is hidden. */
+.warp-overlay[data-warp-active] {
+  background-color: #01010a;
+}
+/* On arrival the backing lifts a touch slower so it doesn't cut before the
+   decelerating streaks have faded back to points. */
+.warp-overlay[data-warp-active='arrive'] {
+  transition: background-color 0.6s ease-out;
+}
+
+/* Reduced motion: the script skips the whole animation and never sets
+   data-warp-active, so the overlay stays transparent — nothing to gate here. But
+   pin it explicitly transparent in case a stale attribute survives a swap. */
+@media (prefers-reduced-motion: reduce) {
+  .warp-overlay {
+    background: transparent !important;
+  }
+}
+
+/* WARP READOUT — the bottom-centre cockpit callout during the jump. It piggybacks
+   on .hud-compass (bottom-centre slot + mono type), but must sit ABOVE the warp
+   canvas + its deep-space backing, and it appears on EVERY page (the .hud-compass
+   opacity gates in hud.css only exist on the home scene), so its own opacity is
+   controlled here off the data attribute the script toggles. */
+/* Compound .hud-compass.warp-readout so the z-index + opacity beat the plain
+   .hud-compass rules in hud.css (imported after hero.css — a bare .warp-readout
+   would tie on specificity and lose the cascade, pinning z-index to 18 behind the
+   warp canvas). */
+.hud-compass.warp-readout {
+  /* Above the warp canvas (10000) so the callout reads over the streaks. */
+  z-index: 10001;
+  /* Hidden by default (overrides .hud-compass's opacity:1); the script fades it in
+     for the jump and out on arrival. A fast in, snappier out. */
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out-quint);
+}
+.hud-compass.warp-readout[data-warp-readout-active] {
+  opacity: 1;
+}
+/* The callout blazes bright + warm as it's the only text in a dark, accelerating
+   field — brighter than the resting compass so it cuts through the streaks, with a
+   soft glow + a quick flicker keyed to the same jump the HUD flickers on. */
+.warp-readout .hud-compass-label {
+  color: #f4f6ff;
+  letter-spacing: 0.22em;
+  text-shadow:
+    0 0 12px rgba(0, 0, 0, 0.9),
+    0 0 16px color-mix(in oklch, var(--highlight) 55%, transparent);
+}
+.warp-readout .hud-compass-prompt {
+  color: color-mix(in oklch, var(--highlight) 70%, #fff);
+}
+.warp-readout[data-warp-readout-active] .hud-compass-read {
+  animation: warp-readout-flicker 0.5s steps(2, end) infinite;
+}
+@keyframes warp-readout-flicker {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.72; }
+}
+
+/* ── HUD FLICKER during the jump ────────────────────────────────────────────
+   body.warp-active (set by warpTransition.ts for the jump only) makes the whole
+   sitewide HUD stutter like the ship's instruments straining at the jump. These
+   layers only EXIST + are lit on the home scene (body.hud-active), so on a reading
+   page there's simply nothing to flicker — the streaks + the readout carry it
+   there. Cheap opacity-only keyframes; pointer-events untouched. */
+body.warp-active .hud-frame,
+body.warp-active .hud-arc,
+body.warp-active .hud-system,
+body.warp-active .hud-compass:not(.warp-readout) {
+  animation: warp-hud-flicker 0.28s steps(2, end) infinite;
+}
+@keyframes warp-hud-flicker {
+  0%   { opacity: 1; }
+  22%  { opacity: 0.28; }
+  40%  { opacity: 0.92; }
+  55%  { opacity: 0.15; }
+  70%  { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
+/* Reduced motion: no readout flicker, no HUD stutter (the whole warp is skipped
+   by the script anyway, but pin it so a stale class can't animate). */
+@media (prefers-reduced-motion: reduce) {
+  .warp-readout,
+  .warp-readout[data-warp-readout-active] .hud-compass-read,
+  body.warp-active .hud-frame,
+  body.warp-active .hud-arc,
+  body.warp-active .hud-system,
+  body.warp-active .hud-compass:not(.warp-readout) {
+    animation: none;
+  }
+}
