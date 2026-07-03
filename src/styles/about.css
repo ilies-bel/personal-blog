@@ -3,7 +3,7 @@
    lots of dark negative space, the panel held off-centre like a viewfinder
    readout, persistent brand top-left. The top-right corner is the shared site
    nav in its static skin (SiteNav.astro + .overlay-blog[data-static] in
-   scene.css) with a trailing Close control. */
+   scene.css) — the same nav as everywhere, nothing bespoke. */
 
 .about-lead { font-size: var(--text-display); color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
 

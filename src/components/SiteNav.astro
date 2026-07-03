@@ -21,7 +21,7 @@
 //
 //   surface="scene" — the bare-page corner overlay (home, about). Single-line
 //     mono labels + target-lock hover ticks + socials, optionally followed by
-//     the HUD power button (home) or a Close control (about).
+//     the HUD power button (home) / the scene-toggle circle (about).
 //   surface="page"  — the reading-page rail: the SAME single-line labels and
 //     tick grammar in a sticky header row (full lock on the current section).
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
@@ -32,8 +32,6 @@ interface Props {
   surface: 'scene' | 'page';
   /** Scene surface: render the HUD power button (home only). */
   showPower?: boolean;
-  /** Scene surface: render a trailing Close control returning home (about). */
-  showClose?: boolean;
   /** Scene surface: labels rest at reading brightness — no boot gate (about). */
   isStatic?: boolean;
   /** Render the circular scene-toggle (parks the page's backdrop scene). On by
@@ -44,7 +42,6 @@ interface Props {
 const {
   surface,
   showPower = false,
-  showClose = false,
   isStatic = false,
   showSceneToggle = surface === 'page',
 } = Astro.props;
@@ -179,18 +176,6 @@ const X_PATH =
         </button>
       )}
 
-      {/* Close (about only): the overlay page's return-to-scene control, riding
-          the nav row as its trailing item so the top-right corner is ONE
-          instrument cluster, not two competing fixed elements. */}
-      {showClose && (
-        <a
-          class="overlay-blog-link overlay-blog-close"
-          href={home}
-          aria-label="Close and return to the home scene"
-        >
-          <span class="overlay-blog-label" data-decode>Close</span>
-        </a>
-      )}
     </nav>
   ) : (
     <nav class="subnav-rail" aria-label="Sections">

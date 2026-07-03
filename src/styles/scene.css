@@ -619,16 +619,6 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
   .scene-toggle-slash { transition: none; }
 }
 
-/* Close — the About overlay's return-to-scene control, riding the nav row as its
-   trailing item behind a hairline divider so the corner reads as ONE instrument
-   cluster. Gold on hover (the shared accent gesture), shared focus ring. */
-.overlay-blog-close {
-  margin-left: 0.35rem;
-  padding: 0.3rem 0 0.3rem 0.95rem;
-  border-left: 1px solid var(--line);
-}
-.overlay-blog-close:hover,
-.overlay-blog-close:focus-visible { color: var(--accent); }
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page

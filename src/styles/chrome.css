@@ -235,37 +235,6 @@
   gap: 1.6rem;
 }
 
-/* Station nav block — minimal-chrome pages (articles) move the header's station
-   rail down here: a full-width row of the same Body·Section pairs ABOVE the
-   copyright line, separated from it by breathing room rather than a second rule.
-   flex-basis 100% pushes the brand/social row onto its own line below. */
-.site-footer-stations {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.1rem 2.4rem;
-  margin-bottom: 1.6rem;
-}
-.site-footer-station {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.site-footer-station-label {
-  color: var(--fg-dim);
-  transition: color 0.16s ease;
-}
-.site-footer-station-section {
-  font-size: var(--text-micro);
-  color: var(--fg-faint);
-}
-.site-footer-station:hover .site-footer-station-label,
-.site-footer-station:focus-visible .site-footer-station-label {
-  color: var(--fg);
-}
-.site-footer-station[aria-current='page'] .site-footer-station-label {
-  color: var(--fg-overlay);
-}
 .site-footer a {
   color: var(--fg-chrome-dim);
   text-decoration: none;

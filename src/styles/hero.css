@@ -335,15 +335,19 @@
    light stays felt in the gaps. */
 body.writing-page .bh-backdrop,
 body.projects-page .bh-backdrop,
+body.archive-page .bh-backdrop,
 body.writing-page .bh-poster-slideshow,
-body.projects-page .bh-poster-slideshow {
+body.projects-page .bh-poster-slideshow,
+body.archive-page .bh-poster-slideshow {
   opacity: 0.34;
   filter: saturate(0.75) brightness(0.85);
 }
 body.writing-page .bh-backdrop::before,
 body.projects-page .bh-backdrop::before,
+body.archive-page .bh-backdrop::before,
 body.writing-page .bh-poster-slideshow::before,
-body.projects-page .bh-poster-slideshow::before {
+body.projects-page .bh-poster-slideshow::before,
+body.archive-page .bh-poster-slideshow::before {
   content: '';
   position: fixed;
   inset: 0;

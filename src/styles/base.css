@@ -66,7 +66,8 @@ body:not(.bare)::after {
 body.article-page::before,
 body.graveyard-page::before,
 body.writing-page::before,
-body.projects-page::before { display: none; }
+body.projects-page::before,
+body.archive-page::before { display: none; }
 
 ::selection {
   background: color-mix(in oklch, var(--accent) 48%, transparent);
