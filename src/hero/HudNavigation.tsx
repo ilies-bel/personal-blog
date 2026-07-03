@@ -657,10 +657,11 @@ export default function HudNavigation({
 
   // INSTRUMENT FRAME — sitewide on the hero (the black-hole section mock was
   // approved). Four hairline corner ticks framing the viewport + a live readout
-  // bottom-left: the walker's STAGE, the star's AGE on the lifecycle clock
-  // (billions of years — falling as you scroll, since the story plays in
-  // reverse), and the nearest station. CSS shows it only while the HUD is armed
-  // (body.hud-active) and hides it on compact layouts.
+  // bottom-left: the star's AGE on the lifecycle clock (billions of years —
+  // falling as you scroll, since the story plays in reverse) and the nearest
+  // station. CSS shows it only while the HUD is armed (body.hud-active) and
+  // hides it on compact layouts. (`frameStage` still drives the station lookup
+  // and the age readout; it is no longer surfaced as a raw STAGE number.)
   const frameStage = legacyStageForProgressFromTable(progress);
   const frameStation = stationForStage(frameStage);
   const frameTime = formatLifecycleTime(lifecycleTimeGyr(frameStage));
@@ -724,7 +725,6 @@ export default function HudNavigation({
       <span className="hud-frame-tick" data-corner="bl" />
       <span className="hud-frame-tick" data-corner="br" />
       <span className="hud-frame-readout">
-        <span className="hud-frame-readout-stage">STAGE {frameStage.toFixed(2)}</span>
         <span className="hud-frame-readout-stage">{frameTime}</span>
         <span className="hud-frame-readout-station">{frameStation.label}</span>
       </span>

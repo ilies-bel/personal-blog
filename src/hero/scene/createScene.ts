@@ -629,6 +629,15 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let diveApexFired = false;
   let diveOnApex: (() => void) | null = null;
   let diveOnProgress: ((s: number) => void) | null = null;
+  // Which plunge shape this dive runs. The DEFAULT (false) is the straight
+  // fall-through: the camera dollies to DIVE_THROUGH_POS just past the origin — right
+  // for the black hole / nebula / dot, where flying THROUGH the object reads as
+  // falling down the throat. The YELLOW STAR is a small SOLID mesh at the origin, so a
+  // straight plunge flies the camera INSIDE the photosphere (an ugly clipped view from
+  // within the sun). For it we instead SWEEP AROUND the star: an orbital arc that
+  // curves aside at a safe radius and turns the OTHER way to begin orbiting rather than
+  // punching in. Set from opts.state === 'yellow' in beginDive().
+  let diveOrbit = false;
   // Scratch vectors created ONCE (the dive must not allocate on the hot path). The
   // FROM pose is snapshotted from the live camera at beginDive() so the plunge
   // starts seamlessly from wherever the scroll pose currently is.
@@ -642,6 +651,19 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const diveTargetWorld = new THREE.Vector3();
   // Scratch only for the unproject math in beginDive(); never read on the hot path.
   const diveAimScratch = new THREE.Vector3();
+  // ORBIT-DIVE state, snapshotted once in beginDive() when opts.state === 'yellow' so
+  // the hot path only reads (no per-frame trig setup, no allocation). The camera swings
+  // around the star on a circle in its own start plane: we keep the start RADIUS and the
+  // start ELEVATION (the up-component of the from-pose), and only advance the AZIMUTH.
+  //   • diveOrbitRadius  — |diveFromPos| at dive start (how far the camera already is).
+  //   • diveOrbitStartAngle — the from-pose's azimuth in the horizontal (XZ) plane.
+  //   • diveOrbitY — the from-pose's height, held flat so the sweep stays level.
+  // The sweep DIRECTION (diveOrbitDir) is chosen to turn AWAY from a straight approach
+  // (see beginDive) so it reads as veering off rather than diving in.
+  let diveOrbitRadius = 0;
+  let diveOrbitStartAngle = 0;
+  let diveOrbitY = 0;
+  let diveOrbitDir = 1;
   // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
   let diveStrength = 0;
   // Plunge timing. The apex (bloom peak / navigate point) lands at 82% of the run,
