@@ -32,6 +32,14 @@ export const HUD_FORCED_BODY_CLASS = 'hud-forced';
  *  goes on. Centralized here so the class string is never spelled inline — it is
  *  referenced from the inline FSM AND from hud.css / scene.css. */
 export const HUD_BOOTING_BODY_CLASS = 'hud-booting';
+/** Toggled on <body> for the duration of a cinematic dive (a marker plunge into a
+ *  star). Set by HeroIsland.beginDive the moment the dive is armed and cleared when
+ *  the island unmounts (the SPA navigation the dive triggers). While present, the HUD
+ *  chrome that would read as clutter mid-plunge is faded out — specifically the
+ *  bottom-left instrument readout (.hud-frame-readout), so the age/station text
+ *  disappears as the camera dives in. Centralized here so the string is never spelled
+ *  inline — referenced from HeroIsland AND hud.css. */
+export const DIVING_BODY_CLASS = 'bh-diving';
 /** Toggled on <body> once the hero has painted its FIRST real frame (the GPU
  *  cloud is actually on the canvas). Drives the instant intro loader's fade-out:
  *  the loader is full-opacity at load (pure SSR markup, zero JS), and adding this

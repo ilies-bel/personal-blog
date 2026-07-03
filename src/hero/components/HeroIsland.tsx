@@ -25,6 +25,7 @@ import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
   HUD_BOOTING_BODY_CLASS,
+  DIVING_BODY_CLASS,
   HUD_POWER_EVENT,
   type HudPowerEventDetail,
   HUD_DOT_SOLO_HOLD_MS,
@@ -521,7 +522,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // clean slate instead of inheriting a stale "unavailable" note. If WebGL is still
       // unavailable the next mount simply re-adds it. (SCENE_READY stays owned by the
       // loader script — we never strip it here.)
-      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, HUD_BOOTING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS);
+      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, HUD_BOOTING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
     };
   }, [backdrop, backdropStage, reduced]);
 
@@ -557,6 +558,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // doesn't get the resurface animation).
     const overlay = document.querySelector<HTMLElement>('[data-dive-overlay]');
     try { sessionStorage.setItem('bh:dive', '1'); } catch { /* private mode — skip */ }
+    // Flag the dive on <body> so the HUD chrome that would clutter the plunge fades out
+    // — specifically the bottom-left instrument readout (hud.css hides .hud-frame-readout
+    // while this class is present). Cleared on the island's unmount (the SPA nav the dive
+    // fires at apex), so it never lingers on the destination page.
+    document.body.classList.add(DIVING_BODY_CLASS);
     if (overlay) {
       // PER-STATE BLOOM TINT: the colour is owned by CSS — hero.css maps
       // [data-bloom-state="…"] to a per-state --bloom-* token (nebula→cool, yellow→gold,

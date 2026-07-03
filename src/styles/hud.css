@@ -2287,6 +2287,14 @@ body.hud-active .hud-frame {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fg-faint);
+  opacity: 1;
+  transition: opacity 0.35s var(--ease-out-quint);
+}
+/* Diving into a marker: the bottom-left readout would just clutter the plunge, so it
+   fades out for the duration of the dive (body.bh-diving, set by HeroIsland.beginDive).
+   The corner ticks stay — only the text goes. */
+body.bh-diving .hud-frame-readout {
+  opacity: 0;
 }
 .hud-frame-readout-stage {
   color: color-mix(in oklch, var(--highlight) 80%, var(--fg-faint));

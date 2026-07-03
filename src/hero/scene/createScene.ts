@@ -629,15 +629,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   let diveApexFired = false;
   let diveOnApex: (() => void) | null = null;
   let diveOnProgress: ((s: number) => void) | null = null;
-  // Which plunge shape this dive runs. The DEFAULT (false) is the straight
-  // fall-through: the camera dollies to DIVE_THROUGH_POS just past the origin — right
-  // for the black hole / nebula / dot, where flying THROUGH the object reads as
-  // falling down the throat. The YELLOW STAR is a small SOLID mesh at the origin, so a
-  // straight plunge flies the camera INSIDE the photosphere (an ugly clipped view from
-  // within the sun). For it we instead SWEEP AROUND the star: an orbital arc that
-  // curves aside at a safe radius and turns the OTHER way to begin orbiting rather than
-  // punching in. Set from opts.state === 'yellow' in beginDive().
-  let diveOrbit = false;
   // Scratch vectors created ONCE (the dive must not allocate on the hot path). The
   // FROM pose is snapshotted from the live camera at beginDive() so the plunge
   // starts seamlessly from wherever the scroll pose currently is.
@@ -651,19 +642,6 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const diveTargetWorld = new THREE.Vector3();
   // Scratch only for the unproject math in beginDive(); never read on the hot path.
   const diveAimScratch = new THREE.Vector3();
-  // ORBIT-DIVE state, snapshotted once in beginDive() when opts.state === 'yellow' so
-  // the hot path only reads (no per-frame trig setup, no allocation). The camera swings
-  // around the star on a circle in its own start plane: we keep the start RADIUS and the
-  // start ELEVATION (the up-component of the from-pose), and only advance the AZIMUTH.
-  //   • diveOrbitRadius  — |diveFromPos| at dive start (how far the camera already is).
-  //   • diveOrbitStartAngle — the from-pose's azimuth in the horizontal (XZ) plane.
-  //   • diveOrbitY — the from-pose's height, held flat so the sweep stays level.
-  // The sweep DIRECTION (diveOrbitDir) is chosen to turn AWAY from a straight approach
-  // (see beginDive) so it reads as veering off rather than diving in.
-  let diveOrbitRadius = 0;
-  let diveOrbitStartAngle = 0;
-  let diveOrbitY = 0;
-  let diveOrbitDir = 1;
   // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
   let diveStrength = 0;
   // Plunge timing. The apex (bloom peak / navigate point) lands at 82% of the run,
@@ -717,6 +695,20 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // "drawn-in" feel — a longer lens compresses depth as the core rushes up. Tasteful
   // (~9° narrowing), not a fisheye. Reduced motion never touches FOV (no geometric dive).
   const DIVE_FOV_MIN = 21;
+  // The plunge is the original straight fall-through, but the approach ARCS sideways so
+  // it reads as a small orbital swing rather than a dead-straight punch-in. The camera's
+  // start pose is rotated a few degrees AROUND the world origin (about the up axis) at
+  // the start of the run, decaying to zero as it reaches the core (the arc weight is
+  // 1 - k) — so early on the camera is offset to one side and swings back onto the throat
+  // as it falls. The camera starts on the RIGHT side of the throat (world -X, which is
+  // screen-right for the +Z dive camera): the STAR ENTERS FROM THE RIGHT and the camera
+  // swings it back to centre — the approach curves in from the right. Negative angle
+  // (three.js rotates about +Y right-hand / CCW-from-above, so a negative angle puts the
+  // camera at world -X). Flip the SIGN to curve in from the left instead.
+  const DIVE_ORBIT_DEG = -14;
+  // The world up-axis the dive's orbital arc rotates the camera around. Constant vector,
+  // never mutated (applyAxisAngle reads it), so it is safe to share across frames.
+  const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
   // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
   // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
@@ -1516,6 +1508,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         // DIVE_THROUGH_POS (just past the origin) so the fall depth/feel is unchanged.
         const k = easeOut(raw);
         camera.position.lerpVectors(diveFromPos, DIVE_THROUGH_POS, k);
+        // ORBITAL ARC: swing the approach in from the side instead of a dead-straight
+        // punch. The camera position is rotated around the world-origin up-axis by an
+        // angle that is FULL at the start of the run and decays to zero as it reaches the
+        // core (1 - k), so the camera starts offset to one side and orbits back onto the
+        // throat as it falls. With DIVE_ORBIT_DEG negative the camera starts on the RIGHT:
+        // the star enters from the right and swings back to centre as the dive completes.
+        camera.position.applyAxisAngle(WORLD_UP, (DIVE_ORBIT_DEG * Math.PI) / 180 * (1 - k));
         frameLookTarget.lerpVectors(diveFromTarget, diveTargetWorld, k);
         camera.lookAt(frameLookTarget);
         // FOV narrows on the SAME front-loaded curve → the walls rush past early, a
