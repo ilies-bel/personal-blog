@@ -101,7 +101,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   }
   renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // Boot clear is plain black; from the first applyLook on, every frame clears to
+  // the scene's own near-black ROOM TINT (look.roomTint — see lifecycle.ts).
   renderer.setClearColor(0x000000, 1);
+  const roomTintColor = new THREE.Color();
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
@@ -930,6 +933,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     gradePass.uniforms.uSat.value = look.gradeSat;
     gradePass.uniforms.uToneComp.value = look.toneComp; // tone-map compression (low for red giant)
     gradePass.uniforms.uGrain.value = look.grain; // per-state film grain (0 in the nebula)
+    // Per-scene room tint: the frame clears to the scene's own near-black hue
+    // (lifecycle's roomTint ramp) instead of one shared pure black, so each
+    // chapter's void carries a quiet colour identity. Rides through the grade +
+    // vignette + grain like any rendered pixel.
+    renderer.setClearColor(
+      roomTintColor.setRGB(look.roomTint[0], look.roomTint[1], look.roomTint[2]),
+      1,
+    );
   };
 
   function frame(): void {

@@ -132,6 +132,11 @@ arcades hugging the limb. This is the **only** state drawn by the dedicated
     the floor).
   So to inspect the settled mesh star, pin `window.__bhMorph = 2.90` — at 2.7
   you are still looking at the point cloud's gold ball.
+- **Scroll hold:** the yellow idle segment (sceneTable.ts) parks at **stage
+  2.915** — mid mesh band, deliberately clear of both the 2.86–2.88 swap
+  dissolve and the 2.95–3.0 collapse-floor crossfade. (It used to park at
+  exactly 2.88, ON the dissolve edge, which made the held star flicker between
+  the washed cloud ball and the crisp mesh.)
 
 > Note: the point cloud *can also* render a yellow sun (`vSunRed = 0`,
 > `sunRadFac = 0.92`, more flares via `atmoThresh = 0.91`) — that path is the

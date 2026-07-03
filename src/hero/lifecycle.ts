@@ -242,6 +242,52 @@ export interface StarState {
    *  SMALLER (not just farther). Drives uBlackHoleScale; the shader gates it to the
    *  black-hole state so the red giant / nebula / dot / sim seed are untouched. */
   blackHoleScale: number;
+
+  /** the room's clear colour for THIS frame — a per-scene near-black hue identity
+   *  (see ROOM_TINT_STOPS). applyLook writes it via renderer.setClearColor. */
+  roomTint: readonly [number, number, number];
+}
+
+// --- PER-SCENE ROOM TINT (the renderer clear colour) -------------------------
+// The room behind every scene used to be pure black (setClearColor 0x000000), so
+// all five chapters shared one identical void. Each scene now clears to its own
+// NEAR-BLACK hue — a quiet colour identity per frame: cold indigo around the
+// black hole, ember around the giant, warm amber around the settled sun,
+// blue-teal in the nebula, deep night blue behind the dot. The values are
+// LINEAR pre-grade: the clear colour rides through the grade pass (tone-map,
+// warmth/olive, vignette, grain) like everything else, so corners still fall
+// toward black and the grain dithers any banding. Kept faint on purpose
+// (~2% luminance): a room tone, not a colour field.
+const ROOM_TINT_STOPS: readonly (readonly [number, number, number, number])[] = [
+  // [stage, r, g, b] — piecewise-linear in stage, clamped at both ends.
+  //
+  // MAGNITUDE: these are LINEAR framebuffer values and the composer's final pass
+  // converts linear → sRGB, which LIFTS the deep end hard (linear 0.003 ≈ sRGB
+  // 0.055 ≈ 14/255). A first draft authored these ~8× higher as if they were
+  // display values and the "near black" room came out milk-chocolate. Keep the
+  // strongest channel ≤ ~0.0035 so the room stays a whisper (~10–15/255).
+  [0.0, 0.0012, 0.0014, 0.0032], // BLACK HOLE — cold indigo void
+  [1.4, 0.0014, 0.0011, 0.0022], // collapse in-rush — violet between hole and giant
+  [2.05, 0.003, 0.0011, 0.0007], // RED GIANT — ember room
+  [2.915, 0.0028, 0.0018, 0.0008], // YELLOW STAR — warm amber study
+  [3.42, 0.0009, 0.0014, 0.0026], // NEBULA — blue-teal gas room
+  [4.7, 0.0006, 0.0009, 0.002], // PALE BLUE DOT — deep night blue
+];
+
+/** Pure: the piecewise-linear ROOM_TINT_STOPS ramp sampled at `stage`. */
+export function roomTintForStage(stage: number): readonly [number, number, number] {
+  const stops = ROOM_TINT_STOPS;
+  if (stage <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
+  for (let i = 1; i < stops.length; i += 1) {
+    if (stage <= stops[i][0]) {
+      const [s0, r0, g0, b0] = stops[i - 1];
+      const [s1, r1, g1, b1] = stops[i];
+      const t = (stage - s0) / (s1 - s0);
+      return [r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t];
+    }
+  }
+  const last = stops[stops.length - 1];
+  return [last[1], last[2], last[3]];
 }
 
 /**
@@ -755,5 +801,6 @@ export function lifecycle(input: LifecycleInput): StarState {
     diskSat,
     streak,
     blackHoleScale,
+    roomTint: roomTintForStage(stage),
   };
 }

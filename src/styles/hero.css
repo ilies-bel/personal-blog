@@ -748,6 +748,19 @@ body.scene-ready.at-opening .bh-focus-dot {
       rgba(0, 0, 0, 0.28) 42%,
       rgba(0, 0, 0, 0.10) 68%,
       transparent 100%);
+  /* The paint gradient above is BIGGER than the box (120%/130%), so the box edges
+     used to cut it mid-value — invisible on the old pure-black room, but a readable
+     dark RECTANGLE once the per-scene room tints lit the background. Feather every
+     edge to zero with an intersected two-axis mask so the pool can never show a
+     straight edge, whatever the paint does. */
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  mask-composite: intersect;
 }
 
 /* Big line: one line per beat, always shown at full bone (no direction swap).

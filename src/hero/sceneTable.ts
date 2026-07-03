@@ -225,7 +225,7 @@ export const SEGMENTS: readonly Segment[] = [
     easing: 'easeInOutSine',
     phase: 'transition',
   },
-  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.88). Weight is the
+  // 4 — YELLOW ignition: finish into the settled gold (3.02 -> 2.915). Weight is the
   // documented-grid 0.07 (an earlier art-direction draft shipped 0.08, which pushed the
   // prefix-sum to 1.01 and let the terminal band spill past p=1.0; 0.07 lands STARTS on
   // exactly 1.0 — see the table header).
@@ -233,25 +233,35 @@ export const SEGMENTS: readonly Segment[] = [
     sceneId: 'yellow',
     weight: 0.07,
     stageStart: 3.02,
-    stageEnd: 2.88,
+    stageEnd: 2.915,
     easing: 'easeOutCubic',
     phase: 'transition',
   },
-  // 5 — YELLOW hold: stay at the settled gold (flat 2.88). Weight TRIMMED 0.07 -> 0.03
+  // 5 — YELLOW hold: stay at the settled gold (flat 2.915). Weight TRIMMED 0.07 -> 0.03
   // (3rd iteration): this is a flat IDLE pause — shrinking its scroll duration frees 0.04
-  // for the widened nebula collapse (3b) WITHOUT changing the hold's LOOK (same stage 2.88,
+  // for the widened nebula collapse (3b) WITHOUT changing the hold's LOOK (same stage,
   // same settledWindow). It still holds long enough to read the yellow beat; the dwell makes
   // it feel longer than 0.03 of scroll alone.
+  //
+  // STAGE 2.915, NOT 2.88: the hold used to park at exactly SWAP_STAGE (2.88) — the top
+  // edge of the tight cloud↔mesh cross-dissolve ([2.86, 2.88], see bodyOwnership) AND the
+  // cloud side of transitions.ts's inclusive `stage <= SWAP_STAGE`. Parked there, the
+  // settled sun rendered mid-dissolve, and ease dither around the hold flipped it between
+  // the washed gold particle ball and the crisp textured mesh — the "yellow star light
+  // variations" report. 2.915 parks it in the middle of the pure-MESH band (2.88–2.95),
+  // clear of both the swap dissolve below and the collapse-floor crossfade above (2.95–3.0),
+  // so the held star is ALWAYS the one crisp mesh look.
   {
     sceneId: 'yellow',
     weight: 0.03,
-    stageStart: 2.88,
-    stageEnd: 2.88,
+    stageStart: 2.915,
+    stageEnd: 2.915,
     easing: 'linear',
     phase: 'idle',
-    settledWindow: [2.875, 2.9],
+    settledWindow: [2.905, 2.925],
   },
-  // 6 — RED grow: the giant grows, one continuous move (2.88 -> 2.05). WIDENED
+  // 6 — RED grow: the giant grows, one continuous move (2.915 -> 2.05, crossing the
+  // 2.86–2.88 cloud↔mesh dissolve mid-motion where it is masked by the travel). WIDENED
   // (0.07 -> 0.13) so the red-giant band owns raw 23-43%: this is the "reveal the
   // full mass" + "limb orbit/drift along the surface" stretch (ITEM 1's first two
   // beats), giving the camera room to arc around the body instead of snapping to the
@@ -259,7 +269,7 @@ export const SEGMENTS: readonly Segment[] = [
   {
     sceneId: 'red',
     weight: 0.13,
-    stageStart: 2.88,
+    stageStart: 2.915,
     stageEnd: 2.05,
     easing: 'easeInOutCubic',
     phase: 'transition',
@@ -669,17 +679,14 @@ export const SCENES: readonly LifecycleScene[] = [
       // In LIFECYCLE space it is the first beat (these bands are lifecycleProgress
       // values), but under the active reverse direction it sits at the PHYSICAL
       // BOTTOM of the page. Copy is readable across the dot's hold (0.00 -> 0.12 =
-      // raw 88-100%, the content-unlock band), then fades as the dot is left behind
-      // into the nebula grow.
+      // raw 88-100%, the content-unlock band), then hard-cuts as the dot is left
+      // behind into the nebula grow — the SAME band() regime as every other beat.
       //
-      // "FADE COPY OUT AT THE VERY END": unlike the other beats (which hard-cut via
-      // band()), the dot beat is rendered with a true IN/OUT fade (ManifestoOverlay
-      // honours these four fields for the 'pale blue dot' state). The IN ramp is
-      // WIDENED to 0.0 -> 0.05 so the line is near-ZERO at the very bottom frame
-      // (lifecycleProgress ≈ 0.0) — the lone speck is alone in black — and rises to
-      // readable only as the visitor scrolls UP slightly off the bottom. inEnd is the
-      // tunable lever for how far up the line takes to bloom in (raise it to keep the
-      // copy faint for longer; lower toward inStart to bring it back fast).
+      // HISTORY: this beat used to carry a special fade-to-nothing at the very
+      // bottom ("the lone speck alone in black"), but readers experienced the
+      // finale statement DISAPPEARING when they scrolled all the way down. The
+      // special regime is gone (ManifestoOverlay renders band(inStart, outEnd));
+      // inEnd/outStart are kept for the window's shape/ordering invariants only.
       at: 0.05,
       text: { inStart: 0.0, inEnd: 0.05, outStart: 0.12, outEnd: 0.17 },
       state: 'pale blue dot',
@@ -749,7 +756,9 @@ export const SCENES: readonly LifecycleScene[] = [
       motion: 'flicker',
       label: 'YELLOW STAR',
       destination: 'Projects',
-      stage: 2.9,
+      // 2.915 = the settled-hold stage (segment 5) so a nav jump lands exactly ON
+      // the idle hold (inside its settledWindow), not just short of it.
+      stage: 2.915,
       href: 'projects',
     },
     markers: [

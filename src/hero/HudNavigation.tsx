@@ -12,7 +12,6 @@ import type { MarkerFrame } from './scene/types';
 import { hudIdForStage, lifecycleProgress, progressForLegacyStage } from './timeline';
 import {
   SCROLL_HINT_DISMISS_AT,
-  SCENE_READY_EVENT,
   SCENE_READY_BODY_CLASS,
 } from './lib/constants';
 
@@ -390,31 +389,30 @@ export default function HudNavigation({
     return () => document.removeEventListener('mousemove', onMove);
   }, []);
 
-  // LOADING → READY: advance off the scene's first composited frame. We listen for the
-  // SAME scene:ready event the loader script keys its fade to (so the boot readout swaps
-  // to READY STATE in lockstep with the loader dissolving), and we also check the body
-  // class up front in case the event already fired before this effect attached. A short
-  // interval backstop catches the narrow race where scene:ready fires in the gap BETWEEN
-  // that up-front check and addEventListener (the `once` listener would miss it, leaving
-  // the readout stuck on LOADING): it polls the reliable body.scene-ready class so the text
-  // always advances even on a missed event. Only meaningful while still 'loading'; later
-  // phases ignore it.
+  // LOADING → READY: advance off the loader's REVEAL, i.e. the body.scene-ready CLASS —
+  // NOT the raw scene:ready event. The two are different instants: the event fires on the
+  // scene's first composited frame, but the loader script adds the class at
+  // max(scene:ready, LOADER_MIN_MS) — on a fast first load the class lands seconds AFTER
+  // the event. The glide effect below is armed by this phase change, and the loader's
+  // dot+name fade is keyed to the CLASS (scene.css), so advancing on the raw event sent
+  // the readout gliding straight THROUGH the still-visible wordmark (its dark scrim
+  // blacking the name out mid-travel). Polling the class keeps the whole dissolve — mark
+  // fade → glide → background fade — sequenced against the loader's actual reveal. The
+  // ≤80ms poll granularity is invisible during a loading screen. Only meaningful while
+  // still 'loading'; later phases ignore it.
   useEffect(() => {
     if (bootPhase !== 'loading') return;
     if (sceneIsReady()) {
       setBootPhase('ready');
       return;
     }
-    const advance = (): void => setBootPhase((prev) => (prev === 'loading' ? 'ready' : prev));
-    window.addEventListener(SCENE_READY_EVENT, advance, { once: true });
     const poll = window.setInterval(() => {
       if (sceneIsReady()) {
-        advance();
+        setBootPhase((prev) => (prev === 'loading' ? 'ready' : prev));
         window.clearInterval(poll);
       }
-    }, 100);
+    }, 80);
     return () => {
-      window.removeEventListener(SCENE_READY_EVENT, advance);
       window.clearInterval(poll);
     };
   }, [bootPhase]);

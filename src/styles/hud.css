@@ -632,6 +632,14 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-copy {
       rgba(0, 0, 0, 0.08) 62%,
       transparent 86%);
 }
+/* No scrim while the readout lives in the LOADER (the boot readout, lifted above
+   the dot + wordmark or gliding down): the pool is black but the loader cover is
+   the warmer --bg graphite, so over the loader it stamped a dark ELLIPSE behind
+   the readout. There is nothing bright behind the boot readout to protect against
+   — the pool only earns its keep once the live scene renders under the compass. */
+.hud-compass--boot::before {
+  display: none;
+}
 /* The compass is the page's single bottom-centre scroll-state instrument, visible
    throughout the cinematic scroll. Hidden ONLY until the scene's first frame paints
    (body.scene-ready, added by index.astro's loader script) so it never flashes over
