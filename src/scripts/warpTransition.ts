@@ -72,6 +72,11 @@ interface WarpStar {
   // sparks among the white), so the field isn't a flat white.
   hue: number;
   bright: number;
+  // DENSITY GATE (0..1): the star only lights up once the jump's density ramp
+  // passes this threshold. Low-threshold stars appear first (a sparse field at
+  // sub-light), high-threshold ones fill in as we accelerate — so the field starts
+  // nearly EMPTY and grows in count, rather than showing all 460 from frame one.
+  visThreshold: number;
 }
 
 interface WarpState {
@@ -127,6 +132,10 @@ function buildStars(): WarpStar[] {
       // Mostly white (hue ~0 handled specially), with a minority of cool sparks.
       hue: rand(i, 3),
       bright: 0.45 + rand(i, 4) * 0.55,
+      // Skewed toward 1 (via the cube) so only a SMALL fraction of stars have a low
+      // threshold — the field opens with a sparse handful and the bulk fill in only
+      // as the density ramp climbs near full speed.
+      visThreshold: Math.pow(rand(i, 6), 0.6),
     });
   }
   return stars;
@@ -238,30 +247,43 @@ function drawFrame(
   // mid-velocity star crosses the tunnel in a beat at full speed; dt keeps it stable
   // across framerates. Clamp dt so a stall (tab blur, GC) can't teleport every star.
   const advance = speed * 1.15 * Math.min(dt, 0.05);
+  // DENSITY ramp: how much of the field is lit this frame. Starts tiny (a sparse
+  // handful of sparks at sub-light — the `0.06` seed) and climbs a touch AHEAD of
+  // raw speed (pow < 1) so stars keep FILLING IN as we accelerate, reaching the full
+  // 460 only at lightspeed. A star is drawn iff its visThreshold ≤ density; a narrow
+  // band just below the threshold FADES it in so new stars don't pop.
+  const density = Math.min(1, 0.06 + Math.pow(speed, 0.7) * 1.05);
+  // LENGTH ramp: the global stretch factor for trails. Near zero at the start (stars
+  // read as POINTS / tiny dashes) and grows super-linearly with speed so the dashes
+  // only lengthen into streaks as we accelerate — no long dashes from frame one.
+  const stretch = Math.pow(speed, 1.35);
 
   for (const star of stars) {
     // ADVANCE this star through the tunnel by its own velocity, and WRAP when it
     // exits past the camera (depth ≥ 1) back to just past the centre — the wrap is
-    // what makes the stream continuous + the speeds independent. A tiny per-star
-    // phase offset on respawn (via angle) avoids visible banding.
+    // what makes the stream continuous + the speeds independent.
     star.depth += advance * star.vel;
     if (star.depth >= 1) {
       star.depth -= 1; // recycle: reappears near the centre and races out again
     }
+
+    // DENSITY GATE: skip stars the ramp hasn't reached yet, and fade in the ones
+    // right at the frontier so the field grows smoothly instead of popping stars on.
+    if (star.visThreshold > density) continue;
+    const densFade = Math.min(1, (density - star.visThreshold) / 0.12);
 
     // Perspective: radius grows with the SQUARE of depth so a star accelerates as it
     // nears the camera (creeps at the centre, screams at the edge) — a real dolly
     // through a starfield, not a linear slide.
     const d = star.depth;
     const rOuter = (0.02 + d * d * 1.25) * half;
-    // The TRAIL length is the distance the star moved this frame (its instantaneous
-    // speed), so a fast star draws a long streak and a slow one a near-point. This is
-    // the core of "so fast we only see the trail": length == how fast it's going NOW.
+    // The TRAIL length is (instantaneous per-frame travel) × the global stretch —
+    // so at low speed even a fast-moving star is a near-POINT (stretch → 0) and only
+    // at speed does it draw a real streak. The tiny 0.004 floor keeps a visible spark
+    // rather than a zero-length line. This is what makes the field open as DOTS and
+    // lengthen into dashes/streaks as we accelerate.
     const instSpeed = advance * star.vel;
-    // Convert that depth-rate into a pixel length via the same perspective slope
-    // (d·2·1.25) so the trail scales with where the star is, plus a floor so a
-    // just-respawned centre star still shows a spark.
-    const len = (0.01 + instSpeed * (0.3 + d * 2.4)) * half;
+    const len = (0.004 + instSpeed * (0.3 + d * 2.4) * (0.15 + stretch)) * half;
     const rInner = Math.max(0, rOuter - len);
 
     const dx = Math.cos(star.angle);
@@ -276,7 +298,7 @@ function drawFrame(
     // very edge so a star dims out gracefully instead of popping on wrap.
     let stroke: string;
     const edgeFade = d > 0.92 ? (1 - d) / 0.08 : 1;
-    const a = star.bright * alpha * glow * (0.35 + d * 0.65) * edgeFade;
+    const a = star.bright * alpha * glow * (0.35 + d * 0.65) * edgeFade * densFade;
     if (star.hue < 0.68) {
       stroke = `rgba(238, 240, 255, ${a})`;
     } else if (star.hue < 0.86) {
