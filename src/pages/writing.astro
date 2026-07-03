@@ -1,178 +1,169 @@
 ---
-import { getCollection, type CollectionEntry } from 'astro:content';
+// WRITING — written as a PROSE MENU rather than a post list: a short spoken
+// paragraph where the linked phrase carries each destination. In the author's
+// own voice, four lines:
+//   · my writings        → the Medium article (external — opens in a new tab)
+//   · my failures        → the graveyard (dead projects, kept and owned)
+//   · why this blog       → the Inspiration essay (why the site begins at the end)
+//   · how I did it        → the Behind the Build case study
+// The Inspiration href comes from the hero's own black-hole nav row (the same
+// source of truth BaseLayout uses) so a slug change can't strand the link.
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
-import PageHud from '../components/PageHud.astro';
+import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 import { SITE_TITLE } from '../consts';
-import { stationForStage, type JourneyStation } from '../hero/sceneTable';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
-const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
-);
+// The inspiration essay's path comes from the hero's own black-hole nav row —
+// the same source of truth BaseLayout uses — so a slug change can't strand this link.
+const inspirationHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? 'writing';
 
-const [latest, ...archive] = posts;
-const fmt = (d: Date) =>
-  d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-const allTags = Array.from(new Set(posts.flatMap((post) => post.data.tags))).sort();
-
-// Each post's backdrop rides the stellar lifecycle: `scene.journey` posts scrub the
-// live engine across a [from, to] stage window; the rest read against the frozen
-// black hole (or the corridor inside it). The list surfaces that as a per-row
-// STATION readout — glyph + name of the journey endpoints — so the index speaks the
-// same celestial system as the hero and the article backdrops (the liant).
-interface PostJourney {
-  from: JourneyStation;
-  to: JourneyStation | null; // null = a held room, not a journey
-}
-const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
-  const journey = post.data.scene?.journey;
-  if (journey) return { from: stationForStage(journey[0]), to: stationForStage(journey[1]) };
-  return { from: stationForStage(0), to: null }; // frozen black-hole room (or the corridor inside it)
-};
+// The prose menu, line by line. `lead` is the spoken opener; the linked `phrase`
+// carries the destination; `tail` finishes the thought. Reads as sentences, not
+// a table — but each line is still a single real <a> for keyboard + crawlers.
+// `external: true` marks an off-site link (opens in a new tab, rel-guarded).
+const lines = [
+  {
+    lead: 'Here are',
+    phrase: 'my writings',
+    href: 'https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb',
+    tail: ', and I will put my articles.',
+    ariaLabel: 'My writings — Memory leak: search and destroy (Medium)',
+    external: true,
+  },
+  {
+    lead: 'Here are',
+    phrase: 'my failures',
+    href: href('graveyard'),
+    tail: ', because we learn from them too.',
+    ariaLabel: 'My failures — the graveyard',
+  },
+  {
+    lead: 'This is',
+    phrase: 'why this blog',
+    href: href(inspirationHref),
+    tail: ' exists at all.',
+    ariaLabel: 'Why this blog exists',
+  },
+  {
+    lead: 'And this is',
+    phrase: 'how I did it',
+    href: href('behind-the-build'),
+    tail: '.',
+    ariaLabel: 'How I did it',
+  },
+];
 ---
 
 <BaseLayout
   title="Writing"
-  description={`Technical essays and notes by ${SITE_TITLE} on Astro, frontend systems, deployment, and software craft.`}
+  description={`Writing by ${SITE_TITLE}, told plainly: my writings, my failures, why this blog exists, and how I did it.`}
   type="website"
   bodyClass="writing-page"
 >
   {/* Static celestial backdrop — the signature scene frozen at the NEBULA frame
       (stage 3.5, Writing's own celestial body in the nav model), heavily dimmed
-      behind the list. client:only: the page reads fully without JS; the corner
+      behind the prose. client:only: the page reads fully without JS; the corner
       scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
   <BlackHole client:only="react" backdrop backdropStage={3.5} />
 
-  {/* Cockpit gauge — the same side instrument the scene-journey articles and
-      the graveyard fly with: scroll-progress rail + a readout naming the note
-      currently in view (spied via data-hud-title on the card + rows). */}
-  <PageHud
-    index="SECTION 02 / 04"
-    beat={`WRITING · ${posts.length} ${posts.length === 1 ? 'NOTE' : 'NOTES'}`}
-    spy="[data-hud-title]"
-  />
-
-  <section class="writing-hero" aria-labelledby="writing-title">
-    <div class="writing-hero-copy">
-      {/* Page designation row — kicker + mono status readout, so the page opens
-          like a labeled instrument screen (the graveyard's SPECIMEN grammar,
-          generalized). SECTION 02 = Writing's slot in the canonical nav order. */}
-      <p class="writing-kicker">
+  <section class="archive">
+    <header class="archive-head">
+      {/* Page designation row — same instrument grammar as Projects/About.
+          SECTION 02 = Writing's slot in the canonical nav order. */}
+      <p class="archive-kicker">
         <span>Writing</span>
-        <span class="writing-kicker-readout">
-          Section 02 · {posts.length} {posts.length === 1 ? 'note' : 'notes'}{latest && ` · newest ${fmt(latest.data.pubDate)}`}
-        </span>
+        <span class="archive-kicker-readout">Section 02 · {lines.length} entries</span>
       </p>
-      <h1 id="writing-title">Notes on software that keeps working.</h1>
-      <p>
-        Short technical essays on content sites, frontend systems, deployment, and
-        the small decisions that make software easier to own.
-      </p>
-    </div>
+      <h1>Everything, in plain words.</h1>
+    </header>
 
-    {/* The index card rides the hero's right column (it is page-header metadata,
-        not featured-card metadata) — this balances the hero band, whose right
-        half used to sit empty while the card crowded the featured section. */}
-    {latest && (
-      <aside class="writing-index-card" aria-label="Writing index">
-        <dl>
-          <div>
-            <dt>Published</dt>
-            <dd>{posts.length} notes</dd>
-          </div>
-          <div>
-            <dt>Topics</dt>
-            <dd>{allTags.slice(0, 5).join(' / ')}</dd>
-          </div>
-          <div>
-            <dt>Newest</dt>
-            <dd>{fmt(latest.data.pubDate)}</dd>
-          </div>
-        </dl>
-      </aside>
-    )}
-  </section>
-
-  {latest && (
-    <section class="writing-featured" aria-labelledby="latest-title">
-      <a class="writing-featured-card" href={href(`posts/${latest.id}/`)} data-hud-title={latest.data.title}>
-        <span class="writing-featured-label">Latest note</span>
-        {/* Shared-element morph: this headline carries the latest post's
-            transition:name, so clicking the card sends the title physically
-            travelling into the article h1 (and back on browser-back). The
-            latest post's ARCHIVE ROW below deliberately does NOT carry the
-            name — duplicate view-transition-names on one page abort the whole
-            transition, so the featured card owns the latest post's morph. */}
-        <h2 id="latest-title" transition:name={`post-title-${latest.id}`} data-decode>{latest.data.title}</h2>
-        <p>{latest.data.description}</p>
-        <span class="writing-featured-meta">
-          {fmt(latest.data.pubDate)}
-          {(() => {
-            const j = journeyForPost(latest);
-            return (
-              <span
-                class="writing-journey"
-                role="img"
-                aria-label={`Scene: ${j.to ? `${j.from.label} to ${j.to.label}` : j.from.label}`}
-              >
-                <span class="writing-journey-glyph" style={`--glyph: url('${href(j.from.glyphSrc)}')`} />
-                {j.to && <span class="writing-journey-arrow">→</span>}
-                {j.to && (
-                  <span class="writing-journey-glyph" style={`--glyph: url('${href(j.to.glyphSrc)}')`} />
-                )}
-                <span class="writing-journey-label">
-                  {j.to ? `${j.from.label} → ${j.to.label}` : j.from.label}
-                </span>
-              </span>
-            );
-          })()}
-        </span>
-      </a>
-    </section>
-  )}
-
-  <section class="writing-list" aria-label="All writing">
-    {(latest ? [latest, ...archive] : posts).map((post) => {
-      const j = journeyForPost(post);
-      return (
-      <a class="writing-row" href={href(`posts/${post.id}/`)} data-hud-title={post.data.title}>
-        <span class="writing-row-left">
-          <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
-          {/* The row's lifecycle STATION readout: which room of the stellar
-              lifecycle this note reads in (its scene.journey endpoints). */}
-          <span
-            class="writing-journey"
-            role="img"
-            aria-label={`Scene: ${j.to ? `${j.from.label} to ${j.to.label}` : j.from.label}`}
-          >
-            <span class="writing-journey-glyph" style={`--glyph: url('${href(j.from.glyphSrc)}')`} />
-            {j.to && <span class="writing-journey-arrow">→</span>}
-            {j.to && (
-              <span class="writing-journey-glyph" style={`--glyph: url('${href(j.to.glyphSrc)}')`} />
-            )}
-          </span>
-        </span>
-        <span class="writing-row-copy">
-          {/* Per-post shared-element name → the article h1 (posts/[...slug]).
-              The latest post's row stays unnamed: its morph belongs to the
-              featured card above (one name per page, or the transition aborts). */}
-          {post.id === latest?.id ? (
-            <span class="writing-row-title" data-decode>{post.data.title}</span>
-          ) : (
-            <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
-          )}
-          <span class="writing-row-description">{post.data.description}</span>
-          {post.data.tags.length > 0 && (
-            <span class="writing-tags" aria-label="Tags">
-              {post.data.tags.map((tag) => <span>{tag}</span>)}
-            </span>
-          )}
-        </span>
-      </a>
-      );
-    })}
+    {/* The prose menu: each line is a spoken sentence whose linked phrase is the
+        destination. The <a> wraps only the phrase, so the surrounding words stay
+        quiet copy and the target is exactly the clickable idea. data-decode gives
+        the phrase the site's scramble-on-hover; the whole block reads as a short
+        note, not a list. */}
+    <nav class="prose-menu" aria-label="Writing">
+      {lines.map((line) => (
+        <p class="prose-line">
+          {`${line.lead} `}
+          {/* No whitespace inside the <a>: the underline must hug the phrase, so
+              the trailing punctuation in `tail` sits flush against the link.
+              External links open in a new tab and are rel-guarded. */}
+          <a
+            class="prose-link"
+            href={line.href}
+            aria-label={line.ariaLabel}
+            target={line.external ? '_blank' : undefined}
+            rel={line.external ? 'noopener noreferrer' : undefined}
+          ><span data-decode>{line.phrase}</span></a>{line.tail}
+        </p>
+      ))}
+    </nav>
   </section>
 </BaseLayout>
+
+<style>
+  .archive {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 4.5rem 0 3rem;
+  }
+  .archive-kicker {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.15rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--fg-chrome-dim);
+    margin: 0 0 1rem;
+  }
+  .archive-kicker-readout {
+    color: var(--fg-chrome-faint);
+  }
+  .archive-head h1 {
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: var(--text-display);
+    margin: 0 0 2.75rem;
+  }
+
+  /* The prose menu — large, quiet spoken lines. The unlinked words sit at the
+     dim reading colour so the linked phrase (full-strength fg) reads as the one
+     thing to click on each line. */
+  .prose-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+  .prose-line {
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: clamp(1.5rem, 3.4vw, 2.3rem);
+    line-height: 1.28;
+    color: var(--fg-dim);
+    margin: 0;
+    text-wrap: balance;
+  }
+  .prose-link {
+    color: var(--fg);
+    text-decoration: none;
+    /* Understated underline that brightens to the accent on hover — the linked
+       phrase already carries the decode scramble, so the rule stays subtle. */
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+    text-decoration-color: var(--hud-line);
+    transition: color 0.2s ease, text-decoration-color 0.2s ease;
+  }
+  .prose-link:hover,
+  .prose-link:focus-visible {
+    color: var(--accent-strong);
+    text-decoration-color: currentColor;
+  }
+</style>
