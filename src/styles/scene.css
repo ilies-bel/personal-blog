@@ -544,12 +544,32 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
 /* Per-page overlay visibility. On the home the manifesto identity (.bh-identity,
    hero.css) replaces the small wordmark, so the wordmark is hidden and the
    micro-nav is shown. About runs the scene in backdrop mode (no .bh-identity), so
-   the wordmark owns the top-left; it shares the SAME corner nav as the home scene
-   (one nav system) — only the power button is dropped there (it toggles the home
-   HUD morph, which has no meaning over the About backdrop). */
+   the wordmark owns the top-left; the nav stays (same instrument as home) in its
+   STATIC skin — see .overlay-blog[data-static] below. (No power button renders
+   there at all: SiteNav's showPower is home-only.) */
 body.bare .overlay-brand { display: none; }
 body.bare.about-page .overlay-brand { display: inline-flex; }
-body.bare.about-page .overlay-blog-power { display: none; }
+
+/* STATIC nav skin (About): there is no scene boot to gate the labels, so they
+   rest at reading brightness instead of the home's dimmed idle, and there is no
+   at-opening hold. The current section keeps its target-lock frame lit (the same
+   "locked" statement the reading rail makes), so About announces itself. */
+.overlay-blog[data-static] .overlay-blog-link { color: var(--fg-dim); }
+.overlay-blog[data-static] .overlay-blog-link:hover,
+.overlay-blog[data-static] .overlay-blog-link:focus-visible { color: var(--fg); }
+.overlay-blog[data-static] .overlay-blog-link[aria-current='page'] { color: var(--fg-overlay); }
+.overlay-blog-section[aria-current='page'] .overlay-blog-lock { opacity: 1; }
+
+/* Close — the About overlay's return-to-scene control, riding the nav row as its
+   trailing item behind a hairline divider so the corner reads as ONE instrument
+   cluster. Gold on hover (the shared accent gesture), shared focus ring. */
+.overlay-blog-close {
+  margin-left: 0.35rem;
+  padding: 0.3rem 0 0.3rem 0.95rem;
+  border-left: 1px solid var(--line);
+}
+.overlay-blog-close:hover,
+.overlay-blog-close:focus-visible { color: var(--accent); }
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page

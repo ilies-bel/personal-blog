@@ -991,6 +991,7 @@ const SCENE_BY_ID: Record<HudTargetId, LifecycleScene> = SCENES.reduce(
   {} as Record<HudTargetId, LifecycleScene>,
 );
 
+
 /** The dwell STRENGTH (0..1) declared by a scene, or 0 when it has none. This is
  *  the single read of the `dwell` field — lifecycleMachine.resolve() folds it into
  *  the resolved position so createScene can damp its follow-ease. Pure. */

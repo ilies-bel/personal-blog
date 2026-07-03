@@ -10,12 +10,11 @@ import CustomCursor from '../components/CustomCursor.astro';
 // transition:persist (the dive overlay, the custom cursor) survive each swap.
 import { ClientRouter } from 'astro:transitions';
 import { SITE_LANG, SOCIALS, BRAND_NAME, BRAND_ROLE } from '../consts';
-// The hero's lifecycle nav rows (celestial body label + section destination + href),
-// in physical scroll order. The single source of truth for the rail; the reading-
-// page sub-nav projects it below so the two correspond and can never drift. Imported
-// from the PURE data layer (sceneTable.ts), not HudNavigation.tsx, so the Astro
-// frontmatter pulls no React into this layout.
-import { HUD_NAV_ITEMS } from '../hero/sceneTable';
+// THE site navigation — one canonical model (SITE_NAV_ITEMS in sceneTable.ts)
+// rendered by one component on both layout branches: the bare-page corner
+// overlay (home/about) and the reading-page rail. SiteNav owns the item set,
+// order, wording, and active-state logic; this layout only picks the surface.
+import SiteNav from '../components/SiteNav.astro';
 // The sitewide type system: Instrument Serif (display headlines + quote accent),
 // IBM Plex Sans (body/UI), IBM Plex Mono (labels, dates, tags).
 // Self-hosted woff2 + bundled by Vite — no render-blocking CDN request. The faces
@@ -35,98 +34,25 @@ interface Props {
   // Used by the home page, whose whole canvas is the scroll-scrubbed scene.
   bare?: boolean;
   // Optional extra class on <body>. Lets a bare page (e.g. About) opt into its
-  // own chrome variant — see body.bare.about-page in global.css, which shows the
-  // top-left wordmark and hides the home-only micro-nav so Close can own the
-  // top-right corner.
+  // own chrome variant — 'about-page' shows the top-left wordmark and switches
+  // the corner nav to its static skin (always lit, Close instead of the power
+  // button) — see isAboutOverlay below + body.bare.about-page in scene.css.
   bodyClass?: string;
-  // MINIMAL READING CHROME (article pages): the header keeps only the wordmark +
-  // social icons — no station rail — so a reading page is a quiet room of the same
-  // ship (the hero has no top bar either; the full-width station bar was the one
-  // conventional-navbar moment in the whole DA). The full station nav renders as a
-  // block in the footer instead, after the article's own "Next note" continuation.
-  minimalChrome?: boolean;
 }
 
 const props = Astro.props;
-const { bare = false, bodyClass, minimalChrome = false } = props;
+const { bare = false, bodyClass } = props;
 const bodyClasses = [bare ? 'bare' : null, bodyClass].filter(Boolean).join(' ') || undefined;
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 const year = new Date().getFullYear();
 
-// Mark the active nav item (the sub-page HUD nav locks the current section).
-// Compare the current path to each link's resolved href, trailing-slash
-// insensitive, so "/" and "/about" each light up their own section.
-const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
-const norm = (p: string) => p.replace(/\/+$/, '') || '/';
-const isActive = (p: string) => norm(href(p)) === path;
-const writingRoot = norm(href('writing'));
-const postsRoot = norm(href('posts'));
-// The black hole links to a POST (its own essay, "Inspiration"), so it lives under
-// the /posts/ subtree that the Writing/nebula row otherwise claims. Resolve that one
-// post's path from the same source of truth (the hero's end/black-hole nav row) and
-// EXCLUDE it from the Writing lock, so the inspiration post locks the BLACK HOLE row
-// only — every page lights exactly one section.
-const blackHoleHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? '';
-const blackHolePath = blackHoleHref ? norm(href(blackHoleHref)) : '';
-const isWritingActive =
-  path === writingRoot ||
-  (path.startsWith(`${postsRoot}/`) && path !== blackHolePath);
+// The About overlay is the one bare page that is NOT the live scene: its nav
+// renders statically lit (no boot gate), swaps the power button for a Close
+// control, and marks its own section current. Derived from the body class the
+// page already passes, so the layout API stays unchanged.
+const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
 
-// Sub-page HUD nav model — the standard (non-bare) reading-page nav, rebuilt to
-// CORRESPOND with the hero's vertical lifecycle rail. Each row is a Body·Section
-// PAIR: `label` is the celestial body (the bright title line, e.g. 'BLACK HOLE'),
-// `section` is the destination it links to (the dim second line, e.g.
-// 'Inspiration'). The five lifecycle rows are DERIVED from the hero's single
-// source of truth (HUD_NAV_ITEMS in sceneTable.ts) — same labels, same
-// destinations, same top→bottom scroll order — so the rail and this nav can never
-// drift. Two reading-only pages that have no lifecycle stage (Home = the hero
-// scene itself, Behind = the build case study) are appended in the SAME two-line
-// shape with a quiet body line that fits the family.
-interface SubnavItem {
-  href: string;
-  /** Bright title line — the celestial body (or the page's own name). */
-  label: string;
-  /** Dim second line — the section this row links to. */
-  section: string;
-  active: boolean;
-}
-// CURATED SITE NAV — no longer a 1:1 projection of the hero's five stations. The
-// full lifecycle list read as "too many links" in the chrome, and the site menu
-// does not need to mirror the scene order (the hero's rail/markers still do).
-// Three primary destinations lead; everything secondary — the Inspiration essay,
-// the making-of, and the graveyard (deliberately NOT a headline entry; it is also
-// referenced from the About page) — lives behind one INDEX page. Body·Section
-// pairs keep the celestial register where a body exists.
-const subnavItems: SubnavItem[] = [
-  { href: href('projects'), label: 'YELLOW STAR', section: 'Projects', active: isActive('projects') },
-  // Writing stays active across the posts subtree (minus the inspiration post,
-  // which belongs to the Index entry below).
-  { href: href('writing'), label: 'NEBULA', section: 'Writing', active: isWritingActive },
-  { href: href('about'), label: 'THE BEGINNING', section: 'About', active: isActive('about') },
-  {
-    href: href('archive'),
-    label: 'THE ARCHIVE',
-    section: 'Index',
-    active:
-      isActive('archive') ||
-      isActive('graveyard') ||
-      isActive('behind-the-build') ||
-      path === blackHolePath,
-  },
-  // Home — return to the live scene itself (the whole lifecycle).
-  { href: href(''), label: 'THE SCENE', section: 'Home', active: isActive('') },
-];
-// Two-digit mono index for the locked section (1-based, matches reading order).
-const subnavIndex = (i: number): string => String(i + 1).padStart(2, '0');
-
-// Corner nav (bare pages: home + about) — the SAME rows as the reading nav,
-// rendered at a lighter density: single-line SECTION words, same lifecycle order,
-// same source of truth. One nav system, two densities — the celestial body line
-// only appears where a scene rail can anchor it (the reading nav + hero rail).
-// On the home scene the 'Home' row is dropped (you are standing on it); About
-// keeps it as the way back into the scene.
-const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section === 'Home'));
 ---
 
 <!doctype html>
@@ -161,99 +87,19 @@ const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section 
             <span class="bh-identity-role">{BRAND_ROLE}</span>
           </a>
 
-          {/* The blog micro-nav, top-right: the five section routes rendered as quiet
-              text labels (mono-uppercase) that dim at rest and brighten/lift once the
-              HUD activates at the black hole (body.hud-active). Two inline brand-logo
-              icon links — a GitHub octocat and an X logo — sit as direct <a> siblings
-              next to the section labels, reusing .overlay-blog-link so they track the
-              same dim→bright color, hover underline-sweep, focus ring, and hud-active
-              lift. A power button toggles the hud-active morph in place without
-              scrolling. */}
-          <nav class="overlay-blog" aria-label="Sections">
-            {/* Text-only section labels — no decorative icons. The five links
-                show small mono-uppercase labels at rest (dim) and brighten/lift
-                when the HUD activates at the black hole (body.bare.hud-active).
-                The functional icon links/Power controls below KEEP their inline SVGs. */}
-            {/* Section links carry the reading nav's target-lock frame (four corner
-                ticks), shown on HOVER/focus here — the same "targeting" motif the
-                .subnav locks onto its current section, ported to the hero as an
-                interaction. The frame is position:absolute (see scene.css), so it
-                overlays on hover without shifting the row. No index number (a number
-                appearing on hover would change the link's width). */}
-            <div class="overlay-blog-links">
-              {/* ONE nav system, two densities: these are the SAME rows the reading
-                  nav (.subnav) renders, mapped from the same cornerItems/subnavItems
-                  list — here as single-line SECTION words in lifecycle order (the
-                  celestial-body first line belongs to surfaces with a scene rail).
-                  aria-current lights the section you are on (About, on that page). */}
-              {cornerItems.map((item) => (
-                <a
-                  class="overlay-blog-link overlay-blog-section"
-                  href={item.href}
-                  aria-current={item.active ? 'page' : undefined}
-                >
-                  <span class="overlay-blog-lock" aria-hidden="true">
-                    <span class="overlay-blog-tick overlay-blog-tick-tl"></span>
-                    <span class="overlay-blog-tick overlay-blog-tick-tr"></span>
-                    <span class="overlay-blog-tick overlay-blog-tick-bl"></span>
-                    <span class="overlay-blog-tick overlay-blog-tick-br"></span>
-                  </span>
-                  <span class="overlay-blog-label">{item.section}</span>
-                </a>
-              ))}
-            </div>
-
-            {/* Two inline brand-logo icon links — GitHub octocat and X logo. Both
-                carry .overlay-blog-link so they inherit the rail's dim→bright color
-                tracking, hover underline-sweep, focus ring, and hud-active lift.
-                The aria-label on each <a> is the only accessible name (no visible
-                text label). Icons use official simple-icons paths, fill="currentColor"
-                so they pick up the rail's currentColor exactly like the power glyph. */}
-            {SOCIALS.github && (
-              <a class="overlay-blog-link overlay-blog-social" href={SOCIALS.github} aria-label="GitHub">
-                <svg class="overlay-blog-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-                </svg>
-              </a>
-            )}
-            {SOCIALS.twitter && (
-              <a class="overlay-blog-link overlay-blog-social" href={SOCIALS.twitter} aria-label="X">
-                <svg class="overlay-blog-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-              </a>
-            )}
-
-            {/* Power button: a manual override that TOGGLES the hud-active morph in
-                place (no scrolling). Sticky — once engaged it adds body.hud-forced so
-                the scroll-driven toggle in HeroIsland stands down until toggled off. */}
-            <button
-              type="button"
-              class="overlay-blog-power"
-              aria-pressed="false"
-              aria-label="Toggle navigation"
-            >
-              {/* IEC power glyph: an open ring broken at the top by a vertical line.
-                  Matched to the section-icon weight (1.5 stroke) so the corner reads
-                  as one set; the circular FRAME around it lives in scene.css. */}
-              <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
-                <path
-                  d="M16 6 L16 15"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                />
-                <path
-                  d="M11 10.5 A 7 7 0 1 0 21 10.5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
-          </nav>
+          {/* The corner nav, top-right — THE site navigation in its scene skin
+              (see SiteNav.astro): the five canonical sections as quiet mono
+              labels that dim at rest and brighten/lift once the HUD activates
+              at the black hole, plus the GitHub/X brand links. On the home
+              scene it carries the HUD power button; on the About overlay it is
+              statically lit, swaps the power button for a Close control, and
+              locks its own section. */}
+          <SiteNav
+            surface="scene"
+            showPower={!isAboutOverlay}
+            showClose={isAboutOverlay}
+            isStatic={isAboutOverlay}
+          />
 
           {/* Boot transition layers — driven entirely by body.hud-booting (added for
               the ~3.6s power-on window by the FSM script below). Three fixed, full-
@@ -593,74 +439,18 @@ const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section 
 
           {/* Sub-page HUD nav (.subnav) — the standard reading-page header wearing
               the hero design language WITHOUT the live-scene coupling: no scroll-
-              gated unfurl, no power button, no scene toggle. Brand lockup hard-left,
-              section rail hard-right, sitting under a single top hairline rule.
-              Labels are ALWAYS shown (there is no scene to power on); each section is
-              a glyph + mono-uppercase label row. The CURRENT section is "locked": it
-              gets the hero's target-lock treatment — corner ticks + a hairline frame,
-              a brighter --fg, and a two-digit mono index — driven by aria-current. */}
+              gated unfurl, no power button, no scene toggle. Brand lockup hard-left;
+              the section rail hard-right is THE site navigation in its page skin
+              (SiteNav.astro) — same five sections, same order, same wording as the
+              hero corner nav, destination bright over its celestial body dim. The
+              CURRENT section is "locked": corner ticks, brighter --fg, and a
+              two-digit mono index — driven by aria-current. */}
           <header class="subnav" transition:name="subnav" transition:animate="none">
             <a class="subnav-brand bh-identity-lockup" href={href('')}>
               <span class="bh-identity-name">{BRAND_NAME}</span>
               <span class="bh-identity-role">{BRAND_ROLE}</span>
             </a>
-            <nav class="subnav-rail" aria-label="Sections">
-              {!minimalChrome && <ul class="subnav-list">
-                {subnavItems.map((item, i) => (
-                  <li class="subnav-item">
-                    <a
-                      class="subnav-link"
-                      href={item.href}
-                      aria-current={item.active ? 'page' : undefined}
-                    >
-                      {/* Target-lock frame — four corner ticks, only rendered/shown
-                          on the locked (current) section (CSS hides them otherwise). */}
-                      <span class="subnav-lock" aria-hidden="true">
-                        <span class="subnav-tick subnav-tick-tl"></span>
-                        <span class="subnav-tick subnav-tick-tr"></span>
-                        <span class="subnav-tick subnav-tick-bl"></span>
-                        <span class="subnav-tick subnav-tick-br"></span>
-                      </span>
-                      {/* Body·Section PAIR, mirroring the hero rail: the celestial
-                          body is the bright title line, the section it links to is
-                          the dim second line. */}
-                      <span class="subnav-copy">
-                        <span class="subnav-label">{item.label}</span>
-                        <span class="subnav-section">{item.section}</span>
-                      </span>
-                      {/* Two-digit mono index — only shown on the locked section. */}
-                      <span class="subnav-index" aria-hidden="true">{subnavIndex(i)}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>}
-
-              {/* Brand-logo icon links — GitHub octocat + X logo, the SAME pair the
-                  hero corner nav (.overlay-blog) shows, so the reading header reads
-                  as the same instrument kit (not a second design). They carry
-                  .subnav-link so they inherit the rail's colour, focus ring, and
-                  hover lift; .subnav-social drops the cell padding + sizes the glyph.
-                  The hero's POWER button is deliberately NOT mirrored here — there is
-                  no live scene HUD to power on a reading page. */}
-              {(SOCIALS.github || SOCIALS.twitter) && (
-                <div class="subnav-socials">
-                  {SOCIALS.github && (
-                    <a class="subnav-link subnav-social" href={SOCIALS.github} aria-label="GitHub">
-                      <svg class="subnav-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-                      </svg>
-                    </a>
-                  )}
-                  {SOCIALS.twitter && (
-                    <a class="subnav-link subnav-social" href={SOCIALS.twitter} aria-label="X">
-                      <svg class="subnav-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                      </svg>
-                    </a>
-                  )}
-                </div>
-              )}
-            </nav>
+            <SiteNav surface="page" />
           </header>
 
           <main id="main-content">
@@ -673,24 +463,6 @@ const cornerItems = subnavItems.filter((item) => !(isActive('') && item.section 
               across SPA swaps like the header (transition:name + animate none) so
               the chrome holds still while only the page content moves. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
-            {/* MINIMAL-CHROME pages moved the station nav out of the header; it
-                lands here as a quiet full-width block ABOVE the copyright row —
-                same Body·Section pairs, same source of truth (subnavItems), so
-                the reader still has every station at the end of the page. */}
-            {minimalChrome && (
-              <nav class="site-footer-stations" aria-label="Sections">
-                {subnavItems.map((item) => (
-                  <a
-                    class="site-footer-station"
-                    href={item.href}
-                    aria-current={item.active ? 'page' : undefined}
-                  >
-                    <span class="site-footer-station-label">{item.label}</span>
-                    <span class="site-footer-station-section">{item.section}</span>
-                  </a>
-                ))}
-              </nav>
-            )}
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
             <nav class="site-footer-links" aria-label="Social links">
               {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label">GitHub</span></a>}
