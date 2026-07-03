@@ -1,69 +1,42 @@
 /* ===========================================================================
    Self-hosted webfonts — the sitewide type system.
 
-   Three families, one role each (see tokens.css --font-* tokens):
-     • Instrument Serif — the DISPLAY face (upright 400 for headlines / the
-                          identity mark; italic 400 as the quote/manifesto
-                          accent). Sharp editorial serif, one true master —
-                          display sizes only, never body text.
-     • IBM Plex Sans    — body + UI copy (variable file, real 400–700 masters,
-                          so medium/bold are never synthesized). Pairs with
-                          Plex Mono as one instrument superfamily.
-     • IBM Plex Mono    — UI labels, metadata, dates, tags (the instrument readout).
+   Three families, one role each (see global.css --font-* tokens):
+     • Space Grotesk   — H1/display (700) + body (400). One variable file per
+                         subset carries both real weights, so bold is a true
+                         700 master, never a synthesized faux-bold.
+     • IBM Plex Mono   — UI labels, metadata, dates, tags (the instrument readout).
+     • Instrument Serif (italic) — the occasional quote / manifesto serif accent.
 
    Files live in src/styles/fonts/ and are referenced with RELATIVE url()s so
    Vite bundles + fingerprints them and rewrites the path under astro's `base`
-   (no /public hardcoding, no render-blocking CDN). Subsets: latin + latin-ext
-   (covers accented Latin like "Iliès"); mono is ASCII-only in use so it ships
-   latin only.
+   (no /public hardcoding, no render-blocking CDN — same self-hosted property the
+   site had with @fontsource). Subsets: latin + latin-ext (covers accented Latin
+   like "Iliès"); mono is ASCII-only in use so it ships latin only.
 
    font-display: swap everywhere — text paints immediately in the fallback and
    swaps to the webface on load (no invisible-text flash on the hero overlay).
    =========================================================================== */
 
-/* --- Instrument Serif (upright 400, display headlines / identity) ---------- */
+/* --- Space Grotesk (variable: 400 body, 700 display) ----------------------- */
 /* latin */
 @font-face {
-  font-family: 'Instrument Serif';
+  font-family: 'Space Grotesk';
   font-style: normal;
-  font-weight: 400;
+  font-weight: 400 700;
   font-display: swap;
-  src: url('./fonts/instrument-serif-latin.woff2') format('woff2');
+  src: url('./fonts/space-grotesk-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
     U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
     U+2212, U+2215, U+FEFF, U+FFFD;
 }
 /* latin-ext */
 @font-face {
-  font-family: 'Instrument Serif';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./fonts/instrument-serif-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
-/* --- IBM Plex Sans (variable 400–700, body + UI copy) ----------------------- */
-/* latin */
-@font-face {
-  font-family: 'IBM Plex Sans';
+  font-family: 'Space Grotesk';
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url('./fonts/ibm-plex-sans-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-    U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin-ext */
-@font-face {
-  font-family: 'IBM Plex Sans';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('./fonts/ibm-plex-sans-latin-ext.woff2') format('woff2');
+  src: url('./fonts/space-grotesk-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
     U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;

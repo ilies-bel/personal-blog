@@ -1,0 +1,241 @@
+---
+// SiteNav — THE site navigation, one model rendered on every surface.
+//
+// Before this component existed the site had two hand-written navs that drifted
+// apart (different wording, different ordering, different item sets): the hero's
+// corner micro-nav (.overlay-blog, scene.css) and the reading-page rail
+// (.subnav-rail, chrome.css). Both now render from the SAME canonical model,
+// owned HERE, with the flip rule (destination is the bright line, celestial
+// body the dim caption) — so no two surfaces can disagree about what the
+// sections are called or where they sit.
+//
+// The model is the CURATED Index-hub IA (feedback round 1): three primary
+// destinations — Projects, Writing, About — plus INDEX (/archive), the hub for
+// everything secondary (the Inspiration essay, Behind the Build, the
+// graveyard). The hero's vertical rail still walks all five lifecycle scenes;
+// a menu doesn't need to mirror the scene order.
+//
+// The two surfaces keep their own CSS skins on purpose (the scene overlay floats
+// over a live canvas and boot-gates its brightness; the reading rail is a sticky
+// header bar): `surface` picks the skin, the MODEL is shared.
+//
+//   surface="scene" — the bare-page corner overlay (home, about). Single-line
+//     mono labels + target-lock hover ticks + socials, optionally followed by
+//     the HUD power button (home) / the scene-toggle circle (about).
+//   surface="page"  — the reading-page rail: the SAME single-line labels and
+//     tick grammar in a sticky header row (full lock on the current section).
+import { HUD_NAV_ITEMS } from '../hero/sceneTable';
+import { SOCIALS } from '../consts';
+
+interface Props {
+  /** Which skin to render: the bare-page corner overlay or the reading rail. */
+  surface: 'scene' | 'page';
+  /** Scene surface: render the HUD power button (home only). */
+  showPower?: boolean;
+  /** Scene surface: labels rest at reading brightness — no boot gate (about). */
+  isStatic?: boolean;
+  /** Render the circular scene-toggle (parks the page's backdrop scene). On by
+   *  default for the page skin; the home scene skin opts out (its scene IS the
+   *  content and has its own power/motion circles). */
+  showSceneToggle?: boolean;
+}
+const {
+  surface,
+  showPower = false,
+  isStatic = false,
+  showSceneToggle = surface === 'page',
+} = Astro.props;
+
+const base = import.meta.env.BASE_URL;
+const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+const home = href('').replace(/\/+$/, '') || '/';
+
+// Active-section resolution — trailing-slash insensitive path compare. Writing
+// stays active across the whole /posts/ subtree EXCEPT the black hole's own
+// essay (the Inspiration row claims that one), so every page lights exactly one
+// section. Same logic the old BaseLayout nav used, now owned here.
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const norm = (p: string) => p.replace(/\/+$/, '') || '/';
+const isActive = (p: string) => norm(href(p)) === path;
+const writingRoot = norm(href('writing'));
+const postsRoot = norm(href('posts'));
+const endItem = HUD_NAV_ITEMS.find((item) => item.id === 'end');
+const blackHolePath = endItem ? norm(href(endItem.href)) : '';
+const isWritingActive =
+  path === writingRoot || (path.startsWith(`${postsRoot}/`) && path !== blackHolePath);
+
+// Menus show the DESTINATION only — the celestial-body names stay in the
+// hero's vertical rail (a scene instrument) and the scenes themselves. Index
+// lights for every page it hubs (archive itself, the graveyard, the making-of,
+// the inspiration essay), so every page still locks exactly one section.
+interface NavRow {
+  href: string;
+  label: string;
+  active: boolean;
+}
+const rows: NavRow[] = [
+  { href: href('projects'), label: 'Projects', active: isActive('projects') },
+  { href: href('writing'), label: 'Writing', active: isWritingActive },
+  { href: href('about'), label: 'About', active: isActive('about') },
+  {
+    href: href('archive'),
+    label: 'Index',
+    active:
+      isActive('archive') ||
+      isActive('graveyard') ||
+      isActive('behind-the-build') ||
+      path === blackHolePath,
+  },
+];
+
+// Official simple-icons brand paths (GitHub octocat, X logo), fill=currentColor
+// so the glyphs track each skin's link color exactly like the text labels.
+const GITHUB_PATH =
+  'M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12';
+const X_PATH =
+  'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z';
+---
+
+{
+  surface === 'scene' ? (
+    <nav class="overlay-blog" aria-label="Sections" data-static={isStatic || undefined}>
+      {/* Section links — small mono-uppercase destination labels with the
+          target-lock corner-tick frame on hover/focus; the CURRENT section
+          (about page) keeps its frame lit. The frame is position:absolute
+          (scene.css), so it overlays without shifting the row. */}
+      <div class="overlay-blog-links">
+        {rows.map((row) => (
+          <a
+            class="overlay-blog-link overlay-blog-section"
+            href={row.href}
+            aria-current={row.active ? 'page' : undefined}
+          >
+            <span class="overlay-blog-lock" aria-hidden="true">
+              <span class="overlay-blog-tick overlay-blog-tick-tl" />
+              <span class="overlay-blog-tick overlay-blog-tick-tr" />
+              <span class="overlay-blog-tick overlay-blog-tick-bl" />
+              <span class="overlay-blog-tick overlay-blog-tick-br" />
+            </span>
+            <span class="overlay-blog-label" data-decode>{row.label}</span>
+          </a>
+        ))}
+      </div>
+
+      {/* Brand-logo icon links — carry .overlay-blog-link so they inherit the
+          rail's dim→bright color, focus ring, and hud-active lift. */}
+      {SOCIALS.github && (
+        <a class="overlay-blog-link overlay-blog-social" href={SOCIALS.github} aria-label="GitHub">
+          <svg class="overlay-blog-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d={GITHUB_PATH} />
+          </svg>
+        </a>
+      )}
+      {SOCIALS.twitter && (
+        <a class="overlay-blog-link overlay-blog-social" href={SOCIALS.twitter} aria-label="X">
+          <svg class="overlay-blog-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d={X_PATH} />
+          </svg>
+        </a>
+      )}
+
+      {/* Power button (home only): toggles the hud-active morph in place. Sticky —
+          once engaged it adds body.hud-forced so the scroll-driven toggle stands
+          down until toggled off. The HUD power FSM in BaseLayout binds to it by
+          class; on pages without it (about) the FSM simply runs buttonless. */}
+      {showPower && (
+        <button
+          type="button"
+          class="overlay-blog-power"
+          aria-pressed="false"
+          aria-label="Toggle navigation"
+        >
+          {/* IEC power glyph: an open ring broken at the top by a vertical line. */}
+          <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M16 6 L16 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M11 10.5 A 7 7 0 1 0 21 10.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </button>
+      )}
+
+      {/* Scene toggle (the hero's circular side control, sitewide): parks the
+          dimmed backdrop scene — persisted, wired in src/scripts/sceneToggle.ts. */}
+      {showSceneToggle && (
+        <button
+          type="button"
+          class="scene-toggle"
+          aria-pressed="false"
+          aria-label="Toggle background scene"
+        >
+          {/* Celestial glyph — a ringed body with its core; the slash appears
+              when the scene is parked (aria-pressed=true, scene.css). */}
+          <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+            <line class="scene-toggle-slash" x1="7" y1="25" x2="25" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </button>
+      )}
+
+    </nav>
+  ) : (
+    <nav class="subnav-rail" aria-label="Sections">
+      <ul class="subnav-list">
+        {rows.map((row) => (
+          <li class="subnav-item">
+            <a class="subnav-link" href={row.href} aria-current={row.active ? 'page' : undefined}>
+              {/* Target-lock frame — four corner ticks: full lock on the current
+                  section, half-strength acquisition on hover/focus. The SAME
+                  single-line label + tick cluster the hero corner nav renders —
+                  no caption, no index, one nav look sitewide. */}
+              <span class="subnav-lock" aria-hidden="true">
+                <span class="subnav-tick subnav-tick-tl" />
+                <span class="subnav-tick subnav-tick-tr" />
+                <span class="subnav-tick subnav-tick-bl" />
+                <span class="subnav-tick subnav-tick-br" />
+              </span>
+              <span class="subnav-label" data-decode>{row.label}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {(SOCIALS.github || SOCIALS.twitter) && (
+        <div class="subnav-socials">
+          {SOCIALS.github && (
+            <a class="subnav-link subnav-social" href={SOCIALS.github} aria-label="GitHub">
+              <svg class="subnav-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d={GITHUB_PATH} />
+              </svg>
+            </a>
+          )}
+          {SOCIALS.twitter && (
+            <a class="subnav-link subnav-social" href={SOCIALS.twitter} aria-label="X">
+              <svg class="subnav-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d={X_PATH} />
+              </svg>
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Scene toggle — the hero's circular side control, on every reading
+          page: parks the dimmed backdrop scene (src/scripts/sceneToggle.ts). */}
+      {showSceneToggle && (
+        <button
+          type="button"
+          class="scene-toggle"
+          aria-pressed="false"
+          aria-label="Toggle background scene"
+        >
+          {/* Celestial glyph — a ringed body with its core; the slash appears
+              when the scene is parked (aria-pressed=true, scene.css). */}
+          <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+            <line class="scene-toggle-slash" x1="7" y1="25" x2="25" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </button>
+      )}
+    </nav>
+  )
+}

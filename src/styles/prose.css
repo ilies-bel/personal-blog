@@ -56,7 +56,8 @@
   border-radius: 3px;
 }
 
-/* The one warm signal: a gold mono kicker, matching .writing-kicker. */
+/* Chrome-ramp mono kicker, matching .writing-kicker — gold is reserved for
+   signal (current section, hover, readouts), not page scaffolding. */
 .article-header .article-kicker {
   margin: 0 0 0.85rem;
   width: max-content;
@@ -65,7 +66,7 @@
   font-size: var(--text-label);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--highlight);
+  color: var(--fg-chrome-dim);
 }
 .article-header h1 {
   font-size: var(--text-hero);

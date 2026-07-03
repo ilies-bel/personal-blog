@@ -116,10 +116,12 @@ function copyForMarker(placement: MarkerPlacement): CompassCopy {
   return { label: placement.title, dest: placement.subtitle };
 }
 
-/** A rail-hovered scene names by its HUD row (label + destination). */
+/** A rail-hovered scene names by its HUD row — destination-first, the same
+ *  flip every nav surface applies (the marker copy is already destination-
+ *  titled, e.g. 'PROJECTS' / 'Things I build', so this matches it). */
 function copyForHudId(id: HudTargetId): CompassCopy {
   const item = HUD_NAV_BY_ID[id];
-  return { label: item.label, dest: item.destination };
+  return { label: item.destination, dest: item.label };
 }
 
 /** The current aiming result, committed to React state only when it changes.
@@ -842,8 +844,9 @@ export default function HudNavigation({
           labels (mirrors the .hud-compass aria-hidden rationale). */}
       {mobileReadout && (
         <div className="hud-nav-mobile-readout" aria-hidden="true">
-          <span>{mobileReadout.label}</span>
+          {/* Destination-first, same flip as the rail rows below. */}
           <span>{mobileReadout.destination}</span>
+          <span>{mobileReadout.label}</span>
         </div>
       )}
       <nav
@@ -912,9 +915,13 @@ export default function HudNavigation({
                   <span className="hud-nav-glyph hud-nav-number" aria-hidden="true">
                     {number}
                   </span>
+                  {/* Destination-first, matching every other nav surface (SiteNav):
+                      the bright title answers "where does this go", the celestial
+                      body is the dim caption. The rail keeps its physical scroll
+                      ORDER (it is a scene instrument); only the pair is flipped. */}
                   <span className="hud-nav-copy">
-                    <span className="hud-nav-title">{item.label}</span>
-                    <span className="hud-nav-destination">{item.destination}</span>
+                    <span className="hud-nav-title" data-decode>{item.destination}</span>
+                    <span className="hud-nav-destination">{item.label}</span>
                   </span>
                 </button>
               </li>

@@ -31,14 +31,24 @@
   gap: 1.1rem;
 }
 
+/* Page designation row — the kicker plus a mono status readout, so the page
+   opens like a labeled instrument screen (the graveyard's SPECIMEN grammar,
+   generalized). Chrome ramp, not gold: gold is signal, not scaffolding. */
 .writing-kicker {
   margin: 0;
-  width: max-content;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.15rem;
   font-family: var(--font-mono);
   font-size: var(--text-label);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--highlight);
+  color: var(--fg-chrome-dim);
+}
+.writing-kicker-readout {
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-chrome-faint);
 }
 
 .writing-hero h1 {
@@ -69,13 +79,14 @@
   margin-bottom: clamp(2.5rem, 7vw, 4.5rem);
 }
 
+/* Instrument plates, not marketing cards: square corners, one hairline, a flat
+   tonal lift — no blur, no gradient wash, no hover levitation. The featured
+   panel is the page's ONE promoted object; it earns bracket corners (the
+   about-panel / target-lock gesture) and a hairline that brightens on hover. */
 .writing-featured-card,
 .writing-index-card {
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: color-mix(in oklch, var(--bg-soft) 72%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in oklch, var(--bg-soft) 45%, transparent);
 }
 
 .writing-featured-card {
@@ -86,36 +97,47 @@
   padding: clamp(1.35rem, 4vw, 2.25rem);
   color: inherit;
   text-decoration: none;
-  overflow: hidden;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    transform 0.22s var(--ease-out-quint);
+  transition: border-color 0.18s ease;
 }
 
-.writing-featured-card::before {
+/* Bracket corners — two low-alpha gold Ls (top-left + bottom-right), the same
+   corner gesture the about panel and the target-lock ticks use. */
+.writing-featured-card::before,
+.writing-featured-card::after {
   content: '';
   position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, color-mix(in oklch, var(--highlight) 12%, transparent), transparent 46%),
-    radial-gradient(28rem 18rem at 88% 12%, color-mix(in oklch, var(--ember) 10%, transparent), transparent 72%);
-  opacity: 0.74;
+  width: clamp(1.1rem, 2.2vw, 1.6rem);
+  height: clamp(1.1rem, 2.2vw, 1.6rem);
+  border: 1px solid color-mix(in oklch, var(--accent) 26%, transparent);
   pointer-events: none;
+  transition: border-color 0.18s ease;
+}
+.writing-featured-card::before {
+  top: 0.55rem;
+  left: 0.55rem;
+  border-right: none;
+  border-bottom: none;
+}
+.writing-featured-card::after {
+  right: 0.55rem;
+  bottom: 0.55rem;
+  border-left: none;
+  border-top: none;
 }
 
 .writing-featured-card > * {
   position: relative;
 }
 
-.writing-featured-card:hover {
-  border-color: color-mix(in oklch, var(--accent) 62%, var(--line));
-  background: color-mix(in oklch, var(--bg-soft) 88%, transparent);
-  transform: translateY(-2px);
+.writing-featured-card:hover,
+.writing-featured-card:focus-visible {
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
 }
-
-.writing-featured-card:active {
-  transform: translateY(1px);
+.writing-featured-card:hover::before,
+.writing-featured-card:hover::after,
+.writing-featured-card:focus-visible::before,
+.writing-featured-card:focus-visible::after {
+  border-color: color-mix(in oklch, var(--accent) 60%, transparent);
 }
 
 .writing-featured-label,
@@ -152,20 +174,16 @@
 }
 
 .writing-featured-meta {
-  color: var(--fg-faint);
+  color: var(--fg-chrome-faint);
   /* Baseline readout: the date sits on its own hairline at the card's foot, so
      the card closes on the same instrument line the index card's rows use. */
   margin-top: 0.35rem;
   padding-top: 0.95rem;
-  border-top: 1px solid color-mix(in oklch, var(--accent) 12%, var(--line));
+  border-top: 1px solid var(--line);
 }
 
 .writing-index-card {
   padding: clamp(1.25rem, 2vw, 1.5rem);
-  border-color: color-mix(in oklch, var(--accent) 16%, var(--line));
-  background:
-    linear-gradient(140deg, color-mix(in oklch, var(--highlight) 5%, transparent), transparent 52%),
-    color-mix(in oklch, var(--bg-soft) 72%, transparent);
 }
 
 .writing-index-card dl {
@@ -181,7 +199,7 @@
      the column stops feeling like an even mechanical grid. */
   gap: 0.45rem;
   padding: 1.05rem 0;
-  border-bottom: 1px solid color-mix(in oklch, var(--accent) 12%, var(--line));
+  border-bottom: 1px solid var(--line);
 }
 
 .writing-index-card div:first-child {
@@ -198,7 +216,7 @@
   font-size: var(--text-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-chrome-faint);
 }
 
 .writing-index-card dd {
@@ -267,7 +285,7 @@
   font-size: var(--text-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-chrome-faint);
 }
 
 /* --- Lifecycle STATION readout (the liant with the hero) --------------------
@@ -376,14 +394,15 @@
   min-height: 1.55rem;
   padding: 0.16rem 0.6rem;
   border: 1px solid var(--line);
+  /* Square-cut readout chips — chrome ramp like every metadata readout. */
   border-radius: 2px;
-  color: var(--fg-faint);
+  color: var(--fg-chrome-faint);
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   line-height: 1;
-  background: color-mix(in oklch, var(--bg-soft) 64%, transparent);
+  background: transparent;
   transition:
     border-color 0.16s ease,
     color 0.16s ease,

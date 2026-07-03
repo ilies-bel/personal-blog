@@ -124,12 +124,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  /* Asymmetric horizontal padding: the right side reserves a constant slot for the
-     two-digit index that the CURRENT section reveals (.subnav-index is absolutely
-     positioned into it). Reserving it on EVERY link — not just the active one — is
-     what keeps the rail from shifting when the number appears. */
-  padding: 0.5rem 1.6rem 0.5rem 0.95rem;
-  color: var(--fg-dim);
+  padding: 0.5rem 0.95rem;
+  /* Chrome ramp (cool-neutral bone) — the same temperature the hero's chrome
+     reads over the void, so the reading nav is the same instrument. */
+  color: var(--fg-chrome-dim);
   text-decoration: none;
   font-family: var(--font-mono);
   font-size: var(--text-hud);
@@ -139,28 +137,17 @@
   transition: color 0.16s ease;
 }
 .subnav-link:hover,
-.subnav-link:focus-visible { color: var(--fg); }
+.subnav-link:focus-visible { color: var(--fg-chrome); }
 .subnav-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
-/* Body·Section PAIR — the two-line stack that mirrors the hero rail's
-   .hud-nav-copy (a vertical grid with the bright body title over the dim section
-   line). Same gap + uppercase mono family so the reading-page nav reads as the
-   same instrument. */
-.subnav-copy {
-  display: grid;
-  gap: 0.22rem;
-  min-width: 0;
-}
-
-/* Mono-uppercase BODY label (the celestial body) — bright title line. A gold
-   underline sweeps in on hover/focus (mirrors the .overlay-blog-label reveal, but
-   the label here is ALWAYS shown, so only the underline animates). Drawn as a
-   bottom-anchored background gradient sized 0%→100% width so the label's box can
-   clip it cleanly. */
+/* Mono-uppercase DESTINATION label — single line, the same word the hero
+   corner nav shows (no caption, no index — one nav look sitewide). A gold
+   underline sweeps in on hover/focus, drawn as a bottom-anchored background
+   gradient sized 0%→100% width so the label's box can clip it cleanly. */
 .subnav-label {
   display: inline-block;
   line-height: 1;
@@ -177,45 +164,18 @@
 .subnav-link:hover .subnav-label,
 .subnav-link:focus-visible .subnav-label { background-size: 100% 1px; }
 
-/* Dim SECTION line (the destination the row links to) — the muted second line,
-   matching the hero rail's .hud-nav-destination (smaller tracking-wide mono, a
-   step dimmer than the body title). Stays dim on hover so only the body brightens,
-   exactly like the rail. */
-.subnav-section {
-  display: inline-block;
-  line-height: 1;
-  font-size: var(--text-micro);
-  letter-spacing: 0.1em;
-  color: var(--fg-faint);
-  transition: color 0.16s ease;
-}
-
-/* Two-digit mono index — only the locked (current) section shows it. The OLD approach
-   toggled display:none → inline-block ONLY on the active item, growing just that item
-   and shoving the rest of the rail sideways (the content shift). The fix: EVERY link
-   permanently reserves the index zone (a constant right slot — see .subnav-link's
-   padding-right below), and the index is absolutely positioned INTO that reserved
-   slot, just after the label. Because the slot exists on every item whether or not its
-   number shows, revealing it on the current section changes nothing's width. */
-.subnav-index {
-  position: absolute;
-  right: 0.45rem;          /* sits inside the reserved right slot, trailing the label */
-  top: 50%;
-  transform: translateY(-50%);
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  letter-spacing: var(--tracking-label);
-  color: var(--accent);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
+/* Target-lock frame — opacity-driven so it can also REVEAL on hover/focus (the
+   hero corner nav's targeting gesture, ported): full strength on the locked
+   (current) section, a lighter acquisition frame while hovering the rest. */
 .subnav-lock {
-  display: none;
   position: absolute;
   inset: 0.18rem 0.3rem;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out-quint);
 }
+.subnav-link:hover .subnav-lock,
+.subnav-link:focus-visible .subnav-lock { opacity: 0.5; }
 /* corner brackets = current/locked target only */
 .subnav-tick {
   position: absolute;
@@ -235,23 +195,16 @@
 .subnav-link[aria-current='page'] {
   color: var(--fg-overlay);
 }
-.subnav-link[aria-current='page'] .subnav-lock { display: block; }
-.subnav-link[aria-current='page'] .subnav-index { opacity: 1; }
+.subnav-link[aria-current='page'] .subnav-lock { opacity: 1; }
 /* Persistent underline on the current section — the same gold sweep shown at
    rest (not just on hover), so the current item is obvious. */
 .subnav-link[aria-current='page'] .subnav-label {
   background-size: 100% 1px;
 }
-/* Current section's dim section line lifts a step (still secondary to the body)
-   so the locked row reads as one brighter unit — mirrors the rail's current-row
-   destination brightening. */
-.subnav-link[aria-current='page'] .subnav-section {
-  color: var(--fg-dim);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .subnav-label,
-  .subnav-section { transition: none; }
+  .subnav-lock { transition: none; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -274,51 +227,21 @@
   font-size: var(--text-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  /* Chrome ramp — the footer is instrument text, same temperature as the nav. */
+  color: var(--fg-chrome-faint);
 }
 .site-footer-links {
   display: flex;
   gap: 1.6rem;
 }
 
-/* Station nav block — minimal-chrome pages (articles) move the header's station
-   rail down here: a full-width row of the same Body·Section pairs ABOVE the
-   copyright line, separated from it by breathing room rather than a second rule.
-   flex-basis 100% pushes the brand/social row onto its own line below. */
-.site-footer-stations {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.1rem 2.4rem;
-  margin-bottom: 1.6rem;
-}
-.site-footer-station {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.site-footer-station-label {
-  color: var(--fg-dim);
-  transition: color 0.16s ease;
-}
-.site-footer-station-section {
-  font-size: var(--text-micro);
-  color: var(--fg-faint);
-}
-.site-footer-station:hover .site-footer-station-label,
-.site-footer-station:focus-visible .site-footer-station-label {
-  color: var(--fg);
-}
-.site-footer-station[aria-current='page'] .site-footer-station-label {
-  color: var(--fg-overlay);
-}
 .site-footer a {
-  color: var(--fg-dim);
+  color: var(--fg-chrome-dim);
   text-decoration: none;
   transition: color 0.16s ease;
 }
 .site-footer a:hover,
-.site-footer a:focus-visible { color: var(--fg); }
+.site-footer a:focus-visible { color: var(--fg-chrome); }
 .site-footer a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -381,8 +304,9 @@
   }
 
   .subnav-link {
-    padding-inline: 0.7rem;
+    padding: 0.45rem 0.7rem;
   }
+  .subnav-lock { inset: 0.14rem 0.22rem; }
 
   /* The first section label carries the rail's left edge now that there's no
      divider; pull the socials in line with the labels' left padding. */

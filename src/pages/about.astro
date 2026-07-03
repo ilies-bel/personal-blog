@@ -9,9 +9,10 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
 {/* About reads as an overlay panel floating in the same room as the hero: the
     signature 3D object sits dimmed and pushed back behind a single calm reading
-    column, with the persistent brand top-left and a bracket-framed Close
-    top-right. `bare` strips the standard reading chrome so this composition
-    owns the viewport — see BaseLayout's bare branch and .about-* in global.css. */}
+    column, with the persistent brand top-left and the site nav top-right in its
+    static skin (always lit, About locked, trailing Close control — rendered by
+    BaseLayout's bare branch via bodyClass="about-page"). `bare` strips the
+    standard reading chrome so this composition owns the viewport. */}
 <BaseLayout
   title="About"
   description={`About ${SITE_TITLE}: engineer, writer, and builder of small clever things on the web.`}
@@ -101,15 +102,19 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       <section class="about-contact" id="get-in-touch">
         <h2 class="about-contact-title">Get in touch</h2>
         <ul class="about-contact-list">
-          {SOCIALS.github && <li><a href={SOCIALS.github}>GitHub</a></li>}
-          {SOCIALS.twitter && <li><a href={SOCIALS.twitter}>Twitter / X</a></li>}
-          {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`}>Email</a></li>}
+          {SOCIALS.github && <li><a href={SOCIALS.github} data-decode>GitHub</a></li>}
+          {SOCIALS.twitter && <li><a href={SOCIALS.twitter} data-decode>Twitter / X</a></li>}
+          {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`} data-decode>Email</a></li>}
         </ul>
       </section>
     </article>
   </main>
 </BaseLayout>
 
+{/* No scripted initial focus: the old Close autofocus painted a visible focus
+    ring on every mouse load (script focus counts as focus-visible), which read
+    as a broken box in the corner. Keyboard users reach the nav via the skip
+    link / first Tab as on every other page. */}
 <script>
   // The personal moment: tag <body> with .has-signature-anim so the signature
   // starts hidden (clip-path collapsed, flourish stroke offset), then drop the

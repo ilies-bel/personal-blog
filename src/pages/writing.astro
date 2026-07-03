@@ -1,6 +1,8 @@
 ---
 import { getCollection, type CollectionEntry } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import BlackHole from '../hero/BlackHole.tsx';
+import PageHud from '../components/PageHud.astro';
 import { SITE_TITLE } from '../consts';
 import { stationForStage, type JourneyStation } from '../hero/sceneTable';
 
@@ -38,9 +40,32 @@ const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
   type="website"
   bodyClass="writing-page"
 >
+  {/* Static celestial backdrop — the signature scene frozen at the NEBULA frame
+      (stage 3.5, Writing's own celestial body in the nav model), heavily dimmed
+      behind the list. client:only: the page reads fully without JS; the corner
+      scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
+  <BlackHole client:only="react" backdrop backdropStage={3.5} />
+
+  {/* Cockpit gauge — the same side instrument the scene-journey articles and
+      the graveyard fly with: scroll-progress rail + a readout naming the note
+      currently in view (spied via data-hud-title on the card + rows). */}
+  <PageHud
+    index="SECTION 02 / 04"
+    beat={`WRITING · ${posts.length} ${posts.length === 1 ? 'NOTE' : 'NOTES'}`}
+    spy="[data-hud-title]"
+  />
+
   <section class="writing-hero" aria-labelledby="writing-title">
     <div class="writing-hero-copy">
-      <p class="writing-kicker">Writing</p>
+      {/* Page designation row — kicker + mono status readout, so the page opens
+          like a labeled instrument screen (the graveyard's SPECIMEN grammar,
+          generalized). SECTION 02 = Writing's slot in the canonical nav order. */}
+      <p class="writing-kicker">
+        <span>Writing</span>
+        <span class="writing-kicker-readout">
+          Section 02 · {posts.length} {posts.length === 1 ? 'note' : 'notes'}{latest && ` · newest ${fmt(latest.data.pubDate)}`}
+        </span>
+      </p>
       <h1 id="writing-title">Notes on software that keeps working.</h1>
       <p>
         Short technical essays on content sites, frontend systems, deployment, and
@@ -73,7 +98,7 @@ const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
 
   {latest && (
     <section class="writing-featured" aria-labelledby="latest-title">
-      <a class="writing-featured-card" href={href(`posts/${latest.id}/`)}>
+      <a class="writing-featured-card" href={href(`posts/${latest.id}/`)} data-hud-title={latest.data.title}>
         <span class="writing-featured-label">Latest note</span>
         {/* Shared-element morph: this headline carries the latest post's
             transition:name, so clicking the card sends the title physically
@@ -81,7 +106,7 @@ const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
             latest post's ARCHIVE ROW below deliberately does NOT carry the
             name — duplicate view-transition-names on one page abort the whole
             transition, so the featured card owns the latest post's morph. */}
-        <h2 id="latest-title" transition:name={`post-title-${latest.id}`}>{latest.data.title}</h2>
+        <h2 id="latest-title" transition:name={`post-title-${latest.id}`} data-decode>{latest.data.title}</h2>
         <p>{latest.data.description}</p>
         <span class="writing-featured-meta">
           {fmt(latest.data.pubDate)}
@@ -113,7 +138,7 @@ const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
     {(latest ? [latest, ...archive] : posts).map((post) => {
       const j = journeyForPost(post);
       return (
-      <a class="writing-row" href={href(`posts/${post.id}/`)}>
+      <a class="writing-row" href={href(`posts/${post.id}/`)} data-hud-title={post.data.title}>
         <span class="writing-row-left">
           <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
           {/* The row's lifecycle STATION readout: which room of the stellar
@@ -135,9 +160,9 @@ const journeyForPost = (post: CollectionEntry<'posts'>): PostJourney => {
               The latest post's row stays unnamed: its morph belongs to the
               featured card above (one name per page, or the transition aborts). */}
           {post.id === latest?.id ? (
-            <span class="writing-row-title">{post.data.title}</span>
+            <span class="writing-row-title" data-decode>{post.data.title}</span>
           ) : (
-            <span class="writing-row-title" transition:name={`post-title-${post.id}`}>{post.data.title}</span>
+            <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
           )}
           <span class="writing-row-description">{post.data.description}</span>
           {post.data.tags.length > 0 && (

@@ -327,6 +327,50 @@
       var(--bg) 100%);
 }
 
+/* LIST-PAGE variant (writing / projects): each section sits in front of ITS OWN
+   celestial frame (writing -> the nebula, projects -> the yellow star, the same
+   stage values the nav model carries), pushed further back than About's panel
+   composition because these pages are ledgers of many rows, not one column. A
+   full-viewport top-to-bottom scrim keeps every row readable while the frame's
+   light stays felt in the gaps. */
+body.writing-page .bh-backdrop,
+body.projects-page .bh-backdrop,
+body.archive-page .bh-backdrop,
+body.writing-page .bh-poster-slideshow,
+body.projects-page .bh-poster-slideshow,
+body.archive-page .bh-poster-slideshow {
+  opacity: 0.34;
+  filter: saturate(0.75) brightness(0.85);
+}
+body.writing-page .bh-backdrop::before,
+body.projects-page .bh-backdrop::before,
+body.archive-page .bh-backdrop::before,
+body.writing-page .bh-poster-slideshow::before,
+body.projects-page .bh-poster-slideshow::before,
+body.archive-page .bh-poster-slideshow::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.55),
+    rgba(0, 0, 0, 0.35) 40%,
+    rgba(0, 0, 0, 0.72)
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* SCENE OFF -- the corner scene-toggle circle (SiteNav) parks every backdrop
+   canvas/poster/corridor. Body class applied + persisted by
+   src/scripts/sceneToggle.ts; the home page's live scene is .bh-stage WITHOUT
+   .bh-backdrop, so it is deliberately unaffected. */
+body.backdrop-off .bh-backdrop,
+body.backdrop-off .bh-poster-slideshow,
+body.backdrop-off .tesseract-backdrop {
+  display: none;
+}
+
 /* Article variant: the SAME pinned scene but at the BLACK-HOLE frame, whose
    photon ring is a bright full-width white band — far hotter than About's smoky
    nebula. The goal here is NOT to bury it but to make the article read as the

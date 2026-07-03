@@ -1,9 +1,9 @@
 /* About — an overlay panel floating in the hero's room. The dimmed signature
    object (.bh-backdrop, hero.css) sits behind a single calm reading column:
    lots of dark negative space, the panel held off-centre like a viewfinder
-   readout, persistent brand top-left, the shared corner nav top-right (the same
-   .overlay-blog system as the home scene — one nav everywhere, the former
-   bespoke Close control is gone). */
+   readout, persistent brand top-left. The top-right corner is the shared site
+   nav in its static skin (SiteNav.astro + .overlay-blog[data-static] in
+   scene.css) — the same nav as everywhere, nothing bespoke. */
 
 .about-lead { font-size: var(--text-display); color: var(--fg); margin: 0 0 1.5rem; text-wrap: balance; }
 
@@ -62,7 +62,7 @@
   font-size: var(--text-label);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-chrome-faint);
 }
 
 /* The lead sits larger and brighter; the body steps down to muted. It is the
@@ -90,21 +90,20 @@
 }
 .about-body:last-of-type { margin-bottom: 0; }
 
+/* Working principles — a hairline instrument grid, not a tinted card: square
+   corners, plain 1px lines, flat tonal lift. The one card-ish element left on
+   this page is gone; the panel's bracket corners carry the framing. */
 .about-principles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-top: clamp(2rem, 6vh, 3.5rem);
-  border: 1px solid color-mix(in oklch, var(--accent) 14%, var(--line));
-  border-radius: var(--radius-md);
-  background:
-    linear-gradient(140deg, color-mix(in oklch, var(--ember) 5%, transparent), transparent 58%),
-    color-mix(in oklch, var(--bg-soft) 58%, transparent);
-  overflow: hidden;
+  border: 1px solid var(--line);
+  background: color-mix(in oklch, var(--bg-soft) 45%, transparent);
 }
 .about-principles div {
   padding: 1rem;
-  border-right: 1px solid color-mix(in oklch, var(--accent) 10%, var(--line));
+  border-right: 1px solid var(--line);
 }
 .about-principles div:last-child { border-right: 0; }
 .about-principles span {
@@ -246,7 +245,7 @@
 
   .about-principles div {
     border-right: 0;
-    border-bottom: 1px solid color-mix(in oklch, var(--accent) 10%, var(--line));
+    border-bottom: 1px solid var(--line);
   }
 
   .about-principles div:last-child {

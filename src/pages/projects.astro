@@ -1,5 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import BlackHole from '../hero/BlackHole.tsx';
+import PageHud from '../components/PageHud.astro';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -12,17 +14,34 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   type="website"
   bodyClass="projects-page"
 >
+  {/* Static celestial backdrop — the scene frozen at the YELLOW STAR frame
+      (stage 2.9, Projects' own celestial body in the nav model), heavily dimmed
+      behind the ledger. client:only: the page reads fully without JS; the corner
+      scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
+  <BlackHole client:only="react" backdrop backdropStage={2.9} />
+
+  {/* Cockpit gauge — the same side instrument the scene-journey articles and
+      the graveyard fly with: scroll-progress rail + a readout naming the
+      project currently in view (spied via data-hud-title on each entry). */}
+  <PageHud index="SECTION 01 / 04" beat="PROJECTS · 2 SHIPPED" spy="[data-hud-title]" />
+
   <section class="projects-hero" aria-labelledby="projects-title">
-    <p class="projects-kicker">Projects</p>
+    {/* Page designation row — kicker + mono status readout, so the page opens
+        like a labeled instrument screen. SECTION 01 = Projects' slot in the
+        canonical nav order (SITE_NAV_ITEMS). */}
+    <p class="projects-kicker">
+      <span>Projects</span>
+      <span class="projects-kicker-readout">Section 01 · 2 projects · shipped &amp; running</span>
+    </p>
     <h1 id="projects-title">The work that held.</h1>
     <p>Tools I built, shipped, and still stand behind.</p>
   </section>
 
   <div class="projects-list" aria-label="Shipped projects">
 
-    <article class="projects-entry" id="fleet">
+    <article class="projects-entry" id="fleet" data-hud-title="Fleet">
       <header class="projects-entry-header">
-        <h2 class="projects-entry-name">Fleet</h2>
+        <h2 class="projects-entry-name"><span data-decode>Fleet</span></h2>
         <div class="projects-entry-links">
           <a href="https://github.com/ilies-bel/fleet" class="projects-link" target="_blank" rel="noopener noreferrer">github.com/ilies-bel/fleet</a>
           <span class="projects-link-sep" aria-hidden="true">/</span>
@@ -63,9 +82,9 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       </div>
     </article>
 
-    <article class="projects-entry" id="mars">
+    <article class="projects-entry" id="mars" data-hud-title="Mars">
       <header class="projects-entry-header">
-        <h2 class="projects-entry-name">Mars <span class="projects-badge">private</span></h2>
+        <h2 class="projects-entry-name"><span data-decode>Mars</span> <span class="projects-badge">private</span></h2>
         <span class="projects-private-note">B2B product. No public link.</span>
         <dl class="projects-meta">
           <div class="projects-meta-item">
@@ -270,14 +289,25 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   /* Page-hero block snapped to the sitewide ladder (tokens.css) so Writing /
      Projects / Graveyard open at the same scale and tracking — the old local
      clamps ran a full rung louder than every other reading page. */
+  /* Page designation row — kicker + mono status readout (mirrors
+     .writing-kicker), chrome ramp instead of gold: gold is signal, not
+     scaffolding. */
   .projects-kicker {
     margin: 0;
-    width: max-content;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.15rem;
     font-family: var(--font-mono);
     font-size: var(--text-label);
     letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
-    color: var(--highlight);
+    color: var(--fg-chrome-dim);
+  }
+
+  .projects-kicker-readout {
+    letter-spacing: var(--tracking-label);
+    color: var(--fg-chrome-faint);
   }
 
   .projects-hero h1 {
@@ -330,13 +360,13 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     align-items: center;
     padding: 0.18rem 0.6rem;
     border: 1px solid var(--line);
-    border-radius: var(--radius-pill);
+    border-radius: 2px;
     font-family: var(--font-mono);
     font-size: 0.65rem;
     font-weight: 400;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--fg-faint);
+    color: var(--fg-chrome-faint);
     vertical-align: middle;
   }
 
@@ -362,7 +392,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   }
 
   .projects-link-sep {
-    color: var(--fg-faint);
+    color: var(--fg-chrome-faint);
   }
 
   .projects-pkg {
@@ -376,7 +406,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     font-size: 0.65rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--fg-faint);
+    color: var(--fg-chrome-faint);
     padding: 0.1rem 0.4rem;
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
@@ -386,7 +416,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     font-family: var(--font-mono);
     font-size: 0.78rem;
     letter-spacing: 0.04em;
-    color: var(--fg-faint);
+    color: var(--fg-chrome-faint);
   }
 
   .projects-entry-body {
@@ -407,7 +437,8 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     width: 100%;
     height: auto;
     border: 1px solid var(--line);
-    border-radius: var(--radius-md);
+    /* Square-cut instrument plate — the room's corner grammar. */
+    border-radius: 2px;
     background: var(--bg-soft);
   }
 
@@ -416,7 +447,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     font-family: var(--font-mono);
     font-size: var(--text-label);
     letter-spacing: 0.06em;
-    color: var(--fg-faint);
+    color: var(--fg-chrome-faint);
     line-height: 1.4;
   }
 
@@ -429,7 +460,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     width: 100%;
     height: auto;
     border: 1px solid var(--line);
-    border-radius: var(--radius-md);
+    border-radius: 2px;
     background: var(--bg-soft);
   }
 
@@ -565,7 +596,7 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   .projects-proud {
     padding: 1rem 1.1rem;
     border: 1px solid var(--line);
-    border-radius: var(--radius-md);
+    border-radius: 2px;
     background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
     font-size: 0.96rem !important;
   }
@@ -612,14 +643,14 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     font-size: 0.65rem;
     letter-spacing: 0.13em;
     text-transform: uppercase;
-    color: var(--fg-faint);
+    color: var(--fg-chrome-faint);
     font-weight: 400;
     margin: 0;
     padding: 0;
   }
 
   .projects-meta dd {
-    color: var(--fg-dim);
+    color: var(--fg-chrome-dim);
     font-size: 0.75rem;
     letter-spacing: 0.03em;
     margin: 0;

@@ -544,12 +544,81 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
 /* Per-page overlay visibility. On the home the manifesto identity (.bh-identity,
    hero.css) replaces the small wordmark, so the wordmark is hidden and the
    micro-nav is shown. About runs the scene in backdrop mode (no .bh-identity), so
-   the wordmark owns the top-left; it shares the SAME corner nav as the home scene
-   (one nav system) — only the power button is dropped there (it toggles the home
-   HUD morph, which has no meaning over the About backdrop). */
+   the wordmark owns the top-left; the nav stays (same instrument as home) in its
+   STATIC skin — see .overlay-blog[data-static] below. (No power button renders
+   there at all: SiteNav's showPower is home-only.) */
 body.bare .overlay-brand { display: none; }
 body.bare.about-page .overlay-brand { display: inline-flex; }
-body.bare.about-page .overlay-blog-power { display: none; }
+
+/* STATIC nav skin (About): there is no scene boot to gate the labels, so they
+   rest at reading brightness instead of the home's dimmed idle, and there is no
+   at-opening hold. The current section keeps its target-lock frame lit (the same
+   "locked" statement the reading rail makes), so About announces itself. */
+.overlay-blog[data-static] .overlay-blog-link { color: var(--fg-dim); }
+.overlay-blog[data-static] .overlay-blog-link:hover,
+.overlay-blog[data-static] .overlay-blog-link:focus-visible { color: var(--fg); }
+.overlay-blog[data-static] .overlay-blog-link[aria-current='page'] { color: var(--fg-overlay); }
+.overlay-blog-section[aria-current='page'] .overlay-blog-lock { opacity: 1; }
+
+/* SCENE TOGGLE — the hero's circular side control, generalized: the same thin
+   ring frame as the power button, wrapping a celestial glyph (ringed body +
+   core). Parks the page's backdrop scene (body.backdrop-off, hero.css) via
+   src/scripts/sceneToggle.ts. aria-pressed=true = scene parked: the glyph gains
+   its slash and the whole control dims — an instrument reading "off", not an
+   alarm. Used in BOTH nav skins (reading rail + about overlay). */
+.scene-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  color: var(--fg-chrome-dim);
+  display: grid;
+  place-items: center;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    opacity 0.2s ease;
+}
+.scene-toggle .overlay-blog-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  filter: none;
+}
+.scene-toggle:hover {
+  color: var(--fg-chrome);
+  border-color: var(--accent);
+}
+.scene-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+.scene-toggle-slash {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+.scene-toggle[aria-pressed='true'] {
+  color: var(--fg-chrome-faint);
+  border-color: var(--line);
+  opacity: 0.75;
+}
+.scene-toggle[aria-pressed='true'] .scene-toggle-slash {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-toggle,
+  .scene-toggle-slash { transition: none; }
+}
+
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page
