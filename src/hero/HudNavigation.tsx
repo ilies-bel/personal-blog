@@ -663,49 +663,53 @@ export default function HudNavigation({
   const frameStation = stationForStage(frameStage);
   const frameTime = formatLifecycleTime(lifecycleTimeGyr(frameStage));
 
-  // ---- HALF-CIRCLE TICK GAUGE (the desktop rail, re-instrumented) -----------
-  // The lateral map as an aviation-HUD arc: a half-circle of minor ticks hugging
-  // the left edge, the five stations as major ticks (numbered, clickable), and a
-  // caret riding the arc at the LIVE scroll progress — the heading-tape selector
-  // from the flight-instrument reference. Geometry is computed in fixed SVG units
-  // (1 unit = 1px at the 190×600 box) so the HTML hit-area buttons and the label
-  // can share the same coordinates. The old vertical rail markup stays for the
-  // compact (≤60rem) layout; CSS swaps which one renders per breakpoint.
+  // ---- HALF-CIRCLE TICK GAUGE (fixed-lubber heading card) -------------------
+  // The lateral map as a true compass card: the ARROW IS FIXED on the horizontal
+  // centreline (the lubber line) and the tick QUADRANT rotates under it with
+  // scroll — the instrument answers "you are here" the way a heading indicator
+  // does, instead of sliding a caret along a static scale. Minimalist face: no
+  // arc stroke, no box — ticks only, fading with angular distance from the
+  // lubber line so the card emerges ahead and dissolves behind. Geometry is in
+  // fixed SVG units (1 unit = 1px at the 190×600 box) so the HTML hit-area
+  // buttons and the label share coordinates. The old vertical rail markup stays
+  // for the compact (≤60rem) layout; CSS swaps which one renders per breakpoint.
   const ARC_R = 300;
   const ARC_SWEEP = 55; // degrees each side of the horizontal centreline
-  const ARC_CX = -(ARC_R * Math.cos((ARC_SWEEP * Math.PI) / 180)) + 12;
-  // QUANTIZED to 2 decimals: SSR (Node) and the browser disagree on trig results
-  // in the last ulps, and React flags every such coordinate as a hydration
-  // mismatch. Two decimals of an SVG unit are far below visual precision and
-  // identical on both sides.
+  // QUANTIZED to 2 decimals (fx): SSR (Node) and the browser disagree on trig
+  // results in the last ulps, and React flags every such coordinate as a
+  // hydration mismatch. Two decimals of an SVG unit are far below visual
+  // precision and identical on both sides. ARC_CX is quantized too — it rides
+  // into every transform string.
   const fx = (v: number): number => Number(v.toFixed(2));
-  const arcPoint = (p: number, radius: number) => {
-    const theta = ((p * 2 - 1) * ARC_SWEEP * Math.PI) / 180; // p 0 (top) → 1 (bottom)
-    return {
-      x: fx(ARC_CX + radius * Math.cos(theta)),
-      y: fx(radius * Math.sin(theta)),
-      deg: fx((theta * 180) / Math.PI),
-    };
+  const ARC_CX = fx(-(ARC_R * Math.cos((ARC_SWEEP * Math.PI) / 180)) + 12);
+  const thetaOf = (p: number): number => (p * 2 - 1) * ARC_SWEEP; // p 0 (top) → 1 (bottom)
+  const arcAt = (deg: number, radius: number) => ({
+    x: fx(ARC_CX + radius * Math.cos((deg * Math.PI) / 180)),
+    y: fx(radius * Math.sin((deg * Math.PI) / 180)),
+  });
+  // The card's rotation: bring the CURRENT progress angle onto the lubber line.
+  const caretDeg = fx(thetaOf(Math.min(1, Math.max(0, progress))));
+  // Angular fade around the lubber line — full presence within ~10°, gone past
+  // ~65°. Ticks are static geometry inside the rotating group; only this opacity
+  // (and the group rotation) changes per frame.
+  const arcFade = (deg: number): number => {
+    const d = Math.abs(deg - caretDeg);
+    return fx(Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6));
   };
-  const arcA = arcPoint(0, ARC_R);
-  const arcB = arcPoint(1, ARC_R);
-  const ARC_PATH = `M ${arcA.x.toFixed(1)} ${arcA.y.toFixed(1)} A ${ARC_R} ${ARC_R} 0 0 1 ${arcB.x.toFixed(1)} ${arcB.y.toFixed(1)}`;
   const ARC_MINOR_TICKS = 44;
-  // Station positions in RAW scroll space — the same stage→scroll conversion the
+  // Station angles in RAW scroll space — the same stage→scroll conversion the
   // click-travel uses (progressForLegacyStage is lifecycle-space; the direction
   // seam flips it to raw).
   const arcStations = HUD_NAV_ITEMS.map((item, i) => ({
     item,
     number: i + 1,
-    p: lifecycleProgress(progressForLegacyStage(item.stage)),
+    theta: fx(thetaOf(lifecycleProgress(progressForLegacyStage(item.stage)))),
   }));
-  const arcCaret = arcPoint(Math.min(1, Math.max(0, progress)), ARC_R - 26);
-  // The label follows the POINTED station (hover/focus), else the current one.
+  // The label sits FIXED beside the lubber line (the current station is always
+  // there) and names the pointed station (hover/focus), else the current one.
   const arcShownItem = (pointedId && HUD_NAV_BY_ID[pointedId]) ||
     (effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null);
-  const arcShownPt = arcShownItem
-    ? arcPoint(lifecycleProgress(progressForLegacyStage(arcShownItem.stage)), ARC_R + 12)
-    : null;
+  const ARC_LABEL_X = fx(ARC_CX + ARC_R + 16);
 
   return (
     <>
@@ -728,57 +732,84 @@ export default function HudNavigation({
         click-jump + pointedId aiming the rail rows used. */}
     <div className="hud-arc" data-visible={visible} aria-hidden={!visible}>
       <svg className="hud-arc-svg" viewBox="0 -300 190 600" width="190" height="600" aria-hidden="true">
-        <path className="hud-arc-line" d={ARC_PATH} />
-        {Array.from({ length: ARC_MINOR_TICKS + 1 }, (_, k) => {
-          const p = k / ARC_MINOR_TICKS;
-          const a = arcPoint(p, ARC_R - 8);
-          const b = arcPoint(p, ARC_R - 2);
-          return (
-            <line
-              key={k}
-              className="hud-arc-tick"
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-            />
-          );
-        })}
-        {arcStations.map(({ item, number, p }) => {
-          const a = arcPoint(p, ARC_R - 18);
-          const b = arcPoint(p, ARC_R - 2);
-          const n = arcPoint(p, ARC_R - 34);
-          return (
-            <g
-              key={item.id}
-              className="hud-arc-station"
-              data-current={effectiveCurrentId === item.id}
-            >
-              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
-              <text x={n.x} y={n.y} textAnchor="middle" dominantBaseline="central">
-                {number}
-              </text>
-            </g>
-          );
-        })}
-        <g
-          className="hud-arc-caret"
-          transform={`translate(${arcCaret.x.toFixed(1)} ${arcCaret.y.toFixed(1)}) rotate(${arcCaret.deg.toFixed(1)})`}
-        >
-          <path d="M -4 -5 L 6 0 L -4 5 Z" />
+        {/* THE CARD — everything inside rotates so the current progress angle
+            sits on the fixed lubber line (theta 0, screen-horizontal). */}
+        <g className="hud-arc-rot" transform={`rotate(${-caretDeg} ${ARC_CX} 0)`}>
+          {Array.from({ length: ARC_MINOR_TICKS + 1 }, (_, k) => {
+            const deg = fx(thetaOf(k / ARC_MINOR_TICKS));
+            const a = arcAt(deg, ARC_R - 7);
+            const b = arcAt(deg, ARC_R - 2);
+            return (
+              <line
+                key={k}
+                className="hud-arc-tick"
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                opacity={arcFade(deg)}
+              />
+            );
+          })}
+          {arcStations.map(({ item, number, theta }) => {
+            const a = arcAt(theta, ARC_R - 16);
+            const b = arcAt(theta, ARC_R - 2);
+            const n = arcAt(theta, ARC_R - 30);
+            return (
+              <g
+                key={item.id}
+                className="hud-arc-station"
+                data-current={effectiveCurrentId === item.id}
+                opacity={arcFade(theta)}
+              >
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+                {/* Digits are set along their own radius (local rotate = own
+                    theta), so the station AT the lubber line always reads
+                    upright — compass-card behaviour, not a tilted sticker. */}
+                <text
+                  transform={`translate(${n.x} ${n.y}) rotate(${theta})`}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                >
+                  {String(number).padStart(2, '0')}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+        {/* FIXED lubber line + arrow — the "you are here" datum the card turns
+            under. Never moves. The chevron sits INSIDE the station numbers'
+            radius (R−30) so the current station's digits park between arrow and
+            hairline instead of underneath the arrow. */}
+        <g className="hud-arc-lubber">
+          <line x1={fx(ARC_CX + ARC_R - 18)} y1={0} x2={fx(ARC_CX + ARC_R + 4)} y2={0} />
+          <path
+            d={`M ${fx(ARC_CX + ARC_R - 50)} -4.5 L ${fx(ARC_CX + ARC_R - 41)} 0 L ${fx(ARC_CX + ARC_R - 50)} 4.5`}
+          />
         </g>
       </svg>
-      {arcStations.map(({ item, p }) => {
-        const pt = arcPoint(p, ARC_R - 10);
+      {arcStations.map(({ item, theta }) => {
+        // Hit areas live in SCREEN space, so counter-derive each station's screen
+        // angle under the current rotation. Past ~52° the point's x goes negative
+        // (off the left screen edge — cos(52°)·(R−9) barely clears ARC_CX), so a
+        // station rotated beyond that is hidden rather than left as an invisible
+        // or unclickable zone floating in the void.
+        const rel = fx(theta - caretDeg);
+        const pt = arcAt(rel, ARC_R - 9);
+        const reachable = Math.abs(rel) <= 52;
         return (
           <button
             key={item.id}
             type="button"
             className="hud-arc-btn"
-            style={{ left: `${pt.x.toFixed(1)}px`, top: `${(300 + pt.y).toFixed(1)}px` }}
+            style={{
+              left: `${pt.x}px`,
+              top: `${fx(300 + pt.y)}px`,
+              visibility: reachable ? undefined : 'hidden',
+            }}
             aria-label={`Travel to ${item.label}`}
             aria-current={effectiveCurrentId === item.id ? 'location' : undefined}
-            tabIndex={visible ? 0 : -1}
+            tabIndex={visible && reachable ? 0 : -1}
             onClick={() => beginTravel(item.id, item.stage)}
             onMouseEnter={() => setPointedId(item.id)}
             onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}
@@ -787,10 +818,10 @@ export default function HudNavigation({
           />
         );
       })}
-      {arcShownItem && arcShownPt && (
+      {arcShownItem && (
         <span
           className="hud-arc-label"
-          style={{ left: `${(arcShownPt.x + 8).toFixed(1)}px`, top: `${(300 + arcShownPt.y).toFixed(1)}px` }}
+          style={{ left: `${ARC_LABEL_X}px`, top: '300px' }}
         >
           <span className="hud-arc-label-title">{arcShownItem.label}</span>
           <span className="hud-arc-label-dest">{arcShownItem.destination}</span>

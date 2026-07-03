@@ -2313,11 +2313,12 @@ body.hud-active .hud-frame {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   HALF-CIRCLE TICK GAUGE — the desktop lateral map, re-instrumented (aviation
-   heading-arc reference): minor ticks along a half-circle hugging the left edge,
-   five numbered station ticks (clickable), a caret riding the live progress and
-   a label following the pointed/current station. The old vertical rail markup
-   still renders for the compact layout; the swap is pure CSS (below).
+   HALF-CIRCLE TICK GAUGE — fixed-lubber heading card: the gold arrow is FIXED on
+   the horizontal centreline and the tick quadrant ROTATES under it with scroll
+   (compass-card behaviour). Minimalist face: no arc stroke, no box — hairline
+   ticks only, fading with angular distance from the lubber (opacity is set
+   per-tick inline by the component). The old vertical rail markup still renders
+   for the compact layout; the swap is pure CSS (below).
    ────────────────────────────────────────────────────────────────────────────── */
 .hud-arc {
   position: fixed;
@@ -2337,31 +2338,35 @@ body.at-opening .hud-arc { opacity: 0; }
 .hud-arc[data-visible='false'] .hud-arc-btn,
 body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
 .hud-arc-svg { display: block; overflow: visible; }
-.hud-arc-line {
-  fill: none;
-  stroke: var(--hud-line);
-  stroke-width: 1;
-}
 .hud-arc-tick {
-  stroke: color-mix(in oklch, var(--fg-faint) 55%, transparent);
+  stroke: color-mix(in oklch, var(--fg-faint) 45%, transparent);
   stroke-width: 1;
 }
 .hud-arc-station line {
   stroke: var(--fg-dim);
-  stroke-width: 1.5;
+  stroke-width: 1.25;
   transition: stroke 0.24s ease;
 }
 .hud-arc-station text {
   fill: var(--fg-faint);
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
   transition: fill 0.24s ease;
 }
 .hud-arc-station[data-current='true'] line { stroke: var(--highlight); }
 .hud-arc-station[data-current='true'] text { fill: var(--highlight); }
-.hud-arc-caret path {
-  fill: var(--highlight);
+/* The fixed datum: hairline lubber + open chevron, both gold, never moving. */
+.hud-arc-lubber line {
+  stroke: var(--highlight);
+  stroke-width: 1;
+  opacity: 0.85;
+}
+.hud-arc-lubber path {
+  fill: none;
+  stroke: var(--highlight);
+  stroke-width: 1.25;
+  stroke-linejoin: miter;
 }
 .hud-arc-btn {
   position: absolute;
