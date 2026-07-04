@@ -973,49 +973,29 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const now = performance.now();
     const t = (now - t0) / 1000;
 
-    // --- lifecycle position, smoothed toward the scroll target ---
+    // --- lifecycle position, sampled from the caller's presentation clock ---
     const exploring = hooks.isExplorationMode?.() === true;
     const focusTarget = exploring ? hooks.getFocusTarget?.() ?? null : null;
-    // Per-scene DWELL damps the morph follow-ease so the visitor lingers on a
-    // dwelling beat (e.g. the contemplative red giant). dwell is the active scene's
-    // strength 0..1 (0 when none): at 0 follow is exactly 0.28 — IDENTICAL to before
-    // for undwelled scenes — and rises in stickiness with strength. The map
-    // 0.28 * (1 - 0.6 * dwell) spans 0.28 (dwell 0) -> 0.112 (dwell 1); a Math.max
-    // floor of 0.1 guarantees follow can never reach 0 (which would stall the morph)
-    // and never exceeds 0.28 (dwell is clamped >= 0, so the term <= 0.28). Under
-    // reduced motion the ease is already instant (follow = 1) and dwell is ignored —
-    // the morph snaps, so there is nothing to linger on and accessibility is kept.
-    const dwell = reduced ? 0 : Math.max(0, Math.min(1, hooks.getDwell?.() ?? 0));
-    const follow = reduced ? 1 : Math.max(0.1, 0.28 * (1 - 0.6 * dwell));
-    const progressTarget = Math.max(0, Math.min(1, hooks.getProgress?.() ?? progress));
-    const stageTarget = hooks.getStage();
-    // SETTLE SNAP — land on the restored scroll state, don't animate into it.
-    // The scene mounts and reads its initial stage/progress while window.scrollY is
-    // still 0 (the pale-blue-dot opening), because the browser applies scroll
-    // RESTORATION (on reload / back-navigation to a scrolled position) a frame or
-    // two AFTER mount. Without this, the late restored target would arrive and the
-    // 0.28 easing would GLIDE the whole lifecycle up from the dot to the visitor's
-    // real position — the "fast-forward the animation" bug. So for a short window
-    // after scene start we snap stage/progress DIRECTLY to target (no lerp): the
-    // first frame lands wherever scroll currently is, and any restoration that lands
-    // a few frames later is absorbed instantly too. The window is ~a quarter second
-    // (a handful of frames) — long enough to cover scroll restoration, short enough
-    // that a visitor cannot have meaningfully wheel-scrolled within it, so normal
-    // smooth easing resumes immediately afterward. (Reduced motion already uses
-    // follow=1, so this is a no-op there.)
+    // THE ENGINE NO LONGER EASES. getStage/getProgress return PRE-SMOOTHED
+    // presentation values: each island owns ONE PresentationClock (see
+    // src/hero/presentationClock.ts — the follow-ease, the per-scene dwell
+    // damping and the scroll-restoration settle-snap all live there now) and
+    // hands this engine its eased output. Because every DOM consumer (manifesto
+    // text, HUD spy, arc gauge, marker gates) reads the SAME clock, the canvas
+    // and the chrome cannot disagree about which lifecycle beat is on screen —
+    // the fix for the "rail says NEBULA over a red-giant frame" desync.
+    progress = Math.max(0, Math.min(1, hooks.getProgress?.() ?? progress));
+    stage = hooks.getStage();
+    // RESTORE-SNAP GUARD: for a short window after scene start, pin the
+    // stage-delta trackers to the live stage so a large jump (scroll restoration
+    // landing a few frames after mount) reads as rest, not motion — otherwise it
+    // would flip the hyperspace-streak flow direction and register a phantom
+    // nebula-flash crossing. The value snap itself is the clock's job (its own
+    // settle window); this only guards the engine's local frame-to-frame trackers.
     const SETTLE_SNAP_S = 0.25;
     if (t < SETTLE_SNAP_S) {
-      progress = progressTarget;
-      stage = stageTarget;
-      // Keep the stage-delta trackers in sync so a snap doesn't read as motion:
-      // otherwise the jump from the stale 0 to the restored stage would register a
-      // huge dStreakStage and flip the hyperspace-streak flow (and would be a phantom
-      // nebula-flash crossing). Syncing them here makes the snapped frame look static.
       prevStreakStage = stage;
       prevNebulaStage = stage;
-    } else {
-      progress += (progressTarget - progress) * follow;
-      stage += (stageTarget - stage) * follow;
     }
     // DEBUG: window.__bhMorph forces the stage to an exact value (no smoothing)
     // so the explosion can be inspected frame-by-frame from a capture script.
@@ -1569,12 +1549,11 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       const onScreen = ndcX > -1.1 && ndcX < 1.1 && ndcY > -1.1 && ndcY < 1.1;
       // BEAT-band gate: a marker shows exactly while its scene's manifesto copy
       // is on screen. beatIdForLifecycleP reads the SAME text bands the overlay
-      // renders with, and it is fed progressTarget — the RAW clamped scroll, the
-      // same signal the overlay's React snapshot mirrors — NOT the eased internal
-      // `progress`, which lags raw scroll by the dwell-damped follow-ease and
-      // would land the marker a beat behind its own text. (This replaced the old
-      // settledWindow gate: two clocks, visibly out of sync.)
-      const beatId = beatIdForLifecycleP(lifecycleProgress(progressTarget));
+      // renders with, fed the SAME clock value: `progress` is the presentation
+      // clock's eased output, which is also what HeroIsland publishes to the
+      // React overlay. One clock — the marker, its text, and the rendered body
+      // flip on the same frame by construction.
+      const beatId = beatIdForLifecycleP(lifecycleProgress(progress));
       // STRICT: never publish a marker as visible while the supernova flash/morph
       // envelope is active. `nova` (the clockless Gaussian flash envelope computed
       // above) > ~0.01 means a blast is on screen — suppress the marker so it can

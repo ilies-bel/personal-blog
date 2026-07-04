@@ -123,26 +123,23 @@ export interface MarkerFrame {
    *  edge, making the origin-based `onScreen` false. */
   gateOk: boolean;
   /** The scene whose manifesto BEAT copy is on screen right now — computed by
-   *  beatIdForLifecycleP from the same RAW scroll the text overlay reads — or
-   *  null in a between-beats gap. StarMarker/HudNavigation compare this against
-   *  a placement's state, so a marker's show/hide is frame-locked to its text. */
+   *  beatIdForLifecycleP from the same eased presentation-clock progress the text
+   *  overlay renders with — or null in a between-beats gap. StarMarker/
+   *  HudNavigation compare this against a placement's state, so a marker's
+   *  show/hide is frame-locked to its text AND to the rendered body. */
   beatId: HudTargetId | null;
 }
 
 export interface SceneHooks {
-  /** Returns the current legacy shader lifecycle position. Sampled once per frame.
-   *  The public scroll story is normalized progress; the shader stage is now an
-   *  implementation detail produced by timeline.ts. */
+  /** Returns the shader lifecycle position to RENDER this frame. The engine does
+   *  not smooth this value — the caller owns a PresentationClock (the single
+   *  eased lifecycle clock; see src/hero/presentationClock.ts) and hands the
+   *  engine its eased output, so the canvas and every DOM consumer read the same
+   *  clock. A caller pinning a constant (backdrop mode) passes it directly. */
   getStage: () => number;
-  /** Returns the normalized forward scroll progress (0..1) for the camera rig. */
+  /** Returns the presentation progress (0..1, raw-scroll space) for the camera
+   *  rig — the same clock value as getStage, pre-smoothed by the caller. */
   getProgress?: () => number;
-  /** Returns the active scene's dwell STRENGTH (0..1) for the CURRENT scroll
-   *  position, 0 when the active scene declares no dwell. The render loop DAMPS its
-   *  morph follow-ease by this amount so the visitor lingers on a dwelling beat. It
-   *  is a damping of the internal ease only — the page scrollbar is never touched.
-   *  Optional: backdrop mode and reduced motion ignore it (the ease is already
-   *  instant under reduced motion). */
-  getDwell?: () => number;
   /** Active HUD target. The render loop uses this only for a quiet focus boost;
    *  the stage preview itself still flows through getStage(). */
   getFocusTarget?: () => HudTargetId | null;
