@@ -1283,11 +1283,39 @@ body:not(.loader-gone) .star-marker {
     0 0 5px 0 color-mix(in oklch, var(--marker-gold) 98%, transparent);
 }
 
+/* TARGET DESIGNATION PING (cockpit only): while the HUD is powered, each resting
+   marker breathes a slow expanding gold ring — "targets designated" — so the dive
+   points visibly answer the power switch. A ::after ring, NOT the dot itself: the
+   dot's transform/box-shadow belong to the hover→active→locked escalation
+   (transition-driven), and an animation there would fight it. Idle-state only, so
+   the ping stands down the moment the pointer engages; gated on data-visible so
+   hidden markers don't run a compositor animation. (Note: a whole-marker
+   brightness SPLIT between power states was tried before and read as
+   inconsistency — see the marker resting-look block; a ping is legible as a
+   signal where a static dim never was.) */
+body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marker-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--marker-gold) 70%, transparent);
+  opacity: 0;
+  animation: star-marker-designate 2.8s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)) infinite;
+  pointer-events: none;
+}
+@keyframes star-marker-designate {
+  0% { opacity: 0.8; transform: scale(1); }
+  /* The ring dies well before the cycle ends — a ping and a long quiet, not a strobe. */
+  55% { opacity: 0; transform: scale(3.6); }
+  100% { opacity: 0; transform: scale(3.6); }
+}
+
 /* THE BEGINNING marker frames the REAL pale blue dot (it is projection-anchored
    dead on the speck). A gold core here would sit exactly on top of the scene's
    payoff and turn the famous blue point amber — so this reticle has no core of
    its own; the WebGL speck plays that role. All other escalation cues (hex,
-   arms, card) still carry the interaction feedback. */
+   arms, card) still carry the interaction feedback. (display:none also kills the
+   designation ping here — deliberately: nothing amber may pulse over the speck.) */
 .star-marker[data-marker='beginning'] .star-marker-dot {
   display: none;
 }
@@ -1638,6 +1666,18 @@ body:not(.loader-gone) .star-marker {
   .star-marker[data-side='left'][data-locked='true'] .star-marker-card-cta {
     transform: none;
   }
+  /* The designation ping is a pure grace note — drop it entirely. Full selector
+     repeated: the ping rule's specificity is high, and a media query adds none. */
+  body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marker-dot::after {
+    animation: none;
+    content: none;
+  }
+}
+/* Manual reduced-motion override (data-reduced) mirrors the OS path: no ping.
+   [data-reduced] appended to the ping's own chain so this outranks it. */
+body.hud-active .star-marker[data-reduced='true'][data-visible='true'][data-state='idle'] .star-marker-dot::after {
+  animation: none;
+  content: none;
 }
 .star-marker[data-reduced='true'] .star-marker-dot,
 .star-marker[data-reduced='true'] .star-marker-plate,
