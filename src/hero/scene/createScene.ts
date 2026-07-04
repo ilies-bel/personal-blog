@@ -1585,7 +1585,17 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // viewport fraction (always on-screen) so the star ORIGIN going off-screen
       // (camera-parked red giant on a narrow viewport) must not hide it. Anchored
       // markers ride the origin, so they keep the full `visible` (incl. onScreen).
-      const gateOk = beatId !== null && nova < 0.01;
+      //
+      // DIVE gate: the instant a dive arms, every marker stands down. The dive
+      // override above swings the camera through an orbital arc (DIVE_ORBIT_DEG — the
+      // star enters from the RIGHT and swings back to centre), so an anchored marker
+      // riding the projected origin would LEAP ~a quarter-viewport sideways on the
+      // first dive frame and glide back — a "drifting marker" smeared across the
+      // plunge. Gating here (the single source of marker frames) also releases the
+      // cursor dock: StarMarker's tick sees visible=false, drops its lock, and the
+      // hexagon cursor undocks — CSS alone can hide the marker but can't undock the
+      // cursor. The designation reticle has done its job once you're diving into it.
+      const gateOk = beatId !== null && nova < 0.01 && !diveActive;
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk, beatId });
     }
 

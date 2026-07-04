@@ -1362,6 +1362,44 @@ body.hud-shutting-down .hud-boot-joint {
 }
 /* The 'quietness at rest' now comes from the small dim dot + dim label, not a
    whole-marker dimmer. */
+/* WARP NAV GATE — hide EVERY star marker while a warp jump to About is playing.
+   The warp overlay canvas (z-index 10000) is NOT an opaque sheet — it draws only
+   the light-streaks over a transparent canvas, so the origin page stays visible
+   UNDER the field for the whole 1.5s jump. A marker that happens to be on screen
+   (its gold dot, or a hover-locked card) would sit there as stale lit furniture
+   while the rest of the HUD chrome powers down for the jump (body.warp-active
+   flicker) — so it stands down too. `.warp-overlay` is transition:persist'ed, so
+   its `data-warp-active` attribute (set to 'jump' then 'arrive' by
+   warpTransition.ts, cleared to idle at the end) survives the ClientRouter swap;
+   the ARRIVE side has no home markers left to hide (the swap removed them, and the
+   before-swap arbiter skips the native view-transition for a warp so no snapshot
+   of one can cross-fade either) — the attribute spanning both phases just makes
+   the window airtight. !important beats the [data-visible] opacity:1 rule.
+   pointer-events off too so a hidden marker can't be clicked mid-jump. */
+body:has(.warp-overlay[data-warp-active]) .star-marker {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  /* Snap hidden the instant the warp starts — no eased fade. A marker caught
+     mid-fade (opacity ~0.3) would otherwise ease down over its 0.14s transition
+     and flicker for a frame or two under the (transparent) streak field. */
+  transition: none !important;
+}
+/* DIVE GATE — the same stand-down for the cinematic dive (body.bh-diving, added
+   synchronously in HeroIsland.beginDive BEFORE the camera starts moving). The
+   dive's orbital arc (createScene DIVE_ORBIT_DEG — the star enters from the
+   right) swings the star's projection ~a quarter-viewport RIGHT on the first
+   dive frames, and the anchored pale-dot marker rides that projection — so
+   without this rule the just-clicked reticle DARTS right at full opacity for the
+   ~0.3s it takes the scene's diveActive frame-gate to propagate (React commit of
+   data-visible=false + the eased opacity transition), reading as a "drifting
+   marker". The scene gate stays the source of truth — it is what releases the
+   marker lock so the hexagon cursor undocks, which CSS cannot do — this rule
+   only guarantees the very first dive frame is already paint-clean. */
+body.bh-diving .star-marker {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
 /* EARLY-INTERACTION GATE — until the intro loader is FULLY gone (body.loader-gone,
    set on the ::before background-fade transitionend; see index.astro), the markers
    sit UNDER the loader but are live <a> links. Force pointer-events:none so a
