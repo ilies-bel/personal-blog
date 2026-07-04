@@ -122,18 +122,32 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
           />
 
           {/* Boot transition layers — driven entirely by body.hud-booting (added for
-              the ~3.6s power-on window by the FSM script below). Three fixed, full-
+              the ~3.6s power-on window by the FSM script below). Fixed, full-
               viewport, pointer-events:none layers + a bottom-centre readout, all CSS-
               off the body class (see hud.css → "HUD boot sequence"); aria-hidden so
               none of it ever announces:
                 • .hud-boot-flicker — a light layer that surges/settles (power surge).
                 • .hud-boot-scan    — a thin line that sweeps across the viewport.
+                • .hud-boot-panels  — the cockpit BEZEL: four edge seams that etch in
+                                      clockwise around the viewport (a current tracing
+                                      the canopy frame) with corner joints that weld
+                                      lit as the trace passes; fades out at ignition.
                 • .hud-boot         — the status readout + a stuttering progress bar.
               The .hud-boot-label TEXT is swapped by the FSM through the boot window
               (LOADING → CALIBRATING → ALIGNING → SYSTEMS NOMINAL) so the readout
               reads like a machine running its start-up self-check. */}
           <div class="hud-boot-flicker" aria-hidden="true"></div>
           <div class="hud-boot-scan" aria-hidden="true"></div>
+          <div class="hud-boot-panels" aria-hidden="true">
+            <span class="hud-boot-seam" data-edge="top"></span>
+            <span class="hud-boot-seam" data-edge="right"></span>
+            <span class="hud-boot-seam" data-edge="bottom"></span>
+            <span class="hud-boot-seam" data-edge="left"></span>
+            <span class="hud-boot-joint" data-corner="tl"></span>
+            <span class="hud-boot-joint" data-corner="tr"></span>
+            <span class="hud-boot-joint" data-corner="br"></span>
+            <span class="hud-boot-joint" data-corner="bl"></span>
+          </div>
           <div class="hud-boot" aria-hidden="true">
             <span class="hud-boot-label">LOADING</span>
             <span class="hud-boot-bar"></span>

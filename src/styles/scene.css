@@ -310,6 +310,27 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
 body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   transform: translateY(-2px);
 }
+/* IGNITION HANDSHAKE: when hud-active lands, the section labels flicker alive one
+   after another left→right — instruments answering the power bus, in the same
+   stutter language as the warp flicker. A one-shot ANIMATION (not a
+   transition-delay) so hover/focus transitions stay instant afterwards;
+   `backwards` holds each label dim through its stagger slot. Replays on
+   ClientRouter swaps (the fresh body re-gains hud-active) — that re-handshake is
+   deliberate, it reads as the chrome re-syncing after a jump. */
+body.bare.hud-active .overlay-blog-links .overlay-blog-link {
+  animation: overlay-link-ignite 0.42s ease-out backwards;
+}
+body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(1) { animation-delay: 0.05s; }
+body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(2) { animation-delay: 0.13s; }
+body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(3) { animation-delay: 0.21s; }
+body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(4) { animation-delay: 0.29s; }
+body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(5) { animation-delay: 0.37s; }
+@keyframes overlay-link-ignite {
+  0%   { opacity: 0.25; }
+  45%  { opacity: 0.95; }
+  60%  { opacity: 0.55; }  /* one settle stutter, then steady */
+  100% { opacity: 1; }
+}
 /* Functional control glyphs only — the GitHub/X brand-logo SVGs in the social
    icon links, the Power button SVG, and the ReducedMotionToggle SVG all carry
    .overlay-blog-icon. Section icons were removed; this rule now sizes only the
@@ -374,7 +395,7 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-icon,
   .overlay-blog-link { transition: none; }
-  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
+  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; animation: none; }
   /* Drop the social-logo lift/scale; the gold glow still confirms hover. */
   .overlay-blog-social:hover .overlay-blog-icon,
   .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }

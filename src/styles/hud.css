@@ -1102,12 +1102,98 @@ body.hud-booting .hud-boot-scan {
   100% { transform: translateY(100%); opacity: 0; }
 }
 
+/* COCKPIT BEZEL — "the whole site is screen panels": during the boot window a
+   gold hairline traces the viewport perimeter CLOCKWISE from the top-left (top →
+   right → bottom → left), etching in the canopy frame around the visitor; a small
+   corner JOINT welds lit as the trace passes each corner. When booting ends the
+   whole bezel cross-fades out (container transition) exactly as the instruments
+   ignite — the frame dissolves into the four .hud-frame corner ticks the powered
+   HUD keeps.
+
+   Draw mechanics: the CHILDREN's resting state is the COMPLETED bezel (seams at
+   full scale, joints lit) and only the body.hud-booting animations start them
+   from nothing (fill-mode both + per-element delay = the clockwise sequencing).
+   This is deliberate: when hud-booting drops, the animations are removed and the
+   children SNAP to their completed resting state — invisible under the
+   container's opacity fade — instead of snapping to zero-length seams mid-fade.
+   All timing derives from --hud-boot-dur so the trace can never drift from the
+   FSM's window. Children are position:absolute inside the one fixed container. */
+.hud-boot-panels {
+  position: fixed;
+  inset: 0;
+  z-index: 17;                 /* with the flicker/scan wash, below the HUD rail */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+body.hud-booting .hud-boot-panels {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+.hud-boot-seam {
+  position: absolute;
+  background: color-mix(in oklch, var(--highlight) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--highlight) 35%, transparent);
+}
+/* Edge geometry + the DRAW ORIGIN each edge grows from (clockwise trace). */
+.hud-boot-seam[data-edge='top']    { top: 10px; left: 10px; right: 10px; height: 1px; transform-origin: left center; }
+.hud-boot-seam[data-edge='right']  { top: 10px; bottom: 10px; right: 10px; width: 1px; transform-origin: center top; }
+.hud-boot-seam[data-edge='bottom'] { bottom: 10px; left: 10px; right: 10px; height: 1px; transform-origin: right center; }
+.hud-boot-seam[data-edge='left']   { top: 10px; bottom: 10px; left: 10px; width: 1px; transform-origin: center bottom; }
+/* The clockwise trace: each seam draws over ~22% of the boot window, starting as
+   the previous edge finishes (4% → 24% → 44% → 64%), so the current runs the full
+   perimeter and closes the frame just before SYSTEMS NOMINAL. */
+body.hud-booting .hud-boot-seam[data-edge='top'],
+body.hud-booting .hud-boot-seam[data-edge='bottom'] {
+  animation: hud-boot-seam-x calc(var(--hud-boot-dur) * 0.22) var(--ease-out-quint) both;
+}
+body.hud-booting .hud-boot-seam[data-edge='right'],
+body.hud-booting .hud-boot-seam[data-edge='left'] {
+  animation: hud-boot-seam-y calc(var(--hud-boot-dur) * 0.22) var(--ease-out-quint) both;
+}
+body.hud-booting .hud-boot-seam[data-edge='top']    { animation-delay: calc(var(--hud-boot-dur) * 0.04); }
+body.hud-booting .hud-boot-seam[data-edge='right']  { animation-delay: calc(var(--hud-boot-dur) * 0.24); }
+body.hud-booting .hud-boot-seam[data-edge='bottom'] { animation-delay: calc(var(--hud-boot-dur) * 0.44); }
+body.hud-booting .hud-boot-seam[data-edge='left']   { animation-delay: calc(var(--hud-boot-dur) * 0.64); }
+@keyframes hud-boot-seam-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes hud-boot-seam-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+/* Corner joints: 3px gold studs a hair outside the seam crossings. Each one BLIPS
+   bright the moment the trace reaches its corner (same delays as the seams above)
+   then settles to a quiet hold — panels bolting on, one corner at a time. */
+.hud-boot-joint {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: var(--highlight);
+  opacity: 0.55;
+}
+.hud-boot-joint[data-corner='tl'] { top: 9px; left: 9px; }
+.hud-boot-joint[data-corner='tr'] { top: 9px; right: 9px; }
+.hud-boot-joint[data-corner='br'] { bottom: 9px; right: 9px; }
+.hud-boot-joint[data-corner='bl'] { bottom: 9px; left: 9px; }
+body.hud-booting .hud-boot-joint {
+  animation: hud-boot-joint-weld calc(var(--hud-boot-dur) * 0.18) ease-out both;
+}
+body.hud-booting .hud-boot-joint[data-corner='tl'] { animation-delay: calc(var(--hud-boot-dur) * 0.04); }
+body.hud-booting .hud-boot-joint[data-corner='tr'] { animation-delay: calc(var(--hud-boot-dur) * 0.26); }
+body.hud-booting .hud-boot-joint[data-corner='br'] { animation-delay: calc(var(--hud-boot-dur) * 0.46); }
+body.hud-booting .hud-boot-joint[data-corner='bl'] { animation-delay: calc(var(--hud-boot-dur) * 0.66); }
+@keyframes hud-boot-joint-weld {
+  0%   { opacity: 0; box-shadow: none; }
+  35%  { opacity: 1; box-shadow: 0 0 10px 2px color-mix(in oklch, var(--highlight) 80%, transparent); }
+  100% { opacity: 0.55; box-shadow: 0 0 4px 0 color-mix(in oklch, var(--highlight) 30%, transparent); }
+}
+
 /* Reduced motion: skip the flicker, scan and bar STUTTER entirely. The readout
    still shows briefly (its opacity transition is allowed) and the bar fills CALMLY
    so the boot is felt, just without the machine-startup theatrics. */
 @media (prefers-reduced-motion: reduce) {
   body.hud-booting .hud-boot-flicker { animation: none; opacity: 0; }
   body.hud-booting .hud-boot-scan { animation: none; opacity: 0; }
+  /* The bezel trace is pure theatrics too — the calm readout carries the boot. */
+  body.hud-booting .hud-boot-panels { opacity: 0; }
+  body.hud-booting .hud-boot-seam,
+  body.hud-booting .hud-boot-joint { animation: none; }
   body.hud-booting .hud-boot-bar::after {
     animation: hud-boot-fill-calm var(--hud-boot-dur) ease-out forwards;
   }
