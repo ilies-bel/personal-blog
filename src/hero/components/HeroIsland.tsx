@@ -276,8 +276,9 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // owns that class so the loader → ignite sequence is sequenced in exactly one
       // place. We dispatch only on the at-bottom EDGE (ref-tracked) so the request fires
       // once per transition, never every scroll sample. The FSM decides what to honour:
-      // it suppresses the scroll power-off while the corner override (body.hud-forced)
-      // is engaged and keeps the HUD lit once booted, so the island can dispatch freely.
+      // it auto-boots only while the visitor has never touched the power button
+      // (userChosen), keeps the HUD lit once booted, and ignores the power-off
+      // request entirely — so the island can dispatch freely.
       // CONTENT UNLOCK (raw 88-100%): arm the HUD across the whole pale-dot/content
       // band, not just the last frame. The 'beginning' SCENE owns lifecycle 0.00-0.12
       // = raw 88-100% exactly (segment 1 in the RE-TIMED table), so gate on the SCENE
@@ -502,9 +503,9 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
       // ONLY the island-owned chrome class (is-scrolled) and the transient boot
       // class (hud-booting) — a half-finished loader must not survive an unmount.
-      // We deliberately do NOT strip hud-active / hud-forced anymore: those are
-      // owned by the boot FSM and mirrored to localStorage, so the persisted power
-      // state is the source of truth across an SPA unmount/reload. Reset the
+      // We deliberately do NOT strip hud-active: it is owned by the boot FSM and
+      // mirrored to localStorage, so the persisted power state is the source of
+      // truth across an SPA unmount/reload. Reset the
       // at-end edge tracker so a re-mount re-evaluates and re-requests from scratch.
       hudAtEndRef.current = false;
       // Cancel a still-pending "brief solo" power-on so it can't fire after the island
