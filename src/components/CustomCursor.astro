@@ -47,8 +47,18 @@
 {/* The comet-tail canvas — its OWN fixed full-viewport layer, BEHIND the ball
     (one z-index step below), so its pixels are raw viewport coords fully
     decoupled from the ball's transform. Inert + invisible until the script wires
-    it up and the first fine-pointer move reveals it. */}
-<canvas class="cursor-trail" data-cursor-trail transition:persist aria-hidden="true"></canvas>
+    it up and the first fine-pointer move reveals it.
+
+    transition:persist takes an EXPLICIT, STABLE key ("bh-cursor-trail"). Without
+    one Astro derives the persist id from the element's ordinal among transition-
+    scoped nodes, which DIFFERS between a `bare` page (home/about) and a reading
+    page — so the ids mismatched, persist SILENTLY failed on those swaps, and Astro
+    inserted the fresh (un-revealed, opacity:0) node in place of the live one. The
+    controller script runs once and holds the old node, so it never re-revealed the
+    replacement → the cursor "sometimes" went invisible after a page transition.
+    A fixed key makes the id identical on every page, so the SAME node truly
+    persists across every navigation. Must match the ball's key family below. */}
+<canvas class="cursor-trail" data-cursor-trail transition:persist="bh-cursor-trail" aria-hidden="true"></canvas>
 
 {/*
   The cursor root (the ball). position:fixed + pointer-events:none so it floats
@@ -56,8 +66,14 @@
   script reveals it only on a fine pointer once the mouse has actually moved. The
   dot and the hexagon both live inside, centred on the same point, so the swap
   keeps the dot perfectly put.
+
+  transition:persist takes an EXPLICIT, STABLE key ("bh-cursor-root") for the same
+  reason as the trail canvas above — see that note. The ordinal-derived id differed
+  across bare vs reading pages, so the live ball got replaced by a fresh opacity:0
+  node on those swaps (the invisible-cursor bug); a fixed key persists the SAME
+  node everywhere.
 */}
-<div class="cursor" data-custom-cursor transition:persist aria-hidden="true">
+<div class="cursor" data-custom-cursor transition:persist="bh-cursor-root" aria-hidden="true">
   {/* The hexagon outline — hidden until .cursor--interactive. Flat-top regular
       hexagon (pointy sides), ~40px across, 1px-ish off-white stroke, no fill,
       low opacity. Drawn as an inline SVG <polygon> so it scales crisply. */}
