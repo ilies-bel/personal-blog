@@ -38,7 +38,7 @@
 
 /* The progress RAIL — a 1px tarnished line with a gold fill that grows top→down with
    article scroll. The fill height is driven by the --scene-progress custom property
-   (0..1) the ArticleHud / GraveyardHud / TesseractBackdrop rails set inline. */
+   (0..1) the ArticleHud rail sets inline. */
 .article-hud-rail {
   position: relative;
   width: 1px;

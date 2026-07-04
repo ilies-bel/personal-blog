@@ -1,10 +1,6 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import BlackHole from '../../hero/BlackHole.tsx';
-import ArticleScene from '../../hero/components/ArticleScene.tsx';
-import ArticleHud from '../../hero/components/ArticleHud.tsx';
-import TesseractBackdrop from '../../hero/components/TesseractBackdrop.astro';
 import IslandsDemo from '../../components/mdx/IslandsDemo.tsx';
 import SceneFigure from '../../components/mdx/SceneFigure.tsx';
 import SignalsReadout from '../../components/mdx/SignalsReadout.tsx';
@@ -33,10 +29,7 @@ const nextPost = allPosts.length > 1 ? allPosts[(postIndex + 1) % allPosts.lengt
 const nextJourney = nextPost?.data.scene?.journey;
 const nextFrom = stationForStage(nextJourney ? nextJourney[0] : 0);
 const nextTo = nextJourney ? stationForStage(nextJourney[1]) : null;
-// `headings` feeds the ArticleHud section readout. Astro auto-assigns each heading an
-// `id` equal to its `slug`, so the HUD's IntersectionObserver can spy them by id with
-// no manual id injection in the MDX.
-const { Content, headings } = await render(post);
+const { Content } = await render(post);
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
@@ -47,27 +40,13 @@ const fmt = (d: Date) =>
 // its own (client:* in the MDX), keeping the surrounding prose zero-JS — the islands
 // thesis, demonstrated. Passed to <Content components={...} /> below.
 const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
-
-// ART-DIRECTION ROUTING. Three backdrop modes, resolved here so the template stays flat:
-//   • scene.journey set     → the LIVE engine driven by article scroll (the scene
-//                             journey — ArticleScene + the reading-chrome HUD).
-//   • backdrop 'tesseract'  → the bespoke corridor (new scene.backdrop OR legacy field).
-//   • neither               → today's frozen, dimmed black-hole backdrop (safe default).
-const sceneCfg = post.data.scene;
-const journey = sceneCfg?.journey;
-const useTesseract =
-  sceneCfg?.backdrop === 'tesseract' || post.data.backdrop === 'tesseract';
-// Section readout source: the post's h2s, in order. slug doubles as the element id.
-const sections = headings
-  .filter((h) => h.depth === 2)
-  .map((h) => ({ id: h.slug, title: h.text }));
 ---
 
-{/* The article reads in the same room as the hero: the signature object sits
-   pinned to its BLACK-HOLE frame (backdropStage=0), heavily dimmed by CSS to a
-   faint graphite/gold atmosphere behind the reading column. `body.article-page` (set
-   below) tunes the dim down for the bright photon ring and softens the standard
-   page glow so the two don't muddy. See body.article-page .bh-backdrop in hero.css. */}
+{/* READING SURFACE — posts render on calm darkness: the sitewide near-black room
+   (--bg, base.css) with only the faint sitewide grid texture. No celestial
+   backdrop is mounted behind body text — the scene renders belong to the home
+   hero / the list pages / Behind the Build, not under a reading column. Any
+   in-prose scene plates a post wants come through the MDX islands (SceneFigure). */}
 <BaseLayout
   title={post.data.title}
   description={post.data.description}
@@ -77,34 +56,7 @@ const sections = headings
   modifiedTime={post.data.updatedDate}
   bodyClass="article-page"
 >
-  {/* Backdrop layer. Three modes (resolved in the frontmatter block above):
-       • scene.journey set    → <ArticleScene>: the LIVE hero engine, its getStage
-         driven by ARTICLE scroll, so reading the post scrubs the stellar lifecycle
-         through the authored [from,to] window. This is the scene-JOURNEY treatment —
-         the article reads in the same room AND with the same motion grammar as the
-         hero, not a frozen wallpaper.
-       • backdrop 'tesseract' → the bespoke Interstellar corridor (INSPIRATION / 01).
-       • neither              → the legacy frozen, dimmed black-hole backdrop.
-     client:only means each simply doesn't render without JS, leaving the article fully
-     readable on the plain dark room. All sit at z-index 0 behind the reading column and
-     under the dive overlay, so a marker dive resurfaces INTO whichever backdrop renders. */}
-  {
-    journey ? (
-      <ArticleScene client:only="react" journey={journey} />
-    ) : useTesseract ? (
-      <TesseractBackdrop />
-    ) : (
-      <BlackHole client:only="react" backdrop backdropStage={0} />
-    )
-  }
-
-  {/* Reading-frame HUD — mounted only on scene-journey posts (it tracks the live
-     scrub). A passive readout in the hero's mono-gold instrument language: a scroll
-     progress rail, the section index/title, and the active celestial-beat name. Its
-     own island; reads scroll from the window event ArticleScene dispatches. */}
-  {journey && <ArticleHud client:only="react" sections={sections} />}
-
-  <article class="prose" data-scene-journey={journey ? '' : undefined}>
+  <article class="prose">
     <header class="article-header">
       <a class="article-back" href={href('writing')}>
         <span class="article-back-bracket" aria-hidden="true"></span>
