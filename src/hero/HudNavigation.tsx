@@ -81,6 +81,18 @@ function scrollToScene(id: HudTargetId, reduced: boolean): number {
   return top;
 }
 
+/** The compass CTA's travel target: the chapter `dir` steps away from `from` in
+ *  PHYSICAL scroll order (HUD_NAV_ITEMS is authored top→bottom, so +1 is one
+ *  chapter DOWN the page — the descent — and -1 one chapter back up). Returns
+ *  null past either end. Backs the bottom-centre readout's click actions:
+ *  "[ REVERSE COLLAPSE ]" / "[ SCROLL TO EXPLORE ]" descend one chapter, the
+ *  finale "[ THE BEGINNING ]" steps back up. */
+function sceneStep(from: HudTargetId, dir: 1 | -1): HudTargetId | null {
+  const i = HUD_NAV_ITEMS.findIndex((item) => item.id === from);
+  const next = i >= 0 ? HUD_NAV_ITEMS[i + dir] : undefined;
+  return next ? next.id : null;
+}
+
 // --- Aiming-compass data source --------------------------------------------
 // The bottom-centre readout is "a compass embarked in the cursor". Two glyphs:
 //   • ▲  — the CURSOR. The FIXED anchor at the gauge's centre. It never moves.
@@ -596,9 +608,22 @@ export default function HudNavigation({
   // ("SEEKING SIGNAL"); in a transition band between beats there is no settled
   // marker to find AND we are past the opening hold, so the cue is to scroll back
   // onto a beat ("SCROLL BACK TO THE POINT").
-  const phase = sceneForProgress(progress).phase;
+  const sceneNow = sceneForProgress(progress);
+  const phase = sceneNow.phase;
   const atTop = progress <= SCROLL_HINT_DISMISS_AT;
   const recovery = idle && phase === 'transition' && !atTop;
+  // COMPASS CTA TARGETS. The bracketed readout line is a real button (task: the
+  // landing frame's only affordance was a non-clickable prompt), and every copy
+  // variant maps to a travel the rail/gauge already know how to make (beginTravel):
+  //   • REVERSE COLLAPSE / SCROLL TO EXPLORE → one chapter DOWN the page: the
+  //     descent begins, scrolling THROUGH the collapse band onto the next settled
+  //     beat's anchor. At the last chapter it falls back to the current scene's
+  //     own anchor (the page bottom) so the button is never dead.
+  //   • JUMP TO WORK (recovery) → the yellow-star/projects band ('yellow' — the
+  //     scene whose destination is Projects, i.e. "the work").
+  //   • THE BEGINNING (finale) → one chapter back UP, starting the forward play.
+  const descentId = sceneStep(sceneNow.sceneId, 1) ?? sceneNow.sceneId;
+  const ascentId = sceneStep(sceneNow.sceneId, -1) ?? sceneNow.sceneId;
   // FINALE: deep inside the closing dot hold (raw scroll ≥ 96%) the journey is
   // over — "SCROLL TO EXPLORE" would point at nothing. The idle readout flips to
   // an arrival: the beat's name, plus the one true fact about scrolling back up
@@ -981,15 +1006,30 @@ export default function HudNavigation({
           data-boot={bootPhase}
           data-glide={gliding}
           data-reduced={reduced}
-          aria-hidden="true"
+          // Decorative through LOADING/READY (the loader owns the announced copy),
+          // but the standing cue carries a REAL control — "[ REVERSE COLLAPSE ]"
+          // is a button that begins the descent — so the container must not be
+          // aria-hidden while a focusable action lives inside it.
+          aria-hidden={bootPhase === 'cue' ? undefined : true}
         >
           {bootPhase === 'cue' ? (
             <>
-              <p className="hud-compass-read">
+              {/* The landing frame's real path: the cue line is a <button> (the
+                  .hud-compass-cta reset keeps the metrics of the <p> it replaces).
+                  Clicking begins the descent — the same beginTravel click-jump the
+                  rail uses, to the first chapter below the black hole — so the
+                  collapse plays on the way down. Keyboard reachable; the scroll it
+                  fires also dismisses this cue (bootPhase → live). */}
+              <button
+                type="button"
+                className="hud-compass-read hud-compass-cta"
+                onClick={() => beginTravel(descentId)}
+                aria-label="Reverse the collapse — begin the descent"
+              >
                 <span className="hud-compass-prompt">[ </span>
                 <span className="hud-compass-label">REVERSE COLLAPSE</span>
                 <span className="hud-compass-prompt"> ]</span>
-              </p>
+              </button>
               <p className="hud-compass-dest">
                 <span className="hud-compass-arrow">↓</span>
                 <span>scroll down</span>
@@ -1024,17 +1064,30 @@ export default function HudNavigation({
         data-recovery={recovery}
         data-reduced={reduced}
         data-booting={booting}
-        aria-hidden="true"
+        // Hidden from AT while NAMING (the aimed copy duplicates the marker /
+        // rail labels, which announce themselves) AND while the boot readout owns
+        // the slot (this element is visually dark then — its CTA is also tabIndex
+        // -1). In the exposed idle state the container must NOT be aria-hidden —
+        // an aria-hidden ancestor over a focusable control is an a11y trap.
+        aria-hidden={idle && !booting ? undefined : true}
       >
         {idle ? (
           atEnd ? (
             <>
-              {/* FINALE readout — the arrival beat at the bottom of the journey. */}
-              <p className="hud-compass-read hud-compass-read--idle">
+              {/* FINALE readout — the arrival beat at the bottom of the journey.
+                  Clickable: "play it forward" steps one chapter back UP the page,
+                  starting the lifecycle's forward run. */}
+              <button
+                type="button"
+                className="hud-compass-read hud-compass-read--idle hud-compass-cta"
+                onClick={() => beginTravel(ascentId)}
+                tabIndex={visible && !booting ? 0 : -1}
+                aria-label="Play it forward — travel back up one chapter"
+              >
                 <span className="hud-compass-prompt">[ </span>
                 <span className="hud-compass-label">THE BEGINNING</span>
                 <span className="hud-compass-prompt"> ]</span>
-              </p>
+              </button>
               <p className="hud-compass-dest">
                 <span className="hud-compass-arrow">↑</span>
                 <span>play it forward</span>
@@ -1042,11 +1095,26 @@ export default function HudNavigation({
             </>
           ) : (
           <>
-            <p className="hud-compass-read hud-compass-read--idle">
+            {/* The idle readout is a real control: SCROLL TO EXPLORE descends one
+                chapter (same travel as the cue), JUMP TO WORK travels to the
+                yellow-star/projects band. Same beginTravel machinery as the rail —
+                highlight lock, settle watcher, reduced-motion jump — so the CTA
+                and the instruments always agree on the destination. */}
+            <button
+              type="button"
+              className="hud-compass-read hud-compass-read--idle hud-compass-cta"
+              onClick={() => beginTravel(recovery ? 'yellow' : descentId)}
+              tabIndex={visible && !booting ? 0 : -1}
+              aria-label={
+                recovery
+                  ? 'Jump to the projects chapter'
+                  : 'Scroll to the next chapter'
+              }
+            >
               <span className="hud-compass-prompt">[ </span>
               <span className="hud-compass-label">{recovery ? 'JUMP TO WORK' : 'SCROLL TO EXPLORE'}</span>
               <span className="hud-compass-prompt"> ]</span>
-            </p>
+            </button>
             {/* Reserve the second (destination) line's height even when idle so the
                 grid block is the SAME height in both states — the rose + first
                 readout line never shift vertically when toggling idle↔active. It

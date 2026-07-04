@@ -223,13 +223,23 @@ body.scene-ready .scene-loader::before {
   gap: 0.6rem;
 }
 
-/* Opening hold: the full section nav is DELAYED — hidden on the quiet black-hole
-   opening frame, fading in once the visitor scrolls past SCROLL_HINT_DISMISS_AT
-   (body loses .at-opening). The existing body.bare .overlay-blog transition
-   (opacity/transform, hero.css) makes this glide rather than pop. */
-body.at-opening .overlay-blog {
-  opacity: 0;
-  pointer-events: none;
+/* Opening hold — STANDBY nav (power contract). The section nav used to be fully
+   hidden on the opening frame (opacity 0), which left the landing viewport with
+   NO clickable path at all: the three destinations must be legible and reachable
+   from second zero. So while body.at-opening holds AND the HUD is dark, the row
+   now renders in a dimmed-but-readable STANDBY treatment instead of vanishing:
+   the links keep their normal resting tone (--hud-rail-dim-text — the same rung
+   the row rests at mid-scroll, so scrolling past the opening changes nothing),
+   pulled down only a step in row opacity so the opening frame still reads quiet.
+   This is squarely inside the power contract: the HUD instruments (rail, arc,
+   compass gauge) stay dark until the FSM powers them; the corner nav is standby
+   chrome, not a HUD instrument. When the HUD later boots (body.hud-active), the
+   EXISTING promote rules take over — colour lift to --fg + the 2px transform
+   lift + the ignite flicker — all paint/transform only, so standby → powered
+   causes zero layout shift. A restored-power visitor (hud-active persisted) at
+   the top simply doesn't match this rule and lands on the full lit treatment. */
+body.at-opening:not(.hud-active):not(.hud-booting) .overlay-blog {
+  opacity: 0.86;
 }
 
 /* Section links as text labels — visible in EVERY mode (no decorative icons).

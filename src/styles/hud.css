@@ -773,28 +773,83 @@ body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay:
 .hud-compass-dest--spacer {
   visibility: hidden;
 }
-/* Idle placeholder: SEEKING SIGNAL — dim, faint, all the signal colour drained so
-   the instrument reads as scanning/empty rather than naming a destination. */
+/* Idle placeholder: SEEKING SIGNAL — quiet but RELIABLE. The idle readout is now
+   a real CTA (see .hud-compass-cta below), so it rests on the interaction layer's
+   --fg-hud-interactive (~15-20% brighter than the old --fg-faint) instead of the
+   decorative-faint tier: it must read as an instrument you can act on, not as
+   texture. Signal colour still drained — brightness, not gold, is the lift. */
 .hud-compass-read--idle {
-  color: var(--fg-faint);
+  color: var(--fg-hud-interactive);
 }
 .hud-compass-read--idle .hud-compass-label {
-  color: var(--fg-faint);
+  color: var(--fg-hud-interactive);
   letter-spacing: 0.2em;
 }
 .hud-compass-read--idle .hud-compass-prompt {
-  color: var(--fg-faint);
+  color: var(--fg-hud-interactive);
 }
 /* Recovery cue is a longer instruction, not a label — tighten tracking, keep it on
    one line, and warm it toward gold so it reads as an active prompt (vs the drained
-   SEEKING-SIGNAL scan). */
+   SEEKING-SIGNAL scan). Base stepped up --fg-dim → --fg in the mix so the recovery
+   prompt rises proportionally with the brightened idle tier below it. */
 .hud-compass[data-recovery='true'] .hud-compass-read--idle .hud-compass-label {
   letter-spacing: 0.12em;
   white-space: nowrap;
-  color: color-mix(in oklch, var(--fg-dim) 70%, var(--hud-gold));
+  color: color-mix(in oklch, var(--fg) 70%, var(--hud-gold));
 }
 .hud-compass[data-recovery='true'] .hud-compass-read--idle .hud-compass-prompt {
   color: color-mix(in oklch, var(--hud-gold) 50%, var(--hud-line));
+}
+
+/* --- Compass CTA (the "[ … ]" line as a REAL control) -----------------------
+   The idle/boot readout's bracketed line is a <button>: at the landing frame
+   "[ REVERSE COLLAPSE ]" begins the descent (smooth-scroll to the next chapter),
+   "[ SCROLL TO EXPLORE ]" does the same mid-journey, "[ JUMP TO WORK ]" travels
+   to the yellow-star/projects band, and the finale "[ THE BEGINNING ]" steps back
+   up one chapter. Markup + actions live in HudNavigation.tsx (they reuse the same
+   beginTravel click-jump the rail/gauge use); this is purely the look:
+     • a full button reset so the line renders EXACTLY like the <p> it replaces
+       (the .hud-compass-read metrics/colour all still apply — no layout shift);
+     • pointer-events re-enabled (the .hud-compass container is pointer-events:
+       none by design, so only this line is interactive);
+     • hover/focus: the brackets brighten to the rail gold and the label lifts to
+       the HUD main tone — a proportional step above the raised resting tier;
+     • the unified focus ring (2px --accent) for keyboard reach. */
+.hud-compass-cta {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  padding: 0.1rem 0.25rem;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* While the slot is dark (booting hand-off / gated off) the invisible line must
+   not remain a click/tab target — mirror the container's hidden states. */
+.hud-compass[data-booting='true'] .hud-compass-cta,
+.hud-compass[data-visible='false'] .hud-compass-cta,
+body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
+  pointer-events: none;
+}
+/* Hover/focus lift — written at (0,4,0)+ and placed AFTER the idle/recovery/cue
+   colour rules so the pointed state wins over every resting treatment. */
+.hud-compass .hud-compass-cta:hover .hud-compass-label,
+.hud-compass .hud-compass-cta:focus-visible .hud-compass-label {
+  color: var(--hud-main);
+}
+.hud-compass .hud-compass-cta:hover .hud-compass-prompt,
+.hud-compass .hud-compass-cta:focus-visible .hud-compass-prompt {
+  color: var(--hud-gold);
+}
+.hud-compass .hud-compass-cta:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
 }
 
 @media (max-width: 60rem) {
@@ -1516,10 +1571,14 @@ body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marke
   color: var(--marker-line);
   opacity: 0;
   transition: opacity 0.3s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
-  /* Dark legibility halo for the off-white label on the dark/noisy canvas. */
+  /* Dark legibility halo for the off-white label on the dark/noisy canvas.
+     STRENGTHENED (a third, wider layer + denser core) so the caption still
+     carves out of the bright yellow-star / red-limb frames, where the old
+     two-layer halo let the light strokes wash to invisibility. */
   text-shadow:
-    0 0 2px color-mix(in oklch, var(--bg) 85%, transparent),
-    0 0 5px color-mix(in oklch, var(--bg) 55%, transparent);
+    0 0 3px color-mix(in oklch, var(--bg) 92%, transparent),
+    0 0 7px color-mix(in oklch, var(--bg) 72%, transparent),
+    0 0 14px color-mix(in oklch, var(--bg) 45%, transparent);
 }
 .star-marker[data-visible='true'] .star-marker-microlabel {
   opacity: 0.82;
@@ -1538,11 +1597,13 @@ body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marke
 .star-marker-microlabel::before { content: '[ '; }
 .star-marker-microlabel::after { content: ' ]'; }
 /* BRIGHT states: the label is near-black (currentColor), so its halo flips LIGHT
-   to stay readable on the bright surface (mirrors the reticle's halo flip). */
+   to stay readable on the bright surface (mirrors the reticle's halo flip).
+   Strengthened in step with the dark halo above. */
 .star-marker[data-bright='true'] .star-marker-microlabel {
   text-shadow:
-    0 0 2px color-mix(in oklch, var(--fg) 85%, transparent),
-    0 0 5px color-mix(in oklch, var(--fg) 55%, transparent);
+    0 0 3px color-mix(in oklch, var(--fg) 92%, transparent),
+    0 0 7px color-mix(in oklch, var(--fg) 72%, transparent),
+    0 0 14px color-mix(in oklch, var(--fg) 45%, transparent);
 }
 
 /* LEADER LINE — a thin horizontal connector + small endpoint dot that extends out
@@ -2125,7 +2186,10 @@ body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
   transition: stroke 0.24s ease, opacity 0.45s var(--ease-out-quint);
 }
 .hud-arc-station text {
-  fill: var(--fg-faint);
+  /* Interaction layer: the station digits are click targets' labels — they rest on
+     --fg-hud-interactive (~15-20% above the old --fg-faint) so the powered gauge's
+     stations read reliably; the decorative minor ticks keep their faint mix. */
+  fill: var(--fg-hud-interactive);
   font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.12em;
@@ -2175,7 +2239,9 @@ body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
   pointer-events: none;
 }
 .hud-arc-label-title { color: var(--fg); }
-.hud-arc-label-dest { color: var(--fg-faint); }
+/* Caption rides the interactive resting tier (was --fg-faint): it names the
+   station the pointer is on, so it must hold over the scene like the digits. */
+.hud-arc-label-dest { color: var(--fg-hud-interactive); }
 .hud-arc-label { transition: opacity 0.45s var(--ease-out-quint); }
 
 /* ── GHOST MODE (HUD off) — the gauge keeps reading, the navigator goes dark. ──
@@ -2243,15 +2309,19 @@ body.hud-active .hud-arc-label { transition-delay: 0.85s; }
   opacity: 0;
 }
 /* The resting caption has no gold brackets and settles a step dimmer — a quiet name
-   floating under a speck, not a chip. */
+   floating under a speck, not a chip. RESTING opacity raised 0.62 → 0.74 (~19%):
+   the on-scene destination names (INSPIRATION / GRAVEYARD / WRITING / ABOUT) are
+   the interaction layer's front line and were near-invisible over the scene at
+   0.62. Hover/active step up proportionally (0.92 → 1) so the escalation ladder
+   keeps its rungs. */
 .star-marker-microlabel::before,
 .star-marker-microlabel::after {
   content: none;
 }
 .star-marker[data-visible='true'] .star-marker-microlabel {
-  opacity: 0.62;
+  opacity: 0.74;
 }
 .star-marker[data-state='hover'] .star-marker-microlabel,
 .star-marker[data-state='active'] .star-marker-microlabel {
-  opacity: 0.92;
+  opacity: 1;
 }
