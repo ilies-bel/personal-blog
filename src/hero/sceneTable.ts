@@ -685,7 +685,15 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Web software, technical writing, understandable systems.',
         tags: ['Fast', 'Readable', 'Usable'],
         cta: 'Read about me',
-        dive: true,
+        // NO dive: this is the ONE marker that navigates to /about, and /about has
+        // its OWN signature transition — the hyperspace WARP (the light-speed streak
+        // jump; see src/scripts/warpTransition.ts). With dive omitted, StarMarker's
+        // onClick doesn't preventDefault, so the click falls through to the native
+        // <a href="about"> and the warp's capture-phase listener claims it → the pale
+        // dot punches to lightspeed into About. (dive:true here fought the warp: both
+        // fired off one click — a bloom plunge stacked under the streaks, with the
+        // reticle dragged sideways by the dive's orbital arc. The warp IS the intended
+        // About transition, so the dot defers to it.) Every OTHER marker keeps dive.
       },
     ],
     beat: {
