@@ -8,8 +8,15 @@ import type { ScrollDirection } from '../lib/constants';
 import type { HudTargetId } from '../HudNavigation';
 
 export interface SceneState {
-  /** 0..1 scroll progress; drives the per-beat opacities. */
+  /** 0..1 presentation progress — the EASED output of the island's
+   *  PresentationClock, i.e. the same value the canvas renders (NOT the raw
+   *  scrollbar position). Drives the per-beat opacities and the HUD gauge, so
+   *  text/chrome flip on the same lifecycle frame as the pixels behind them. */
   progress: number;
+  /** The eased shader stage (0..5) from the same clock tick as `progress`.
+   *  Drives the instrument readouts (station / lifecycle-time) and the
+   *  bright-zone chrome flip. */
+  stage: number;
   /** Scroll direction; selects the active big line per beat. */
   direction: ScrollDirection;
   /** Resolved reduced-motion preference (manual override ?? OS). When true the hero

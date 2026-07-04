@@ -17,9 +17,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // mounts <ClientRouter />.
 import { navigate } from 'astro:transitions/client';
 import { ScrollTracker } from '../scroll';
-import { SCROLL_SECTION_COUNT, BUILT_STAGES, legacyStageForProgress, resolve, brightZoneFor } from '../timeline';
+import { SCROLL_SECTION_COUNT, BUILT_STAGES, legacyStageForProgress, brightZoneFor } from '../timeline';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
-import { sceneForProgress } from '../sceneTable';
+import { dwellForScene, sceneActivatesHud, sceneForProgress } from '../sceneTable';
+import { PresentationClock, type PresentationState } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
@@ -156,11 +157,16 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // outside the mount effect. Null until the engine chunk resolves (and cleared on
   // unmount) — the action falls back to a plain SPA nav while it is null.
   const sceneHandleRef = useRef<SceneHandle | null>(null);
-  // Exact scroll progress (0..1) drives the morph through a ref the render loop
-  // reads. React receives a lower-frequency visual snapshot for DOM overlays.
+  // Exact RAW scroll progress (0..1) — the presentation clock's TARGET. Only the
+  // physical-scroll chrome (opening hold, hint dismiss) reads this directly; the
+  // morph and every lifecycle-keyed consumer read the clock's EASED output.
   const progressRef = useRef(0);
   const publishedProgressRef = useRef(0);
+  // React receives lower-frequency snapshots of the presentation clock (the SAME
+  // eased values the canvas renders) for DOM overlays: `progress` drives the beat
+  // bands / gauge, `stage` the instrument readouts + bright-zone chrome flip.
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState(0);
   // Scroll direction is still published for components that support direction-
   // specific copy; the current forward lifecycle uses matching lines both ways.
   const lastProgressRef = useRef(0);
@@ -262,30 +268,23 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       };
     }
 
-    // Drive the opening chrome (name + top-right menu) from a single source of
-    // truth: it is shown at the very top OR whenever the HUD is present. The HUD
-    // appears at the bottom and stays, so reusing its status keeps the name and
-    // menu pinned alongside it (no separate scroll threshold to drift). Tracked
-    // through chromeVisibleRef so the DOM is only touched on an actual transition.
-    const syncChrome = (): void => {
-      // HUD activation REQUEST: once the REAL scroll position reaches the PHYSICAL
-      // BOTTOM of the page (under the reverse arc that is the lonely pale-blue-dot /
-      // 'beginning' scene), the island asks the boot FSM to power the HUD on (and asks
-      // it to power off again when scroll leaves) — preserving the "you've reached the
-      // end, here's the menu" feel. It does NOT touch body.hud-active itself — the FSM
-      // owns that class so the loader → ignite sequence is sequenced in exactly one
-      // place. We dispatch only on the at-bottom EDGE (ref-tracked) so the request fires
-      // once per transition, never every scroll sample. The FSM decides what to honour:
-      // it auto-boots only while the visitor has never touched the power button
-      // (userChosen), keeps the HUD lit once booted, and ignores the power-off
-      // request entirely — so the island can dispatch freely.
-      // CONTENT UNLOCK (raw 88-100%): arm the HUD across the whole pale-dot/content
-      // band, not just the last frame. The 'beginning' SCENE owns lifecycle 0.00-0.12
-      // = raw 88-100% exactly (segment 1 in the RE-TIMED table), so gate on the SCENE
-      // id rather than the stage>=4.7 threshold (which only fired at raw=1.0). The
-      // rail's scroll-spy below now reads the SAME sceneForProgress resolver, so the
-      // at-end gate and the highlighted row stay consistent.
-      const atEnd = sceneForProgress(progressRef.current).sceneId === 'beginning';
+    // HUD activation REQUEST: once the presentation reaches the scene flagged
+    // `activatesHud` in the scene table (the 'beginning' pale-blue-dot band at the
+    // PHYSICAL BOTTOM under the reverse arc), the island asks the boot FSM to power
+    // the HUD on (and to power off again when the presentation leaves) — preserving
+    // the "you've reached the end, here's the menu" feel. It does NOT touch
+    // body.hud-active itself — the FSM owns that class so the loader → ignite
+    // sequence is sequenced in exactly one place. Dispatched only on the EDGE
+    // (ref-tracked) so the request fires once per transition, never every sample.
+    // The FSM decides what to honour: it auto-boots only while the visitor has
+    // never touched the power button (userChosen), keeps the HUD lit once booted,
+    // and ignores the power-off request entirely — so the island can dispatch
+    // freely. Driven from the CLOCK (eased),
+    // the same resolver as the rail's scroll-spy, so the at-end gate and the
+    // highlighted row stay consistent — and the flag is table data
+    // (sceneActivatesHud), not a hardcoded id that can drift from the table.
+    const syncHudPower = (easedProgress: number): void => {
+      const atEnd = sceneActivatesHud(sceneForProgress(easedProgress).sceneId);
       if (atEnd !== hudAtEndRef.current) {
         hudAtEndRef.current = atEnd;
         if (atEnd) {
@@ -320,7 +319,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           );
         }
       }
+    };
 
+    // Drive the opening chrome (name + top-right menu) from a single source of
+    // truth: it is shown at the very top OR whenever the HUD is present. Keyed on
+    // RAW scroll (progressRef) on purpose — the opening hold and the chrome hide
+    // are physical-scroll boundaries, not lifecycle beats, so they must respond
+    // to the scrollbar itself, not the eased presentation. Tracked through
+    // chromeVisibleRef so the DOM is only touched on an actual transition.
+    const syncChrome = (): void => {
       // Opening hold: while scroll is still on the black-hole opening frame (at/under
       // SCROLL_HINT_DISMISS_AT) the page shows only the three opening layers (brand,
       // bottom-centre status, the central focus dot); the full section nav + left HUD
@@ -339,48 +346,71 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       chromeVisibleRef.current = visible;
       document.body.classList.toggle(SCROLLED_BODY_CLASS, !visible);
     };
-    const publishProgress = (nextProgress: number, force = false): void => {
+    // Publish a presentation-clock snapshot to React (gated so DOM overlays get a
+    // perceptual cadence, not every frame of the ease). Both values in a snapshot
+    // come from the SAME clock tick, so text bands and stage readouts can never
+    // straddle two different frames.
+    const publishSnapshot = (next: PresentationState, force = false): void => {
       const previous = publishedProgressRef.current;
-      const crossedHint = crossedProgressThreshold(previous, nextProgress, SCROLL_HINT_DISMISS_AT);
-      // Push a React update the instant the SCENE the visitor is on changes, so the
-      // rail's highlighted row (now driven by sceneForProgress — see scrollHudId
-      // below) updates in lockstep with the scene rather than lagging. This MUST use
-      // the SAME scene resolver as scrollHudId, not the old hudIdForStage stage-spy,
-      // or the correct row would update late/jumpily (the stage thresholds sit above
-      // the scenes' settled holds, so a stage-spy fires the publish on the wrong frame).
+      const crossedHint = crossedProgressThreshold(previous, next.progress, SCROLL_HINT_DISMISS_AT);
+      // Push a React update the instant the SCENE the presentation is on changes, so
+      // the rail's highlighted row (driven by sceneForProgress — see scrollHudId
+      // below) updates in lockstep with the scene rather than lagging.
       const hudSceneChanged = explorationModeRef.current
-        && sceneForProgress(previous).sceneId !== sceneForProgress(nextProgress).sceneId;
+        && sceneForProgress(previous).sceneId !== sceneForProgress(next.progress).sceneId;
 
       if (
         !force
-        && Math.abs(nextProgress - previous) < REACT_PROGRESS_MIN_DELTA
+        && Math.abs(next.progress - previous) < REACT_PROGRESS_MIN_DELTA
         && !crossedHint
         && !hudSceneChanged
-        && nextProgress !== 0
-        && nextProgress !== 1
+        && next.progress !== 0
+        && next.progress !== 1
       ) {
         return;
       }
 
-      publishedProgressRef.current = nextProgress;
-      setProgress(nextProgress);
+      publishedProgressRef.current = next.progress;
+      setProgress(next.progress);
+      setStage(next.stage);
     };
+
+    // THE PRESENTATION CLOCK — the single eased lifecycle clock (see
+    // presentationClock.ts). Targets: raw scroll progress + its table-mapped stage.
+    // The scene engine samples `clock.current` every frame, and the React snapshots
+    // below come from the same instance, so the canvas and the DOM chrome always
+    // agree on what is on screen. Dwell (sticky beats) damps the ease here — the
+    // engine no longer owns any smoothing.
+    const clock = new PresentationClock(
+      () => ({
+        progress: progressRef.current,
+        stage: legacyStageForProgress(progressRef.current),
+      }),
+      {
+        reduced: isReduced,
+        dwellFor: (raw) => dwellForScene(sceneForProgress(raw).sceneId),
+      },
+    );
+    const unsubClock = clock.subscribe((state) => {
+      publishSnapshot(state);
+      // The HUD power gate rides the presentation (eased) scene, matching the rail.
+      syncHudPower(state.progress);
+    });
 
     const tracker = new ScrollTracker(SCROLL_SECTION_COUNT);
     const unsub = tracker.subscribe((scrollState) => {
       progressRef.current = scrollState.progress;
-      publishProgress(scrollState.progress);
+      // New target for the presentation clock; it eases toward it on its own rAF
+      // and notifies the subscription above as it moves.
+      clock.wake();
       // Direction from the delta, with a deadzone so tiny jitter doesn't flip it.
       const delta = scrollState.progress - lastProgressRef.current;
       if (delta > DIRECTION_DEADZONE) setDirection(SCROLL_DOWN);
       else if (delta < -DIRECTION_DEADZONE) setDirection(SCROLL_UP);
       lastProgressRef.current = scrollState.progress;
       // Cinematic chrome: the name (.bh-identity) and the top-right menu
-      // (.overlay-blog, owned by the layout) belong to the opening frame only. Once
-      // scroll leaves the top they fade away so the lifecycle scene plays
-      // uninterrupted; they return at the top — and again once the HUD is present at
-      // the bottom (syncChrome reuses the exploration status). A class on <body>
-      // drives both (the menu lives outside this island).
+      // (.overlay-blog, owned by the layout) belong to the opening frame only —
+      // physical-scroll boundaries, so they stay keyed on the RAW tracker value.
       syncChrome();
     });
     const initial = tracker.start();
@@ -388,6 +418,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     publishedProgressRef.current = initial.progress;
     lastProgressRef.current = initial.progress;
     setProgress(initial.progress);
+    setStage(legacyStageForProgress(initial.progress));
+    // Start the clock ON the initial scroll position (its settle-snap window then
+    // absorbs any late browser scroll restoration without a glide).
+    clock.start();
     // Seed the opening-hold class from the initial scroll position so the page opens
     // in the right state (only the three opening layers) before the first scroll
     // sample — then syncChrome flips it on the transition out of the hold.
@@ -395,15 +429,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     atOpeningRef.current = initialAtOpening;
     document.body.classList.toggle(AT_OPENING_BODY_CLASS, initialAtOpening);
 
-    // One normalized forward progress value owns the public choreography. The
-    // shader stage is a legacy implementation coordinate derived from it.
-    const getStage = (): number => legacyStageForProgress(progressRef.current);
-    const getProgress = (): number => progressRef.current;
-    // The active scene's dwell strength (0..1) for the live scroll position, read
-    // from the same pure resolver everything else uses. createScene damps its morph
-    // follow-ease by this so dwelling beats (red giant, black hole) feel stickier —
-    // mirrors how getStage/getProgress flow into the scene. No scrollbar is touched.
-    const getDwell = (): number => resolve(progressRef.current).dwell;
+    // The engine samples the presentation clock — pre-smoothed, shared with every
+    // DOM consumer. One clock, one truth about what is on screen.
+    const getStage = (): number => clock.current.stage;
+    const getProgress = (): number => clock.current.progress;
 
     // REDUCED-MOTION CONTRACT: under the resolved reduced-motion preference we do NOT
     // mount the WebGL engine at all — no createScene import, no rAF loop. The still
@@ -421,6 +450,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       return () => {
         cancelled = true;
         disposeReduced();
+        unsubClock();
+        clock.stop();
         unsub();
         tracker.stop();
         hudAtEndRef.current = false;
@@ -438,7 +469,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         const dispose = createScene(host, isReduced, {
           getStage,
           getProgress,
-          getDwell,
           getFocusTarget: () => null,
           isExplorationMode: () => explorationModeRef.current,
           onMarkerFrame: (m) => { markerFrameRef.current = m; },
@@ -491,6 +521,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     return () => {
       cancelled = true;
       document.removeEventListener('astro:before-swap', onBeforeSwap);
+      unsubClock();
+      clock.stop();
       unsub();
       tracker.stop();
       sceneHandleRef.current = null;
@@ -636,30 +668,25 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   }, [backdrop, fromOsOnly]);
 
   const base = import.meta.env.BASE_URL ?? '/';
-  // The lifecycle scene the live scroll position is ON (same segment-boundary
-  // resolver the morph, camera, beats and data-scene all use). Computed up here so
-  // the rail's scroll-spy can derive from it (see scrollHudId just below); reused for
-  // data-scene at the bottom of the component.
+  // The lifecycle scene the PRESENTATION is on — `progress` is the clock's eased
+  // snapshot, the same value the canvas renders, so this resolver names the scene
+  // that is ACTUALLY on screen (not the one the scrollbar has raced ahead to).
+  // Computed up here so the rail's scroll-spy can derive from it (scrollHudId just
+  // below); reused for data-scene at the bottom of the component.
   const sceneId = sceneForProgress(progress).sceneId;
-  // Scroll-spy: the HUD row the live scroll position maps to. Driven by the SCENE
-  // resolver above — NOT the old hudIdForStage stage-threshold spy. Those per-row
-  // stage thresholds sit ABOVE the scenes' settled holds (yellow row stage 2.9 vs the
-  // yellow hold at shader-stage 2.88; nebula row 3.5 vs the nebula hold at 3.42), so
-  // hudIdForStage(settledStage) returned the row BELOW the one you were on — yellow lit
-  // red, nebula lit yellow. sceneForProgress(...).sceneId is a HudTargetId keyed to the
-  // SAME id set as the HUD rows, so the highlighted row always matches the scene you
-  // are actually on. Self-consistent by construction.
+  // Scroll-spy: the HUD row the presentation maps to. Driven by the SCENE resolver
+  // above — sceneForProgress(...).sceneId is a HudTargetId keyed to the SAME id set
+  // as the HUD rows, so the highlighted row always matches the scene you are
+  // actually on. Self-consistent by construction.
   const scrollHudId: HudTargetId | null = explorationMode ? sceneId : null;
-  // Shader stage (0..5) for the bright-zone test below; still the resolver's stage,
-  // just no longer fed through hudIdForStage for the rail's "current" row.
-  const lifecycleStage = resolve(progress).stage;
   // Adaptive dark stroke: is the chrome currently over a BRIGHT lifecycle zone? Two
   // bright beats bleach the canvas behind the warm-bone chrome — the supernova flash
   // (shader stage ~0.5, the breakout) and the bright yellow-star hold (settled gold at
-  // stage ~2.88). Derived purely from the shader stage already tracked here (no extra
-  // scroll read). Over the dark states (black hole / red giant / nebula / dot) this is
-  // false → warm bone. The provider hands it down; the CSS [data-zone] flips the tokens.
-  const brightZone = brightZoneFor(lifecycleStage);
+  // stage ~2.88). `stage` is the clock's eased shader stage — the exact value the
+  // morph renders — so the chrome flips on the same frame the canvas brightens.
+  // Over the dark states (black hole / red giant / nebula / dot) this is false →
+  // warm bone. The provider hands it down; the CSS [data-zone] flips the tokens.
+  const brightZone = brightZoneFor(stage);
   // sceneId (the lifecycle scene the live scroll position is ON) is computed once
   // above — it now feeds BOTH the rail scroll-spy and these per-scene HUD colour
   // tokens (data-scene) + the yellow-star designed-ring overlay, from the one resolver.
@@ -677,7 +704,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   return (
     <SceneStateProvider
-      state={{ progress, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base }}
+      state={{ progress, stage, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base }}
       actions={{ beginDive, requestReducedMotion }}
     >
       {/* data-zone="bright" over the supernova flash + yellow-star beat flips the

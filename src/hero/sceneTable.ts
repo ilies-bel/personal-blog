@@ -672,6 +672,15 @@ export const SCENES: readonly LifecycleScene[] = [
       stage: 4.7,
       href: 'about',
     },
+    // The ONLY scene that arms the HUD. Under the active REVERSE direction this
+    // pale-blue-dot scene owns the PHYSICAL BOTTOM of the page (raw 90-100%, the
+    // content-unlock band): reaching it requests HUD power-on, leaving it requests
+    // power-off. HeroIsland's edge-detector reads this via sceneActivatesHud() —
+    // table data, not a hardcoded id. (The flag used to sit on the 'end'/black-hole
+    // scene, a leftover from before the direction flip, while HeroIsland hardcoded
+    // 'beginning' — the two disagreed; the flag now matches the live behaviour and
+    // the island reads the flag.)
+    activatesHud: true,
     markers: [
       // BEGINNING / pale blue dot — ONE marker, projection-anchored so it stays
       // centred on the speck wherever the scene projects it.
@@ -698,9 +707,14 @@ export const SCENES: readonly LifecycleScene[] = [
       // PALE BLUE DOT — the lonely speck the reverse arc resolves to (stage ~4.7).
       // In LIFECYCLE space it is the first beat (these bands are lifecycleProgress
       // values), but under the active reverse direction it sits at the PHYSICAL
-      // BOTTOM of the page. Copy is readable across the dot's hold (0.00 -> 0.12 =
-      // raw 88-100%, the content-unlock band), then hard-cuts as the dot is left
-      // behind into the nebula grow — the SAME band() regime as every other beat.
+      // BOTTOM of the page. Copy is readable across the dot's hold (0.00 -> 0.10 =
+      // raw 90-100%, the content-unlock band), then hard-cuts EXACTLY as the dot is
+      // left behind into the nebula grow — the SAME band() regime as every other
+      // beat. The band MUST NOT extend past the scene boundary (STARTS[1] = 0.10):
+      // it used to run to 0.17, which kept the ABOUT copy + its anchored marker
+      // floating over the growing nebula cloud/streaks for the first ~7% of the
+      // grow band (the "ABOUT over the nebula" bug). The live-table test now pins
+      // every beat band inside its own scene's span so this cannot drift again.
       //
       // HISTORY: this beat used to carry a special fade-to-nothing at the very
       // bottom ("the lone speck alone in black"), but readers experienced the
@@ -708,7 +722,7 @@ export const SCENES: readonly LifecycleScene[] = [
       // special regime is gone (ManifestoOverlay renders band(inStart, outEnd));
       // inEnd/outStart are kept for the window's shape/ordering invariants only.
       at: 0.05,
-      text: { inStart: 0.0, inEnd: 0.05, outStart: 0.12, outEnd: 0.17 },
+      text: { inStart: 0.0, inEnd: 0.05, outStart: 0.09, outEnd: 0.1 },
       state: 'pale blue dot',
       down: 'I build software that stays understandable.',
       up: 'I build software that stays understandable.',
@@ -937,10 +951,6 @@ export const SCENES: readonly LifecycleScene[] = [
     // BLACK HOLE — the terminal hero. A light dwell so the final settle reads as
     // slightly stickier than the brighter beats above it. Gentle by design.
     dwell: { strength: 0.4 },
-    // The ONLY scene that arms the HUD: reaching the black hole requests HUD
-    // power-on (leaving it requests power-off). This replaces the former hardcoded
-    // `=== 'end'` test in HeroIsland with a table-driven flag.
-    activatesHud: true,
     beat: {
       // BLACK HOLE — enters after the easeOutExpo settle has visually completed
       // (~0.86 -> 0.93 in lifecycleProgress). This is the lifecycle's terminal state,
@@ -993,17 +1003,66 @@ const SCENE_BY_ID: Record<HudTargetId, LifecycleScene> = SCENES.reduce(
 
 
 /** The dwell STRENGTH (0..1) declared by a scene, or 0 when it has none. This is
- *  the single read of the `dwell` field — lifecycleMachine.resolve() folds it into
- *  the resolved position so createScene can damp its follow-ease. Pure. */
+ *  the single read of the `dwell` field — the presentation clock folds it into
+ *  its follow-ease so dwelling beats feel stickier. Pure. */
 export function dwellForScene(id: HudTargetId): number {
   return SCENE_BY_ID[id]?.dwell?.strength ?? 0;
 }
 
 /** Whether a scene arms the HUD (its `activatesHud` flag). The single read of the
  *  flag — HeroIsland's HUD-power edge-detector uses it instead of a hardcoded id.
- *  Only the 'end' scene is flagged today, so the request still fires exactly there. */
+ *  Only the 'beginning' scene (the pale dot at the physical bottom under the
+ *  reverse direction) is flagged today, so the request fires exactly there. */
 export function sceneActivatesHud(id: HudTargetId): boolean {
   return SCENE_BY_ID[id]?.activatesHud === true;
+}
+
+// ---------------------------------------------------------------------------
+// SCENE ANCHORS — the ONE raw-scroll position that canonically "is" each scene.
+//
+// The HUD arc gauge places its station ticks at these anchors, and a rail /
+// gauge click TRAVELS to them — one derivation for both, so the caret, the
+// highlighted row, the station tick and the click-travel destination all agree
+// whenever the page rests on a beat. (They used to come from three different
+// mappings: the caret from raw progress, the ticks from the approximate
+// progressForLegacyStage inverse of each row's `stage`, travel from that same
+// inverse — which parked travel on hold EDGES (red) or mid-transition (nebula,
+// whose `stage` 3.5 predates the 3.42 settled hold) and left the caret pointing
+// between stations while a station's scene was plainly on screen.)
+//
+// Definition: the anchor is where the page RESTS when the scene is settled —
+//   • middle scenes → the MIDPOINT of the scene's settled idle hold (the segment
+//     carrying its settledWindow), converted to raw scroll space. Mid-hold is
+//     maximally clear of both adjacent transition edges, so the eased
+//     presentation sits inside the hold's settledWindow (markers show, the row
+//     is current) with no edge dither.
+//   • the two TERMINAL scenes → the physical scroll extremes (raw 0 for the
+//     scene at the top of the page, raw 1 for the bottom): that is where the
+//     page actually parks against the edge, so the landing frame and the
+//     station tick align exactly at rest.
+// Derived from SEGMENTS at module load — re-time a scene and the anchors, the
+// gauge geometry and click-travel follow automatically.
+// ---------------------------------------------------------------------------
+export const SCENE_ANCHOR_RAW: Readonly<Record<HudTargetId, number>> = (() => {
+  const anchors = {} as Record<HudTargetId, number>;
+  for (let i = 0; i < SEGMENTS.length; i += 1) {
+    const seg = SEGMENTS[i];
+    if (seg.phase !== 'idle' || !seg.settledWindow) continue;
+    const midLifecycle = (STARTS[i] + STARTS[i + 1]) / 2;
+    // lifecycleProgress is its own inverse: lifecycle-space midpoint → raw scroll.
+    anchors[seg.sceneId] = lifecycleProgress(midLifecycle);
+  }
+  // Terminal scenes rest against the physical page edges. SCENES is authored in
+  // lifecycle order; under the reverse direction its FIRST entry sits at the
+  // bottom of the page (raw 1) and its LAST at the top (raw 0).
+  anchors[SCENES[0].id] = lifecycleProgress(0);
+  anchors[SCENES[SCENES.length - 1].id] = lifecycleProgress(1);
+  return anchors;
+})();
+
+/** The canonical raw-scroll anchor for a scene (see SCENE_ANCHOR_RAW). */
+export function anchorRawForScene(id: HudTargetId): number {
+  return SCENE_ANCHOR_RAW[id];
 }
 
 /** The lifecycle STATION nearest an arbitrary shader stage — the scene whose hud

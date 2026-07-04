@@ -248,6 +248,18 @@
     hideStyle.textContent = `html, body, * { cursor: none !important; }`;
     document.head.appendChild(hideStyle);
 
+    // RE-ARM AFTER EVERY SPA SWAP. BaseLayout mounts <ClientRouter />, and its
+    // head diff REMOVES this dynamically-injected <style> on every SPA
+    // navigation (it isn't part of any page's authored head). The cursor
+    // elements themselves survive via transition:persist and this module script
+    // is deduped (it never re-runs on a swap), so without this hook the native
+    // cursor silently came back after the first SPA nav — the "cursor sometimes
+    // switches back to the default" bug — while the custom dot kept tracking on
+    // top of it. Re-appending the same node is idempotent and cheap.
+    document.addEventListener('astro:after-swap', () => {
+      if (!hideStyle.isConnected) document.head.appendChild(hideStyle);
+    });
+
     // Selector for things that should show the hexagon. `closest()` is used at
     // hit-test time so a child of a link/button (an icon, a <span>) still counts.
     const INTERACTIVE_SELECTOR = [

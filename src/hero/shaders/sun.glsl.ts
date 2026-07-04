@@ -587,28 +587,50 @@ export const sunLoopVert = /* glsl */ `
     float a     = phase / aOn;                       // 0..1 across active window
     float inWin = step(phase, aOn);
 
-    // arches fire in sequence (lowest first): this arch begins at aSeq and its
-    // jet whips fast from one foot to the other like a fountain stream A -> B.
-    float JET   = 0.12;                              // per-arch crossing time (fast)
+    // --- LIFE ENVELOPE: a smooth breath over the whole active window ----------
+    // The arcade RISES into presence, HOLDS lit, then SETTLES back — instead of
+    // snapping on with the jet and hard-cutting at the end. 'live' is the base
+    // presence of the (already-grown) loop; the jet flash rides ON TOP of it. This
+    // is what makes a persistent coronal loop that brightens when it fires, rather
+    // than a filament that only exists while the jet head is on it.
+    float rise  = smoothstep(0.0, 0.14, a);          // ease in at the start
+    float settle= 1.0 - smoothstep(0.72, 1.0, a);    // ease out at the end
+    float live  = rise * settle * inWin;
+
+    // arches fire in sequence (lowest first): this arch begins at aSeq and its jet
+    // whips from one foot to the other like a fountain stream A -> B, DRAWING the
+    // loop out of the surface as it goes (grow) and leaving a lit filament behind.
+    float JET   = 0.14;                              // per-arch crossing time
     float la    = (a - aSeq) / JET;                  // local jet progress for this arch
     float started = step(aSeq, a);
     float d     = la - aSweep;                       // >0 once the jet head passed this particle
-    float emerge= smoothstep(0.0, 0.10, d) * started;
-    float fade  = 1.0 - smoothstep(0.80, 1.0, a);    // whole flare cools at the very end
-    float flash = exp(-pow(max(d,0.0)/0.05, 2.0)) * step(0.0,d) * started * inWin * fade;
+    // emerge = has the jet drawn this particle out yet. Once drawn, it STAYS out for the
+    // rest of the life (max-hold): the loop is a standing structure, not a moving dot.
+    float drawn = smoothstep(0.0, 0.12, d) * started;
+    float emerge= drawn;
+    // white-hot jet head: a tight gaussian on the sweep front, tracking along the arc.
+    float flash = exp(-pow(max(d,0.0)/0.06, 2.0)) * step(0.0,d) * started * inWin * settle;
 
-    float grow  = emerge * (1.0 + 0.08*smoothstep(0.5,1.0,a));   // seed -> final
+    // grow the loop out of its on-surface seed as the jet head reaches it; a tiny
+    // overshoot (1.06) then relax reads as the loop springing up.
+    float grow  = emerge * (1.0 + 0.06*sin(clamp(d,0.0,1.0)*3.14159));
     vec3 wp     = mix(aSeedPos, position, clamp(grow, 0.0, 1.06));
 
-    float flick = 0.85 + 0.15*sin(uTime*3.0 + aSeed*6.2831);
-    // flash weight 1.7 -> 0.9: the white-hot jet head at full strength read as a bright
-    // dotted bead-train whipping along the arc (the "wireframe whisk"); at 0.9 the sweep
-    // still reads but the arc stays a glowing filament.
-    vB   = aBright*flick*emerge*fade*inWin + 0.9*flash;
+    // per-particle shimmer: a slow traveling ripple ALONG the arc (aU) plus a seed
+    // jitter, so the filament crawls with plasma instead of flickering uniformly.
+    float shimmer = 0.86
+      + 0.09*sin(uTime*2.2 + aSeed*6.2831)
+      + 0.07*sin(uTime*1.3 - aU*9.0 + aSeed*3.1);
+
+    // base emission: the standing loop glows at 'live' (once emerged), and the jet head
+    // adds a hot streak on top. The loop never fully vanishes mid-life between the head
+    // passing and the settle — it holds as a persistent filament.
+    vB   = aBright * shimmer * emerge * live + 0.85*flash;
     vHot = flash;
 
     vec4 mv = modelViewMatrix*vec4(wp,1.0);
-    gl_PointSize = aSize*uPix*(uPS/-mv.z) * (0.5 + 0.5*emerge + 0.9*flash);
+    // size: a settled base once emerged, swelling under the hot jet head.
+    gl_PointSize = aSize*uPix*(uPS/-mv.z) * (0.55 + 0.45*emerge*live + 0.9*flash);
     gl_Position = projectionMatrix*mv;
   }`;
 
