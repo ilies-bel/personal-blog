@@ -127,7 +127,11 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               off the body class (see hud.css → "HUD boot sequence"); aria-hidden so
               none of it ever announces:
                 • .hud-boot-flicker — a light layer that surges/settles (power surge).
-                • .hud-boot-scan    — a thin line that sweeps across the viewport.
+                • .hud-boot-scan    — a CRT roll bar: a luminous horizontal band
+                                      that rolls down the viewport and WRAPS (the
+                                      next copy enters the top as it exits the
+                                      bottom), three passes with a mid-window
+                                      v-hold catch.
                 • .hud-boot-panels  — the cockpit BEZEL: four edge seams that etch in
                                       clockwise around the viewport (a current tracing
                                       the canopy frame) with corner joints that weld
