@@ -662,9 +662,9 @@ body.graveyard-page .bh-backdrop::before {
 
 /* The name (.bh-identity) and the top-right section menu (.overlay-blog, scene.css)
    now stay VISIBLE throughout the whole scroll — they are quiet at the top and only
-   change their APPEARANCE (grow / open to labels / brighten) once the visitor reaches
-   the black hole (body.hud-active), set by HeroIsland (or forced by the corner power
-   button). They are never hidden mid-scroll, so the .overlay-blog/.bh-identity are
+   change their APPEARANCE (grow / open to labels / brighten) once the HUD powers on
+   (body.hud-active — the boot FSM: scroll reaching the lifecycle's ending, or the
+   corner power button). They are never hidden mid-scroll, so the .overlay-blog/.bh-identity are
    deliberately NOT part of any is-scrolled hide rule. The transition base below makes
    the appearance change glide; visibility is no longer touched here. */
 body.bare .bh-identity,
@@ -674,14 +674,15 @@ body.bare .overlay-blog {
     transform 0.5s var(--ease-out-quint);
 }
 
-/* HUD-activation chrome: the name is a quiet whisper at base (scaled down, dimmed)
-   and GROWS to full presence once real scroll reaches the black hole — body.hud-active.
+/* HUD-activation chrome: the name is a quiet whisper at base (scaled down, dimmed —
+   the observation deck runs dark) and GROWS to full presence once the HUD powers on
+   — body.hud-active, set by the boot FSM (scroll auto-boot or the power button).
    Only transform/opacity/colour live here; the positioning above (fixed top-left) is
    untouched. Placed after the .bh-identity rules so it wins on equal specificity. */
 body.bare .bh-identity {
   transform-origin: top left;
   transform: scale(0.82);
-  opacity: 0.62;
+  opacity: 0.52;
   transition:
     transform 0.6s var(--ease-out-quint),
     opacity 0.5s var(--ease-out-quint);

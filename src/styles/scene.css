@@ -233,7 +233,7 @@ body.at-opening .overlay-blog {
 }
 
 /* Section links as text labels — visible in EVERY mode (no decorative icons).
-   At rest: small mono-uppercase, dim (--hud-rail-dim). At the black hole
+   At rest: small mono-uppercase, dim (--hud-rail-dim). Once the HUD powers on
    (body.bare.hud-active): brighter (--fg) and lifted a hair so the rail
    reads as the explicit menu it becomes. Gold underline sweeps in on hover. */
 .overlay-blog-links {
