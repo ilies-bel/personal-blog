@@ -31,7 +31,6 @@ const {
   HUD_NAV_ITEMS,
   legacyStageForProgressFromTable,
   sceneForProgress,
-  sceneActivatesHud,
   anchorRawForScene,
 } = table;
 const TOL = 1e-9;
@@ -177,16 +176,6 @@ test('scene anchors are strictly ordered along the rail (top → bottom)', () =>
     assert.ok(raw > prev, `anchor for ${item.id} (${raw}) not after previous (${prev})`);
     prev = raw;
   }
-});
-
-test('exactly one scene arms the HUD, and it owns the physical page bottom', () => {
-  const armed = SCENES.filter((s) => sceneActivatesHud(s.id));
-  assert.equal(armed.length, 1, 'exactly one activatesHud scene');
-  assert.equal(
-    armed[0].id,
-    sceneForProgress(1).sceneId,
-    'the HUD-arming scene must be the one the bottom of the page rests on',
-  );
 });
 
 test("every beat's readable band maps to its scene on the live curve", () => {

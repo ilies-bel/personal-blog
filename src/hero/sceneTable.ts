@@ -653,12 +653,6 @@ export interface LifecycleScene {
    *  lingers on the beat — a damping of the internal ease, never a scroll hijack
    *  (see SceneDwell). */
   dwell?: SceneDwell;
-  /** When true, reaching this scene REQUESTS the HUD power-on (and leaving it
-   *  requests power-off). Declared on the terminal black-hole scene so the bottom
-   *  hero ignites the HUD. Absent elsewhere. The actual edge-detect + event dispatch
-   *  lives in HeroIsland; this flag is the single source of "which scene arms the
-   *  HUD" so it is no longer a hardcoded string test. */
-  activatesHud?: boolean;
 }
 
 // The five scenes, authored in LIFECYCLE order (beginning/pale-blue-dot first ->
@@ -680,15 +674,6 @@ export const SCENES: readonly LifecycleScene[] = [
       stage: 4.7,
       href: 'about',
     },
-    // The ONLY scene that arms the HUD. Under the active REVERSE direction this
-    // pale-blue-dot scene owns the PHYSICAL BOTTOM of the page (raw 90-100%, the
-    // content-unlock band): reaching it requests HUD power-on, leaving it requests
-    // power-off. HeroIsland's edge-detector reads this via sceneActivatesHud() —
-    // table data, not a hardcoded id. (The flag used to sit on the 'end'/black-hole
-    // scene, a leftover from before the direction flip, while HeroIsland hardcoded
-    // 'beginning' — the two disagreed; the flag now matches the live behaviour and
-    // the island reads the flag.)
-    activatesHud: true,
     markers: [
       // BEGINNING / pale blue dot — ONE marker, projection-anchored so it stays
       // centred on the speck wherever the scene projects it.
@@ -708,7 +693,15 @@ export const SCENES: readonly LifecycleScene[] = [
         body: 'Web software, technical writing, understandable systems.',
         tags: ['Fast', 'Readable', 'Usable'],
         cta: 'Read about me',
-        dive: true,
+        // NO dive: this is the ONE marker that navigates to /about, and /about has
+        // its OWN signature transition — the hyperspace WARP (the light-speed streak
+        // jump; see src/scripts/warpTransition.ts). With dive omitted, StarMarker's
+        // onClick doesn't preventDefault, so the click falls through to the native
+        // <a href="about"> and the warp's capture-phase listener claims it → the pale
+        // dot punches to lightspeed into About. (dive:true here fought the warp: both
+        // fired off one click — a bloom plunge stacked under the streaks, with the
+        // reticle dragged sideways by the dive's orbital arc. The warp IS the intended
+        // About transition, so the dot defers to it.) Every OTHER marker keeps dive.
       },
     ],
     beat: {
@@ -1007,8 +1000,8 @@ export const MARKER_PLACEMENTS: readonly MarkerPlacement[] = SCENES.flatMap((s) 
 export const BEATS: ManifestoBeat[] = SCENES.flatMap((s) => (s.beat ? [s.beat] : []));
 
 /** Scene id -> its full LifecycleScene. The single index used by the per-scene
- *  property accessors below (dwell / activatesHud) so a reader never re-finds a
- *  scene by hand. Built once at module load. */
+ *  property accessors below (dwell) so a reader never re-finds a scene by hand.
+ *  Built once at module load. */
 const SCENE_BY_ID: Record<HudTargetId, LifecycleScene> = SCENES.reduce(
   (acc, scene) => {
     acc[scene.id] = scene;
@@ -1023,14 +1016,6 @@ const SCENE_BY_ID: Record<HudTargetId, LifecycleScene> = SCENES.reduce(
  *  its follow-ease so dwelling beats feel stickier. Pure. */
 export function dwellForScene(id: HudTargetId): number {
   return SCENE_BY_ID[id]?.dwell?.strength ?? 0;
-}
-
-/** Whether a scene arms the HUD (its `activatesHud` flag). The single read of the
- *  flag — HeroIsland's HUD-power edge-detector uses it instead of a hardcoded id.
- *  Only the 'beginning' scene (the pale dot at the physical bottom under the
- *  reverse direction) is flagged today, so the request fires exactly there. */
-export function sceneActivatesHud(id: HudTargetId): boolean {
-  return SCENE_BY_ID[id]?.activatesHud === true;
 }
 
 // ---------------------------------------------------------------------------

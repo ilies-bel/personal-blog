@@ -27,7 +27,7 @@ import { PosterSlideshow, resolveReducedMotionNow } from './reduced-motion';
  *  HUDs (ArticleHud, GraveyardHud — sibling islands that don't share React context)
  *  listen for it on window rather than prop-drilling across roots. Named `scene:*`
  *  (not `article:*`) because the graveyard page consumes the SAME seam; mirrors the
- *  hero's window-event grammar (HUD_POWER_EVENT et al.) so every HUD speaks it. */
+ *  hero's window-event grammar (SCENE_READY_EVENT et al.) so every HUD speaks it. */
 export const SCENE_PROGRESS_EVENT = 'scene:progress';
 
 export interface SceneProgressDetail {

@@ -166,77 +166,65 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
           </div>
 
           {/* HUD POWER STATE MACHINE — the single, explicit owner of the HUD's body
-              classes and its loader sequence. A self-contained, zero-import
-              <script is:inline> (mirrors the project's CustomCursor convention) so it
-              runs the moment the body parses, with no framework on the critical path.
+              classes and its power sequences. A self-contained, zero-import bundled
+              <script> (mirrors the project's CustomCursor convention) so it runs the
+              moment the body parses, with no framework on the critical path.
 
-              The machine has three states:
-                • idle    — HUD off (observation deck: the spectacle, minimal chrome).
-                • booting — the power-on / loader sequence is playing (body.hud-booting).
-                • ready   — HUD fully lit (body.hud-active → cockpit: instruments up).
+              The machine has four states:
+                • idle          — HUD off (observation deck: the spectacle, minimal chrome).
+                • booting       — the power-ON sequence is playing (body.hud-booting).
+                • ready         — HUD fully lit (body.hud-active → cockpit: instruments up).
+                • shutting-down — the power-OFF sequence is playing (body.hud-shutting-down):
+                                  the boot layers run IN REVERSE, then we land in idle.
 
-              THE CONTRACT — "the story proposes once; the pilot decides after":
+              THE CONTRACT — "on by default; the pilot can power it down":
+                • The HUD is ON BY DEFAULT. A first-time visitor lands straight in
+                  `ready` (fully lit, no boot sequence — the boot only plays when they
+                  later power the HUD back ON). Scroll never drives power at all.
                 • The power button toggles ONE bit: powered. One click, always. Its
-                  aria-pressed mirrors the machine state (pressed = booting|ready),
-                  however the HUD got lit — there is no second flag to desync from
-                  what the visitor sees.
-                • Scroll reaching the lifecycle's ending (HUD_POWER_EVENT{on:true}
-                  from HeroIsland) auto-boots the HUD — but ONLY while the visitor
-                  has never touched the power button (userChosen === false). Once
-                  they have, scroll never drives power again: if they left the ship
-                  dark, arrival at the ending just PULSES the power button once
-                  ("systems standing by") instead of booting.
-                • Once booted we STAY powered (scroll-up does not tear the HUD down);
-                  only the power button returns us to idle.
-              userChosen is NOT the old `forced` flag reborn: it never affects the
-              button (which always toggles power directly) — it only gates the scroll
-              trigger. Write-once, read in one place, nothing to desync.
+                  aria-pressed mirrors the machine state (pressed = booting|ready), so
+                  the button always reads exactly as lit as the HUD is.
+                • Powering ON plays the boot sequence (booting → ready). Powering OFF
+                  plays that same sequence IN REVERSE (ready → shutting-down → idle) —
+                  the animation runs BOTH ways, symmetric.
+                • The state persists: a returning visitor lands straight in `ready` or
+                  `idle` exactly as they left it — no replayed sequence either way.
 
               transition(next) is the ONLY place body classes are mutated; it also
-              mirrors { powered, userChosen } to localStorage, restored on init so a
-              returning visitor lands straight in `ready` (no replayed 3.6s boot) or
-              `idle` exactly as they left it.
+              mirrors { powered } to localStorage, restored on init.
 
-              The class-string + storage-key + event-name literals below are the same
-              ones centralized in src/hero/lib/constants.ts — this inline island can't
-              import that module (no bundler on an is:inline script), so the literals
-              are spelled here and MUST be kept in sync with that file. Likewise
-              BOOT_MS mirrors HUD_BOOT_DURATION_MS and is pushed into --hud-boot-dur so
-              the CSS animation length can never drift from the JS timer. */}
+              The class-string + storage-key literals below are the same ones
+              centralized in src/hero/lib/constants.ts — this bundled island can't
+              import that module, so the literals are spelled here and MUST be kept in
+              sync with that file. Likewise BOOT_MS mirrors HUD_BOOT_DURATION_MS and is
+              pushed into --hud-boot-dur so the CSS animation length can never drift
+              from the JS timer (the shutdown reuses the SAME window, reversed). */}
           <script>
-            // NOTE: this is now a BUNDLED script (no `is:inline`) so it can re-run on
+            // NOTE: this is a BUNDLED script (no `is:inline`) so it can re-run on
             // every ClientRouter swap. ClientRouter replaces document.body (and with
             // it the power button + boot-label nodes) on each navigation, so the FSM
             // is wrapped in an idempotent initHudFsm() that RE-QUERIES those nodes each
             // call and re-applies the persisted/current state to the fresh DOM. The
-            // machine state itself (state / forced / timers / the bound window listener)
-            // lives ONCE on window.__bhHudFsm so a re-init reuses it and only the window
-            // listener is bound a single time across swaps. Behaviour is otherwise
-            // identical to the former <script is:inline> island.
-            type HudState = 'idle' | 'booting' | 'ready';
+            // machine state itself (state / timers) lives ONCE on window.__bhHudFsm so
+            // a re-init reuses it, and the per-node button listener is bound a single
+            // time per actual button element across swaps.
+            type HudState = 'idle' | 'booting' | 'ready' | 'shutting-down';
             // The machine state persisted on window across ClientRouter swaps. The
-            // control functions (requestPowerOn/Off, togglePower, standbyPulse) are
-            // re-pointed to the current DOM by each init, so the single window listener
-            // + the once-per-node button listener always drive the live page.
+            // control function (togglePower) is re-pointed to the current DOM by each
+            // init, so the once-per-node button listener always drives the live page.
             interface HudFsm {
               state: HudState;
-              /** True once the visitor has EVER clicked the power button. Gates the
-               *  scroll-driven auto-boot only — never the button itself. */
-              userChosen: boolean;
-              bootEndTimer: number;
+              /** The pending boot→ready / shutdown→idle timer (0 when none). */
+              seqEndTimer: number;
               lineTimers: number[];
-              windowBound: boolean;
-              requestPowerOn?: (skipBoot: boolean) => void;
-              requestPowerOff?: () => void;
               togglePower?: () => void;
-              standbyPulse?: () => void;
             }
             function initHudFsm(): void {
               // --- Centralized literals (mirror src/hero/lib/constants.ts) ---------
               const ACTIVE_CLASS = 'hud-active'; // HUD_ACTIVE_BODY_CLASS  (ready)
               const BOOTING_CLASS = 'hud-booting'; // HUD_BOOTING_BODY_CLASS (booting)
+              const SHUTDOWN_CLASS = 'hud-shutting-down'; // power-off (boot layers, reversed)
               const STATE_KEY = 'hud-state'; // HUD_STATE_STORAGE_KEY
-              const POWER_EVENT = 'hud:power'; // HUD_POWER_EVENT (from HeroIsland)
               const BOOT_MS = 3600; // HUD_BOOT_DURATION_MS — keep in sync with --hud-boot-dur
 
               // RE-QUERY the per-swap DOM each init. body / btn / bootLabel are all
@@ -247,69 +235,59 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               const btn = document.querySelector<HTMLButtonElement>('.overlay-blog-power');
               const bootLabel = document.querySelector<HTMLElement>('.hud-boot-label');
 
-              // Honour the OS reduced-motion preference: under it the boot is a calm,
-              // brief readout (no flicker/scan/stutter — those are dropped in CSS) and
-              // we shorten the JS window so the readout doesn't linger.
+              // Honour the OS reduced-motion preference: under it the sequence is a
+              // calm, brief readout (no flicker/scan/stutter — those are dropped in
+              // CSS) and we shorten the JS window so the readout doesn't linger.
               const reduceMotion =
                 window.matchMedia &&
                 window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-              const bootMs = reduceMotion ? 700 : BOOT_MS;
+              const seqMs = reduceMotion ? 700 : BOOT_MS;
 
               // Push the boot duration into the CSS var so the bar/flicker/scan
-              // animation lengths track the JS timer from a single source.
+              // animation lengths track the JS timer from a single source (the
+              // shutdown reuses the same layers reversed, so it shares this window).
               root.style.setProperty('--hud-boot-dur', BOOT_MS + 'ms');
 
-              // The machine-startup status lines, cycled through the boot window so
-              // the readout reads like a system check, not a flat bar. Tasteful, on-
-              // theme (Golden Record / black-hole instrument; mono uppercase via CSS).
+              // The machine-startup status lines, cycled through the boot window so the
+              // readout reads like a system check, not a flat bar. On power-OFF they
+              // play in reverse (SYSTEMS NOMINAL → LOADING) so the readout counts down.
               const BOOT_LINES = ['LOADING', 'CALIBRATING', 'ALIGNING ARRAY', 'SYSTEMS NOMINAL'];
 
               // --- Persistence (try/catch — private mode must never throw) ---------
-              // Blob shape: { powered, userChosen }. Legacy blobs carried a `forced`
-              // flag instead — a visitor who had engaged the old forced override HAD
-              // touched the button, so `forced: true` migrates to userChosen: true.
-              const readState = (): { powered: boolean; userChosen: boolean } => {
+              // Blob shape: { powered }. Absence of a blob means FIRST VISIT → the HUD
+              // defaults ON (see init below). Legacy blobs carried extra flags
+              // (forced / userChosen); we simply ignore them and read `powered`.
+              const readPowered = (): boolean | null => {
                 try {
                   const raw = window.localStorage.getItem(STATE_KEY);
-                  if (!raw) return { powered: false, userChosen: false };
-                  const parsed = JSON.parse(raw);
-                  return {
-                    powered: parsed.powered === true,
-                    userChosen: parsed.userChosen === true || parsed.forced === true,
-                  };
+                  if (!raw) return null; // no choice recorded → default ON
+                  return JSON.parse(raw).powered === true;
                 } catch (_) {
-                  return { powered: false, userChosen: false };
+                  return null;
                 }
               };
-              const writeState = (powered: boolean, chosen: boolean): void => {
+              const writePowered = (powered: boolean): void => {
                 try {
-                  window.localStorage.setItem(
-                    STATE_KEY,
-                    JSON.stringify({ powered: powered, userChosen: chosen }),
-                  );
+                  window.localStorage.setItem(STATE_KEY, JSON.stringify({ powered: powered }));
                 } catch (_) {
                   /* storage disabled — run without persistence */
                 }
               };
 
               // --- Persisted machine across swaps ----------------------------------
-              // The mutable state (current state, userChosen, live timers) lives ONCE
-              // on window so a re-init after a navigation continues the same machine
-              // rather than resetting it. `state`/`userChosen` here are LOCAL working
-              // copies seeded from the persisted machine; transition()/togglePower()
-              // write them straight back to fsm so the next init reads them.
-              // Typed accessor for the window-level machine (the project's idiom for
-              // __bh* globals in bundled scripts — see CustomCursor.astro).
+              // The mutable state (current state, live timers) lives ONCE on window so
+              // a re-init after a navigation continues the same machine rather than
+              // resetting it. `state` here is a LOCAL working copy seeded from the
+              // persisted machine; transition() writes it straight back to fsm so the
+              // next init reads it. Typed accessor for the window-level machine (the
+              // project's idiom for __bh* globals — see CustomCursor.astro).
               const fsmWindow = window as unknown as { __bhHudFsm?: HudFsm };
               const fsm: HudFsm = (fsmWindow.__bhHudFsm = fsmWindow.__bhHudFsm || {
-                state: 'idle', // 'idle' | 'booting' | 'ready'
-                userChosen: false, // pilot has taken the controls (gates auto-boot only)
-                bootEndTimer: 0,
+                state: 'ready', // on by default; overridden below if storage says idle
+                seqEndTimer: 0,
                 lineTimers: [],
-                windowBound: false,
               });
               let state = fsm.state;
-              let userChosen = fsm.userChosen;
               const lineTimers = fsm.lineTimers;
 
               const clearLineTimers = () => {
@@ -318,160 +296,108 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               const setBootLine = (text: string): void => {
                 if (bootLabel) bootLabel.textContent = text;
               };
+              // Schedule the status-line cadence across the sequence window. `reverse`
+              // counts the lines down (power-off) instead of up (power-on).
+              const scheduleBootLines = (reverse: boolean): void => {
+                const lines = reverse ? BOOT_LINES.slice().reverse() : BOOT_LINES;
+                setBootLine(lines[0]);
+                if (reduceMotion) return;
+                for (let i = 1; i < lines.length; i++) {
+                  const at = (seqMs * i) / lines.length;
+                  lineTimers.push(window.setTimeout(() => setBootLine(lines[i]), at));
+                }
+              };
 
               // Mirror the MACHINE state onto the power button's ARIA: pressed while
-              // powering up or lit (booting | ready), however the HUD got there. This
-              // matches the CSS, which lights the button gold off body.hud-active /
-              // hud-booting — what a screen reader hears and what the eye sees can't
-              // disagree. Called from every transition() and at init.
+              // powering up or lit (booting | ready), released while shutting down or
+              // off (shutting-down | idle) — so aria-pressed tracks the DESTINATION the
+              // sequence is heading to. Matches the CSS, which lights the button gold
+              // off body.hud-active / hud-booting. Called from every transition() + init.
               const applyPressed = () => {
-                if (btn) btn.setAttribute('aria-pressed', state !== 'idle' ? 'true' : 'false');
+                if (btn) {
+                  const lit = state === 'booting' || state === 'ready';
+                  btn.setAttribute('aria-pressed', lit ? 'true' : 'false');
+                }
               };
 
               // transition(next) — the ONLY place the state classes change. Each call
-              // sets the body classes for `next`, schedules any timers that state
-              // owns, and persists the resulting power state.
+              // sets the body classes for `next`, schedules any timers that state owns,
+              // and persists the resulting power INTENT.
               const transition = (next: HudState): void => {
                 if (next === state) return;
-                // Leaving booting: always clear its timers so a fast power-off press
-                // can cancel the loader cleanly.
-                if (state === 'booting') {
-                  window.clearTimeout(fsm.bootEndTimer);
+                // Leaving a sequence state: clear its timers so a fast opposite press
+                // can cancel the in-flight boot/shutdown cleanly.
+                if (state === 'booting' || state === 'shutting-down') {
+                  window.clearTimeout(fsm.seqEndTimer);
                   clearLineTimers();
                 }
                 state = next;
                 fsm.state = next;
                 applyPressed();
-                // Any transition answers a standing invitation: drop the standby
-                // pulse class so it can't linger on a now-lit (or re-darkened) button.
-                if (btn) btn.classList.remove('is-standby');
 
                 if (next === 'idle') {
-                  body.classList.remove(BOOTING_CLASS);
-                  body.classList.remove(ACTIVE_CLASS);
-                  writeState(false, userChosen);
+                  body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS, ACTIVE_CLASS);
+                  writePowered(false);
                   return;
                 }
 
                 if (next === 'booting') {
-                  // HUD stays DARK while the loader plays: add booting, ensure active
-                  // is OFF so the rail/compass/menu only ignite once booting → ready.
-                  body.classList.remove(ACTIVE_CLASS);
+                  // HUD stays DARK while the boot plays: add booting, ensure active +
+                  // shutdown are OFF so the rail/compass/menu only ignite booting → ready.
+                  body.classList.remove(ACTIVE_CLASS, SHUTDOWN_CLASS);
                   body.classList.add(BOOTING_CLASS);
-                  // Cycle the status lines across the boot window so the readout reads
-                  // like a startup self-check. Spread evenly; the last line (SYSTEMS
-                  // NOMINAL) lands just before ignition.
-                  setBootLine(BOOT_LINES[0]);
-                  if (!reduceMotion) {
-                    for (let i = 1; i < BOOT_LINES.length; i++) {
-                      const at = (bootMs * i) / BOOT_LINES.length;
-                      lineTimers.push(window.setTimeout(() => setBootLine(BOOT_LINES[i]), at));
-                    }
-                  }
-                  // Boot completes → ignite. Non-interruptible by scroll; a power-off
-                  // press calls transition('idle') which clears this timer.
-                  fsm.bootEndTimer = window.setTimeout(() => transition('ready'), bootMs);
-                  writeState(true, userChosen); // intent: we are powering up to ready
+                  scheduleBootLines(false); // LOADING → SYSTEMS NOMINAL
+                  // Boot completes → ignite. A power-off press calls transition('shutting-down')
+                  // which clears this timer.
+                  fsm.seqEndTimer = window.setTimeout(() => transition('ready'), seqMs);
+                  writePowered(true); // intent: we are powering up to ready
+                  return;
+                }
+
+                if (next === 'shutting-down') {
+                  // Power-OFF sequence: the SAME boot layers, played in reverse (CSS
+                  // off body.hud-shutting-down). The HUD chrome goes dark immediately
+                  // (drop active) while the reversed loader plays out, then we land idle.
+                  body.classList.remove(ACTIVE_CLASS, BOOTING_CLASS);
+                  body.classList.add(SHUTDOWN_CLASS);
+                  scheduleBootLines(true); // SYSTEMS NOMINAL → LOADING (counting down)
+                  fsm.seqEndTimer = window.setTimeout(() => transition('idle'), seqMs);
+                  writePowered(false); // intent: we are powering down to idle
                   return;
                 }
 
                 if (next === 'ready') {
-                  // Boot finished (or restored): drop booting, light the HUD. NOW the
-                  // rail cascade + compass + menu chrome ignite together.
-                  body.classList.remove(BOOTING_CLASS);
+                  // Boot finished (or restored): drop the sequence classes, light the
+                  // HUD. NOW the rail cascade + compass + menu chrome ignite together.
+                  body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS);
                   body.classList.add(ACTIVE_CLASS);
-                  writeState(true, userChosen);
+                  writePowered(true);
                   return;
                 }
               };
 
-              // requestPowerOn — go to ready via the loader, unless we are already on
-              // the way (booting) or there (ready). Skips the boot when restoring.
-              const requestPowerOn = (skipBoot: boolean): void => {
-                if (state === 'ready') return;
-                if (skipBoot) {
-                  // Restore path: land straight in ready so a returning visitor isn't
-                  // marched through the 3.6s boot again.
-                  transition('ready');
-                  return;
-                }
-                if (state === 'booting') return; // already powering up
-                transition('booting');
-              };
-
-              // requestPowerOff — return to idle. Booting cancels to idle (a power-off
-              // press during boot aborts the loader); ready tears straight down.
-              const requestPowerOff = () => {
-                if (state === 'idle') return;
-                transition('idle');
-              };
-
-              // --- Inputs ----------------------------------------------------------
-              // The power toggle: ONE bit, one click. Marks the pilot as having taken
-              // the controls (userChosen — persisted by the transition this always
-              // triggers), then flips the actual power state. Factored out so BOTH the
-              // window listener and the once-per-node button listener invoke the SAME
-              // latest closure (each init rewrites fsm.* to point at the current DOM).
+              // --- Input: the power toggle. ONE bit, one click. Powering ON plays the
+              // boot (idle/shutting-down → booting → ready); powering OFF plays it in
+              // reverse (ready/booting → shutting-down → idle). Pressing mid-sequence
+              // reverses course: a press during booting starts the shutdown, a press
+              // during shutting-down starts the boot. Factored onto fsm so the
+              // once-per-node button listener always invokes the LATEST closure (each
+              // init rewrites fsm.togglePower to point at the current DOM).
               const togglePower = (): void => {
-                userChosen = true;
-                fsm.userChosen = true;
-                if (state === 'idle') requestPowerOn(false);
-                else requestPowerOff(); // booting aborts the loader; ready tears down
+                if (state === 'ready' || state === 'booting') transition('shutting-down');
+                else transition('booting'); // idle | shutting-down → power up
               };
-
-              // "Systems standing by" — the single soft pulse the power button gives
-              // when scroll arrives at the ending but the auto-boot is suppressed
-              // (the pilot previously chose dark). The ship asks instead of acting.
-              // Class-driven one-shot CSS animation (scene.css); re-triggerable by
-              // removing + re-adding across a reflow. Reduced motion drops the
-              // animation in CSS, so this is safe to call unconditionally.
-              const standbyPulse = (): void => {
-                if (!btn) return;
-                btn.classList.remove('is-standby');
-                void btn.offsetWidth; // restart the animation if mid-pulse
-                btn.classList.add('is-standby');
-              };
-
-              // Expose the current closure's controls on fsm BEFORE binding listeners,
-              // so they can always call the LATEST closure (re-pointed to the fresh DOM
-              // by each initHudFsm() on astro:page-load).
-              fsm.requestPowerOn = requestPowerOn;
-              fsm.requestPowerOff = requestPowerOff;
               fsm.togglePower = togglePower;
-              fsm.standbyPulse = standbyPulse;
-              if (!fsm.windowBound) {
-                fsm.windowBound = true;
-                window.addEventListener(POWER_EVENT, (event: Event) => {
-                  const detail = (event as CustomEvent<{ on?: boolean } | null>).detail;
-                  if (!detail) return;
-                  // detail.on === false (scroll left the ending) is deliberately a
-                  // no-op: once booted the HUD stays lit until the power button powers
-                  // it off.
-                  if (!detail.on) return;
-                  // Call the latest closures via fsm (rewritten by each init, so they
-                  // always target the current page's nodes). We do NOT re-run
-                  // initHudFsm() here — that would re-add the per-init button listener
-                  // and stack duplicates on a non-swapped (home-page) button.
-                  if (!fsm.userChosen) {
-                    // The story's ignition: auto-boot, but only while the visitor has
-                    // never touched the power button.
-                    if (fsm.requestPowerOn) fsm.requestPowerOn(false);
-                  } else if (fsm.state === 'idle' && fsm.standbyPulse) {
-                    // Pilot chose dark: don't override them — pulse the button once.
-                    fsm.standbyPulse();
-                  }
-                });
-              }
 
-              // 2) Power button — toggles the power state. The button node is
-              //    REPLACED on every swap (fresh node = no prior listener), but
-              //    initHudFsm() can also run twice against the SAME node on the very
-              //    first paint (the direct call + astro:page-load). A per-node dataset
-              //    flag makes the bind exactly-once per actual button element.
+              // Power button — toggles the power state. The button node is REPLACED on
+              // every swap (fresh node = no prior listener), but initHudFsm() can also
+              // run twice against the SAME node on the very first paint (the direct
+              // call + astro:page-load). A per-node dataset flag makes the bind
+              // exactly-once per actual button element.
               if (btn && !btn.dataset.hudPowerBound) {
                 btn.dataset.hudPowerBound = '1';
                 // Invoke the LATEST closure via fsm so a node bound on an earlier init
-                // still toggles the live machine (never the stale first-init locals).
+                // still toggles the live machine (never a stale first-init local).
                 btn.addEventListener('click', () => {
                   if (fsmWindow.__bhHudFsm && fsmWindow.__bhHudFsm.togglePower) {
                     fsmWindow.__bhHudFsm.togglePower();
@@ -479,31 +405,28 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 });
               }
 
-              // --- Init: restore persisted power state (apply classes ASAP, no flash).
-              // On a swap this RE-APPLIES the live state to the fresh body/button: the
-              // localStorage restore lands us in ready/idle without replaying the boot,
-              // and applyPressed() repaints the new button's ARIA.
-              const persisted = readState();
-              // In-memory (mid-session) userChosen wins over the persisted blob —
-              // storage may be unavailable, and the flag is write-once anyway.
-              userChosen = userChosen || persisted.userChosen;
-              fsm.userChosen = userChosen;
-              if (persisted.powered) {
-                // Returning visitor / post-swap with the HUD on: restore ready directly
-                // (no replayed boot). On a swap this also re-paints the fresh body with
-                // the active class (transition() no-ops if state is already 'ready',
-                // so the body class is re-set below for that case).
-                if (state === 'ready') {
-                  // Already ready in-memory (mid-session swap): repaint the fresh body.
-                  body.classList.remove(BOOTING_CLASS);
-                  body.classList.add(ACTIVE_CLASS);
-                } else {
-                  requestPowerOn(true);
-                }
+              // --- Init: apply the resting power state to the (possibly fresh) DOM,
+              // no flash and no replayed sequence. On a swap this RE-APPLIES the live
+              // state to the fresh body/button. First visit (no stored choice) defaults
+              // the HUD ON. A mid-sequence swap (booting/shutting-down) is rare, but we
+              // settle it to its destination rather than leave the loader half-drawn on
+              // a brand-new body that never scheduled its timers.
+              const stored = readPowered(); // true | false | null(first visit → ON)
+              const powered = stored !== false; // null or true → on
+              if (powered) {
+                // Land straight in ready (default-on first visit, returning-lit visitor,
+                // or repainting a mid-boot swap onto the fresh body — no replayed boot).
+                state = 'ready';
+                fsm.state = 'ready';
+                body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS);
+                body.classList.add(ACTIVE_CLASS);
+              } else {
+                // Stored OFF: land dark. Repaints a mid-shutdown swap straight to idle.
+                state = 'idle';
+                fsm.state = 'idle';
+                body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS, ACTIVE_CLASS);
               }
-              // Repaint the (possibly fresh) button's ARIA whatever path we took —
-              // transition() covers its own calls, but the no-op paths (already ready,
-              // or idle with nothing persisted) still need the fresh node stamped.
+              // Repaint the fresh button's ARIA whatever path we took.
               applyPressed();
             }
 

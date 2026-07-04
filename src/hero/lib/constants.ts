@@ -119,48 +119,24 @@ export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
  *  / disabled storage must never throw). */
 export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM
- *  writes a small JSON blob `{ powered: boolean, userChosen: boolean }` here on
- *  every transition and restores it on init, so a returning visitor finds the HUD
- *  lit (or dark) exactly as they left it — without being marched back through the
- *  ~3.6s boot. `userChosen` records that the visitor has ever clicked the power
- *  button; while true, scroll no longer auto-boots the HUD (legacy blobs' `forced`
- *  flag migrates to it on read). All access is wrapped in try/catch (private mode
- *  / disabled storage must never throw). */
+ *  writes a small JSON blob `{ powered: boolean }` here on every transition and
+ *  restores it on init, so a returning visitor finds the HUD lit (or dark) exactly
+ *  as they left it — without replaying the ~3.6s sequence either way. The HUD is ON
+ *  BY DEFAULT: absence of a stored blob (a first-time visitor) is read as powered.
+ *  Legacy blobs carried extra flags (`forced` / `userChosen` from the old scroll
+ *  auto-boot); they are simply ignored — only `powered` is read. All access is
+ *  wrapped in try/catch (private mode / disabled storage must never throw). */
 export const HUD_STATE_STORAGE_KEY = 'hud-state';
 
-// --- cross-layer events ----------------------------------------------------
-/** The window CustomEvent HeroIsland dispatches to REQUEST a HUD power change. The
- *  island no longer owns body.hud-active directly — the boot FSM does — so it only
- *  signals intent. The detail is `{ on: boolean; source: 'scroll' }`: `on` is true
- *  once real scroll reaches the lifecycle's ending, false when it leaves. The FSM
- *  is the single owner of the body classes and decides what to do with the request
- *  (auto-boot only while the visitor has never touched the power button, plus the
- *  once-booted-stays-powered rule). The name lives here so the dispatcher
- *  (HeroIsland) and the listener (the inline FSM) never disagree on the string. */
-export const HUD_POWER_EVENT = 'hud:power';
-/** Detail payload carried by HUD_POWER_EVENT. */
-export interface HudPowerEventDetail {
-  /** Requested power state: true = power on, false = power off. */
-  on: boolean;
-  /** Where the request came from (only 'scroll' today; kept for future sources). */
-  source: 'scroll';
-}
-/** The HUD boot duration, in milliseconds. The single source of truth for "how
- *  long does powering-up take" — referenced by the inline FSM's boot timer AND by
- *  hud.css's --hud-boot-dur (which MUST be kept in sync: the inline script also
- *  pushes this value into the CSS var on init so the two can never drift). ~3.6s:
- *  long enough to read like a machine running its start-up self-check. */
+/** The HUD power sequence duration, in milliseconds. The single source of truth for
+ *  "how long does powering up (or down) take" — referenced by the FSM's sequence
+ *  timer AND by hud.css's --hud-boot-dur (which MUST be kept in sync: the FSM also
+ *  pushes this value into the CSS var on init so the two can never drift). The
+ *  power-OFF sequence reuses this same window, played in reverse. ~3.6s: long enough
+ *  to read like a machine running its start-up self-check. */
 export const HUD_BOOT_DURATION_MS = 3600;
-/** "Brief solo, then HUD arms": how long the closing pale-blue-dot beat holds ALONE
- *  before HeroIsland asks the boot FSM to power the HUD up. When real scroll first
- *  reaches the physical bottom (the lonely speck / 'beginning' scene), the island
- *  WAITS this long before dispatching HUD_POWER_EVENT{on:true}, so the lone dot lands
- *  in silence for a beat and only THEN does the rail/compass boot in. Scrolling back
- *  UP off the bottom before the timer fires CANCELS the pending power-on (the dot was
- *  only glanced, not arrived at). This is the tunable hold length — dial UP for a
- *  longer solo, DOWN (toward 0) to arm the HUD the instant the dot lands. It is the
- *  pre-boot pause; the ~3.6s boot loader (HUD_BOOT_DURATION_MS) still plays after. */
-export const HUD_DOT_SOLO_HOLD_MS = 1100;
+
+// --- cross-layer events ----------------------------------------------------
 /** The window CustomEvent the scene dispatches ONCE, after its first frame has
  *  rendered + composited (see createScene's frame()). The instant intro loader
  *  listens for it to fade itself out (add SCENE_READY_BODY_CLASS). The name lives

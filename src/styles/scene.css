@@ -32,9 +32,11 @@ body.bare::after {
   );
   transition: --vignette-edge 0.6s var(--ease-out-quint);
 }
-/* Deepen when the HUD takes over (or is powering up) so the chrome stands out. */
+/* Deepen when the HUD takes over (or is powering up / down) so the chrome stands
+   out — held through the shutdown so the vignette eases back only once it lands idle. */
 body.bare.hud-active::after,
-body.bare.hud-booting::after {
+body.bare.hud-booting::after,
+body.bare.hud-shutting-down::after {
   --vignette-edge: 0.72;
 }
 /* --vignette-edge is not an animatable property in browsers without @property, so
@@ -470,15 +472,19 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
   box-shadow: 0 0 12px color-mix(in oklch, var(--highlight) 45%, transparent);
 }
 
-/* CHARGING look while the HUD is powering up (#4). The whole button PULSES on load
+/* CHARGING look while the HUD is powering up OR down (#4). The whole button PULSES
    — a gold glow that swells and fades in place — so it reads as the corner control
-   drawing power. (No rotating ring: the pulse alone is the charge cue.) position:
-   relative is kept harmlessly in case any future ::overlay wants a positioning
-   context; it costs nothing without a ::before to host. */
+   drawing (or draining) power for the whole in-flight sequence. During shutdown the
+   button also reverts to its dim resting tint (aria-pressed → false, hud-active
+   dropped), so the pulse plays over a darkening glyph — power draining out. (No
+   rotating ring: the pulse alone is the charge cue.) position: relative is kept
+   harmlessly in case any future ::overlay wants a positioning context; it costs
+   nothing without a ::before to host. */
 .overlay-blog-power {
   position: relative;
 }
-body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
+body.hud-booting .overlay-blog-power:not(.overlay-blog-motion),
+body.hud-shutting-down .overlay-blog-power:not(.overlay-blog-motion) {
   animation: overlay-power-charge 0.9s ease-in-out infinite;
 }
 /* The pulse: a gold (var(--highlight)/var(--accent-strong)) glow that breathes from
@@ -500,35 +506,12 @@ body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
   }
 }
 
-/* "SYSTEMS STANDING BY" — the single soft pulse the FSM gives the button when
-   scroll arrives at the lifecycle's ending but the auto-boot is suppressed (the
-   pilot previously powered the HUD off — userChosen). The ship asks instead of
-   acting: one slow gold breath, then back to the dim resting look. One-shot
-   (iteration-count 1); the FSM re-triggers it by re-adding .is-standby across a
-   reflow on each fresh arrival. Deliberately calmer than the charging pulse —
-   an invitation, not an alarm. */
-.overlay-blog-power.is-standby {
-  animation: overlay-power-standby 1.8s ease-in-out 1;
-}
-@keyframes overlay-power-standby {
-  0%, 100% {
-    border-color: var(--line);
-    color: var(--fg-dim);
-    box-shadow: none;
-  }
-  45% {
-    border-color: var(--accent-strong);
-    color: var(--accent-strong);
-    box-shadow: 0 0 14px color-mix(in oklch, var(--highlight) 45%, transparent);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-power { transition: none; }
-  /* Drop the charge pulse; the static lit/charging tint above still reads. */
-  body.hud-booting .overlay-blog-power { animation: none; }
-  /* Drop the standby pulse too — it is a pure grace note, nothing depends on it. */
-  .overlay-blog-power.is-standby { animation: none; }
+  /* Drop the charge pulse (both power-up and power-down); the static lit/charging
+     tint above still reads. */
+  body.hud-booting .overlay-blog-power,
+  body.hud-shutting-down .overlay-blog-power { animation: none; }
 }
 
 /* Reduced-motion toggle — a sibling glyph button to the corner power control. The
