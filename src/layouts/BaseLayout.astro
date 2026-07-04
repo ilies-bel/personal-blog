@@ -131,10 +131,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                                       over the whole frame, shuffling in steps,
                                       loud while the signal acquires, dead by
                                       ignition.
-                • .hud-boot-headswitch — the head-switching noise band: the torn
-                                      static strip along the very bottom edge
-                                      every VHS tape has.
-                      (The third VHS layer — tracking slips — needs no element:
+                      (The other VHS layer — tracking slips — needs no element:
                       hud.css steps the scene CANVAS itself sideways, so the
                       picture jumps like a deck hunting for tracking.)
                 • .hud-boot-panels  — the cockpit BEZEL: four edge seams that etch in
@@ -147,7 +144,6 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               reads like a machine running its start-up self-check. */}
           <div class="hud-boot-flicker" aria-hidden="true"></div>
           <div class="hud-boot-static" aria-hidden="true"></div>
-          <div class="hud-boot-headswitch" aria-hidden="true"></div>
           <div class="hud-boot-panels" aria-hidden="true">
             <span class="hud-boot-seam" data-edge="top"></span>
             <span class="hud-boot-seam" data-edge="right"></span>

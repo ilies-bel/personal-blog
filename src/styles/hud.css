@@ -1069,20 +1069,17 @@ body.hud-booting .hud-boot-flicker {
 }
 
 /* VHS SIGNAL KIT — the boot reads like a tape deck acquiring signal, not a CRT
-   sweep. Three layers, all gray/white (no gold — the bezel owns the gold), all
+   sweep. Two layers, both gray/white (no gold — the bezel owns the gold), both
    loudest EARLY (signal acquiring) and dead by ignition, all timing off
    --hud-boot-dur:
      • TAPE STATIC FIELD (.hud-boot-static) — faint grayscale grain over the
-       whole frame, shuffling position in coarse steps.
-     • HEAD-SWITCHING BAND (.hud-boot-headswitch) — the torn static strip along
-       the very bottom edge every VHS tape has; horizontally-streaked noise,
-       stepped shear jitter.
+       whole frame, shuffling position in coarse steps (an inline SVG
+       feTurbulence tile, desaturated).
      • TRACKING SLIPS (no element) — the scene CANVAS itself jumps sideways with
        a slight skew tear in three stepped bursts, like the deck hunting for
        tracking. steps(1, end) holds each pose discretely — raw jumps, no easing.
-   The noise textures are inline SVG feTurbulence tiles (desaturated); the field
-   uses isotropic fine grain, the band an anisotropic base frequency (low x,
-   high y) so its noise reads as horizontal tape streaks. */
+   (A head-switching noise band along the bottom edge was tried and cut — too
+   much furniture at the readout's edge of the frame.) */
 .hud-boot-static {
   position: fixed;
   inset: 0;
@@ -1111,40 +1108,6 @@ body.hud-booting .hud-boot-static {
   42%  { opacity: 0.14; }
   60%  { opacity: 0.07; }
   88%  { opacity: 0.04; }
-  100% { opacity: 0; }
-}
-.hud-boot-headswitch {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3.2vh;
-  z-index: 17;
-  pointer-events: none;
-  opacity: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='56'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.65' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='280' height='56' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 280px 100%;
-  /* The band's top edge is torn, not ruled — mask it off with a soft ramp. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
-}
-body.hud-booting .hud-boot-headswitch {
-  animation:
-    vhs-head-jitter 0.24s steps(3) infinite,
-    vhs-head-window var(--hud-boot-dur) linear 1 both;
-}
-/* Stepped shear + texture slide: the strip tears sideways in discrete snaps. */
-@keyframes vhs-head-jitter {
-  from { background-position: 0 0; transform: skewX(0deg) translateY(0); }
-  to   { background-position: -187px 0; transform: skewX(-1.4deg) translateY(1px); }
-}
-@keyframes vhs-head-window {
-  0%   { opacity: 0; }
-  5%   { opacity: 0.5; }
-  38%  { opacity: 0.4; }
-  42%  { opacity: 0.65; }  /* flares with the second tracking slip */
-  46%  { opacity: 0.35; }
-  84%  { opacity: 0.28; }
   100% { opacity: 0; }
 }
 /* TRACKING SLIPS — the picture itself (the WebGL canvas, never the HUD chrome:
@@ -1255,10 +1218,9 @@ body.hud-booting .hud-boot-joint[data-corner='bl'] { animation-delay: calc(var(-
    so the boot is felt, just without the machine-startup theatrics. */
 @media (prefers-reduced-motion: reduce) {
   body.hud-booting .hud-boot-flicker { animation: none; opacity: 0; }
-  /* The whole VHS kit is theatrics — static, head-switch band and the canvas
-     tracking slips all stand down; the calm readout carries the boot. */
+  /* The whole VHS kit is theatrics — static and the canvas tracking slips both
+     stand down; the calm readout carries the boot. */
   body.hud-booting .hud-boot-static { animation: none; opacity: 0; }
-  body.hud-booting .hud-boot-headswitch { animation: none; opacity: 0; }
   body.hud-booting .bh-stage canvas { animation: none; }
   /* The bezel trace is pure theatrics too — the calm readout carries the boot. */
   body.hud-booting .hud-boot-panels { opacity: 0; }
