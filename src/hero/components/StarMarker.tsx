@@ -167,12 +167,15 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // the legacy title/subtitle still renders a complete-looking panel:
   //   eyebrow  → title       headline → title       body → subtitle
   //   tags     → omitted when absent/empty
-  //   cta      → the legacy '[ OPEN ]' affordance text when absent
+  // NOTE: the card carries NO CTA link. The card is aria-hidden/decorative and
+  // its hit area is only the small reticle dot, so a "Read the story →" line
+  // looked clickable while clicks on it did nothing. The whole reticle <a> is the
+  // real link (a click anywhere on it navigates / dives); placement.cta is left
+  // unused on purpose rather than rendered as a dead affordance.
   const eyebrow = placement.eyebrow ?? placement.title;
   const headline = placement.headline ?? placement.title;
   const body = placement.body ?? placement.subtitle;
   const tags = placement.tags && placement.tags.length > 0 ? placement.tags : null;
-  const cta = placement.cta ? `${placement.cta} →` : '[ OPEN ]';
 
   // The always-near micro-label: the eyebrow when present, else the title.
   const microLabel = placement.eyebrow ?? placement.title;
@@ -386,7 +389,26 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           const engageSq = engageRadius * engageRadius;
           const releaseSq = releaseRadius * releaseRadius;
           if (!lastLocked && distSq <= engageSq) nextLocked = true;
-          else if (lastLocked && distSq > releaseSq) nextLocked = false;
+          else if (lastLocked && distSq > releaseSq) {
+            // Past the release radius — but DON'T drop the lock if the pointer is
+            // travelling through the corridor toward the open card, or is over the
+            // card itself. The card sits ~2× the release radius from the dot, so a
+            // plain radius release would fire in the gap between dot and card and
+            // make the card unreachable (pointer-events flips off mid-travel). While
+            // locked, treat the card's rect (padded to bridge the connector gap) as
+            // part of the keep-alive region: the lock only truly drops once the
+            // pointer leaves BOTH the release circle AND that padded card region.
+            const cardEl = el?.querySelector<HTMLElement>('.star-marker-card-body');
+            const cr = cardEl?.getBoundingClientRect();
+            const KEEP_ALIVE_PAD = 28; // px — bridges the dot→card connector gap
+            const overCardRegion =
+              !!cr &&
+              p.x >= cr.left - KEEP_ALIVE_PAD &&
+              p.x <= cr.right + KEEP_ALIVE_PAD &&
+              p.y >= cr.top - KEEP_ALIVE_PAD &&
+              p.y <= cr.bottom + KEEP_ALIVE_PAD;
+            nextLocked = overCardRegion;
+          }
         } else if (!focusedRef.current) {
           nextLocked = false;
         }
@@ -634,24 +656,32 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           Decorative (the <a> carries the real accessible name). */}
       <span className="star-marker-microlabel" aria-hidden="true">{microLabel}</span>
 
-      {/* The tethered terminal-style card — revealed with the locked state. The
-          richer panel: eyebrow → headline → desc → tags → CTA, with a reserved
-          media slot for the future orbital diagram. Decorative (aria-hidden); the
-          <a> carries the real accessible name (headline + body) above. */}
+      {/* The tethered instrument card — revealed with the locked state. A single
+          CHAMFERED HUD panel: cold-black fill + a crisp 1px white outline that
+          traces the whole angular silhouette (top-left + bottom-right corners cut
+          at 45°), drawn by the .star-marker-card-frame layer via stacked clip-paths.
+          Inside: eyebrow → header rule → headline → desc → tags → CTA. Decorative
+          (aria-hidden); the <a> carries the real accessible name (headline + body)
+          above. */}
       <span className="star-marker-card" aria-hidden="true">
         <span className="star-marker-connector" />
         <span className="star-marker-card-body">
+          {/* The angular white outline that follows the chamfered silhouette.
+              Absolutely positioned behind the copy; drawn with clip-paths so the
+              border traces the cut corners, not a plain rectangle. Decorative. */}
+          <span className="star-marker-card-frame" />
           <span className="star-marker-card-text">
             <span className="star-marker-card-eyebrow">{eyebrow}</span>
+            {/* Thin header rule — separates the chapter label from the headline
+                the way the reference HUD readouts do. */}
+            <span className="star-marker-card-rule" />
             <span className="star-marker-card-headline">{headline}</span>
             <span className="star-marker-card-desc">{body}</span>
+            {/* No CTA line — the card is decorative; the reticle <a> is the link. */}
             {tags ? (
               <span className="star-marker-card-tags">{tags.join(' · ')}</span>
             ) : null}
-            <span className="star-marker-card-cta">{cta}</span>
           </span>
-          {/* placeholder: orbital diagram + icons go here */}
-          <span className="star-marker-card-media" />
         </span>
       </span>
     </a>
