@@ -29,11 +29,24 @@ export default function ReducedMotionToggle() {
   const { reduced } = useSceneState();
   const { requestReducedMotion } = useSceneActions();
 
-  // The .overlay-blog nav is server-rendered by BaseLayout, so it is in the DOM by the
-  // time this island hydrates — but resolve it in an effect (after mount) so the lookup
-  // is client-only and SSR-safe, and re-resolve on an SPA navigation. Null until found
-  // (or on pages with no nav) → the button renders in place as a graceful fallback.
-  const [navHost, setNavHost] = useState<HTMLElement | null>(null);
+  // The .overlay-blog nav is server-rendered by BaseLayout, so on a page that HAS the nav
+  // the toggle should portal into that row. On a page WITHOUT it, the toggle falls back to
+  // a fixed-position corner render (.bh-root > .overlay-blog-motion, scene.css).
+  //
+  // The host is resolved in a post-mount effect (client-only, SSR-safe, and re-runs on an
+  // SPA navigation). The catch: the fixed-position fallback's `right:` offset lands EXACTLY
+  // on the X social icon in the nav row, so rendering the fallback even for a single frame
+  // on a page that does have the nav flashes the camera glyph on top of the X — a visible
+  // ~1s overlap on a slow hydrate (the window a user would notice + screenshot).
+  //
+  // So the state is TRISTATE, and the fallback is gated on a CONFIRMED absence rather than
+  // a not-yet-resolved one:
+  //   • undefined — host not resolved yet → render NOTHING (never the flashing fallback).
+  //   • HTMLElement — nav found → portal into the row.
+  //   • null — resolution ran and found no nav → render the fixed-position fallback.
+  // The first paint is `undefined`, so the fallback can only ever appear on a page that
+  // genuinely has no nav, never as a transient flash over the X on one that does.
+  const [navHost, setNavHost] = useState<HTMLElement | null | undefined>(undefined);
   useEffect(() => {
     const resolveHost = (): void => {
       setNavHost(document.querySelector<HTMLElement>('.overlay-blog'));
@@ -74,6 +87,9 @@ export default function ReducedMotionToggle() {
     </button>
   );
 
-  // Portal into the nav row when the host exists; otherwise render in place.
+  // undefined → not resolved yet: render nothing (avoids the fixed-fallback flash over
+  // the X). A found host → portal into the nav row. null → resolution confirmed no nav on
+  // this page → render the fixed-position fallback in place.
+  if (navHost === undefined) return null;
   return navHost ? createPortal(button, navHost) : button;
 }
