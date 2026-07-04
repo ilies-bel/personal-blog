@@ -316,6 +316,9 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 state = next;
                 fsm.state = next;
                 applyPressed();
+                // Any transition answers a standing invitation: drop the standby
+                // pulse class so it can't linger on a now-lit (or re-darkened) button.
+                if (btn) btn.classList.remove('is-standby');
 
                 if (next === 'idle') {
                   body.classList.remove(BOOTING_CLASS);
