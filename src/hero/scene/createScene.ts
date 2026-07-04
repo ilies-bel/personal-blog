@@ -1,6 +1,6 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { CFG, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
+import { CFG, resolveParticleRTScale, resolveRgGranBake, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
@@ -14,6 +14,8 @@ import { buildStarfield, buildDistantStar } from './buildStarfield';
 import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
+import { buildGranBake } from './buildGranBake';
+import { buildParticlePass, PARTICLE_RT_LAYER } from './buildParticlePass';
 import { buildPostChain } from './buildPostChain';
 import { WebGLUnavailableError, type SceneHandle, type SceneHooks, type DiveOptions, type Rig } from './types';
 
@@ -45,6 +47,31 @@ function isWebGLAvailable(): boolean {
 }
 
 /**
+ * Cooperative yield between boot slices. The scene boot builds several ~1.2M-element
+ * typed-array rigs plus a GPGPU sim; done back-to-back they were ONE monstrous main-
+ * thread task (~4.6s under Lighthouse's 4× mobile throttle) that dominated TBT. The
+ * same total work now happens in per-rig slices with a macrotask boundary between
+ * them, so input/rendering can interleave. scheduler.yield() (Chrome 129+) keeps the
+ * continuation at the front of the task queue when available; setTimeout(0) is the
+ * portable fallback. The loader (index.astro) covers the whole boot either way —
+ * scene:ready still fires only after the FIRST REAL COMPOSITED FRAME, so slicing can
+ * lengthen boot wall-time slightly but never changes what the visitor sees.
+ */
+function yieldToMain(): Promise<void> {
+  const g = globalThis as { scheduler?: { yield?: () => Promise<void> } };
+  if (typeof g.scheduler?.yield === 'function') {
+    try {
+      return g.scheduler.yield();
+    } catch {
+      // fall through to the setTimeout fallback below
+    }
+  }
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+/**
  * The few frame-local STATEFUL multipliers applyLook needs that are NOT pure
  * functions of `look` alone. They are resolved each frame (from the focusGlow
  * ease, the gravity-sim sample, the streak latch and the debug overrides) and
@@ -71,7 +98,11 @@ interface ApplyLookCtx {
   nebulaFlashBloom: number;
 }
 
-export function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks, tier: DeviceTier = 'high'): SceneHandle {
+// NOTE the async signature: construction is SLICED (see yieldToMain above) so no
+// single boot task is monstrous. Callers await the handle; the WebGL probe below
+// still throws synchronously-on-first-tick (before any await), so the typed
+// WebGLUnavailableError keeps surfacing through the same promise rejection path.
+export async function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks, tier: DeviceTier = 'high'): Promise<SceneHandle> {
   const diskParticles = tuneParticlesForDevice(tier);
   const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
   void bCritShadow;
@@ -121,11 +152,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // and updateLensUniforms() stay byte-for-byte identical.
   const pixelRatio = renderer.getPixelRatio();
 
+  // Boot slice seam: the GL context + canvas exist; the heavy typed-array rig
+  // builds start on fresh tasks. (Every seam below sits BEFORE the first event
+  // listener registration, so no handler can ever observe a half-built scene.)
+  await yieldToMain();
+
   const diskRig = buildDisk(scene, diskParticles, pixelRatio, tier === 'low');
   const diskMatPrimary = diskRig.primary;
   const diskMatSecondary = diskRig.secondary;
   const diskPrimary = diskRig.primaryPts;
   const diskSecondary = diskRig.secondaryPts;
+
+  await yieldToMain(); // boot slice seam (disk rig ~1.2M grains built above)
 
   const starRig = buildStarfield(scene, diskParticles, pixelRatio, tier === 'low');
   const starUniforms = starRig.uniforms; // updateLensUniforms() writes through this
@@ -137,6 +175,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const distantStarRig = buildDistantStar(scene, pixelRatio);
   const distantStarUniforms = distantStarRig.uniforms;
   const distantStarPts = distantStarRig.pts;
+
+  await yieldToMain(); // boot slice seam (lensed starfield ~450k grains built above)
 
   const warpRig = buildWarp(scene, diskParticles);
   const warpUniforms = warpRig.uniforms; // updateLensUniforms() writes through this
@@ -157,6 +197,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
 
+  await yieldToMain(); // boot slice seam (warp/streak/ring line rigs built above)
+
   // High builds the full RenderPass→Bloom→Grade→Nova. The low tier gets a CHEAP
   // bloom — the SAME pass, but its mip pyramid renders at quarter resolution
   // (bloomScale 0.5), which is far cheaper AND softer: the low-res blur spreads, so
@@ -167,6 +209,59 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const bloom = postRig.bloom;
   const gradePass = postRig.gradePass;
   const novaPass = postRig.novaPass;
+
+  // --- half-res particle pass (the fill-rate lever) --------------------------
+  // The scene is GPU-fill-rate-bound on the ~2.4M soft additive gaussian sprites of
+  // the disk cloud + its lensed ghost. Those two draws are routed onto their own
+  // layer and rendered into a `particleScale`-sized HalfFloat target each frame,
+  // then additively upsample-composited into the full-res scene render BEFORE
+  // bloom (see buildParticlePass.ts for the full pipeline/depth/ordering story).
+  // HIGH tier only: the low tier already renders the whole frame at a 0.6-capped
+  // DPR with its own re-tuned grain sizes/boosts — stacking another halving under
+  // that would change its carefully measured look for little gain. At scale === 1
+  // (?prtres=1, the A/B kill-switch) NOTHING is built or moved: the rigs stay on
+  // layer 0 and the frame path below is the original single pass, byte-identical.
+  const particleScale = tier === 'high' ? resolveParticleRTScale() : 1;
+  const particlePass = particleScale < 1 ? buildParticlePass(scene, particleScale) : null;
+  if (particlePass) {
+    diskPrimary.layers.set(PARTICLE_RT_LAYER);
+    diskSecondary.layers.set(PARTICLE_RT_LAYER);
+    // The disk materials now render ONLY into the scaled-down particle target, so
+    // their sprite sizing must know the ratio (gl_PointSize is in target pixels):
+    // the shader rescales each point's footprint and conserves raster-floored
+    // sprite energy via vSizeComp. Static for the life of the scene — set once.
+    diskMatPrimary.uniforms.uSizeScale.value = particleScale;
+    diskMatSecondary.uniforms.uSizeScale.value = particleScale;
+  }
+
+  // --- red-giant granulation cubemap bake (the vertex-bound red-giant fix) ----
+  // The settled red giant was VERTEX-bound (~37fps): the disk vertex shader
+  // re-evaluated the rigid multi-scale granulation (cellular 27-cell hash loop +
+  // warpFbm + fbm) for ~1.2M vertices every frame — a pattern that on the red
+  // giant is a PURE RIGID function of the spun sphere direction (churn zeroed by
+  // the rotation-lock). buildGranBake renders that scalar field ONCE into a
+  // cubemap (six tiny draws, run under the loader in scheduleGpuWarm below,
+  // following the GPGPU-bake precedent) and the shader swaps the noise block for
+  // one textureCube fetch — gated by uGranBakeReady, which flips ONLY on bake
+  // success, so a slow/failed bake or the ?rgbake=0 kill-switch keeps the exact
+  // analytic rendering. HIGH tier only: the low tier draws 28-40k grains (the
+  // vertex noise is negligible there) and may lack WebGL2/float-renderability.
+  const granBake = tier === 'high' && renderer.capabilities.isWebGL2 && resolveRgGranBake()
+    ? buildGranBake(renderer, diskMatPrimary.uniforms.uGranScale.value as number)
+    : null;
+  let granBakeTried = false; // one attempt settles it (bake() is idempotent, success or fail)
+  let granBakeApplied = false;
+  // Flip the disk materials onto the baked path — ONLY after a successful bake
+  // (the fallback contract: a visitor who reaches the giant before the bake
+  // finishes sees today's exact analytic rendering until this flips).
+  const applyGranBake = (): void => {
+    if (granBakeApplied || !granBake || !granBake.isBaked()) return;
+    for (const m of [diskMatPrimary, diskMatSecondary]) {
+      m.uniforms.uGranTex.value = granBake.texture;
+      m.uniforms.uGranBakeReady.value = 1;
+    }
+    granBakeApplied = true;
+  };
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
   // The yellow star is a small anchor the red giant CONTRACTS into. The red giant's
@@ -180,6 +275,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const RED_GIANT_RADIUS = 4.2 * GIANT_RADIUS_SCALE; // = 10.5; uGiantR × uGiantScale (held giant)
   const SUN_RIG_RADIUS = RED_GIANT_RADIUS * YELLOW_RED_RADIUS_RATIO; // dying star: small grow anchor
   const sunRig = buildSunRig(scene, SUN_RIG_RADIUS, renderer.getPixelRatio());
+
+  await yieldToMain(); // boot slice seam (post chain + mesh sun rig built above)
 
   // --- GPGPU gravitational collapse (nebula → yellow star) ---
   // A stateful N-body-style gravity sim (see gravitySim.ts): particles accelerate under
@@ -205,6 +302,12 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         coreR: SUN_RIG_RADIUS,
         halfFloat: diskParticles <= 240_000,
       });
+
+  // boot slice seam (GPGPU sim: 1.2M-texel seed texture + compute setup built
+  // above). Everything after this seam — function definitions, listener wiring,
+  // the compile kickoff — is cheap; the remaining GPU-heavy work (shader compile,
+  // first render) is already async via startRenderLoop below.
+  await yieldToMain();
 
   // --- lens uniforms (recomputed each frame from camera geometry) ---
   function updateLensUniforms(): void {
@@ -260,6 +363,9 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
     renderer.setSize(w, h);
     postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
+    // Half-res particle target rides the SAME resize path (and the same pixel ratio
+    // the renderer just resolved), so it always tracks the composer's target ÷ scale.
+    particlePass?.setSize(w, h, renderer.getPixelRatio());
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     gradePass.uniforms.uResolution.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
@@ -934,6 +1040,17 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     const flarePresence = (look.starFormed > 0 ? smoothstep01((look.starFormed - 0.97) / 0.03) : 1) * look.meshW;
     sunRig.loopMat.uniforms.uFade.value = flarePresence;
     sunRig.coronaMat.uniforms.uFade.value = flarePresence;
+    // TRUE-VISIBILITY gate for the loop arcade + corona haze: at flarePresence == 0
+    // both layers contribute EXACTLY zero photons (sunLoopFrag multiplies BOTH rgb
+    // and alpha by uFade; sunCoronaFrag multiplies its only output term by uFade;
+    // both are additive), yet ~67k loop sprites (uPS=150 → ~9px each) plus the full
+    // depthTest:false corona billboard still rasterized at full fill cost across the
+    // WHOLE forming-star window (stage ≈3.01→3.5, including the settled nebula hold
+    // at 3.42, where the seed mesh is visible but its atmosphere is not). Inside the
+    // yellow↔red cross-dissolve band flarePresence = meshW > 0, so the dissolve
+    // still renders both sides — this gate only drops the provably-zero case.
+    sunRig.loops.visible = flarePresence > 0;
+    sunRig.corona.visible = flarePresence > 0;
     // inner chromosphere glow rides meshW (it has no starFormed flare gate — it is the rim
     // glow present at all star sizes), so it dissolves in/out with the body. It rides meshW
     // directly: the seed is now the real textured photosphere (blue-tinted), not a clean disc,
@@ -949,15 +1066,19 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
 
     // --- body visibility (cloud vs mesh) + gravity teardown ------------------
     diskPrimary.visible = look.cloudShown;
-    diskSecondary.visible = look.cloudShown;
     starPts.visible = look.starPtsVisible;
     // plain starfield brightness behind the scene.
     starMat.uniforms.uStarBright.value = look.starBright;
     // remove ALL gravity once the star forms (warp arcs, lensed ghost, photon ring).
     warpSeg.visible = !look.gravityGone;
     warpSeg2.visible = !look.gravityGone;
-    diskSecondary.visible = !look.gravityGone; // no lensed disk ghost behind the star
-    ringPts.visible = !look.gravityGone; // no photon ring around the star
+    // Ghost + ring carry their own zero-contribution gates (lifecycle's
+    // diskGhostVisible / ringVisible): each goes false a beat BEFORE gravityGone,
+    // exactly where its shader already zeroes every pixel — so the ~1.2M-vertex
+    // secondary draw and the 64k ring sprites stop being submitted at zero cost
+    // to the rendered frame (see the flag docs in lifecycle.ts).
+    diskSecondary.visible = look.diskGhostVisible; // no lensed disk ghost behind the star
+    ringPts.visible = look.ringVisible; // no photon ring around the star
     starSecPts.visible = false; // secondary lensed star image stays off
 
     // --- bloom + auto-exposure + grade + disk-saturation (all resolved finals) ---
@@ -980,6 +1101,92 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       roomTintColor.setRGB(look.roomTint[0], look.roomTint[1], look.roomTint[2]),
       1,
     );
+  };
+
+  // --- post-first-frame GPGPU warm (runs under the loader) --------------------
+  // After the first real frame composites (scene:ready) the intro loader still
+  // covers the screen (2.5s floor on a first session load), so that window is used
+  // to finish the ONE remaining lazily-created GPU workload: the GPGPU collapse
+  // flipbook. Its two compute programs compile and its 21 snapshot FBOs allocate on
+  // the FIRST bake() — which used to fire mid-scroll at stage ≥ 2.3 and was the
+  // measured scrub hitch (a multi-frame compile/alloc stall right as the visitor
+  // crossed into the collapse approach). bake() is resumable and bounded per call
+  // (STEPS_PER_BAKE_FRAME), so this loop simply feeds it frames until done.
+  //   • Idempotent + scroll-safe: frame() keeps its own lazy bake trigger as the
+  //     fallback; both drive the same bounded, one-shot bake state machine, so a
+  //     visitor scrolling into the collapse mid-warm just shares the work.
+  //   • Never a long task: each tick is one bounded bake() call on its own rAF.
+  //   • Invisible: the bake renders only into its own offscreen sim targets.
+  //   • `stopped` parks the loop on dispose/pause; the in-frame lazy trigger then
+  //     covers a later resume (pause means the page is navigating away anyway).
+  // The __bhGpuWarm window snapshot is the LOG-FREE verification hook: program
+  // count at first frame vs after warm (renderer.info.programs), + bake state.
+  const gpuWarmInfo = {
+    programsAtFirstFrame: 0,
+    programsAfterWarm: 0,
+    bakeDone: false,
+    // Red-giant granulation cubemap bake state (buildGranBake): true once the six
+    // face draws completed and the disk flipped to the baked path. Stays false on
+    // the low tier / ?rgbake=0 / a failed bake — the analytic fallback.
+    granBakeDone: false,
+    // Live count, so a perf/capture script can assert AFTER scrubbing the full
+    // scroll range that no state transition compiled anything new
+    // (programsNow() === programsAfterWarm ⇒ zero mid-scroll compile stalls).
+    programsNow: (): number => renderer.info.programs?.length ?? 0,
+  };
+  // --- GPU draw-audit seam (__bhDrawAudit) -----------------------------------
+  // Log-free verification hook, mirroring __bhGpuWarm: snapshot() returns what the
+  // LAST COMPLETE frame SUBMITTED (renderer.info.render: calls/points/triangles/
+  // lines + live program count) so a capture script can table submissions per
+  // scroll position. The composer runs several renderer.render() calls per frame
+  // (one per pass) and info auto-resets after each — per-pass numbers are useless —
+  // so the FIRST snapshot() call ARMS whole-frame accumulation: frame() turns
+  // autoReset off and resets the counters ONCE per composite. Until armed nothing
+  // changes (autoReset stays true); normal play never arms it.
+  const drawAuditFrame = { calls: 0, points: 0, triangles: 0, lines: 0 };
+  let drawAuditArmed = false;
+  (window as unknown as Record<string, unknown>)[DEBUG_WINDOW_KEYS.drawAudit] = {
+    snapshot: (): { calls: number; points: number; triangles: number; lines: number; programs: number } => {
+      drawAuditArmed = true;
+      return {
+        calls: drawAuditFrame.calls,
+        points: drawAuditFrame.points,
+        triangles: drawAuditFrame.triangles,
+        lines: drawAuditFrame.lines,
+        programs: renderer.info.programs?.length ?? 0,
+      };
+    },
+  };
+
+  let gpuWarmStarted = false;
+  const scheduleGpuWarm = (): void => {
+    if (gpuWarmStarted) return;
+    gpuWarmStarted = true;
+    gpuWarmInfo.programsAtFirstFrame = renderer.info.programs?.length ?? 0;
+    (window as unknown as Record<string, unknown>)[DEBUG_WINDOW_KEYS.gpuWarm] = gpuWarmInfo;
+    const tick = (): void => {
+      if (stopped) return; // disposed/paused → frame()'s lazy bake remains the fallback
+      // Red-giant granulation cubemap first: six tiny GPU draws in ONE bounded call
+      // (its shader compiles here, under the loader — never mid-scroll), then the
+      // disk flips to the baked path via uGranBakeReady. Idempotent; a failure
+      // simply leaves the analytic path (uGranBakeReady stays 0).
+      if (granBake && !granBakeTried) {
+        granBakeTried = true;
+        granBake.bake();
+        applyGranBake();
+        gpuWarmInfo.granBakeDone = granBakeApplied;
+        requestAnimationFrame(tick);
+        return;
+      }
+      if (gravitySim.available && !gravitySim.isBaked()) {
+        gravitySim.bake();
+        requestAnimationFrame(tick);
+        return;
+      }
+      gpuWarmInfo.bakeDone = !gravitySim.available || gravitySim.isBaked();
+      gpuWarmInfo.programsAfterWarm = renderer.info.programs?.length ?? 0;
+    };
+    requestAnimationFrame(tick);
   };
 
   function frame(): void {
@@ -1133,7 +1340,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       readDebugNumber(DEBUG_WINDOW_KEYS.nebulaFlash) !== undefined ||
       readDebugNumber(DEBUG_WINDOW_KEYS.erupt) !== undefined ||
       readDebugNumber(DEBUG_WINDOW_KEYS.giantErupt) !== undefined ||
-      readDebugNumber(DEBUG_WINDOW_KEYS.streak) !== undefined;
+      readDebugNumber(DEBUG_WINDOW_KEYS.streak) !== undefined ||
+      readDebugNumber(DEBUG_WINDOW_KEYS.tailEps) !== undefined;
     // STATIC: a frame where nothing time-driven is visibly moving, so re-rendering
     // it would paint identical pixels. The ONE state that qualifies is the settled
     // PALE BLUE DOT — the closing speck at the bottom of the page, a long idle dwell
@@ -1263,6 +1471,18 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     if (gravitySim.available && (collapseApproaching || look.nebulaShader) && !gravitySim.isBaked()) {
       gravitySim.bake();
     }
+    // Lazy fallback for the red-giant granulation cubemap (mirrors the gravity-sim
+    // trigger above): the warm loop normally settles this one rAF after the first
+    // paint, but if it was parked (dispose/pause mid-warm) the bake still lands on
+    // the next live frame. One boolean check per frame once settled; bake() is a
+    // single bounded call (six tiny draws) and applyGranBake flips the uniform only
+    // on success — until then the analytic path renders, byte-identical to today.
+    if (granBake && !granBakeTried) {
+      granBakeTried = true;
+      granBake.bake();
+      applyGranBake();
+      gpuWarmInfo.granBakeDone = granBakeApplied;
+    }
     // GATE THE COLLAPSE ON A COMPLETE FLIPBOOK. The baked sim is the ONE beat that is not
     // a pure function of scroll: its snapshots take ~0.6s to bake the first time the
     // nebula is reached. If we sampled it before the bake finished, sampleAt() clamps to
@@ -1317,6 +1537,27 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     // flat self-emission, 1 = full light model) so the look can be A/B'd live.
     const nebLightOverride = readDebugNumber(DEBUG_WINDOW_KEYS.nebLight);
     applyCtx.nebLight = typeof nebLightOverride === 'number' ? nebLightOverride : 1;
+
+    // DEBUG: window.__bhTailEps overrides the disk's invisible-tail discard epsilon
+    // live (0 = discard off → the exact original fill; unset → the shipped
+    // DISK_TAIL_EPS default already baked into the uniforms at build). Same-session
+    // toggling keeps the per-load random grain fixed, so an A/B screenshot pair
+    // diffs cleanly. Written only while the hook is set — normal play never touches it.
+    const tailEpsOverride = readDebugNumber(DEBUG_WINDOW_KEYS.tailEps);
+    if (typeof tailEpsOverride === 'number') setDisk('uTailEps', Math.max(0, tailEpsOverride));
+
+    // DEBUG: window.__bhRgBake LIVE-toggles the baked-granulation path (0 = the
+    // analytic per-frame noise, 1 = the baked cubemap — only when the boot bake
+    // actually landed; it can never force-enable a missing/failed/kill-switched
+    // bake since granBakeApplied stays false there). Same-session toggling keeps
+    // the per-load random grain AND the spin phase fixed, so an A/B screenshot
+    // pair isolates the bake itself instead of drowning in reload noise — the
+    // exact __bhTailEps precedent. Written only while the hook is set; normal
+    // play never touches it (the boot-resolved ?rgbake= path stands).
+    const rgBakeOverride = readDebugNumber(DEBUG_WINDOW_KEYS.rgbake);
+    if (typeof rgBakeOverride === 'number') {
+      setDisk('uGranBakeReady', rgBakeOverride > 0 && granBakeApplied ? 1 : 0);
+    }
 
     // --- yellow star → red giant: FLASH-SWAP transition ----------------------
     // Direction (lifecycle plays in reverse on scroll-down): the YELLOW STAR
@@ -1382,9 +1623,13 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       look.yrColor > 0.9 &&
       look.kCollapse < 0.02;
     // distant-star presence ramp: a function of `stage` (not in StarState), so it
-    // stays here. Visibility also gates on look.gravityGone.
-    distantStarPts.visible = !look.gravityGone && stage < 0.45;
-    distantStarUniforms.uPresence.value = distantStarPts.visible ? 1 - smoothstep01((stage - 0.08) / 0.34) : 0;
+    // stays here. Visibility also gates on look.gravityGone — AND on the presence
+    // ramp itself: it reaches EXACTLY 0 at stage ≥ 0.42 (the shader zeroes vB →
+    // gl_PointSize 0) while the old stage<0.45 window kept submitting the draw for
+    // a zero-contribution band, so the presence>0 clause drops that waste.
+    const distantPresence = 1 - smoothstep01((stage - 0.08) / 0.34);
+    distantStarPts.visible = !look.gravityGone && stage < 0.45 && distantPresence > 0;
+    distantStarUniforms.uPresence.value = distantStarPts.visible ? distantPresence : 0;
 
     // --- hyperspace streaks: dot ⇄ nebula lightspeed approach ---------------
     // The nebula's own gas grains trail into long radial lanes while the camera
@@ -1783,7 +2028,48 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     }
 
     updateLensUniforms();
+    // Draw-audit accumulation (armed only after __bhDrawAudit.snapshot() is first
+    // called — see the seam above): reset the render counters ONCE per composite so
+    // they sum across every composer pass instead of auto-resetting per pass.
+    if (drawAuditArmed) {
+      renderer.info.autoReset = false;
+      renderer.info.reset();
+    }
+    // Half-res particle pass: render the heavy soft rigs (disk cloud + lensed ghost,
+    // parked on PARTICLE_RT_LAYER) into the offscreen half-res target, then reveal
+    // the in-scene composite triangle so the composer's RenderPass upsamples them
+    // additively into the full-res frame BEFORE bloom. applyLook already resolved
+    // this frame's `.visible` on both rigs, and renderInto() renders the scene
+    // through the particle layer, so the per-state visibility gates keep working
+    // unchanged. When NEITHER rig is shown (the settled-yellow mesh window) the
+    // whole pass is skipped and the composite stays hidden — zero cost. Runs after
+    // the draw-audit reset so audited frames count the offscreen submission too.
+    // null (the original single-pass path, byte-identical) at scale 1 / low tier.
+    if (particlePass) {
+      // PER-STATE BYPASS (lifecycle's particleFullRes — the pale-dot hold): hand the
+      // disk rigs back to the full-res main pass for this frame. Layer masks are a
+      // single int write; uSizeScale must track the raster the rigs land on (1 in
+      // the main pass) so the sprite footprint/energy compensation stays exact.
+      const bypass = look.particleFullRes;
+      const rigLayer = bypass ? 0 : PARTICLE_RT_LAYER;
+      diskPrimary.layers.set(rigLayer);
+      diskSecondary.layers.set(rigLayer);
+      const sizeScale = bypass ? 1 : particleScale;
+      if (diskMatPrimary.uniforms.uSizeScale.value !== sizeScale) {
+        diskMatPrimary.uniforms.uSizeScale.value = sizeScale;
+        diskMatSecondary.uniforms.uSizeScale.value = sizeScale;
+      }
+      const particlesLive = !bypass && (diskPrimary.visible || diskSecondary.visible);
+      particlePass.quad.visible = particlesLive;
+      if (particlesLive) particlePass.renderInto(renderer, scene, camera);
+    }
     postRig.render();
+    if (drawAuditArmed) {
+      drawAuditFrame.calls = renderer.info.render.calls;
+      drawAuditFrame.points = renderer.info.render.points;
+      drawAuditFrame.triangles = renderer.info.render.triangles;
+      drawAuditFrame.lines = renderer.info.render.lines;
+    }
 
     // First real frame is now drawn to the canvas (postRig.render() just ran). Tell
     // the page ONCE so the instant intro loader fades out over actual pixels, not a
@@ -1796,6 +2082,10 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     if (!firstFramePainted) {
       firstFramePainted = true;
       window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
+      // The loader now covers a PAINTED scene — spend that covered window warming
+      // the GPGPU collapse (programs + snapshot FBOs) so no scroll position ever
+      // pays a first-bake stall. Scheduled on its own rAF ticks, never this frame.
+      scheduleGpuWarm();
     }
   }
 
@@ -1826,25 +2116,63 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   const startRenderLoop = async (): Promise<void> => {
     try {
       if (typeof renderer.compileAsync === 'function') {
-        await renderer.compileAsync(scene, camera);
-        // Warm the post-chain pass materials too. EffectComposer passes are blitted
-        // through full-screen quads; collecting any pass.material into a throwaway
-        // scene and async-compiling it pulls those programs through KHR parallel
-        // compile as well. The throwaway scene/geometry are disposed; pass materials
-        // remain owned by their pass (do NOT dispose them — the composer still uses
-        // them every frame).
-        const passMaterials: THREE.ShaderMaterial[] = [];
-        for (const pass of postRig.composer.passes) {
-          const mat = (pass as { material?: THREE.ShaderMaterial }).material;
-          if (mat) passMaterials.push(mat);
+        // PROGRAM-VARIANT CORRECTNESS — the whole point of this block. three keys its
+        // program cache on the OUTPUT COLOR SPACE, which is derived from the render
+        // target bound at compile time: null target → the canvas's sRGB variant,
+        // any bound target → the Linear variant (see WebGLPrograms.getParameters).
+        // This scene is ONLY ever rendered through the EffectComposer INTO an
+        // offscreen HalfFloat target, so a bare compileAsync(scene, camera) (the old
+        // code) warmed sRGB variants that no frame ever uses — every rig's REAL
+        // program still compiled lazily on its first visible frame, i.e. the
+        // per-state rigs (sun mesh, streak lanes, …) stalled MID-SCROLL. Binding a
+        // throwaway render target during compile warms the exact Linear variants
+        // frame() renders with, for EVERY material in the scene graph — visible or
+        // not (compile() uses scene.traverse, not traverseVisible).
+        const warmRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
+        const warmGeo = new THREE.PlaneGeometry(2, 2);
+        const compiles: Promise<unknown>[] = [];
+        renderer.setRenderTarget(warmRT);
+        try {
+          // (1) every scene-graph material, Linear (render-target) variant.
+          compiles.push(renderer.compileAsync(scene, camera));
+          // (2) post-chain materials that render INTO render targets: the grade pass
+          // + the UnrealBloom pyramid internals (high-pass, the separable blurs,
+          // composite, blend). These are NOT `pass.material` (UnrealBloomPass keeps
+          // them under its own names), so they are harvested explicitly — otherwise
+          // they all compile inside the first composer.render(), fattening the
+          // first-frame task. Materials stay owned by their passes (never disposed
+          // here); only the throwaway warm scene/geometry are ours.
+          // (All of the composer's offscreen pass materials are ShaderMaterials —
+          // typed as such because THREE.Material doesn't resolve under this
+          // project's @types/three + TS combination; the codebase convention is
+          // ShaderMaterial throughout.)
+          const rtPassMaterials: THREE.ShaderMaterial[] = [gradePass.material];
+          if (bloom) {
+            const b = bloom as unknown as {
+              materialHighPassFilter?: THREE.ShaderMaterial;
+              separableBlurMaterials?: THREE.ShaderMaterial[];
+              compositeMaterial?: THREE.ShaderMaterial;
+              blendMaterial?: THREE.ShaderMaterial;
+            };
+            if (b.materialHighPassFilter) rtPassMaterials.push(b.materialHighPassFilter);
+            if (Array.isArray(b.separableBlurMaterials)) rtPassMaterials.push(...b.separableBlurMaterials);
+            if (b.compositeMaterial) rtPassMaterials.push(b.compositeMaterial);
+            if (b.blendMaterial) rtPassMaterials.push(b.blendMaterial);
+          }
+          const warmRtScene = new THREE.Scene();
+          for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
+          compiles.push(renderer.compileAsync(warmRtScene, camera));
+        } finally {
+          renderer.setRenderTarget(null);
         }
-        if (passMaterials.length > 0) {
-          const warmScene = new THREE.Scene();
-          const warmGeo = new THREE.PlaneGeometry(2, 2);
-          for (const mat of passMaterials) warmScene.add(new THREE.Mesh(warmGeo, mat));
-          await renderer.compileAsync(warmScene, camera);
-          warmGeo.dispose();
-        }
+        // (3) the nova pass is the one material that renders TO SCREEN
+        // (renderToScreen = true) → compile its sRGB variant with NO target bound.
+        const warmScreenScene = new THREE.Scene();
+        warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
+        compiles.push(renderer.compileAsync(warmScreenScene, camera));
+        await Promise.all(compiles);
+        warmGeo.dispose();
+        warmRT.dispose();
       }
     } catch {
       // Defensive: any failure in async compile means we fall back to compile-on-first-
@@ -1960,6 +2288,8 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
       // that drift as rigs are added/removed. Order preserved (post first). gravitySim
       // and renderer are NOT rigs (their own teardown contracts) so stay explicit.
       const rigs: Rig[] = [postRig, diskRig, starRig, distantStarRig, warpRig, streakRig, ringRig, sunRig];
+      if (particlePass) rigs.push(particlePass); // present only when the half-res split is active
+      if (granBake) rigs.push(granBake); // present only when the granulation bake is active (high tier, ?rgbake≠0)
       for (const rig of rigs) rig.dispose();
       gravitySim.dispose();
       renderer.dispose();

@@ -29,6 +29,11 @@ export interface SunRig extends Rig {
   // own (s.starBackVisible), independent of group.visible.
   starBack: THREE.Points;
   corona: THREE.Mesh;
+  /** The coronal-loop arcade Points (~67k sprites at uPS=150). Exposed so the
+   *  render loop can gate its `.visible` when the atmosphere's uFade is exactly 0
+   *  (the loop frag multiplies BOTH rgb and alpha by uFade, additive blending →
+   *  zero contribution while every sprite still rasterizes at full fill cost). */
+  loops: THREE.Points;
   dispose: () => void;
 }
 
@@ -495,5 +500,5 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     starMat.dispose();
   };
 
-  return { group, surfaceMat, surface, glowMat, coronaMat, loopMat, starMat, starBack, corona, dispose };
+  return { group, surfaceMat, surface, glowMat, coronaMat, loopMat, starMat, starBack, corona, loops, dispose };
 }

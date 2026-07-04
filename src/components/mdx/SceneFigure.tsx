@@ -51,9 +51,16 @@ export default function SceneFigure({ stage, caption }: SceneFigureProps) {
         if (!entries.some((e) => e.isIntersecting) || dispose || cancelled) return;
         observer.disconnect();
         void import('../../hero/scene/createScene')
-          .then(({ createScene }) => {
+          .then(async ({ createScene }) => {
             if (cancelled) return;
-            dispose = createScene(host, false, { getStage: () => pinned }, tier);
+            // createScene is async now (sliced boot). A teardown racing the build
+            // disposes the fresh handle the moment it resolves.
+            const handle = await createScene(host, false, { getStage: () => pinned }, tier);
+            if (cancelled) {
+              handle();
+              return;
+            }
+            dispose = handle;
             setMode('live');
           })
           .catch((error: unknown) => {

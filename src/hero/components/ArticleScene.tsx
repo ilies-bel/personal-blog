@@ -199,7 +199,7 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     const getStage = (): number => clock.current.stage;
 
     void import('../scene/createScene')
-      .then(({ createScene }) => {
+      .then(async ({ createScene }) => {
         if (cancelled) return;
         // Backdrop-shaped hook set: just getStage. We deliberately omit onMarkerFrame
         // (no in-article star markers) and the exploration/focus hooks (no HUD nav
@@ -211,7 +211,14 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
         // invariants directly. The createScene signature still takes them so the same
         // entry point works for HeroIsland's backdrop / live branches.
         if (host) {
-          dispose = createScene(host, false, { getStage }, 'high');
+          // createScene is async now (sliced boot). A teardown racing the build
+          // disposes the fresh handle the moment it resolves.
+          const handle = await createScene(host, false, { getStage }, 'high');
+          if (cancelled) {
+            handle();
+            return;
+          }
+          dispose = handle;
           // Apply the gate state the IO may have already latched before this resolved.
           if (offscreen) dispose.pauseRendering?.();
         }

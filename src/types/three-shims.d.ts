@@ -3,6 +3,7 @@ declare module 'three' {
   export class BackSide {}
   export class FloatType {}
   export class HalfFloatType {}
+  export class LinearFilter {}
   export class NoToneMapping {}
   export class RGBAFormat {}
   export class SRGBColorSpace {}
@@ -33,6 +34,7 @@ declare module 'three' {
   export class Vector2 { constructor(...args: any[]); [key: string]: any; }
   export class Vector3 { constructor(...args: any[]); [key: string]: any; }
   export class Vector4 { constructor(...args: any[]); [key: string]: any; }
+  export class WebGLCubeRenderTarget { constructor(...args: any[]); [key: string]: any; }
   export class WebGLRenderer { constructor(...args: any[]); [key: string]: any; }
   export class WebGLRenderTarget { constructor(...args: any[]); [key: string]: any; }
 

@@ -1,5 +1,6 @@
 // Post-processing passes: film grade + supernova whiteout.
-// Extracted verbatim from BlackHole.tsx — GLSL is byte-identical.
+// Extracted verbatim from BlackHole.tsx — GLSL byte-identical, EXCEPT the
+// NovaShader's uNova early-out branch (a pixel-identical perf gate; see main()).
 import * as THREE from 'three';
 
 export const GradeShader = {
@@ -155,6 +156,18 @@ export const NovaShader = {
     }
     void main(){
       vec3 col = texture2D(tDiffuse, vUv).rgb;
+      // EARLY-OUT (uniform branch — coherent across the whole screen): outside the
+      // supernova band the envelope is numerically zero (uNova is a stage-space
+      // Gaussian; it is < 1e-4 for every stage beyond ~±0.27 of the blast centre,
+      // i.e. EVERY settled state) and then BOTH composited terms below are zero:
+      //   bleach ≤ uNova·0.28·uPeak < 3e-5   and
+      //   gasAmt ≤ 1.3·smoothstep(0,0.16,uNova)·uShock < 2e-6,
+      // each far below one 8-bit LSB (1/255 ≈ 3.9e-3) on the canvas this pass
+      // writes to — so skipping the ~10 fbm octaves + shock-disk math per pixel is
+      // pixel-identical. The pass itself still runs (it is the composer's
+      // renderToScreen output), only the wasted per-pixel ALU is dropped; inside
+      // the blast band the full path runs unchanged.
+      if (uNova >= 1e-4) {
       // distance from the blast origin, aspect-corrected so the front is a
       // circle, not an ellipse on a wide viewport.
       vec2 q = (vUv - uCenter); q.x *= uAspect;
@@ -324,6 +337,7 @@ export const NovaShader = {
       vec3 tint = mix(warm, cold, smoothstep(0.35, 0.90, uNova));
       vec3 white = mix(vec3(1.0), tint, 0.42); // warm-tinted, never neutral white
       col = mix(col, white, clamp(bleach, 0.0, 1.0));
+      } // end of the uNova early-out branch (see the top of main)
       gl_FragColor = vec4(col, 1.0);
     }
   `,

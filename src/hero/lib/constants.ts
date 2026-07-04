@@ -238,6 +238,45 @@ export const DEBUG_WINDOW_KEYS = {
    *  any machine without spoofing hardware. Read as a STRING via readDebugString and
    *  honoured FIRST by detectDeviceTier (overrides the cheap auto-detect signals). */
   tier: '__bhTier',
+  /** Force the particle render-target scale (the half-res split for the heavy soft
+   *  additive rigs — see buildParticlePass). Follows the ?tier= pattern: the ?prtres=
+   *  URL query is honoured first and persisted to sessionStorage, then this window
+   *  global. `1` forces the original single-pass full-res path (a kill-switch that
+   *  short-circuits the split entirely); the shipped default is CFG.particleRTScale. */
+  prtres: '__bhPrtRes',
+  /** Kill-switch for the red-giant granulation CUBEMAP bake (buildGranBake — the
+   *  vertex-bound red-giant fix). Follows the ?prtres= pattern: the ?rgbake= URL
+   *  query is honoured first and persisted to sessionStorage, then this window
+   *  global. `0` forces the ANALYTIC per-frame granulation path (today's exact
+   *  shader — the bake is never built, uGranBakeReady stays 0) for A/B; `1` (or
+   *  unset) keeps the shipped baked path on the high tier. ALSO a live per-frame
+   *  toggle (the __bhTailEps precedent): setting the window global mid-session
+   *  flips uGranBakeReady on the fly (0 = analytic, 1 = baked — never enabling a
+   *  bake that didn't land), so an A/B screenshot pair keeps the per-load random
+   *  grain + spin phase fixed and diffs cleanly. */
+  rgbake: '__bhRgBake',
+  /** A/B override for the disk shader's invisible-tail discard epsilon (uTailEps).
+   *  Set 0 to disable the discard outright (byte-identical original fill), or any
+   *  epsilon to test; unset → the shipped TAIL_EPS default. Same-session toggling
+   *  keeps the per-load random grain fixed, so screenshots diff cleanly. */
+  tailEps: '__bhTailEps',
+  /** OUTPUT hook (like `inspect`, always published, costs a one-time tiny object):
+   *  the scene's GPU-warm verification snapshot. createScene publishes
+   *  `{ programsAtFirstFrame, programsAfterWarm, bakeDone }` here — program counts
+   *  read from renderer.info.programs at the first composited frame and again once
+   *  the loader-window warm (GPGPU collapse bake: compute programs + snapshot FBOs)
+   *  finishes — so a capture/perf script can assert that every lazily-compiled GPU
+   *  program was created under the loader, not mid-scroll. Log-free by design. */
+  gpuWarm: '__bhGpuWarm',
+  /** OUTPUT hook (like `gpuWarm`): the scene's per-frame GPU submission snapshot.
+   *  createScene publishes `{ snapshot() }` here — snapshot() returns what the LAST
+   *  COMPLETE frame actually SUBMITTED to the GPU (`renderer.info.render`: draw
+   *  calls / points / triangles / lines, plus the live program count) so a capture
+   *  script can build a per-scroll-position draw-audit table. The composer issues
+   *  one renderer.render() per pass and info auto-resets after each, so the FIRST
+   *  snapshot() call ARMS whole-frame accumulation (autoReset off; frame() resets
+   *  the counters once per composite instead); until armed it costs nothing. */
+  drawAudit: '__bhDrawAudit',
   /** Set truthy (e.g. 1) to make the scene PUBLISH a per-frame `window.__bhLook`
    *  snapshot of the resolved collapse-handoff scalars (stage, sim availability/bake
    *  state, the cloudBright/nebFade envelopes, body weights, camera distance) so a
