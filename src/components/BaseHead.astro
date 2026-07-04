@@ -4,11 +4,14 @@
 // executing any of the client-side interrogation JavaScript.
 import { SITE_TITLE, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, SITE_LANG } from '../consts';
 // Import the above-the-fold faces so Vite resolves their final fingerprinted,
-// base-prefixed URLs. One preload: Space Grotesk latin — it carries the
-// identity name, the manifesto big line AND body copy, all above the fold.
-// latin-ext/mono aren't needed for first paint, and over-preloading would
-// delay more important resources.
-import spaceGroteskLatin from '../styles/fonts/space-grotesk-latin.woff2';
+// base-prefixed URLs (?url guarantees the href can never drift from the URL
+// the bundled CSS references). Two preloads:
+//   • Space Grotesk latin — identity name, manifesto big line AND body copy.
+//   • IBM Plex Mono latin — wordmark + role line in the fixed chrome/HUD.
+// latin-ext and the serif italic aren't needed for first paint (below-fold /
+// rare glyphs), and over-preloading would delay more important resources.
+import spaceGroteskLatin from '../styles/fonts/space-grotesk-latin.woff2?url';
+import ibmPlexMonoLatin from '../styles/fonts/ibm-plex-mono-latin.woff2?url';
 
 interface Props {
   title: string;
@@ -67,10 +70,12 @@ const jsonLd =
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="generator" content={Astro.generator} />
 
-<!-- Preload the primary face (Space Grotesk, latin) to minimize the FOUT swap
+<!-- Preload the two above-the-fold faces (Space Grotesk latin for display/body,
+     IBM Plex Mono latin for the wordmark + role line) to minimize the FOUT swap
      on the fixed hero overlay text. crossorigin is required on font preloads
      even same-origin (fonts always fetch in CORS mode) to avoid a double-fetch. -->
 <link rel="preload" href={spaceGroteskLatin} as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={ibmPlexMonoLatin} as="font" type="font/woff2" crossorigin />
 
 <!-- Primary meta -->
 <title>{fullTitle}</title>

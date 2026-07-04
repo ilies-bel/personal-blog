@@ -4,6 +4,7 @@
 import { BEATS } from '../sceneTable';
 import { band } from '../scroll';
 import { lifecycleProgress } from '../timeline';
+import FinaleLedger from './FinaleLedger';
 import { useSceneState } from './SceneStateContext';
 
 export default function ManifestoOverlay() {
@@ -43,9 +44,14 @@ export default function ManifestoOverlay() {
           ? band(lifecycleP, beat.text.inStart, nextInStart !== undefined ? nextInStart - 1e-4 : 1)
           : band(lifecycleP, beat.text.inStart, beat.text.outEnd);
         const visible = opacity > 0.05;
+        // Declared per-beat layout variant (sceneTable), NOT an index test: the
+        // finale beat renders as a centred full-viewport column (copy upper-
+        // middle, ledger pinned at the bottom) composed around the anchored dot
+        // marker; every other beat keeps the shared bottom-left position.
+        const isFinale = beat.layout === 'finale';
         return (
           <div
-            className="bh-beat"
+            className={isFinale ? 'bh-beat bh-beat--finale' : 'bh-beat'}
             key={i}
             style={{ opacity }}
             // VISUALLY both paths now show exactly the one beat whose band the
@@ -70,6 +76,13 @@ export default function ManifestoOverlay() {
               <span className="sr-only">{beat.state}. </span>
               {beat.whisper}
             </p>
+
+            {/* The finale's payoff: the site index, pinned to the bottom of the
+                finale column. Shares this beat's exact visibility band (live
+                hard-cut AND the reduced-motion gapless regime) via `visible`;
+                the ledger gates its own visibility/pointer-events on it so the
+                links are inert whenever the copy is off screen. */}
+            {isFinale ? <FinaleLedger visible={visible} /> : null}
           </div>
         );
       })}

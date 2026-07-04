@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { CFG, densityCompensation } from '../lib/config';
 import { simDimensions } from '../gravitySim';
-import { diskVertexShader, diskFragmentShader, DISK_ERUPT_SLOTS } from '../shaders/disk.glsl';
+import { diskVertexShader, diskFragmentShader, DISK_ERUPT_SLOTS, DISK_TAIL_EPS } from '../shaders/disk.glsl';
 import type { Uniforms, UniformRig } from './types';
 
 export interface DiskRig extends UniformRig {
@@ -96,6 +96,14 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     //   grain emits a touch harder to keep the object from going dim/sparse. This is now a
     //   MODEST lift (the cheap quarter-res bloom + ~2× grains restore most of the brightness);
     //   see config's densityCompensation (lighter sublinear formula, capped, tier-gated).
+    uSizeScale: { value: 1 }, // half-res particle pass: the offscreen target's resolution ÷ the
+    //   composer's. 1 (default) = full-res single pass, exact shader no-op. createScene sets it to
+    //   the particle-pass scale when the split is active, so sprite SCREEN footprints (and, via
+    //   vSizeComp, raster-floored sprite energy) match the full-res raster. Static — set once.
+    uTailEps: { value: DISK_TAIL_EPS }, // invisible-tail discard epsilon (fill-rate trim).
+    //   Fragments whose final additive intensity lands under this are discarded before the
+    //   blend (they're below the HalfFloat pipeline's visible threshold). Overridable at
+    //   runtime via __bhTailEps for A/B (0 = off → original output, byte-identical).
     uPointGain: { value: comp.pointGain }, // grain-SIZE multiplier, low tier ONLY (1.0 at full
     //   count → byte-identical high path). Fattens each grain so the sparse low-tier cloud
     //   overlaps back into continuous gas (e.g. the red-giant photosphere stops reading as a
@@ -121,6 +129,13 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     uGiantCenter: { value: new THREE.Vector3(0, 0, 0) }, // centred; framing is a camera move
     uGiantSpin: { value: 0 }, // axial spin angle (radians); driven per-frame from uTime
     uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
+    // --- baked red-giant granulation cubemap (scene/buildGranBake.ts) ---------
+    // uGranBakeReady stays 0 (the analytic per-frame path — today's exact shader)
+    // until createScene's boot-time bake completes and flips it; it NEVER flips on
+    // the low tier, under ?rgbake=0, or if the bake fails. uGranTex is only ever
+    // sampled behind that gate (three binds a default cube texture while null).
+    uGranTex: { value: null },
+    uGranBakeReady: { value: 0 },
     // --- Later lifecycle transitions (scroll-driven 0..1 each). The scroll
     //     timeline drives these per frame; the shader body consumes them to morph
     //     the star onward. They sit on the timeline AFTER the red giant:

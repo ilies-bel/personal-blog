@@ -27,8 +27,24 @@
      brightnesses. These rail-only tokens are NOT overridden per scene, so the rail's
      resting rows sit at the single dimmest level everywhere. */
   --hud-rail-dim: oklch(0.44 0.012 78);     /* dimmest non-current number/title — FILLS/bg only */
-  --hud-rail-dim-text: oklch(0.56 0.012 78); /* resting nav number/title text — WCAG 4.5:1 vs --bg */
-  --hud-rail-dim-sub: oklch(0.36 0.012 78); /* dimmest non-current subtext */
+  /* -text/-sub RAISED ~15-20% (0.56→0.66 / 0.36→0.43): the resting interaction layer
+     (rail rows, the top-right standby nav links) had sunk below perceptual
+     reliability on a live scene. Still clearly a resting dim next to the current
+     row's --fg-overlay (0.92), so selection hierarchy holds; contrast vs --bg only
+     improves (was pinned at 4.5:1). These two are INTERACTIVE-text-only tokens —
+     decorative fills keep --hud-rail-dim above. */
+  --hud-rail-dim-text: oklch(0.66 0.012 78); /* resting nav number/title text */
+  --hud-rail-dim-sub: oklch(0.43 0.012 78); /* dimmest non-current subtext */
+  /* INTERACTIVE HUD resting foreground — the interaction layer's answer to
+     --fg-faint. The compass idle readout, the arc gauge's station digits/label
+     caption and other CLICKABLE/actionable HUD text rest here (~15-20% brighter
+     than --fg-faint) so they clear perceptual reliability; decorative furniture
+     (corner welds, frame hairlines, grain, passive readouts) stays on --fg-faint.
+     Defined as a MIX of --fg and --fg-faint rather than a literal so it rides the
+     per-scene / data-zone token flips for free: on the bright yellow-star zone
+     both inputs flip to dark graphite, so this resolves DARKER than faint there —
+     i.e. contrast steps UP on bright frames instead of washing out. */
+  --fg-hud-interactive: color-mix(in oklch, var(--fg) 50%, var(--fg-faint));
   /* Hero-overlay text — the ONLY copy that floats over the warm/orange star states
      (manifesto big line + whisper, identity, the bottom HUD compass). Warm bone
      (--fg) loses authority against the orange photosphere, so this rung shifts the

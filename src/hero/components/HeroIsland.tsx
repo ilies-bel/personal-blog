@@ -234,22 +234,34 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         const value = typeof override === 'number' ? override : fallback;
         return Math.min(BUILT_STAGES, Math.max(0, value));
       };
-      void import('../scene/createScene')
-        .then(({ createScene }) => {
-          if (cancelled) return;
-          disposeRef = createScene(host, isReduced, { getStage: pinnedStage }, tier);
-        })
-        .catch((error: unknown) => {
-          // Backdrop mode is the dimmed atmosphere behind a reading page's own copy —
-          // there is no home loader / manifesto / fallback note to reveal here. So we
-          // only SWALLOW the failure (no unhandled rejection): a missing-WebGL backdrop
-          // (or a chunk-load error) simply leaves this layer blank while the page's real
-          // content stays fully usable. The typed narrowing keeps the WebGL case
-          // distinguishable for any future per-case handling.
-          void isWebGLUnavailableError(error);
-        });
+      // Deferred one macrotask so the import kickoff + its continuations never ride
+      // the hydration/effect flush (same shape as the live path below). createScene
+      // is async (sliced boot), so a teardown racing the build disposes the fresh
+      // handle the moment it resolves.
+      const engineKickoff = window.setTimeout(() => {
+        void import('../scene/createScene')
+          .then(async ({ createScene }) => {
+            if (cancelled) return;
+            const dispose = await createScene(host, isReduced, { getStage: pinnedStage }, tier);
+            if (cancelled) {
+              dispose();
+              return;
+            }
+            disposeRef = dispose;
+          })
+          .catch((error: unknown) => {
+            // Backdrop mode is the dimmed atmosphere behind a reading page's own copy —
+            // there is no home loader / manifesto / fallback note to reveal here. So we
+            // only SWALLOW the failure (no unhandled rejection): a missing-WebGL backdrop
+            // (or a chunk-load error) simply leaves this layer blank while the page's real
+            // content stays fully usable. The typed narrowing keeps the WebGL case
+            // distinguishable for any future per-case handling.
+            void isWebGLUnavailableError(error);
+          });
+      }, 0);
       return () => {
         cancelled = true;
+        window.clearTimeout(engineKickoff);
         disposeRef?.();
       };
     }
@@ -393,10 +405,30 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // the island hydrates; only the heavy GPU scene waits for its own chunk. The
     // tracker already snapshotted the initial scroll position, so createScene reads
     // the right stage/progress as soon as it arrives.
-    void import('../scene/createScene')
-      .then(({ createScene }) => {
+    //
+    // TASK-SHAPING (TBT): three things keep the engine load off the long-task list.
+    //  1. The kickoff is deferred ONE macrotask (setTimeout 0) so neither the import
+    //     initiation nor any of its promise continuations ride the React hydration /
+    //     effect flush — the hydration task stays hydration-sized.
+    //  2. three core is pre-evaluated in ITS OWN task (via the warmThree shim — it
+    //     statically depends on the three-core manualChunks chunk, see
+    //     astro.config.mjs) with a macrotask boundary before the scene code follows,
+    //     so the engine's module eval is split into two medium tasks instead of one
+    //     ~760 KB monster. The second import's evaluation skips three (already
+    //     evaluated) and only runs the addons + scene chunks. (The shim exists
+    //     because `import('three')` directly would namespace-import the library and
+    //     disable its tree-shaking — see warmThree.ts.)
+    //  3. createScene itself is async (sliced boot — see yieldToMain there), so the
+    //     rig construction arrives as a series of sub-tasks too.
+    // The loader (scene:ready contract, index.astro) covers this whole window, so
+    // none of the added task boundaries are visible.
+    const engineKickoff = window.setTimeout(() => {
+      void (async (): Promise<void> => {
+        await import('../scene/warmThree'); // 1st eval task: three core, alone
+        await new Promise<void>((resolve) => { window.setTimeout(resolve, 0); }); // task boundary
+        const { createScene } = await import('../scene/createScene'); // 2nd: addons + scene code
         if (cancelled) return;
-        const dispose = createScene(host, isReduced, {
+        const dispose = await createScene(host, isReduced, {
           getStage,
           getProgress,
           getFocusTarget: () => null,
@@ -410,6 +442,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           // rather than risk showing a half-restored (GPGPU-less) scene.
           onContextLost: () => revealWithoutWebgl(),
         }, tier);
+        // The mount was torn down while the sliced boot was in flight: dispose the
+        // fresh handle at once (it was never published anywhere).
+        if (cancelled) {
+          dispose();
+          return;
+        }
         disposeRef = dispose;
         // Stash the handle so the dive action (beginDive, below) can reach the live
         // scene outside this effect. Cleared on unmount in the cleanup return.
@@ -418,8 +456,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         // can't import scene/three code). Published on window under the __bh* hook
         // convention; deleted on unmount so other pages never see a stale closure.
         window[CURSOR_WINDOW_KEYS.hitGiant] = dispose.hitTestGiant;
-      })
-      .catch((error: unknown) => {
+      })().catch((error: unknown) => {
         // The mount was torn down before the chunk resolved — nothing to reveal.
         if (cancelled) return;
         // WebGL unavailable at mount (createScene threw the typed error) → graceful,
@@ -432,6 +469,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         void isWebGLUnavailableError(error);
         revealWithoutWebgl();
       });
+    }, 0);
 
     // ROOT-CAUSE FIX for the occasional ClientRouter SPA stall on this page. The hero
     // runs a heavy ~1.2M-point GPU render loop; ClientRouter swaps the DOM on a
@@ -450,6 +488,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     document.addEventListener('astro:before-swap', onBeforeSwap);
     return () => {
       cancelled = true;
+      // A still-pending engine kickoff (the setTimeout 0 above) must not fire into a
+      // torn-down mount; the `cancelled` flag already guards every continuation, this
+      // just saves the wasted import.
+      window.clearTimeout(engineKickoff);
       document.removeEventListener('astro:before-swap', onBeforeSwap);
       unsubClock();
       clock.stop();

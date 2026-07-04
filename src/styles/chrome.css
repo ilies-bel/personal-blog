@@ -212,7 +212,7 @@
    under a top hairline (the SAME --hud-line as the header rule, so the page is
    framed by matching lines). Brand-side mono copyright readout, right-side
    links as small mono-uppercase labels wearing the .subnav-label underline
-   sweep. No extra content — year, name, the three socials.
+   sweep. No extra content — year, name, the socials + the Behind the Build link.
    ────────────────────────────────────────────────────────────────────────── */
 .site-footer {
   margin-top: 5rem;

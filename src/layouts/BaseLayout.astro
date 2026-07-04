@@ -47,6 +47,12 @@ const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 const year = new Date().getFullYear();
 
+// True-path match for footer links (trailing-slash insensitive) — aria-current
+// only ever marks the page the visitor is actually on.
+const currentPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const isCurrentPage = (p: string) =>
+  (href(p).replace(/\/+$/, '') || '/') === currentPath;
+
 // The About overlay is the one bare page that is NOT the live scene: its nav
 // renders statically lit (no boot gate), swaps the power button for a Close
 // control, and marks its own section current. Derived from the body class the
@@ -467,13 +473,18 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               hairline, a mono copyright readout brand-side, small mono-uppercase
               link labels right (same underline-sweep hover as .subnav-link). Pinned
               across SPA swaps like the header (transition:name + animate none) so
-              the chrome holds still while only the page content moves. */}
+              the chrome holds still while only the page content moves. Carries the
+              two social profiles plus the Behind the Build case study, surfaced
+              site-wide. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
-            <nav class="site-footer-links" aria-label="Social links">
+            <nav class="site-footer-links" aria-label="Footer links">
               {SOCIALS.github && <a href={SOCIALS.github}><span class="site-footer-label" data-decode>GitHub</span></a>}
               {SOCIALS.twitter && <a href={SOCIALS.twitter}><span class="site-footer-label" data-decode>Twitter</span></a>}
-              {SOCIALS.email && <a href={`mailto:${SOCIALS.email}`}><span class="site-footer-label" data-decode>Email</span></a>}
+              <a
+                href={href('behind-the-build')}
+                aria-current={isCurrentPage('behind-the-build') ? 'page' : undefined}
+              ><span class="site-footer-label" data-decode>Behind the build</span></a>
             </nav>
           </footer>
         </div>

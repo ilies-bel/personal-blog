@@ -6,7 +6,7 @@
 // sits at the world origin). Brightness-related values are lifted above the moody
 // reference still so the hero reads as clearly luminous (see exposure / bloomStr /
 // disk brightness).
-import { DEBUG_WINDOW_KEYS, readDebugString } from './constants';
+import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugString } from './constants';
 
 export interface Config {
   rIn: number;
@@ -40,6 +40,21 @@ export interface Config {
   warp: number;
   starBright: number;
   starDensity: number;
+  /** Render-target scale for the HEAVY soft additive particle rigs (the ~1.2M-grain
+   *  disk cloud + its lensed ghost). 0.5 = render those rigs at half resolution into
+   *  an offscreen HalfFloat target and additively upsample-composite them into the
+   *  full-res scene BEFORE bloom (see scene/buildParticlePass.ts). 1 = the original
+   *  single-pass path, byte-identical (the split is short-circuited entirely).
+   *  Overridable per-visit via ?prtres= (mirrors the ?tier= pattern). */
+  particleRTScale: number;
+  /** Red-giant granulation CUBEMAP bake (the vertex-bound red-giant fix — see
+   *  scene/buildGranBake.ts). true = bake the rigid granulation field once at boot
+   *  and replace the per-vertex-per-frame cellular/warpFbm/fbm block with one
+   *  texture fetch on the red giant. false = the analytic path only (today's exact
+   *  shader). Overridable per-visit via ?rgbake= (mirrors the ?prtres= pattern);
+   *  high tier only either way (the low tier's 28-40k grains make the vertex noise
+   *  negligible, and low may lack WebGL2/float-renderability). */
+  rgGranBake: boolean;
 }
 
 export const CFG: Config = {
@@ -89,6 +104,14 @@ export const CFG: Config = {
   //   busy sparkly field. The lensed starfield is hidden during nebula/dot and the star
   //   states use the sun-rig dome, so this only quiets the BH field.
   starDensity: 3.4, // thinned (5.2 -> 3.4) so the star count drops and the field becomes sparser
+  particleRTScale: 0.5, // half-res particle pass for the big soft gaussian fields (the scene is
+  //   GPU-fill-rate-bound on the 1.2M-sprite additive cloud; halving each axis quarters the
+  //   blended fragments while the bilinear upsample + bloom keep the soft gas visually
+  //   indistinguishable). ?prtres=1 forces the original full-res single pass for A/B.
+  rgGranBake: true, // red-giant granulation cubemap bake (the settled red giant was VERTEX-bound
+  //   at ~37fps re-evaluating the rigid cellular/warpFbm/fbm granulation per vertex per frame;
+  //   the bake replaces it with one cubemap fetch of the spun direction — identical pattern,
+  //   rigidly rotated). ?rgbake=0 forces the analytic per-frame path for A/B.
 };
 
 // Fixed screen-space look offset.
@@ -217,6 +240,93 @@ function probeWebGL(): { webgl2: boolean; weakGpu: boolean } {
   } catch {
     return { webgl2: false, weakGpu: false };
   }
+}
+
+/**
+ * Resolve the particle render-target scale for this visit. Mirrors readTierOverride's
+ * reload-surviving priority order: the `?prtres=` URL query (persisted to
+ * sessionStorage so it survives same-tab reloads), then sessionStorage, then the
+ * __bhPrtRes window global, then the CFG.particleRTScale default. The value is
+ * clamped to [0.25, 1]; anything ≥ 0.999 collapses to EXACTLY 1 so the caller's
+ * `scale < 1` test cleanly short-circuits the split (the kill-switch contract:
+ * ?prtres=1 must reproduce the original single-pass path with zero extra work).
+ */
+export function resolveParticleRTScale(): number {
+  if (typeof window === 'undefined') return 1;
+  const sanitize = (raw: unknown): number | undefined => {
+    const n = typeof raw === 'string' ? Number.parseFloat(raw) : typeof raw === 'number' ? raw : NaN;
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    const clamped = Math.min(1, Math.max(0.25, n));
+    return clamped >= 0.999 ? 1 : clamped;
+  };
+
+  // 1) URL query (?prtres=1) — survives reloads; mirror it into sessionStorage.
+  try {
+    const fromUrl = sanitize(new URLSearchParams(window.location.search).get('prtres'));
+    if (fromUrl !== undefined) {
+      window.sessionStorage?.setItem(DEBUG_WINDOW_KEYS.prtres, String(fromUrl));
+      return fromUrl;
+    }
+  } catch {
+    // URL/sessionStorage access can throw in locked-down contexts — ignore.
+  }
+
+  // 2) sessionStorage (set by a prior ?prtres= visit) — also survives reloads.
+  try {
+    const fromStore = sanitize(window.sessionStorage?.getItem(DEBUG_WINDOW_KEYS.prtres));
+    if (fromStore !== undefined) return fromStore;
+  } catch {
+    // ignore — fall through to the window global.
+  }
+
+  // 3) window.__bhPrtRes global (console-handy; cleared by a full reload).
+  const fromGlobal = sanitize(readDebugNumber(DEBUG_WINDOW_KEYS.prtres));
+  if (fromGlobal !== undefined) return fromGlobal;
+
+  return sanitize(CFG.particleRTScale) ?? 1;
+}
+
+/**
+ * Resolve whether the red-giant granulation cubemap bake is enabled for this visit.
+ * Mirrors resolveParticleRTScale's reload-surviving priority order: the `?rgbake=`
+ * URL query (persisted to sessionStorage so it survives same-tab reloads), then
+ * sessionStorage, then the __bhRgBake window global (0 = off, anything else = on),
+ * then the CFG.rgGranBake default. `?rgbake=0` is the A/B kill-switch: the bake rig
+ * is never built, uGranBakeReady stays 0, and the disk runs the analytic per-frame
+ * granulation — today's exact shader.
+ */
+export function resolveRgGranBake(): boolean {
+  if (typeof window === 'undefined') return false;
+  const sanitize = (raw: unknown): boolean | undefined => {
+    if (raw === '0' || raw === 0 || raw === 'false' || raw === 'off') return false;
+    if (raw === '1' || raw === 1 || raw === 'true' || raw === 'on') return true;
+    return undefined;
+  };
+
+  // 1) URL query (?rgbake=0) — survives reloads; mirror it into sessionStorage.
+  try {
+    const fromUrl = sanitize(new URLSearchParams(window.location.search).get('rgbake'));
+    if (fromUrl !== undefined) {
+      window.sessionStorage?.setItem(DEBUG_WINDOW_KEYS.rgbake, fromUrl ? '1' : '0');
+      return fromUrl;
+    }
+  } catch {
+    // URL/sessionStorage access can throw in locked-down contexts — ignore.
+  }
+
+  // 2) sessionStorage (set by a prior ?rgbake= visit) — also survives reloads.
+  try {
+    const fromStore = sanitize(window.sessionStorage?.getItem(DEBUG_WINDOW_KEYS.rgbake));
+    if (fromStore !== undefined) return fromStore;
+  } catch {
+    // ignore — fall through to the window global.
+  }
+
+  // 3) window.__bhRgBake global (console-handy; cleared by a full reload).
+  const fromGlobal = sanitize(readDebugNumber(DEBUG_WINDOW_KEYS.rgbake));
+  if (fromGlobal !== undefined) return fromGlobal;
+
+  return CFG.rgGranBake;
 }
 
 export function tuneRenderPixelRatio(reduced = false, tier: DeviceTier = 'high'): number {

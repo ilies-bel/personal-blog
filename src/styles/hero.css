@@ -362,12 +362,11 @@ body.archive-page .bh-poster-slideshow::before {
 }
 
 /* SCENE OFF -- the corner scene-toggle circle (SiteNav) parks every backdrop
-   canvas/poster/corridor. Body class applied + persisted by
+   canvas/poster. Body class applied + persisted by
    src/scripts/sceneToggle.ts; the home page's live scene is .bh-stage WITHOUT
    .bh-backdrop, so it is deliberately unaffected. */
 body.backdrop-off .bh-backdrop,
-body.backdrop-off .bh-poster-slideshow,
-body.backdrop-off .tesseract-backdrop {
+body.backdrop-off .bh-poster-slideshow {
   display: none;
 }
 
@@ -501,101 +500,9 @@ body.graveyard-page .bh-backdrop::before {
   z-index: 0;
 }
 
-/* --- TESSERACT backdrop (per-post override) ---------------------------------
-   A bespoke backdrop scoped to a single post (frontmatter backdrop: 'tesseract',
-   the INSPIRATION / 01 page). It REPLACES the dimmed live <BlackHole backdrop>
-   photon-ring scene for that one post; every other post keeps the live scene
-   above. The Interstellar bookcase corridor is a REAL-TIME WebGL scene (a solid-beam
-   lattice of real 3D geometry on a <canvas>, see TesseractBackdrop.astro /
-   buildTesseract.ts), read as cinematic ATMOSPHERE: full-bleed, vignetted to near-black
-   at the edges so the reading column floats, dimmed, with a soft scrim behind the copy.
-
-   It mirrors .bh-stage's depth exactly: position:fixed; inset:0; z-index:0, so it
-   sits BEHIND the reading column (.prose is lifted to z-index:1) and UNDER the
-   .dive-overlay (z 9999). Falling through the home-page black hole therefore
-   resolves INTO this corridor: the destination's <main> rises via the
-   body[data-resurface] keyframe while this fixed layer stays put behind it.
-   aria-hidden — it carries no information, it's mood.
-
-   Motion = pointer "look-around" + ambient drift, BOTH owned by the WebGL rig:
-     • ambient: the rig's rAF loop advances time + a slow bounded breathe along Z;
-     • pointer: the mount script in TesseractBackdrop.astro feeds the cursor (-1..1)
-       to the rig's setLook(), which eases the CAMERA pan + look target so the vanishing
-       point slides and you peer down different axes of the lattice (the "look around
-       inside the tesseract" move).
-   Under prefers-reduced-motion the script renders ONE static frame (no rAF, no look,
-   no push-in) and the drift keyframe is gated off below — a frozen corridor. */
-.tesseract-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 0;                /* same depth as .bh-stage — behind .prose (z 1) */
-  overflow: hidden;
-  background: #020305;       /* deeper near-black floor so edges read as pure void */
-  pointer-events: none;      /* never intercepts text selection / links */
-}
-
-/* Full-bleed corridor canvas. The WebGL renderer is sized to the viewport in CSS
-   pixels (DPR-capped in JS), so the canvas just fills the layer. It sits UNDER the
-   vignette + grain overlays, which do the edge-dimming and reading-column scrim. The
-   shader's own uDim keeps it deep/atmospheric; this layer just stretches it. */
-.tesseract-backdrop-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-/* Edge / corner vignette → near-black, so the reading column floats out of a
-   void. This is the NEAR parallax layer (moves more than the image), which reads
-   as the void "in front of" the corridor sliding against it. */
-.tesseract-backdrop-vignette {
-  position: absolute;
-  inset: 0;
-  will-change: transform;
-  transform: translate(
-    calc(var(--tx) * var(--par-near)),
-    calc(var(--ty) * var(--par-near))
-  );
-  background:
-    /* Reading-column scrim: a tall, narrow elliptical pool of near-black centred
-       on the measure. Pushed STRONGER + WIDER so the text column floats in near-
-       black and the corridor only survives as a faint glow at its edges. */
-    radial-gradient(52% 124% at 50% 50%,
-      rgba(2, 4, 8, 0.92) 0%,
-      rgba(2, 4, 8, 0.74) 40%,
-      rgba(2, 4, 8, 0.22) 70%,
-      rgba(2, 4, 8, 0) 88%),
-    /* Edge/corner vignette → black at the frame, pulled IN (starts darkening
-       earlier) so nothing reads as a literal rectangular photo; the corridor is a
-       muted pool in the centre fading to void well before the edges. */
-    radial-gradient(118% 118% at 50% 46%,
-      rgba(3, 5, 9, 0) 22%,
-      rgba(3, 5, 9, 0.5) 54%,
-      rgba(3, 5, 9, 0.82) 78%,
-      rgba(3, 5, 9, 1) 100%),
-    /* Bottom floor: sink the very base to the room colour for long articles. */
-    linear-gradient(180deg,
-      rgba(3, 5, 9, 0) 56%,
-      rgba(3, 5, 9, 0.82) 84%,
-      var(--bg) 100%);
-}
-
-/* Lightweight film grain on top, low opacity, tiling. An inline feTurbulence
-   data-URI (no extra asset) — matches the moody, slightly-analog room. mix-blend
-   keeps it as texture, not a grey film. Static (no animation) so it stays calm. */
-.tesseract-backdrop-grain {
-  position: absolute;
-  inset: 0;
-  opacity: 0.07;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-}
-
-/* Reduced motion is handled in JS: the mount script renders ONE static frame and
-   binds no rAF / pointer / resize listeners, so there is no CSS animation to gate
-   here. The frozen corridor inherits the same vignette + scrim + grain. */
+/* (The per-post TESSERACT backdrop block that lived here was removed with its
+   component — TesseractBackdrop.astro is no longer mounted anywhere. The shader
+   module tesseract.glsl.ts stays: behind-the-build.astro still imports it.) */
 
 /* --- Persistent identity (fixed top-left; the opening beat) ----------------- */
 .bh-identity {
@@ -887,6 +794,145 @@ body.scene-ready.at-opening .bh-focus-dot {
   .bh-beat {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem);
     max-width: 92vw;
+  }
+}
+
+/* --- FINALE beat (beat.layout === 'finale') -------------------------------- */
+/* The pale-blue-dot finale is the site's INDEX — "after the universe winds down,
+   what remains is the work." Its beat leaves the shared bottom-left slot and
+   becomes a CENTERED full-viewport column composed around the projection-
+   anchored ABOUT dot at ~0.5/0.5:
+     · the copy (big line + whisper) sits in the UPPER-middle — it ends well
+       above the dot, so the speck floats alone in the clear middle band;
+     · the ledger (FinaleLedger's <nav>) pins to the BOTTOM of the column via
+       margin-top:auto, starting BELOW the marker's hover-card region (the card
+       is 20rem wide, tethered to the dot's right, vertically centred on it —
+       roughly 50vh ± ~100px), so card and ledger can never collide on sane
+       viewport heights; a max-height fallback tightens the rows on short ones.
+   Selector is .bh-beat.bh-beat--finale (0,2,0) so it outranks BOTH the base
+   .bh-beat placement and the ≤60rem bottom-lift override above, regardless of
+   source order. The local ::before text pool is dropped — the finale frame is
+   near-black already, a scrim would only grey the void. */
+.bh-beat.bh-beat--finale {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-top: clamp(4.5rem, 13vh, 8.5rem);
+  /* The bottom-centre compass gauge ("[ THE BEGINNING ] ↑ PLAY IT FORWARD")
+     owns roughly the bottom 6rem of the frame — the ledger's last row must end
+     ABOVE it, so the clearance is compass-sized, not cosmetic. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(5.75rem, 11vh, 8rem));
+}
+.bh-beat.bh-beat--finale::before {
+  display: none;
+}
+.bh-beat--finale .bh-beat-whisper {
+  max-width: min(30rem, 86vw);
+}
+
+/* The ledger itself: readable mono navigation, NOT decoration — labels sit at
+   the HUD rung (13px) in full overlay bone, notes one rung down in the chrome
+   dim, both noticeably brighter than the faint chrome tier. Hidden state is
+   visibility (not just the parent's opacity): it removes the links from the
+   tab order and the a11y tree and — with pointer-events — makes them fully
+   inert while another beat owns the screen. */
+.bh-finale-ledger {
+  margin-top: auto; /* pin to the column's bottom, clear of the dot + its card */
+  width: min(23rem, 88vw);
+  display: flex;
+  flex-direction: column;
+  visibility: hidden;
+  pointer-events: none;
+}
+.bh-finale-ledger[data-visible='true'] {
+  visibility: visible;
+  pointer-events: auto;
+}
+.bh-finale-ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: clamp(0.5rem, 1.3vh, 0.8rem) 0.2rem;
+  border-top: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
+  font-family: var(--font-mono);
+  text-decoration: none;
+  transition: border-color 0.18s ease;
+}
+.bh-finale-ledger-row:last-child {
+  border-bottom: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
+}
+.bh-finale-ledger-label {
+  font-size: var(--text-hud);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-overlay);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  transition: color 0.18s ease;
+}
+.bh-finale-ledger-note {
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  color: var(--fg-chrome-dim);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  transition: color 0.18s ease;
+}
+/* Hover/focus follow the site's link conventions: the label lifts to the gold
+   signal, the note steps up to full bone, the hairline brightens. */
+.bh-finale-ledger-row:hover,
+.bh-finale-ledger-row:focus-visible {
+  border-color: color-mix(in oklch, var(--fg-overlay) 40%, transparent);
+}
+.bh-finale-ledger-row:hover .bh-finale-ledger-label,
+.bh-finale-ledger-row:focus-visible .bh-finale-ledger-label {
+  color: var(--accent-strong);
+}
+.bh-finale-ledger-row:hover .bh-finale-ledger-note,
+.bh-finale-ledger-row:focus-visible .bh-finale-ledger-note {
+  color: var(--fg-overlay);
+}
+.bh-finale-ledger-row:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+/* SHORT viewports: compress the rows so the ledger's top edge stays below the
+   hover card's bottom (~50vh + ~100px) instead of riding up into it. 46rem
+   (736px) is where the uncompressed column starts brushing that region. */
+@media (max-height: 46rem) {
+  .bh-beat.bh-beat--finale {
+    padding-top: clamp(3rem, 9vh, 5rem);
+  }
+  .bh-finale-ledger-row {
+    padding-block: 0.35rem;
+  }
+}
+/* NARROW viewports (the ≤60rem band where the HUD becomes the bottom strip and
+   the marker card becomes a bottom sheet): the single column + bottom HUD
+   clearance would push the ledger up onto the dot, so it compacts to a
+   two-column grid of label-only links (the notes are enrichment, the labels are
+   the navigation) and lifts above the horizontal HUD strip the same way the
+   bottom-left beats do (safe-area + 8.5rem). */
+@media (max-width: 60rem) {
+  .bh-beat.bh-beat--finale {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 9rem);
+  }
+  .bh-finale-ledger {
+    width: min(26rem, 92vw);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.5rem;
+  }
+  .bh-finale-ledger-row:last-child {
+    border-bottom: 0;
+  }
+  .bh-finale-ledger-note {
+    display: none;
   }
 }
 

@@ -20,57 +20,12 @@ const YR_RADIUS_RATIO_GLSL = String(YELLOW_RED_RADIUS_RATIO);
 // are never on screen at once, but separate pools avoid coupling the two effects).
 export const DISK_ERUPT_SLOTS = 4;
 
-export const diskVertexShader = /* glsl */ `
-  // --- CLICK ERUPTIONS on the particle red giant (geyser jet + surface ripple) ---
-  // N_ERUPT must equal DISK_ERUPT_SLOTS (and matches the mesh's N_ERUPT). ERUPT_LIFE
-  // is the total lifetime of one eruption in seconds — the jet rises+falls and the
-  // ripple expands+fades over this span; the render loop frees the slot at the same
-  // age. Both values are byte-identical to the yellow-star mesh (sun.glsl.ts) so the
-  // two bodies erupt with the same timing/feel.
-  #define N_ERUPT 4
-  #define ERUPT_LIFE 2.4
-  // GIANT_ERUPT_LIFE: the PARTICLE red giant's geyser runs on its OWN, much longer
-  // clock than the shared 2.4 (which still governs the yellow-star MESH). The user
-  // wants the giant plume to "feel the gravity" — a slow ballistic loft, a long hang
-  // near the apex, then an accelerating fall — so the whole event is stretched to
-  // ~2.3× the old life (5.5s vs 2.4s). MUST stay numerically identical to the JS
-  // GIANT_ERUPT_LIFE in createScene.ts: the render loop frees the giant slot (and
-  // wraps the debug clock) at this same age, so if the two drift the slot would die
-  // (intensity→0) BEFORE the shader finished animating and the plume would vanish
-  // mid-flight. The yellow-star MESH keeps ERUPT_LIFE=2.4 — untouched by this.
-  #define GIANT_ERUPT_LIFE 5.5
-  attribute float aU;
-  attribute float aPhase;
-  attribute float aThickN;
-  attribute float aSeed;
-  // per-particle texel UV into the GPGPU sim position texture (nebula↔star window)
-  attribute vec2 aSimUV;
-
-  uniform float uTime, uOmega0, uSpinDir, uBetaScale, uBeamExp, uDoppler;
-  uniform float uRin, uRout, uThick, uPixelRatio, uSec, uHole, uVertAsym, uHorizAsym, uDistrib;
-  uniform float uBright;
-  // Low-tier grain-SIZE multiplier (1.0 = high/desktop-full → byte-identical; >1.0
-  // ONLY when the JS built the rig with the reduced low-tier grain budget). Fattens
-  // every grain so the thinned, un-bloomed low-tier cloud overlaps back into
-  // continuous gas instead of scattered dots. Folded into baseSize below so it reaches
-  // every point-size branch, and into the per-branch clamp ceilings so it isn't capped.
-  uniform float uPointGain;
-  // Black-hole-only geometric shrink (1 = full disk, →small as the hole implodes).
-  // Gated to uGiant==0 in the body so the red giant and later states are untouched.
-  uniform float uBlackHoleScale;
-  // secondary-image (lower band) screen-space nudge — used to close the seam
-  uniform float uSecOffsetX, uSecOffsetY;
-  // --- Transition 1: reverse supernova (driven by scroll). 0 = black hole.
-  //   uMorph ∈ [0,1]: implosion (0→0.45), flash (~0.5), flare-out (0.55→1).
-  //   uFlash is a precomputed 0..1 burst envelope peaking at the flash.
-  //   uCollapse ∈ [0,1]: the red-giant SURFACE collapse. 0 = full red-giant
-  //     sphere; 1 = the surface has shrunk to the point (the flash/seed). The
-  //     non-homogeneous shrink of the sphere IS the explosion — laggard regions
-  //     of the surface stick out as the finger-spikes (see the giant block). ---
-  uniform float uMorph, uFlash, uCollapse;
-
-  ${LENS_GLSL}
-
+// --- shared noise toolkit (vertex shader + the red-giant granulation BAKE) -----
+// Extracted VERBATIM from the vertex shader body so the granulation bake pass
+// (scene/buildGranBake.ts) compiles the EXACT same hash/noise recipe — one
+// exported snippet, two shaders, zero drift. Interpolated back into the vertex
+// shader below at its original spot, so the assembled GLSL is byte-identical.
+export const GRAN_NOISE_GLSL = /* glsl */ `
   // cheap value-noise hash for the turbulent flare displacement
   float h31(vec3 p){ p = fract(p*0.3183099 + 0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
   // smooth 3D value noise (for the red-giant granulation / convection)
@@ -117,7 +72,13 @@ export const diskVertexShader = /* glsl */ `
     vec3 q = vec3(fbm(p), fbm(p+vec3(5.2,1.3,2.8)), fbm(p+vec3(1.7,9.2,3.4)));
     return fbm(p + 3.0*q);
   }
+`;
 
+// --- shared Ashima simplex toolkit (vertex shader + the granulation BAKE) ------
+// Extracted VERBATIM (like GRAN_NOISE_GLSL above) so the bake can also compute the
+// red-giant photosphere mottle field, which is built on sfbm. Interpolated back
+// into the vertex shader at its original spot — byte-identical assembly.
+export const SUN_NOISE_GLSL = /* glsl */ `
   // --- Ashima 3D simplex noise + fbm (the photosphere recipe ported verbatim
   //     from the standalone Sun render) -----------------------------------
   vec3 sMod289(vec3 x){return x - floor(x*(1.0/289.0))*289.0;}
@@ -171,6 +132,173 @@ export const diskVertexShader = /* glsl */ `
     for(int i=0;i<6;i++){ v += a*snoise(p); p*=2.02; a*=0.5; }
     return v;
   }
+`;
+
+// --- shared red-giant granulation field (vertex shader + the CUBEMAP bake) -----
+// The multi-scale granulation scalar as ONE function so the runtime analytic path
+// and the bake fragment (scene/buildGranBake.ts) can never drift. On the red giant
+// churn is vec3(0) (the rotation-lock zeroes the drift), so gran is a PURE RIGID
+// function of the spun sphere direction — which is exactly what lets the bake
+// precompute it into a cubemap once and sample it with the spun direction at
+// runtime: bake(R(t)·d) is the same rigid rotation of the same pattern as
+// f(R(t)·d). The composition lines are moved VERBATIM from the vertex shader's
+// default-path granulation block (the maths is identical, only wrapped).
+//
+// granRaggedBase is the pure-direction part of the collapse window's ragged
+// eating-front threshold (the coarse lobes + fine fringe, both fbm over the spun
+// dir with NO time term) — baked into the cubemap's alpha channel the same way.
+export const GRAN_FIELD_GLSL = /* glsl */ `
+  // -- multi-scale granulation (Voronoi cells + warped fbm + supergranules) --
+  float granField(vec3 sphere, vec3 churn, float granScale){
+    vec2 cell = cellular(sphere*granScale + churn);
+    float granCells = 1.0 - smoothstep(0.0, 0.5, cell.x);    // bright granule centres
+    float edge      = cell.y - cell.x;                       // ~0 on cell boundary
+    float laneDark  = 1.0 - smoothstep(0.0, 0.06, edge);     // dark intergranular lane
+    float turb = warpFbm(sphere*granScale*0.5 + churn*1.3);  // swirly mottle
+    float supergran = fbm(sphere*2.4 + churn*0.5);           // broad bright/dark regions
+    // higher-contrast mix: bright cells, deep dark lanes between them
+    float gran = clamp(0.55*granCells + 0.4*turb + 0.12, 0.0, 1.0);
+    gran = mix(gran, gran*gran*1.4, 0.5);                    // crush toward contrast
+    gran *= mix(0.72, 1.28, supergran);                      // supergranule modulation
+    gran *= (1.0 - laneDark*0.7);                            // carve the dark lanes
+    gran = clamp(gran, 0.0, 1.3);
+    return gran;
+  }
+  // -- collapse eating-front threshold, pure-direction part (no time, no seed) --
+  // fil (fine fringe) + the coarse ragged lobes, composed in the ORIGINAL addition
+  // order; the per-grain jitter term stays in the vertex shader (it is per-particle,
+  // not a function of direction, so it cannot be baked).
+  float granRaggedBase(vec3 dir){
+    float fil = fbm(dir*7.5 + 4.0);                          // fine fringe detail
+    return fbm(dir*2.3 + 11.0)                               // coarse ragged lobes
+         + (fil - 0.5)*0.30;                                 // fine fringe detail
+  }
+  // -- red-giant photosphere mottle (the ported standalone-Sun recipe) ---------
+  // The domain-warped sfbm field (big gold cells / veins / sunspots) moved
+  // VERBATIM from the vertex shader's sunOn branch. Returns vec2(m, dark) —
+  // vSunM and vSunDark. On the RED GIANT tt is zeroed (the rotation-lock, same
+  // as churn above), so this too is a pure rigid function of the spun sphere —
+  // baked into the cubemap's .g/.b with tt = 0. The yellow-sun path (dormant on
+  // the point cloud) keeps its live tt boil through the analytic call.
+  vec2 granPhotoField(vec3 sphere, float tt){
+    // === (A) photosphere field ==========================================
+    // Big swirling convection cells (the reference's flowing mottle), NOT
+    // high-frequency sand. A LOW base frequency with heavy IQ domain-warp
+    // makes large gold cells; deep dark filamentary veins are carved between
+    // them so the surface reads bold and structured, not pale and grainy.
+    vec3 sp = sphere * 1.25;                           // big cells
+    vec3 q2 = vec3(
+      sfbm(sp + vec3(0.0,0.0,tt)),
+      sfbm(sp + vec3(5.2,1.3,2.7) + tt),
+      sfbm(sp + vec3(1.7,9.2,3.4) - tt)
+    );
+    // two-level warp = swirly, flowing currents
+    vec3 q3 = vec3(
+      sfbm(sp + 3.0*q2 + vec3(1.7,9.2,3.4)),
+      sfbm(sp + 3.0*q2 + vec3(8.3,2.8,4.1)),
+      sfbm(sp + 3.0*q2 + vec3(2.6,6.3,7.9))
+    );
+    float nn = sfbm(sp + 4.5*q3 + tt*0.5);
+    float m = clamp(nn*0.5 + 0.5, 0.0, 1.0);
+    m = pow(m, 0.62);                                  // brighten cell cores hard
+    // medium mottle riding on the big cells (keeps it from looking flat)
+    float gran2 = sfbm(sp*2.6 + tt*0.8)*0.5 + 0.5;
+    m *= 0.74 + 0.40*gran2;
+    // deep dark filamentary VEINS between the cells (the carved orange look)
+    float vein = warpFbm(sphere*2.0 + q3 + tt*0.3);    // reuse cheap warp fbm
+    float veins = smoothstep(0.58, 0.40, vein);        // network of lanes
+    // sunspots: broad low-freq cool patches
+    float spotF = sfbm(sphere*1.1 + 11.0);
+    float spot  = smoothstep(0.44, 0.30, spotF);
+    float dark  = clamp(veins*0.9 + spot*0.95, 0.0, 1.0);
+    m *= 1.0 - 0.82*dark;                              // carve veins/spots DEEP
+    m = clamp(m, 0.0, 1.0);
+    return vec2(m, dark);
+  }
+`;
+
+// Default epsilon for the fragment shader's invisible-tail discard (uTailEps).
+// Each soft gaussian sprite pays full raster+blend cost for its whole quad, but the
+// tail of the falloff contributes almost nothing: a fragment whose final additive
+// intensity lands under ~1e-3 is far below what survives the HalfFloat→grade→8-bit
+// pipeline on its own (1 LSB of the 8-bit output ≈ 4e-3 pre-grade). Discarding
+// those fragments skips their blend/ROP cost. Accumulation safety: in DENSE regions
+// (where hundreds of sprites overlap) the visible sum is dominated by the non-tail
+// fragments, so dropping sub-epsilon tails perturbs the total by well under 1%;
+// sparse regions have too few overlaps for the discarded tails to have summed to a
+// visible value in the first place. The dot state is excluded in the shader (its
+// ~50-halo-sprite glow is DESIGNED whisper-dim, and the dot is fill-trivial anyway).
+// The disk material carries depthTest:false + an existing `discard`, so there is no
+// early-z to lose — this is pure fill-rate win. A/B at runtime via __bhTailEps
+// (0 disables the discard outright; same-session toggle keeps the random grain
+// fixed so screenshots diff cleanly).
+export const DISK_TAIL_EPS = 1e-3;
+
+export const diskVertexShader = /* glsl */ `
+  // --- CLICK ERUPTIONS on the particle red giant (geyser jet + surface ripple) ---
+  // N_ERUPT must equal DISK_ERUPT_SLOTS (and matches the mesh's N_ERUPT). ERUPT_LIFE
+  // is the total lifetime of one eruption in seconds — the jet rises+falls and the
+  // ripple expands+fades over this span; the render loop frees the slot at the same
+  // age. Both values are byte-identical to the yellow-star mesh (sun.glsl.ts) so the
+  // two bodies erupt with the same timing/feel.
+  #define N_ERUPT 4
+  #define ERUPT_LIFE 2.4
+  // GIANT_ERUPT_LIFE: the PARTICLE red giant's geyser runs on its OWN, much longer
+  // clock than the shared 2.4 (which still governs the yellow-star MESH). The user
+  // wants the giant plume to "feel the gravity" — a slow ballistic loft, a long hang
+  // near the apex, then an accelerating fall — so the whole event is stretched to
+  // ~2.3× the old life (5.5s vs 2.4s). MUST stay numerically identical to the JS
+  // GIANT_ERUPT_LIFE in createScene.ts: the render loop frees the giant slot (and
+  // wraps the debug clock) at this same age, so if the two drift the slot would die
+  // (intensity→0) BEFORE the shader finished animating and the plume would vanish
+  // mid-flight. The yellow-star MESH keeps ERUPT_LIFE=2.4 — untouched by this.
+  #define GIANT_ERUPT_LIFE 5.5
+  attribute float aU;
+  attribute float aPhase;
+  attribute float aThickN;
+  attribute float aSeed;
+  // per-particle texel UV into the GPGPU sim position texture (nebula↔star window)
+  attribute vec2 aSimUV;
+
+  uniform float uTime, uOmega0, uSpinDir, uBetaScale, uBeamExp, uDoppler;
+  uniform float uRin, uRout, uThick, uPixelRatio, uSec, uHole, uVertAsym, uHorizAsym, uDistrib;
+  uniform float uBright;
+  // Low-tier grain-SIZE multiplier (1.0 = high/desktop-full → byte-identical; >1.0
+  // ONLY when the JS built the rig with the reduced low-tier grain budget). Fattens
+  // every grain so the thinned, un-bloomed low-tier cloud overlaps back into
+  // continuous gas instead of scattered dots. Folded into baseSize below so it reaches
+  // every point-size branch, and into the per-branch clamp ceilings so it isn't capped.
+  uniform float uPointGain;
+  // Black-hole-only geometric shrink (1 = full disk, →small as the hole implodes).
+  // Gated to uGiant==0 in the body so the red giant and later states are untouched.
+  uniform float uBlackHoleScale;
+  // Half-res particle pass (buildParticlePass): the ratio of the offscreen target's
+  // resolution to the composer's (1.0 = the original full-res single pass, exact
+  // no-op). gl_PointSize is in RENDER-TARGET pixels, so on a scaled-down target the
+  // same size would cover 1/uSizeScale× the intended SCREEN footprint (≈4× the
+  // energy at 0.5 after the bilinear upsample). The block at the end of main()
+  // rescales the final point size — and, for sprites that hit the 1px raster floor,
+  // conserves their total added light via vSizeComp (the fragment folds it into the
+  // final intensity), so the composited half-res field carries the SAME energy the
+  // full-res raster would have produced, just resolved on a coarser grid.
+  uniform float uSizeScale;
+  varying float vSizeComp;
+  // secondary-image (lower band) screen-space nudge — used to close the seam
+  uniform float uSecOffsetX, uSecOffsetY;
+  // --- Transition 1: reverse supernova (driven by scroll). 0 = black hole.
+  //   uMorph ∈ [0,1]: implosion (0→0.45), flash (~0.5), flare-out (0.55→1).
+  //   uFlash is a precomputed 0..1 burst envelope peaking at the flash.
+  //   uCollapse ∈ [0,1]: the red-giant SURFACE collapse. 0 = full red-giant
+  //     sphere; 1 = the surface has shrunk to the point (the flash/seed). The
+  //     non-homogeneous shrink of the sphere IS the explosion — laggard regions
+  //     of the surface stick out as the finger-spikes (see the giant block). ---
+  uniform float uMorph, uFlash, uCollapse;
+
+  ${LENS_GLSL}
+
+  ${GRAN_NOISE_GLSL}
+  ${SUN_NOISE_GLSL}
+  ${GRAN_FIELD_GLSL}
 
   // nebula placement — SHARED VERBATIM with the GPGPU collapse sim's seed pass
   // (gravitySim.ts) so the sim starts looking exactly like the analytic nebula.
@@ -183,6 +311,21 @@ export const diskVertexShader = /* glsl */ `
   uniform float uGiantSpin;   // red-giant axial spin angle (radians; t * rate, tilted-axis)
   uniform float uGiantScale;  // red-giant-ONLY radius multiplier (nebula/dot/sun unaffected)
   uniform float uGranScale;     // granulation cell frequency across the surface
+  // --- baked red-giant granulation (see scene/buildGranBake.ts) --------------
+  // On the red giant the granulation is a PURE RIGID function of the spun sphere
+  // (churn is zeroed by the rotation-lock), so it is baked ONCE into this cubemap
+  // at boot (under the loader) and sampled with the spun direction — replacing the
+  // per-vertex-per-frame cellular(27-cell hash loop) + warpFbm(16 noise evals) +
+  // fbm + the ~54-simplex photosphere mottle with ONE texture fetch. Channels:
+  //   .r = granField(dir)            .g/.b = granPhotoField(dir) → vSunM/vSunDark
+  //   .a = granRaggedBase(dir) (the collapse eating-front's pure-direction part)
+  //   uGranBakeReady stays 0 until the bake completes (or forever, if it fails or
+  //   is kill-switched via ?rgbake=0 / low tier) → the analytic path below runs,
+  //   which is today's exact rendering. Other consumers of the analytic block
+  //   (nebula boil / explosion turbulence, which use non-zero churn and need full
+  //   time-evolution) NEVER take the baked path: the gate requires rgActive.
+  uniform samplerCube uGranTex;
+  uniform float uGranBakeReady;
 
   // --- CLICK ERUPTIONS (geyser jet + travelling surface ripple) --------------
   // Up to N_ERUPT concurrent click eruptions on the PARTICLE red giant, mirroring
@@ -270,6 +413,9 @@ export const diskVertexShader = /* glsl */ `
     vNebLight = 1.0;                            // nebula light factor (1 = full bright; no-op off-nebula)
     vNebGrow = 1.0;                             // dot→nebula growth (1 outside transition)
     vEaten = 0.0;                               // core-swallow progress (set in the collapse block)
+    vSizeComp = 1.0;                            // half-res energy compensation (1 = full-res no-op;
+                                                // initialised before the early returns so it is
+                                                // never an undefined varying)
 
     // === EARLY CULL #1: the whole SECONDARY image, off the black hole ==========
     // PERF, pixel-identical. The disk is drawn TWICE (buildDisk.ts): a PRIMARY pass
@@ -529,18 +675,29 @@ export const diskVertexShader = /* glsl */ `
       // the kill is gated to rgActive only, via the red-giant-zeroed factor below.
       float churnT = uTime * 0.025 * mix(1.0, 0.0, rgActive);   // red giant → ZERO drift (rigid, fully spin-locked); else full
       vec3 churn = vec3(0.0, churnT, 0.0);
-      vec2 cell = cellular(sphere*uGranScale + churn);
-      float granCells = 1.0 - smoothstep(0.0, 0.5, cell.x);    // bright granule centres
-      float edge      = cell.y - cell.x;                       // ~0 on cell boundary
-      float laneDark  = 1.0 - smoothstep(0.0, 0.06, edge);     // dark intergranular lane
-      float turb = warpFbm(sphere*uGranScale*0.5 + churn*1.3); // swirly mottle
-      float supergran = fbm(sphere*2.4 + churn*0.5);           // broad bright/dark regions
-      // higher-contrast mix: bright cells, deep dark lanes between them
-      float gran = clamp(0.55*granCells + 0.4*turb + 0.12, 0.0, 1.0);
-      gran = mix(gran, gran*gran*1.4, 0.5);                    // crush toward contrast
-      gran *= mix(0.72, 1.28, supergran);                      // supergranule modulation
-      gran *= (1.0 - laneDark*0.7);                            // carve the dark lanes
-      gran = clamp(gran, 0.0, 1.3);
+      // BAKED-vs-ANALYTIC gate. On the red giant (rgActive, where churn is exactly
+      // vec3(0)) the granulation is a rigid function of the spun 'sphere', so once
+      // the boot-time cubemap bake is ready we replace the whole analytic block
+      // with ONE fetch of the spun direction — bake(R(t)·d) is the same rigid
+      // rotation of the same pattern as granField(R(t)·d), byte-near-identical up
+      // to texture resolution. Every other branch (nebula boil, explosion
+      // turbulence — non-zero churn, real time-evolution) and the not-yet-baked /
+      // kill-switched fallback keep the FULL analytic path: today's exact shader.
+      // The fetch also carries granRaggedBase(dir) in .a for the collapse block
+      // below (same spun direction, one fetch feeds both).
+      float granBakeOn = (rgActive > 0.5 && uGranBakeReady > 0.5) ? 1.0 : 0.0;
+      vec4 granBaked = vec4(0.0);
+      float gran;
+      if(granBakeOn > 0.5){
+        // NOTE: texture(), not textureCube() — three compiles ShaderMaterials as
+        // GLSL 300 es and its VERTEX prefix only aliases texture2D (the fragment
+        // prefix aliases textureCube, but this is the vertex stage). Vertex-stage
+        // sampling has no derivatives → implicit lod 0, exactly the baked level.
+        granBaked = texture(uGranTex, sphere);
+        gran = granBaked.r;
+      } else {
+        gran = granField(sphere, churn, uGranScale);
+      }
       heat = gran;
 
       // giant radius with a little granular relief so the limb isn't a perfect
@@ -565,8 +722,17 @@ export const diskVertexShader = /* glsl */ `
 
       // fields the ragged swallow front uses: a fine fbm octave for the fringe, and a
       // tiny per-particle jitter (aThickN + aSeed hash, 0-centred, static at uTime=0) so
-      // the eating edge grains don't form a clean line.
-      float fil      = fbm(dir*7.5 + 4.0);
+      // the eating edge grains don't form a clean line. The pure-direction part
+      // (granRaggedBase: the coarse lobes + fine fringe, both plain fbm over the spun
+      // dir with NO time term) rides the SAME baked cubemap as the granulation (.a,
+      // same gate, same spun-direction fetch — granBaked was fetched above); the
+      // per-grain jitter stays analytic (it is per-particle, not a function of dir).
+      float raggedDir;
+      if(granBakeOn > 0.5){                      // explicit branch (not ?:) so the
+        raggedDir = granBaked.a;                 // analytic fbm pair is truly skipped
+      } else {                                   // on the baked path
+        raggedDir = granRaggedBase(dir);
+      }
       float grainJit = 0.5*aThickN + 0.5*(h31(vec3(aSeed*31.7, 3.1, aSeed*7.9)) - 0.5);
 
       // === CORE SWALLOW (hollowed outside-in) =============================
@@ -582,8 +748,9 @@ export const diskVertexShader = /* glsl */ `
       // WHEN each patch is taken. Coarse lobes + a fine octave + a tiny per-grain jitter
       // → an organic, irregular front (no clean shell, no per-grain shimmer). No
       // directional bias — patches all over the surface are eaten as the front sweeps.
-      float ragged = fbm(dir*2.3 + 11.0)                       // coarse ragged lobes
-                   + (fil - 0.5)*0.30                          // fine fringe detail
+      float ragged = raggedDir                                 // coarse lobes + fine fringe
+                                                               //   (granRaggedBase: baked .a
+                                                               //   or the analytic fbm pair)
                    + grainJit*0.10;                            // per-grain fray
       float thresh = clamp(ragged, 0.0, 1.0);                  // when this patch is eaten
 
@@ -685,37 +852,23 @@ export const diskVertexShader = /* glsl */ `
         float tt = uTime * 0.05 * mix(1.0, 0.0, redGiant);   // red giant → ZERO boil (fully spin-locked); yellow sun keeps full tt
 
         // === (A) photosphere field ==========================================
-        // Big swirling convection cells (the reference's flowing mottle), NOT
-        // high-frequency sand. A LOW base frequency with heavy IQ domain-warp
-        // makes large gold cells; deep dark filamentary veins are carved between
-        // them so the surface reads bold and structured, not pale and grainy.
-        vec3 sp = sphere * 1.25;                           // big cells
-        vec3 q2 = vec3(
-          sfbm(sp + vec3(0.0,0.0,tt)),
-          sfbm(sp + vec3(5.2,1.3,2.7) + tt),
-          sfbm(sp + vec3(1.7,9.2,3.4) - tt)
-        );
-        // two-level warp = swirly, flowing currents
-        vec3 q3 = vec3(
-          sfbm(sp + 3.0*q2 + vec3(1.7,9.2,3.4)),
-          sfbm(sp + 3.0*q2 + vec3(8.3,2.8,4.1)),
-          sfbm(sp + 3.0*q2 + vec3(2.6,6.3,7.9))
-        );
-        float nn = sfbm(sp + 4.5*q3 + tt*0.5);
-        float m = clamp(nn*0.5 + 0.5, 0.0, 1.0);
-        m = pow(m, 0.62);                                  // brighten cell cores hard
-        // medium mottle riding on the big cells (keeps it from looking flat)
-        float gran2 = sfbm(sp*2.6 + tt*0.8)*0.5 + 0.5;
-        m *= 0.74 + 0.40*gran2;
-        // deep dark filamentary VEINS between the cells (the carved orange look)
-        float vein = warpFbm(sphere*2.0 + q3 + tt*0.3);    // reuse cheap warp fbm
-        float veins = smoothstep(0.58, 0.40, vein);        // network of lanes
-        // sunspots: broad low-freq cool patches
-        float spotF = sfbm(sphere*1.1 + 11.0);
-        float spot  = smoothstep(0.44, 0.30, spotF);
-        float dark  = clamp(veins*0.9 + spot*0.95, 0.0, 1.0);
-        m *= 1.0 - 0.82*dark;                              // carve veins/spots DEEP
-        m = clamp(m, 0.0, 1.0);
+        // The domain-warped sfbm mottle (big cells / veins / sunspots) — the
+        // recipe now lives in the shared granPhotoField() (GRAN_FIELD_GLSL) so
+        // the cubemap bake compiles the identical maths. On the red giant tt is
+        // 0 (rotation-locked above), making the field a pure rigid function of
+        // the spun sphere — so the baked .g/.b (baked with tt = 0) replace the
+        // ~54 simplex evals per vertex per frame with the one cubemap fetch
+        // already made in the granulation block. The dormant point-cloud yellow
+        // sun (uYellow) and the fallback keep the analytic call with live tt.
+        float m, dark;
+        if(granBakeOn > 0.5){
+          m    = granBaked.g;
+          dark = granBaked.b;
+        } else {
+          vec2 photo = granPhotoField(sphere, tt);
+          m    = photo.x;
+          dark = photo.y;
+        }
 
         vSunM    = m;
         vSunDark = dark;
@@ -1642,6 +1795,28 @@ export const diskVertexShader = /* glsl */ `
       }
     }
     if(drop) gl_PointSize = 0.0;
+
+    // --- HALF-RES PARTICLE PASS: size + energy compensation ---------------------
+    // Skipped entirely at uSizeScale == 1 (the full-res single pass — byte-identical).
+    // gl_PointSize above is in FULL-RES pixels; on the scaled-down particle target the
+    // same number would cover 1/uSizeScale× the intended screen footprint (≈4× energy
+    // at 0.5 after the bilinear upsample — measured as a fat white haze around the
+    // disk). Two steps, both against the size the full-res raster would ACTUALLY have
+    // produced (GL rasterises any 0<size<1 point as ~1px, and this shader's floors sit
+    // at 0.4-0.8, so the reference is max(size, 1)):
+    //   1. rescale the point to uSizeScale× so its SCREEN footprint matches full-res;
+    //   2. sprites that then land under the 1px raster floor still cover a whole texel
+    //      (up to 1/(scale²)× their ideal area), so vSizeComp scales their intensity by
+    //      (ideal/actual)² — the fragment folds it into the final inten, conserving the
+    //      total added light exactly (a 1px full-res grain becomes one quarter-bright
+    //      half-res texel that upsamples back to its original energy, slightly softer).
+    if(uSizeScale < 0.999 && gl_PointSize > 0.0){
+      float fullPx   = max(gl_PointSize, 1.0);   // what the full-res raster actually draws
+      float targetPx = fullPx * uSizeScale;      // ideal size on the scaled-down target
+      float rasterPx = max(targetPx, 1.0);       // what THIS raster will actually draw
+      vSizeComp = (targetPx * targetPx) / (rasterPx * rasterPx);
+      gl_PointSize = rasterPx;
+    }
   }
 `;
 
@@ -1658,6 +1833,11 @@ export const diskFragmentShader = /* glsl */ `
   uniform float uPointGain; // low-tier grain-SIZE multiplier (1.0 on high). Shared with the
   //   vertex shader: there it fattens gl_PointSize, here it WIDENS the gaussian core in step
   //   (softP/softN below) so the fattened sparse grains overlap instead of speckling.
+  uniform float uTailEps;   // invisible-tail discard epsilon (DISK_TAIL_EPS default; 0 = off).
+  //   Fragments whose FINAL additive intensity lands below this are discarded before the
+  //   blend — they are under the HalfFloat pipeline's visible threshold, so skipping their
+  //   ROP/blend cost trims the gaussian-tail fill every sprite currently pays for. See the
+  //   DISK_TAIL_EPS doc at the top of this file for the epsilon/accumulation reasoning.
   varying float vBright;
   varying float vSeed;
   varying float vGiant;
@@ -1678,6 +1858,9 @@ export const diskFragmentShader = /* glsl */ `
   varying float vSimLife; // GPGPU collapse: 1 = free gas, →0 as it accretes onto the star
   varying float vEaten;   // core-swallow progress (0 = on surface, 1 = fallen to the core)
   varying float vEruptGlow; // click-eruption heat (jet root + ripple crest) → hot brightening
+  varying float vSizeComp; // half-res pass energy compensation (1.0 on the full-res path):
+  //   sprites floored to 1px on the scaled-down particle target carry (ideal/actual)² here
+  //   so their total added light matches the full-res raster (see the vertex-end block).
   void main(){
     vec2 c = gl_PointCoord - 0.5;
     float d = length(c);
@@ -2084,6 +2267,21 @@ export const diskFragmentShader = /* glsl */ `
     float accrete = 1.0 - clamp(vSimLife, 0.0, 1.0);   // 0 free gas → 1 fully parked
     inten *= 1.0 + 1.0*smoothstep(0.0, 0.92, accrete); // monotonic heat brightening (→ ~2.0× at the core, blazes as it lands)
     inten *= 1.0 - smoothstep(0.90, 0.985, accrete);   // SHARP wink-out at the photosphere (the star eats it; mesh takes over)
+    // Half-res pass energy conservation: fold in the vertex's raster-floor
+    // compensation (exactly 1.0 on the full-res path → no-op). Applied BEFORE the
+    // tail discard so the epsilon tests the true final contribution.
+    inten *= vSizeComp;
+    // --- INVISIBLE-TAIL DISCARD (fill-rate trim) ---------------------------------
+    // Placed LAST, after every state multiplier has been folded into inten, so the
+    // test sees the exact value that would have been blended. Sub-epsilon fragments
+    // are the gaussian-tail / dim-grain residue below the HalfFloat pipeline's visible
+    // threshold — discarding them skips the additive blend/ROP cost they'd otherwise
+    // pay. The PALE DOT (vPlaceholder ≈ 3) is excluded: its halo is ~50 deliberately
+    // whisper-dim sprites whose SUM is the design (and the dot draws ~400 sprites
+    // total — no fill to win there). This material renders depthTest:false and the
+    // shader already discards (d > 0.5), so no early-z is lost. uTailEps = 0 disables
+    // (inten is never < 0) → byte-identical original output for A/B.
+    if(vPlaceholder < 2.9 && inten < uTailEps) discard;
     gl_FragColor = vec4(col * inten, 1.0);
   }
 `;

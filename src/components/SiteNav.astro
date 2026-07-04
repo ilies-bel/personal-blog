@@ -10,11 +10,12 @@
 // sections are called or where they sit.
 //
 // The model is three primary destinations — Projects, Writing, About. WRITING is
-// now a prose menu (src/pages/writing.astro) that hubs everything secondary — the
-// Inspiration essay, Behind the Build, and the graveyard — so the old separate
-// INDEX (/archive) entry is gone and Writing lights for all of those pages. The
-// hero's vertical rail still walks all five lifecycle scenes; a menu doesn't need
-// to mirror the scene order.
+// now a prose menu (src/pages/writing.astro) that hubs the written material — the
+// posts and Behind the Build — so the old separate INDEX (/archive) entry is gone
+// and Writing lights for those pages. The graveyard has no top-nav item and claims
+// none: no section reads as current there (aria-current is a true-path statement,
+// not a "nearest section" hint). The hero's vertical rail still walks all five
+// lifecycle scenes; a menu doesn't need to mirror the scene order.
 //
 // The two surfaces keep their own CSS skins on purpose (the scene overlay floats
 // over a live canvas and boot-gates its brightness; the reading rail is a sticky
@@ -48,12 +49,11 @@ const {
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
-const home = href('').replace(/\/+$/, '') || '/';
 
 // Active-section resolution — trailing-slash insensitive path compare. WRITING is
-// the prose hub, so it lights across the whole /posts/ subtree AND for every page
-// it now hubs (the graveyard, Behind the Build, and the black-hole Inspiration
-// essay). Every page therefore still locks exactly one section.
+// the prose hub, so it lights across the whole /posts/ subtree and for Behind the
+// Build. The graveyard deliberately locks NOTHING — it has no nav item, and
+// marking Writing current there would be a false aria-current claim.
 const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
 const norm = (p: string) => p.replace(/\/+$/, '') || '/';
 const isActive = (p: string) => norm(href(p)) === path;
@@ -62,7 +62,6 @@ const postsRoot = norm(href('posts'));
 const isWritingActive =
   path === writingRoot ||
   path.startsWith(`${postsRoot}/`) ||
-  isActive('graveyard') ||
   isActive('behind-the-build');
 
 // Menus show the DESTINATION only — the celestial-body names stay in the hero's

@@ -617,6 +617,14 @@ export interface ManifestoBeat {
   up: string;
   /** Small dim elaboration. Shared across both directions; never swaps. */
   whisper: string;
+  /** Optional per-beat LAYOUT variant. Absent = the shared bottom-left manifesto
+   *  position. 'finale' renders the beat as a CENTERED full-viewport column
+   *  (copy in the upper-middle, the site-index ledger pinned at the bottom),
+   *  composed around the projection-anchored dot marker at ~0.5/0.5 — see
+   *  ManifestoOverlay + the .bh-beat--finale block in hero.css. A declared
+   *  variant, not an index-keyed special case, so re-ordering scenes can never
+   *  silently move the finale treatment onto the wrong beat. */
+  layout?: 'finale';
 }
 
 /** A scene's optional "linger here" knob. While the active scene declares dwell,
@@ -714,12 +722,20 @@ export const SCENES: readonly LifecycleScene[] = [
       // finale statement DISAPPEARING when they scrolled all the way down. The
       // special regime is gone (ManifestoOverlay renders band(inStart, outEnd));
       // inEnd/outStart are kept for the window's shape/ordering invariants only.
+      //
+      // FINALE: this beat is the site's INDEX — "after the universe winds down,
+      // what remains is the work." layout: 'finale' renders it centred (copy in
+      // the upper-middle, the ledger of section links pinned at the bottom,
+      // both composed around the anchored ABOUT dot at ~0.5/0.5) instead of the
+      // shared bottom-left position. Same band, same marker gate — only the
+      // composition and copy change.
       at: 0.05,
       text: { inStart: 0.0, inEnd: 0.05, outStart: 0.09, outEnd: 0.1 },
       state: 'pale blue dot',
-      down: 'I build software that stays understandable.',
-      up: 'I build software that stays understandable.',
-      whisper: 'understandable is a choice you make on purpose.',
+      down: 'What remains is the work.',
+      up: 'What remains is the work.',
+      whisper: 'everything else burned away. this is what’s left, and it reads.',
+      layout: 'finale',
     },
   },
   {

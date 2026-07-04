@@ -196,6 +196,23 @@ export interface StarState {
   starBright: number;
   /** all gravity (warp arcs, lensed ghost, photon ring) is gone. */
   gravityGone: boolean;
+  /** the photon ring is SUBMITTED this frame. False once the ring shader's own
+   *  size-coupled envelope (ring.glsl.ts: `1 - smoothstep(0.10, 0.42, uMorph)`,
+   *  multiplied into every point's brightness) has reached exactly 0 at
+   *  morph ≥ 0.42 — from there to the gravityGone teardown (stage ≈ 0.463) the
+   *  64k ring sprites used to rasterize at zero contribution. */
+  ringVisible: boolean;
+  /** the SECONDARY lensed disk image (the ghost) is submitted this frame. Mirrors
+   *  the disk vertex shader's whole-image early-cull (disk.glsl.ts:
+   *  `uImageSign < 0 && (uMorph > 0.25 || uGiant > 0)` → gl_PointSize 0, zero
+   *  pixels) so the ~1.2M-point secondary draw stops being submitted once every
+   *  grain of it is culled in-shader anyway. */
+  diskGhostVisible: boolean;
+  /** the half-res particle pass should BYPASS to full-res this frame (the settled
+   *  pale-dot hold: a ~400-sprite fill-trivial speck whose few crisp pixels soften
+   *  on the scaled-down grid). frame() flips the disk rigs' layer + uSizeScale off
+   *  this flag; a no-op whenever the split is inactive (?prtres=1 / low tier). */
+  particleFullRes: boolean;
 
   // --- disk emission + bloom + exposure beats ---
   /** post-breakout flare ramp (drives bloom taming). */
@@ -518,6 +535,32 @@ export function lifecycle(input: LifecycleInput): StarState {
   // disk image, photon ring). Below ~giant 0.02 these are gone entirely.
   const gravityGone = giantHeld > 0.02;
 
+  // --- zero-contribution submission gates (GPU draw audit) ------------------
+  // Both flags hide rigs whose shaders have ALREADY zeroed every pixel, so the
+  // gate is provably invisible — it only stops SUBMITTING points that were
+  // contributing no photons. Each mirrors its shader's own boundary exactly.
+  //
+  // PHOTON RING: the ring shader's size-coupled envelope is exactly 0 once
+  // morph ≥ 0.42 (see the StarState doc above), but the rig used to stay
+  // submitted until gravityGone (stage ≈ 0.463) — 64k sprites at zero
+  // contribution across that band. Same envelope boundary, as true visibility.
+  const ringVisible = !gravityGone && morph < 0.42;
+  // SECONDARY DISK GHOST: the disk shader's early-cull already emits zero pixels
+  // for the whole secondary image once `morph > 0.25 || giant > 0`; this is the
+  // SAME boolean, JS-side, so the ~1.2M-vertex draw is skipped too. !gravityGone
+  // is implied by giantHeld <= 0 but kept for symmetry with the sibling gates.
+  const diskGhostVisible = !gravityGone && morph <= 0.25 && giantHeld <= 0;
+  // HALF-RES PARTICLE PASS bypass (see scene/buildParticlePass.ts): hand the cloud
+  // back to the FULL-RES main pass for the PALE-DOT slot. The dot draws ~400 sprites
+  // total (the speck + its whisper-dim halo) — fill-trivial, so half-res buys nothing
+  // there — while the speck itself is a 2-4px precision element that measurably
+  // softens/rounds on the scaled-down grid (A/B crop: max pixel diff 104 vs a
+  // reload-noise ceiling of 4). Every HEAVY state (black hole, red giant, nebula,
+  // the transitions) stays on the half-res pass. The flip lands exactly on the dot
+  // slot boundary (stage 4.5), where the cloud is already a tiny cluster mid-dezoom,
+  // so the resolution handoff has no visible seam. Ignored when the split is off.
+  const particleFullRes = dot;
+
   // Tame the bloom as the remnant inflates; let the flash punch it briefly. The
   // red giant is meant to be DIM, so pull bloom right down once it forms.
   const flareAmt = Math.min(1, Math.max(0, (morph - 0.46) / 0.54));
@@ -811,6 +854,9 @@ export function lifecycle(input: LifecycleInput): StarState {
     lensLive,
     starBright,
     gravityGone,
+    ringVisible,
+    diskGhostVisible,
+    particleFullRes,
     flareAmt,
     seedZone,
     hotZone,

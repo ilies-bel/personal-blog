@@ -1,17 +1,16 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ArticleScene from '../hero/components/ArticleScene.tsx';
-import GraveyardHud from '../hero/components/GraveyardHud.tsx';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
 // SPECIMEN LEDGER — the source of truth for the page. The entries render the
-// list, the HUD spy-line reads them, and the templating below stays flat. Order
-// is the visual order of the cabinet drawers; the descent through the list IS
-// the descent through the stellar-lifecycle journey [2.05 (red giant) → 0
-// (black hole)] driven by ArticleScene.
+// list and the templating below stays flat. Order is the visual order of the
+// cabinet drawers; the descent through the list IS the descent through the
+// stellar-lifecycle journey [2.05 (red giant) → 0 (black hole)] driven by
+// ArticleScene.
 interface Specimen {
   id: string;
   name: string;          // mono-caps display name (HUD readout + entry header)
@@ -62,17 +61,6 @@ const specimens: readonly Specimen[] = [
   },
 ];
 
-// The HUD reads its scroll-spy targets from the entry ids — passed in document
-// order so `SPECIMEN 02 / 02` matches the visual order down the page. It also
-// carries the interment year so the readout shows the real `INTERRED 2024`
-// (driven from this same source of truth, not a hardcoded label).
-const hudEntries = specimens.map((s) => ({
-  id: s.id,
-  name: s.name.toUpperCase(),
-  interred: s.interred,
-}));
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
 ---
 
 <BaseLayout
@@ -90,12 +78,6 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
       column-ellipse live in hero.css under body.graveyard-page .bh-backdrop. */}
   <ArticleScene client:only="react" journey={[2.05, 0]} />
 
-  {/* COCKPIT — the graveyard ledger HUD. Same window-event seam as ArticleHud,
-      same mono-gold instrument tokens. Passive readout: SPECIMEN N / total,
-      the active entry name, INTERRED label. Its own island; reads scroll from
-      the window event ArticleScene dispatches. */}
-  <GraveyardHud client:only="react" entries={hudEntries} />
-
   <section class="graveyard-hero" aria-labelledby="graveyard-title">
     <p class="graveyard-kicker">Graveyard</p>
     <h1 id="graveyard-title">Not everything survives.</h1>
@@ -103,14 +85,12 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
   </section>
 
   <div class="graveyard-list" aria-label="Failed and abandoned projects">
-    {specimens.map((s, i) => (
-      <article class="graveyard-entry" id={s.id} data-specimen-index={pad2(i + 1)}>
-        {/* SPECIMEN DRAWER LABEL — the mono-caps row that lifts the page from
-            "blog list" to "logged ledger." Renders BEFORE the headline so it
-            reads like the label slot on a cabinet drawer. */}
+    {specimens.map((s) => (
+      <article class="graveyard-entry" id={s.id}>
+        {/* SPECIMEN DRAWER LABEL — the mono-caps record row above the headline,
+            reading like the label slot on a cabinet drawer. Carries the real
+            record (year of death, cause) — content, not a page counter. */}
         <p class="graveyard-entry-specimen" aria-label="Specimen record">
-          <span class="graveyard-entry-specimen-id">SPECIMEN {pad2(i + 1)}</span>
-          <span class="graveyard-entry-specimen-sep" aria-hidden="true">·</span>
           <span>INTERRED {s.interred}</span>
           <span class="graveyard-entry-specimen-sep" aria-hidden="true">·</span>
           <span>CAUSE: {s.cause}</span>
@@ -176,8 +156,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduceMotion || typeof IntersectionObserver === 'undefined') {
-      // Reduced motion or no observer support: ship them all in instantly. The
-      // HUD spy still works (it has its own observer in GraveyardHud).
+      // Reduced motion or no observer support: ship them all in instantly.
       entries.forEach((el) => el.setAttribute('data-revealed', 'true'));
       return;
     }
