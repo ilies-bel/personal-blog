@@ -19,17 +19,13 @@ import { navigate } from 'astro:transitions/client';
 import { ScrollTracker } from '../scroll';
 import { SCROLL_SECTION_COUNT, BUILT_STAGES, legacyStageForProgress, brightZoneFor } from '../timeline';
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
-import { dwellForScene, sceneActivatesHud, sceneForProgress } from '../sceneTable';
+import { dwellForScene, sceneForProgress } from '../sceneTable';
 import { PresentationClock, type PresentationState } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
-  HUD_BOOTING_BODY_CLASS,
   DIVING_BODY_CLASS,
-  HUD_POWER_EVENT,
-  type HudPowerEventDetail,
-  HUD_DOT_SOLO_HOLD_MS,
   SCROLL_DOWN,
   SCROLL_UP,
   type ScrollDirection,
@@ -194,20 +190,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Whether scroll is still in the opening hold (progress <= SCROLL_HINT_DISMISS_AT).
   // Ref-tracked so the body class only flips on an actual transition, not every sample.
   const atOpeningRef = useRef(true);
-  // Whether real scroll progress has reached the black hole (bottom hero). When
-  // this flips, the island REQUESTS a HUD power change (dispatches HUD_POWER_EVENT)
-  // rather than owning body.hud-active itself — the boot FSM in BaseLayout is the
-  // single owner of the HUD body classes now. Ref-tracked so the request fires only
-  // on the actual at-end transition, not every scroll sample. The FSM honours the
-  // forced override + the once-booted-stays-powered rule, so the island can dispatch
-  // freely and let the machine decide.
-  const hudAtEndRef = useRef(false);
-  // "Brief solo, then HUD arms": the pending power-on timer. When scroll first reaches
-  // the bottom we DELAY the HUD_POWER_EVENT{on:true} by HUD_DOT_SOLO_HOLD_MS so the
-  // lone pale-blue dot lands alone for a beat before the rail/compass boot in. Held in
-  // a ref (0 = none) so a scroll back UP off the bottom — or an unmount — can cancel a
-  // still-pending power-on cleanly.
-  const hudPowerOnTimerRef = useRef(0);
+  // NOTE: scroll no longer drives HUD power. The HUD is ON BY DEFAULT (the boot FSM in
+  // BaseLayout lands a first-time visitor straight in `ready`) and only the corner
+  // power button toggles it off/on — so this island dispatches no HUD_POWER_EVENT and
+  // keeps no at-end / pending-power-on refs.
 
   useEffect(() => {
     const host = hostRef.current;
@@ -267,59 +253,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         disposeRef?.();
       };
     }
-
-    // HUD activation REQUEST: once the presentation reaches the scene flagged
-    // `activatesHud` in the scene table (the 'beginning' pale-blue-dot band at the
-    // PHYSICAL BOTTOM under the reverse arc), the island asks the boot FSM to power
-    // the HUD on (and to power off again when the presentation leaves) — preserving
-    // the "you've reached the end, here's the menu" feel. It does NOT touch
-    // body.hud-active itself — the FSM owns that class so the loader → ignite
-    // sequence is sequenced in exactly one place. Dispatched only on the EDGE
-    // (ref-tracked) so the request fires once per transition, never every sample.
-    // The FSM decides what to honour: it auto-boots only while the visitor has
-    // never touched the power button (userChosen), keeps the HUD lit once booted,
-    // and ignores the power-off request entirely — so the island can dispatch
-    // freely. Driven from the CLOCK (eased),
-    // the same resolver as the rail's scroll-spy, so the at-end gate and the
-    // highlighted row stay consistent — and the flag is table data
-    // (sceneActivatesHud), not a hardcoded id that can drift from the table.
-    const syncHudPower = (easedProgress: number): void => {
-      const atEnd = sceneActivatesHud(sceneForProgress(easedProgress).sceneId);
-      if (atEnd !== hudAtEndRef.current) {
-        hudAtEndRef.current = atEnd;
-        if (atEnd) {
-          // BRIEF SOLO, THEN HUD ARMS: do NOT power the HUD on the instant the dot
-          // lands — let the lone speck hold ALONE for HUD_DOT_SOLO_HOLD_MS first, so
-          // the closing beat reads as a quiet arrival before the chrome boots in. The
-          // delayed dispatch is the SAME power-on request as before, just deferred.
-          // (Guard against stacking: clear any prior pending timer first.)
-          if (hudPowerOnTimerRef.current) window.clearTimeout(hudPowerOnTimerRef.current);
-          hudPowerOnTimerRef.current = window.setTimeout(() => {
-            hudPowerOnTimerRef.current = 0;
-            window.dispatchEvent(
-              new CustomEvent<HudPowerEventDetail>(HUD_POWER_EVENT, {
-                detail: { on: true, source: 'scroll' },
-              }),
-            );
-          }, HUD_DOT_SOLO_HOLD_MS);
-        } else {
-          // Left the bottom before the solo hold elapsed → the dot was only glanced,
-          // not arrived at: cancel the still-pending power-on so the HUD never boots
-          // from a fly-by. (If it had already fired, this is a no-op and the FSM keeps
-          // the HUD lit per the once-booted-stays-powered rule; the explicit {on:false}
-          // dispatch below remains a deliberate FSM no-op, preserved for symmetry.)
-          if (hudPowerOnTimerRef.current) {
-            window.clearTimeout(hudPowerOnTimerRef.current);
-            hudPowerOnTimerRef.current = 0;
-          }
-          window.dispatchEvent(
-            new CustomEvent<HudPowerEventDetail>(HUD_POWER_EVENT, {
-              detail: { on: false, source: 'scroll' },
-            }),
-          );
-        }
-      }
-    };
 
     // Drive the opening chrome (name + top-right menu) from a single source of
     // truth: it is shown at the very top OR whenever the HUD is present. Keyed on
@@ -393,8 +326,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     );
     const unsubClock = clock.subscribe((state) => {
       publishSnapshot(state);
-      // The HUD power gate rides the presentation (eased) scene, matching the rail.
-      syncHudPower(state.progress);
     });
 
     const tracker = new ScrollTracker(SCROLL_SECTION_COUNT);
@@ -454,7 +385,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         clock.stop();
         unsub();
         tracker.stop();
-        hudAtEndRef.current = false;
       };
     }
 
@@ -533,21 +463,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // resolves inside the dynamic import's .then() and is out of scope here.)
       disposeRef?.();
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
-      // ONLY the island-owned chrome class (is-scrolled) and the transient boot
-      // class (hud-booting) — a half-finished loader must not survive an unmount.
-      // We deliberately do NOT strip hud-active: it is owned by the boot FSM and
-      // mirrored to localStorage, so the persisted power state is the source of
-      // truth across an SPA unmount/reload. Reset the
-      // at-end edge tracker so a re-mount re-evaluates and re-requests from scratch.
-      hudAtEndRef.current = false;
-      // Cancel a still-pending "brief solo" power-on so it can't fire after the island
-      // (and the page it belonged to) is gone — the boot FSM would otherwise light a
-      // HUD for a torn-down hero.
-      if (hudPowerOnTimerRef.current) {
-        window.clearTimeout(hudPowerOnTimerRef.current);
-        hudPowerOnTimerRef.current = 0;
-      }
-      // Reset the opening-hold edge tracker too, so a re-mount re-seeds from the live
+      // ONLY the island-owned chrome class (is-scrolled). We deliberately do NOT
+      // touch hud-active / hud-booting / hud-shutting-down: those are owned by the
+      // boot FSM and its state is mirrored to localStorage, so the persisted power
+      // state is the source of truth across an SPA unmount/reload — and the FSM
+      // re-applies the correct resting classes on the next astro:page-load.
+      // Reset the opening-hold edge tracker so a re-mount re-seeds from the live
       // scroll position rather than inheriting a stale "in the opening hold" flag.
       atOpeningRef.current = false;
       // Also clear the no-WebGL fallback class so a fresh mount (e.g. a motion-preference
@@ -555,7 +476,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // clean slate instead of inheriting a stale "unavailable" note. If WebGL is still
       // unavailable the next mount simply re-adds it. (SCENE_READY stays owned by the
       // loader script — we never strip it here.)
-      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, HUD_BOOTING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
+      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
     };
   }, [backdrop, backdropStage, reduced]);
 
