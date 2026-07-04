@@ -128,12 +128,12 @@ const X_PATH =
         </a>
       )}
 
-      {/* Power button (home only): the HUD master power. One click toggles the
-          powered state (idle ⇄ booting/ready); aria-pressed mirrors the machine, so
-          the button always reads exactly as lit as the HUD is. Clicking it also
-          marks the visitor as having taken the controls (userChosen), after which
-          scroll no longer auto-boots the HUD. The FSM in BaseLayout binds to it by
-          class; on pages without it (about) the FSM simply runs buttonless. */}
+      {/* Power button (home only): the HUD master power. The HUD is ON BY DEFAULT;
+          one click toggles it — powering ON plays the boot (booting → ready),
+          powering OFF plays it in reverse (shutting-down → idle). aria-pressed
+          mirrors the machine, so the button always reads exactly as lit as the HUD
+          is. The FSM in BaseLayout binds to it by class; on pages without it (about)
+          the FSM simply runs buttonless. */}
       {showPower && (
         <button
           type="button"
