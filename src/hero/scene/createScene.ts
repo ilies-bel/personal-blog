@@ -6,7 +6,7 @@ import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
 import { cameraPoseForProgress, progressForLegacyStage } from '../timeline';
-import { beatIdForLifecycleP, easeInQuart } from '../sceneTable';
+import { beatIdForLifecycleP, easeInQuart, type HudTargetId } from '../sceneTable';
 import { lifecycleProgress } from '../scroll';
 import { STAR_BACK_BASE_BRIGHT, buildSunRig } from './buildSunRig';
 import { buildDisk } from './buildDisk';
@@ -691,6 +691,25 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
   // larger overshoot flies out the far side into empty starfield before the bloom lands).
   // The look target settles on the exact origin so the fall stays aimed down the throat.
   const DIVE_THROUGH_POS = new THREE.Vector3(0, 0, -2);
+  // PER-STATE SURFACE STOP — never clip INSIDE a star. The through-point above is right
+  // for the black hole (no surface — falling through the horizon IS the shot) and
+  // harmless for the nebula/dot (gas / a speck). But the red giant is a solid 10.5-unit
+  // particle photosphere and the yellow star a solid mesh at the same origin: driving to
+  // z=-2 put the camera INSIDE those bodies long before the veil ramps (the giant at
+  // ~23% of the run, the mesh star at ~42% — both under DIVE_WHITE_START, and the veil
+  // caps at DIVE_WHITE_PEAK anyway), so the visitor watched the near plane slice through
+  // the photosphere. For those two states the dolly BRAKES on the approach line just off
+  // the surface instead: beginDive() resolves diveEndPos to surface-radius × margin
+  // along the from-pose's radial. The margins clear the limb activity (loops/plumes hug
+  // the limb) and the 0.1 near plane, while the star still overfills the narrowed FOV at
+  // arrival — it reads as plunging AT the surface, and the apex veil covers the stop.
+  const DIVE_SURFACE_STOP: Partial<Record<HudTargetId, number>> = {
+    red: RED_GIANT_RADIUS * 1.15,
+    yellow: SUN_RIG_RADIUS * 1.25,
+  };
+  // THIS dive's dolly destination, resolved once per beginDive() (DIVE_THROUGH_POS
+  // unless the dived state has a surface stop above). Scratch — never re-allocated.
+  const diveEndPos = DIVE_THROUGH_POS.clone();
   // The FOV narrows from CFG.fovDeg (30) toward this during the plunge for a tunnel /
   // "drawn-in" feel — a longer lens compresses depth as the core rushes up. Tasteful
   // (~9° narrowing), not a fisheye. Reduced motion never touches FOV (no geometric dive).
@@ -1504,10 +1523,14 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
         // (unprojected in beginDive). The camera TURNS to face the marker as it falls,
         // so the clicked speck swings to screen-centre and grows — a dive INTO it. For
         // a centred/anchored marker diveTargetWorld ≈ the origin, so this reproduces the
-        // original straight-down-the-throat plunge. The dolly destination stays
-        // DIVE_THROUGH_POS (just past the origin) so the fall depth/feel is unchanged.
+        // original straight-down-the-throat plunge. The dolly destination is diveEndPos —
+        // through the origin, or braked just off the photosphere for the solid bodies
+        // (DIVE_SURFACE_STOP) so the camera never clips inside a star. Both dive
+        // endpoints of the lerp sit on the from-pose's radial and outside the stop
+        // radius, and the orbital arc below is a pure rotation about the origin, so the
+        // camera's distance to the star is monotonic — it can never dip under the stop.
         const k = easeOut(raw);
-        camera.position.lerpVectors(diveFromPos, DIVE_THROUGH_POS, k);
+        camera.position.lerpVectors(diveFromPos, diveEndPos, k);
         // ORBITAL ARC: swing the approach in from the side instead of a dead-straight
         // punch. The camera position is rotated around the world-origin up-axis by an
         // angle that is FULL at the start of the run and decays to zero as it reaches the
@@ -1879,6 +1902,17 @@ export function createScene(container: HTMLElement, reduced: boolean, hooks: Sce
     diveStart = performance.now();
     diveFromPos.copy(camera.position);
     diveFromTarget.copy(frameLookTarget);
+    // Resolve THIS dive's dolly destination. Solid bodies (red giant / yellow star)
+    // brake on the approach radial just off the photosphere (DIVE_SURFACE_STOP);
+    // everything else keeps the original through-the-origin fall. The min() guards a
+    // from-pose that already sits close: the dive still travels at least 40% of the
+    // way in rather than stalling on (or backing away from) the surface.
+    const stopR = opts.state !== undefined ? DIVE_SURFACE_STOP[opts.state] : undefined;
+    if (stopR !== undefined) {
+      diveEndPos.copy(diveFromPos).normalize().multiplyScalar(Math.min(stopR, diveFromPos.length() * 0.6));
+    } else {
+      diveEndPos.copy(DIVE_THROUGH_POS);
+    }
     if (opts.targetNdc) {
       // Origin's depth in NDC (perspective-correct), so the unprojected aim point
       // lands on the same plane as the star instead of at the near clip.

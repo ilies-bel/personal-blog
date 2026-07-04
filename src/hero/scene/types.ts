@@ -56,10 +56,13 @@ export interface DiveOptions {
    *  not toward dead-centre. Defaults to the star at the world origin when omitted
    *  (a centred plunge, the original behaviour). */
   targetNdc?: { x: number; y: number };
-  /** Which lifecycle state fired the dive. The caller (HeroIsland) uses it ONLY to
-   *  pick the bloom's tint (a `data-bloom-state` attribute on the overlay → a
-   *  per-state colour in hero.css). The scene itself does not read it. Optional:
-   *  absent leaves the overlay's default (warm-bone) tint. */
+  /** Which lifecycle state fired the dive. The caller (HeroIsland) uses it to pick
+   *  the bloom's tint (a `data-bloom-state` attribute on the overlay → a per-state
+   *  colour in hero.css); the scene uses it to pick the dolly END POINT — solid
+   *  bodies (red giant / yellow star) brake just off the photosphere instead of
+   *  flying through it (DIVE_SURFACE_STOP in createScene), so the camera never
+   *  clips inside a star. Optional: absent falls back to the default tint and the
+   *  through-the-origin plunge. */
   state?: HudTargetId;
   /** Called every frame with the 0..1 overlay (bloom-to-white) strength so the
    *  caller can drive a fullscreen white layer's opacity. Optional. */
