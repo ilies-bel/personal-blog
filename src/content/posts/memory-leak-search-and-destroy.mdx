@@ -1,0 +1,126 @@
+---
+title: "Memory Leak: Search and Destroy"
+description: "A production OutOfMemoryError, a heap dump pulled from a cramped Alpine container, and the flamegraph that pointed at our own monitoring SDK."
+pubDate: 2023-12-11
+tags: ["java", "jvm", "debugging", "production"]
+draft: false
+---
+
+*Originally published in French on [Takima's Medium publication](https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb) in December 2023, co-written with Lansana Diomande.*
+
+## Introduction
+
+Let me tell you the story of a passionate young web developer. Having finished building his first feature and tested it conscientiously, he decides to ship his code to production.
+
+The feature is doing well and the users are happy. But after a few weeks, the thing every developer dreads most in the world happens.
+
+**A crash in production!**
+
+A single clue: `java.lang.OutOfMemoryError: Java heap space`.
+
+That young developer was us, a year ago. Through this write-up of our experience, we hope to help you analyze and deal with this kind of dangerous incident — which happens more often than you'd think.
+
+## What is a memory leak?
+
+Picture a parking lot, where every car drives in and eventually drives out. The wrecks always get towed to the scrapyard. Now imagine the lot never empties, or empties too slowly, and ends up saturated. We have a problem: new cars have nowhere to park.
+
+In the case of the JVM, every object uses a small amount of memory, but it is quickly cleaned up by the garbage collector once it is no longer used. Sometimes, though, unused objects live on indefinitely.
+
+These objects pile up and eventually block the future allocations the application needs to run properly.
+
+The danger of memory leaks is that they often slip through testing and quality assurance. They tend to show up after the application has been running for a long stretch — sometimes several weeks after the code went to production.
+
+In our case, we had no information about the state of memory at the moment of the crash. So our investigation started with putting the application under load, to try to reproduce the error.
+
+## Reproducing the memory leak detected in production
+
+The first goal is to simulate the usage of the application that led to the crash. Being able to reproduce it would let us confirm the memory leak was actually fixed.
+
+A first, simplistic approach can be to write a script (in bash or Python, say) that fires the requests automatically.
+
+In our case, we needed to realistically simulate the very short, intense load spike that characterizes how our application behaves in real conditions. So we used [Gatling](https://gatling.io/), an open-source tool that makes it simple to run effective, measurable load tests. There is even a Java SDK now.
+
+To observe the impact of our simulations, we needed to visualize memory allocations over time. Plenty of tools can do this; here are the ones we used:
+
+- *jstat* or *jmap* (bundled with the JDK)
+
+If you only have a JRE:
+
+- the JMX standard
+- [jattach](https://github.com/jattach/jattach)
+
+If you prefer a graph-based view, monitoring tools such as [VisualVM](https://visualvm.github.io/) — or IntelliJ — can interpret the JMX standard.
+
+If the memory in use keeps climbing, that is the sign of a memory leak. All that's left is to find the cause.
+
+Profiling our application during the load test made the leak plain: the heap usage climbed steadily, edging dangerously close to our memory limit.
+
+## Getting and analyzing the heap dump
+
+To analyze the memory in use, we had to connect to the machine hosting our application and use tools that would let us extract a *heap dump*.
+
+The heap dump is a file containing all of the JVM's memory-allocation information at a precise instant. It comes in the *hprof* format.
+
+Many tools exist to capture a heap dump, *jmap* being the best known. We won't go into the details in this article — [Baeldung has a good piece on the subject](https://www.baeldung.com/java-heap-dump-capture).
+
+In our infrastructure, we run a JRE on an Alpine operating system to keep our Docker images small. We were also very tight on disk space inside the container. Given those constraints, we chose [jattach](https://github.com/jattach/jattach), a standalone, ultra-light tool that can extract the heap dump the same way *jmap* does.
+
+Once we had the heap dump, we could analyze it with tools like *VisualVM*, *Eclipse MAT*, or the IntelliJ profiler.
+
+We started by analyzing the list of objects present at the moment of the dump — the profiler lays them out in a table, and three columns matter:
+
+- **Count** is the number of instances of each class.
+- **Shallow** is the memory those objects occupy by themselves.
+- **Retained** is obtained by recursively summing the memory of all the objects tied to the original one (these are sometimes called memory islands). It represents the amount of memory that would be freed if the class's objects were cleaned up by the garbage collector.
+
+The idea is to find out which objects hide behind the biggest chunks of retained memory. Very often the problematic objects are data collections, since their whole job is to hold other objects.
+
+Here, the *ConcurrentHashMap* class was our first candidate.
+
+So far we had analyzed memory at a fixed point in time. Next, we wanted to find the methods responsible for producing those objects, by analyzing the behavior of the application while it runs.
+
+For that, we used a **flamegraph**. A flamegraph is a diagram showing each method alongside the memory footprint it generated over the analysis window.
+
+In the flamegraph the IntelliJ profiler produced during our Gatling simulation, each rectangle represents a method call, and its width shows the proportion of memory used during the analysis period. *Thread.run* is our application's entry point, and the hungriest method turned out to be *io.sentry.transport.HttpConnection.createConnection*. Switching to a list view, we could see this call was responsible for half of all memory allocations.
+
+Walking back up the call chain in the profiler's tree view, we realized that every request to our application triggered a data send by *Sentry* through the *FilterChain*. That data was stored in a concurrent hash map, which was filling up memory. It is sent to the *Sentry* platform by the client for performance analysis.
+
+We had found our presumed culprit. Now to fix the problem.
+
+To confirm our hypothesis, we disabled the library. Replaying our performance tests, we saw the problem was gone.
+
+Before digging any further, we tried updating the *Sentry* SDK — and that alone was enough to end the memory leak.
+
+After some digging through the *sentry-java* SDK's issues and commits, we understood that the version we were using (6.12.1) did indeed have a [bug](https://github.com/getsentry/sentry-java/issues/2496). It was fixed as of version 6.13 of the SDK by [this merge request](https://github.com/getsentry/sentry-java/pull/2505).
+
+Victory! The application was back on its feet and running in production again, successfully. Ironically, it was *Sentry* — the cause of our crash — that was able to alert us to the problem.
+
+Detecting a memory leak in production is one thing; the best approach is still to avoid them by following a set of preventive good practices.
+
+## Prevention is better than cure
+
+Here is a non-exhaustive list of tips for avoiding memory leaks.
+
+It is important to know your application's limits. Load tests are a good way to check that your application behaves correctly under nominal load, but also — and above all — in extreme yet realistic scenarios (think of the holiday season for Amazon).
+
+Bumping library versions and staying up to date is always good practice, both for security and for bug prevention. It could have spared us the whole problem in our situation. Tools like [Dependabot](https://github.com/dependabot) exist to update dependencies automatically.
+
+Static-analysis tools such as *Sonar* can sometimes detect code smells likely to produce memory leaks.
+
+Good log and metrics monitoring also gives you more visibility. Adding alerting makes you more reactive. We recommend [Datadog](https://www.datadoghq.com/), or an *ELK* stack for an open-source option.
+
+Finally, despite all the precautions taken, problems can still happen in production. It is then important to be able to collect as much information as possible at the moment the application crashes. The *HeapDumpOnOutOfMemoryError* option on the JVM gets you the precious memory file that will save you a lot of analysis time.
+
+## Conclusion
+
+Detecting and resolving memory leaks can turn out to be complex, but a methodical approach and the right tools can make the process much easier.
+
+As a reminder, you should try to:
+
+- Collect as much information as possible through the logs, and a heap dump if available
+- Analyze the heap dumps
+- Try to reproduce the memory leak
+- Fix the problem you found
+- Validate the fix on your staging environments
+
+We hope that through this article you'll feel ready to take on the study and treatment of these scary errors.

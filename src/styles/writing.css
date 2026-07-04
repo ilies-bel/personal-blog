@@ -1,58 +1,30 @@
-/* Writing index — a mission-log surface for the non-bare reading side. */
+/* Writing index — a sectioned shelf for the reading side of the site: Articles,
+   The graveyard, About this site. One quiet headline, then hairline lists.
+   (The .writing-journey family at the bottom is shared with the article-footer
+   "next note" teaser in posts/[...slug].astro — keep it here.) */
 
 .writing-page .wrap {
   padding-bottom: 7rem;
 }
 
 .writing-hero,
-.writing-featured,
-.writing-list {
+.writing-section {
   width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
   margin-inline: auto;
 }
 
+/* Page header — the h1 alone. No kicker, no designation readout: the headline
+   and the nav active state carry the context. Class name kept as .writing-hero
+   so the sitewide entrance choreography (transitions.css) still applies. */
 .writing-hero {
   display: grid;
-  /* Two columns: the title block left, the index card right — the card is page
-     metadata, and parking it here fills the hero band's formerly empty right
-     half (the "unbalanced hero" audit finding). Same column ratio the featured
-     band used, so the two bands stay on one grid. */
-  grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.6fr);
-  align-items: end;
-  gap: 1rem;
-  margin-top: clamp(4rem, 11vw, 7.5rem);
-  /* Hero → featured gap: a gentler fluid step (the old 8vw clamp ballooned to
-     5.5rem on wide screens and left the featured card stranded). */
-  margin-bottom: clamp(2.25rem, 5vw, 3.75rem);
-}
-
-.writing-hero-copy {
-  display: grid;
   gap: 1.1rem;
-}
-
-/* Page designation row — the kicker plus a mono status readout, so the page
-   opens like a labeled instrument screen (the graveyard's SPECIMEN grammar,
-   generalized). Chrome ramp, not gold: gold is signal, not scaffolding. */
-.writing-kicker {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.15rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--fg-chrome-dim);
-}
-.writing-kicker-readout {
-  letter-spacing: var(--tracking-label);
-  color: var(--fg-chrome-faint);
+  margin-top: clamp(4rem, 11vw, 7.5rem);
+  margin-bottom: clamp(2.5rem, 7vw, 4.5rem);
 }
 
 .writing-hero h1 {
-  max-width: 12ch;
+  max-width: 14ch;
   margin: 0;
   font-size: var(--text-hero);
   line-height: var(--leading-tight);
@@ -60,170 +32,20 @@
   text-wrap: balance;
 }
 
-.writing-hero p {
-  max-width: 42rem;
-  margin: 0;
-  color: var(--fg-dim);
-  /* Muted lead — the sub-title rung (matches the article description). */
-  font-size: var(--text-subtitle);
-  line-height: 1.58;
-  text-wrap: pretty;
+/* Sections — a mono uppercase shelf label over a hairline list. Chrome ramp,
+   not gold (gold is signal, not scaffolding), and no numbering. */
+.writing-section + .writing-section {
+  margin-top: clamp(2.75rem, 7vw, 4.5rem);
 }
 
-.writing-featured {
-  display: grid;
-  /* Single column now: the index card moved up into the hero's right column, so
-     the featured card owns the full band width. */
-  grid-template-columns: 1fr;
-  gap: 1rem;
-  margin-bottom: clamp(2.5rem, 7vw, 4.5rem);
-}
-
-/* Instrument plates, not marketing cards: square corners, one hairline, a flat
-   tonal lift — no blur, no gradient wash, no hover levitation. The featured
-   panel is the page's ONE promoted object; it earns bracket corners (the
-   about-panel / target-lock gesture) and a hairline that brightens on hover. */
-.writing-featured-card,
-.writing-index-card {
-  border: 1px solid var(--line);
-  background: color-mix(in oklch, var(--bg-soft) 45%, transparent);
-}
-
-.writing-featured-card {
-  position: relative;
-  display: grid;
-  gap: 1rem;
-  min-height: 22rem;
-  padding: clamp(1.35rem, 4vw, 2.25rem);
-  color: inherit;
-  text-decoration: none;
-  transition: border-color 0.18s ease;
-}
-
-/* Bracket corners — two low-alpha gold Ls (top-left + bottom-right), the same
-   corner gesture the about panel and the target-lock ticks use. */
-.writing-featured-card::before,
-.writing-featured-card::after {
-  content: '';
-  position: absolute;
-  width: clamp(1.1rem, 2.2vw, 1.6rem);
-  height: clamp(1.1rem, 2.2vw, 1.6rem);
-  border: 1px solid color-mix(in oklch, var(--accent) 26%, transparent);
-  pointer-events: none;
-  transition: border-color 0.18s ease;
-}
-.writing-featured-card::before {
-  top: 0.55rem;
-  left: 0.55rem;
-  border-right: none;
-  border-bottom: none;
-}
-.writing-featured-card::after {
-  right: 0.55rem;
-  bottom: 0.55rem;
-  border-left: none;
-  border-top: none;
-}
-
-.writing-featured-card > * {
-  position: relative;
-}
-
-.writing-featured-card:hover,
-.writing-featured-card:focus-visible {
-  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
-}
-.writing-featured-card:hover::before,
-.writing-featured-card:hover::after,
-.writing-featured-card:focus-visible::before,
-.writing-featured-card:focus-visible::after {
-  border-color: color-mix(in oklch, var(--accent) 60%, transparent);
-}
-
-.writing-featured-label,
-.writing-featured-meta {
+.writing-section-title {
+  margin: 0 0 1rem;
   font-family: var(--font-mono);
   font-size: var(--text-label);
-  line-height: 1.1;
-  letter-spacing: var(--tracking-label);
+  font-weight: 400;
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-}
-
-.writing-featured-label {
-  color: var(--highlight);
-}
-
-.writing-featured-card h2 {
-  align-self: end;
-  max-width: 14ch;
-  margin: auto 0 0;
-  color: var(--fg);
-  /* Card-level headline — the secondary display rung, below the page hero. */
-  font-size: var(--text-display);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-tight);
-  text-wrap: balance;
-}
-
-.writing-featured-card p {
-  max-width: 43rem;
-  margin: 0;
-  color: var(--fg-dim);
-  font-size: var(--text-body);
-  line-height: 1.62;
-}
-
-.writing-featured-meta {
-  color: var(--fg-chrome-faint);
-  /* Baseline readout: the date sits on its own hairline at the card's foot, so
-     the card closes on the same instrument line the index card's rows use. */
-  margin-top: 0.35rem;
-  padding-top: 0.95rem;
-  border-top: 1px solid var(--line);
-}
-
-.writing-index-card {
-  padding: clamp(1.25rem, 2vw, 1.5rem);
-}
-
-.writing-index-card dl {
-  display: grid;
-  gap: 0;
-  margin: 0;
-}
-
-.writing-index-card div {
-  display: grid;
-  /* dt → dd: a hair more air between the label and its readout than between
-     rows' content and the next hairline, so each pair reads as one unit and
-     the column stops feeling like an even mechanical grid. */
-  gap: 0.45rem;
-  padding: 1.05rem 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.writing-index-card div:first-child {
-  padding-top: 0;
-}
-
-.writing-index-card div:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.writing-index-card dt {
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--fg-chrome-faint);
-}
-
-.writing-index-card dd {
-  margin: 0;
-  color: var(--fg);
-  font-size: var(--text-body);
-  line-height: 1.45;
+  color: var(--fg-chrome-dim);
 }
 
 .writing-list {
@@ -288,11 +110,75 @@
   color: var(--fg-chrome-faint);
 }
 
+/* Secondary fact in the left column — reading time on articles; the entry kind
+   (Failures / Essay / Build notes) on the dateless rows. Same rung either way. */
+.writing-row-fact {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.writing-row-copy {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  transform: translateX(0);
+  transition: transform 0.22s var(--ease-out-quint);
+}
+
+.writing-row:hover .writing-row-copy {
+  transform: translateX(0.45rem);
+}
+
+.writing-row:active .writing-row-copy {
+  transform: translateX(0.25rem);
+}
+
+.writing-row-title {
+  color: var(--fg);
+  font-family: var(--font-display);
+  /* Row title — the secondary display rung, shared with the entry headlines
+     on Projects and the graveyard. */
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: 1.12;
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+  transition: color 0.16s ease;
+}
+
+.writing-row:hover .writing-row-title {
+  color: var(--accent-strong);
+}
+
+.writing-row-description {
+  max-width: 54rem;
+  color: var(--fg-dim);
+  /* Secondary tier under the row title — the small-body rung. */
+  font-size: var(--text-body-sm);
+  line-height: 1.58;
+}
+
+/* Provenance readout — "First published on Medium, in French" — a quiet mono
+   footnote under the summary, chrome ramp like every metadata readout. */
+.writing-row-origin {
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-chrome-faint);
+}
+
 /* --- Lifecycle STATION readout (the liant with the hero) --------------------
-   A quiet glyph pair naming which room of the stellar lifecycle the note reads
+   A quiet glyph pair naming which room of the stellar lifecycle a note reads
    in — its scene.journey endpoints (e.g. ● → ◍ nebula to red giant). The glyph
    SVGs are black-fill mask sources (the HUD rail's language), so they render as
-   currentColor via CSS mask and brighten with the row on hover. */
+   currentColor via CSS mask. Used by the article-footer "next note" teaser
+   (posts/[...slug].astro) — shared vocabulary, keep even if no index row
+   currently speaks it. */
 .writing-journey {
   display: inline-flex;
   align-items: center;
@@ -316,103 +202,11 @@
   line-height: 1;
 }
 
-/* Text label — used on the featured card's meta line only; the compact rows
-   speak in glyphs alone (the aria-label carries the words). */
 .writing-journey-label {
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-}
-
-.writing-row .writing-journey-label {
-  display: none;
-}
-
-.writing-row:hover .writing-journey {
-  color: color-mix(in oklch, var(--accent-strong) 62%, var(--fg));
-}
-
-/* On the featured card's meta hairline the readout sits inline after the date,
-   separated by the same middle-dot rhythm the index card rows use. */
-.writing-featured-meta .writing-journey {
-  margin-left: 1.1rem;
-}
-
-.writing-row-copy {
-  display: grid;
-  gap: 0.45rem;
-  min-width: 0;
-  transform: translateX(0);
-  transition: transform 0.22s var(--ease-out-quint);
-}
-
-.writing-row:hover .writing-row-copy {
-  transform: translateX(0.45rem);
-}
-
-.writing-row:active .writing-row-copy {
-  transform: translateX(0.25rem);
-}
-
-.writing-row-title {
-  color: var(--fg);
-  font-family: var(--font-display);
-  /* Row title — the secondary display rung, shared with the featured card h2. */
-  font-size: var(--text-display);
-  font-weight: var(--weight-display);
-  line-height: 1.12;
-  letter-spacing: var(--tracking-tight);
-  text-wrap: balance;
-  transition: color 0.16s ease;
-}
-
-.writing-row:hover .writing-row-title {
-  color: var(--accent-strong);
-}
-
-.writing-row-description {
-  max-width: 54rem;
-  color: var(--fg-dim);
-  /* Secondary tier under the row title — the small-body rung. */
-  font-size: var(--text-body-sm);
-  line-height: 1.58;
-}
-
-.writing-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.2rem;
-}
-
-/* Tag chips speak the HUD's square instrument language (uppercase micro mono,
-   hard corners) — rounded pills belonged to a different, softer design system. */
-.writing-tags span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.55rem;
-  padding: 0.16rem 0.6rem;
-  border: 1px solid var(--line);
-  /* Square-cut readout chips — chrome ramp like every metadata readout. */
-  border-radius: 2px;
-  color: var(--fg-chrome-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  line-height: 1;
-  background: transparent;
-  transition:
-    border-color 0.16s ease,
-    color 0.16s ease,
-    background-color 0.16s ease;
-}
-
-.writing-row:hover .writing-tags span {
-  border-color: color-mix(in oklch, var(--accent) 28%, var(--line));
-  color: color-mix(in oklch, var(--accent-strong) 56%, var(--fg));
-  background: color-mix(in oklch, var(--ember) 7%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -429,22 +223,9 @@
   }
 }
 
-@media (max-width: 52rem) {
-  /* The hero stacks: title block, then the index card beneath it. */
-  .writing-hero {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .writing-featured-card {
-    min-height: 18rem;
-  }
-}
-
 @media (max-width: 40rem) {
   .writing-hero,
-  .writing-featured,
-  .writing-list {
+  .writing-section {
     width: min(100%, calc(100vw - 2rem));
   }
 
@@ -457,6 +238,15 @@
   .writing-row {
     grid-template-columns: 1fr;
     gap: 0.65rem;
+  }
+
+  /* Single-column rows: the date + fact stack becomes an inline pair so the
+     left cell reads as one metadata line above the title. */
+  .writing-row-left {
+    grid-auto-flow: column;
+    justify-content: start;
+    align-items: baseline;
+    gap: 0.9rem;
   }
 
   /* Single-column rows: the trailing ↗ would wrap onto its own row, so it

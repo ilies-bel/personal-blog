@@ -1,13 +1,12 @@
 ---
-// WRITING — written as a PROSE MENU rather than a post list: a short spoken
-// paragraph where the linked phrase carries each destination. In the author's
-// own voice, four lines:
-//   · my writings        → the Medium article (external — opens in a new tab)
-//   · my failures        → the graveyard (dead projects, kept and owned)
-//   · why this blog       → the Inspiration essay (why the site begins at the end)
-//   · how I did it        → the Behind the Build case study
-// The Inspiration href comes from the hero's own black-hole nav row (the same
-// source of truth BaseLayout uses) so a slug change can't strand the link.
+// WRITING — a sectioned index, not a prose menu. Three quiet shelves:
+//   · Articles        → the on-site posts (a real archive list that scales)
+//   · The graveyard   → dead projects, kept and owned
+//   · About this site → the Inspiration essay + the Behind the Build case study
+// The h1 and the nav active state carry the page's context — no kicker row, no
+// instrument numbering. Every destination is a real <a> with the site's
+// decode-hover convention on its title.
+import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
@@ -20,150 +19,114 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 // the same source of truth BaseLayout uses — so a slug change can't strand this link.
 const inspirationHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? 'writing';
 
-// The prose menu, line by line. `lead` is the spoken opener; the linked `phrase`
-// carries the destination; `tail` finishes the thought. Reads as sentences, not
-// a table — but each line is still a single real <a> for keyboard + crawlers.
-// `external: true` marks an off-site link (opens in a new tab, rel-guarded).
-const lines = [
-  {
-    lead: 'Here are',
-    phrase: 'my writings',
-    href: 'https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb',
-    tail: ', and I will put my articles.',
-    ariaLabel: 'My writings — Memory leak: search and destroy (Medium)',
-    external: true,
-  },
-  {
-    lead: 'Here are',
-    phrase: 'my failures',
-    href: href('graveyard'),
-    tail: ', because we learn from them too.',
-    ariaLabel: 'My failures — the graveyard',
-  },
-  {
-    lead: 'This is',
-    phrase: 'why this blog',
-    href: href(inspirationHref),
-    tail: ' exists at all.',
-    ariaLabel: 'Why this blog exists',
-  },
-  {
-    lead: 'And this is',
-    phrase: 'how I did it',
-    href: href('behind-the-build'),
-    tail: '.',
-    ariaLabel: 'How I did it',
-  },
-];
+// The Inspiration essay lives in the posts collection but reads as site meta —
+// it gets its own entry in "About this site" below, so the article list excludes
+// it. Its id is derived from the same nav href, keeping one source of truth.
+const inspirationId = inspirationHref.replace(/^posts\//, '');
+
+const articles = (await getCollection('posts', ({ data }) => !data.draft))
+  .filter((post) => post.id !== inspirationId)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+// Reading time: ~220 wpm over the raw MDX body — cheap, static, close enough.
+const readMinutes = (body: string | undefined) =>
+  Math.max(1, Math.round((body ?? '').trim().split(/\s+/).length / 220));
+
+// Provenance notes for pieces that first ran elsewhere, keyed by post id.
+const origins: Record<string, string> = {
+  'memory-leak-search-and-destroy': 'First published on Medium, in French',
+};
 ---
 
 <BaseLayout
   title="Writing"
-  description={`Writing by ${SITE_TITLE}, told plainly: my writings, my failures, why this blog exists, and how I did it.`}
+  description={`Writing by ${SITE_TITLE}: articles, the graveyard of dead projects, and the notes on why this site exists and how it was built.`}
   type="website"
   bodyClass="writing-page"
 >
   {/* Static celestial backdrop — the signature scene frozen at the NEBULA frame
       (stage 3.5, Writing's own celestial body in the nav model), heavily dimmed
-      behind the prose. client:only: the page reads fully without JS; the corner
+      behind the index. client:only: the page reads fully without JS; the corner
       scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
   <BlackHole client:only="react" backdrop backdropStage={3.5} />
 
-  <section class="archive">
-    <header class="archive-head">
-      {/* Page designation row — same instrument grammar as Projects/About.
-          SECTION 02 = Writing's slot in the canonical nav order. */}
-      <p class="archive-kicker">
-        <span>Writing</span>
-        <span class="archive-kicker-readout">Section 02 · {lines.length} entries</span>
-      </p>
-      <h1>Everything, in plain words.</h1>
-    </header>
+  {/* Page header — h1 only. The kicker/designation row is gone on purpose: the
+      headline and the nav's active state carry the context, and this page keeps
+      no instrument numbering. `.writing-hero` keeps the sitewide entrance
+      choreography (transitions.css keys on it). */}
+  <header class="writing-hero">
+    <h1>Everything, in plain words.</h1>
+  </header>
 
-    {/* The prose menu: each line is a spoken sentence whose linked phrase is the
-        destination. The <a> wraps only the phrase, so the surrounding words stay
-        quiet copy and the target is exactly the clickable idea. data-decode gives
-        the phrase the site's scramble-on-hover; the whole block reads as a short
-        note, not a list. */}
-    <nav class="prose-menu" aria-label="Writing">
-      {lines.map((line) => (
-        <p class="prose-line">
-          {`${line.lead} `}
-          {/* No whitespace inside the <a>: the underline must hug the phrase, so
-              the trailing punctuation in `tail` sits flush against the link.
-              External links open in a new tab and are rel-guarded. */}
-          <a
-            class="prose-link"
-            href={line.href}
-            aria-label={line.ariaLabel}
-            target={line.external ? '_blank' : undefined}
-            rel={line.external ? 'noopener noreferrer' : undefined}
-          ><span data-decode>{line.phrase}</span></a>{line.tail}
-        </p>
+  <section class="writing-section" aria-labelledby="articles-title">
+    <h2 class="writing-section-title" id="articles-title">Articles</h2>
+    <div class="writing-list">
+      {articles.map((post) => (
+        <a class="writing-row" href={href(`posts/${post.id}/`)}>
+          <span class="writing-row-left">
+            <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+            <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
+          </span>
+          <span class="writing-row-copy">
+            {/* Per-post shared-element name → the article h1 (posts/[...slug]),
+                so the clicked title physically travels into the headline. */}
+            <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
+            <span class="writing-row-description">{post.data.description}</span>
+            {origins[post.id] && <span class="writing-row-origin">{origins[post.id]}</span>}
+          </span>
+        </a>
       ))}
-    </nav>
+    </div>
+  </section>
+
+  <section class="writing-section" aria-labelledby="graveyard-title">
+    <h2 class="writing-section-title" id="graveyard-title">The graveyard</h2>
+    <div class="writing-list">
+      <a class="writing-row" href={href('graveyard')}>
+        <span class="writing-row-left">
+          <span class="writing-row-fact">Failures</span>
+        </span>
+        <span class="writing-row-copy">
+          <span class="writing-row-title" data-decode>Dead projects, kept and owned</span>
+          <span class="writing-row-description">
+            The work that didn't survive — dated, honoured, and left readable,
+            because the dead ends are where the lessons are.
+          </span>
+        </span>
+      </a>
+    </div>
+  </section>
+
+  <section class="writing-section" aria-labelledby="meta-title">
+    <h2 class="writing-section-title" id="meta-title">About this site</h2>
+    <div class="writing-list">
+      <a class="writing-row" href={href(inspirationHref)}>
+        <span class="writing-row-left">
+          <span class="writing-row-fact">Essay</span>
+        </span>
+        <span class="writing-row-copy">
+          <span class="writing-row-title" data-decode>Why this site exists</span>
+          <span class="writing-row-description">
+            Two pictures I could never get out of my head, and why this portfolio
+            is built like a star and begins at the end.
+          </span>
+        </span>
+      </a>
+      <a class="writing-row" href={href('behind-the-build')}>
+        <span class="writing-row-left">
+          <span class="writing-row-fact">Build notes</span>
+        </span>
+        <span class="writing-row-copy">
+          <span class="writing-row-title" data-decode>Behind the build</span>
+          <span class="writing-row-description">
+            How the scroll-scrubbed stellar lifecycle actually works: one engine,
+            nine shaders, and the budgets that keep it fast.
+          </span>
+        </span>
+      </a>
+    </div>
   </section>
 </BaseLayout>
-
-<style>
-  .archive {
-    max-width: 46rem;
-    margin: 0 auto;
-    padding: 4.5rem 0 3rem;
-  }
-  .archive-kicker {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0.4rem 1.15rem;
-    font-family: var(--font-mono);
-    font-size: var(--text-label);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--fg-chrome-dim);
-    margin: 0 0 1rem;
-  }
-  .archive-kicker-readout {
-    color: var(--fg-chrome-faint);
-  }
-  .archive-head h1 {
-    font-family: var(--font-display);
-    font-weight: var(--weight-display);
-    font-size: var(--text-display);
-    margin: 0 0 2.75rem;
-  }
-
-  /* The prose menu — large, quiet spoken lines. The unlinked words sit at the
-     dim reading colour so the linked phrase (full-strength fg) reads as the one
-     thing to click on each line. */
-  .prose-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 1.6rem;
-  }
-  .prose-line {
-    font-family: var(--font-display);
-    font-weight: var(--weight-display);
-    font-size: clamp(1.5rem, 3.4vw, 2.3rem);
-    line-height: 1.28;
-    color: var(--fg-dim);
-    margin: 0;
-    text-wrap: balance;
-  }
-  .prose-link {
-    color: var(--fg);
-    text-decoration: none;
-    /* Understated underline that brightens to the accent on hover — the linked
-       phrase already carries the decode scramble, so the rule stays subtle. */
-    text-decoration-line: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 0.18em;
-    text-decoration-color: var(--hud-line);
-    transition: color 0.2s ease, text-decoration-color 0.2s ease;
-  }
-  .prose-link:hover,
-  .prose-link:focus-visible {
-    color: var(--accent-strong);
-    text-decoration-color: currentColor;
-  }
-</style>
