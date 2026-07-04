@@ -15,16 +15,12 @@ export const SCROLLED_BODY_CLASS = 'is-scrolled';
  *  the boot readout uses to hand the bottom-centre slot to the live compass, so
  *  "the visitor has moved" is one consistent boundary. Spelled here once. */
 export const AT_OPENING_BODY_CLASS = 'at-opening';
-/** Toggled on <body> once real scroll progress reaches the black hole (bottom
- *  hero). Drives the HUD-activation chrome: the name grows, the top-right section
- *  icons open from icon → icon+label, and the HUD rail lifts to white +
- *  auto-reveals its labels. The power button in the corner can also force this
- *  on/off (see HUD_FORCED_BODY_CLASS). */
+/** Toggled on <body> once the HUD is powered (the boot FSM's `ready` state).
+ *  Drives the cockpit chrome: the name grows, the top-right section labels
+ *  brighten and lift, the corner frame ticks appear. Powered EITHER by scroll
+ *  reaching the lifecycle's ending (auto-boot, first-visit story beat) or by the
+ *  corner power button — one power bit, owned solely by the FSM in BaseLayout. */
 export const HUD_ACTIVE_BODY_CLASS = 'hud-active';
-/** Toggled on <body> by the corner power button when the visitor manually forces
- *  the HUD-activation chrome. While present, the scroll-driven hud-active toggle
- *  in HeroIsland is suppressed so the manual override wins (sticky). */
-export const HUD_FORCED_BODY_CLASS = 'hud-forced';
 /** Toggled on <body> while the HUD power-on sequence is playing — the loader /
  *  flicker / scan-sweep beat that sits BETWEEN idle and a fully-lit HUD. Owned by
  *  the boot FSM (BaseLayout's inline script). The rail / compass / menu stay DARK
@@ -123,22 +119,24 @@ export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
  *  / disabled storage must never throw). */
 export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
 /** localStorage key persisting the HUD power state across reloads. The boot FSM
- *  writes a small JSON blob `{ powered: boolean, forced: boolean }` here on every
- *  transition and restores it on init, so a returning visitor finds the HUD lit
- *  (or dark) exactly as they left it — without being marched back through the
- *  ~3.6s boot. All access is wrapped in try/catch (private mode / disabled
- *  storage must never throw). */
+ *  writes a small JSON blob `{ powered: boolean, userChosen: boolean }` here on
+ *  every transition and restores it on init, so a returning visitor finds the HUD
+ *  lit (or dark) exactly as they left it — without being marched back through the
+ *  ~3.6s boot. `userChosen` records that the visitor has ever clicked the power
+ *  button; while true, scroll no longer auto-boots the HUD (legacy blobs' `forced`
+ *  flag migrates to it on read). All access is wrapped in try/catch (private mode
+ *  / disabled storage must never throw). */
 export const HUD_STATE_STORAGE_KEY = 'hud-state';
 
 // --- cross-layer events ----------------------------------------------------
 /** The window CustomEvent HeroIsland dispatches to REQUEST a HUD power change. The
  *  island no longer owns body.hud-active directly — the boot FSM does — so it only
  *  signals intent. The detail is `{ on: boolean; source: 'scroll' }`: `on` is true
- *  once real scroll reaches the black hole, false when it leaves. The FSM is the
- *  single owner of the body classes and decides what to do with the request
- *  (honouring the forced override + the once-booted-stays-powered rule). The name
- *  lives here so the dispatcher (HeroIsland) and the listener (the inline FSM)
- *  never disagree on the string. */
+ *  once real scroll reaches the lifecycle's ending, false when it leaves. The FSM
+ *  is the single owner of the body classes and decides what to do with the request
+ *  (auto-boot only while the visitor has never touched the power button, plus the
+ *  once-booted-stays-powered rule). The name lives here so the dispatcher
+ *  (HeroIsland) and the listener (the inline FSM) never disagree on the string. */
 export const HUD_POWER_EVENT = 'hud:power';
 /** Detail payload carried by HUD_POWER_EVENT. */
 export interface HudPowerEventDetail {

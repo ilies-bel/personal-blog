@@ -122,18 +122,38 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
           />
 
           {/* Boot transition layers — driven entirely by body.hud-booting (added for
-              the ~3.6s power-on window by the FSM script below). Three fixed, full-
+              the ~3.6s power-on window by the FSM script below). Fixed, full-
               viewport, pointer-events:none layers + a bottom-centre readout, all CSS-
               off the body class (see hud.css → "HUD boot sequence"); aria-hidden so
               none of it ever announces:
                 • .hud-boot-flicker — a light layer that surges/settles (power surge).
-                • .hud-boot-scan    — a thin line that sweeps across the viewport.
+                • .hud-boot-static  — VHS tape-static field: faint grayscale grain
+                                      over the whole frame, shuffling in steps,
+                                      loud while the signal acquires, dead by
+                                      ignition.
+                      (The other VHS layer — tracking slips — needs no element:
+                      hud.css steps the scene CANVAS itself sideways, so the
+                      picture jumps like a deck hunting for tracking.)
+                • .hud-boot-panels  — the cockpit BEZEL: four edge seams that etch in
+                                      clockwise around the viewport (a current tracing
+                                      the canopy frame) with corner joints that weld
+                                      lit as the trace passes; fades out at ignition.
                 • .hud-boot         — the status readout + a stuttering progress bar.
               The .hud-boot-label TEXT is swapped by the FSM through the boot window
               (LOADING → CALIBRATING → ALIGNING → SYSTEMS NOMINAL) so the readout
               reads like a machine running its start-up self-check. */}
           <div class="hud-boot-flicker" aria-hidden="true"></div>
-          <div class="hud-boot-scan" aria-hidden="true"></div>
+          <div class="hud-boot-static" aria-hidden="true"></div>
+          <div class="hud-boot-panels" aria-hidden="true">
+            <span class="hud-boot-seam" data-edge="top"></span>
+            <span class="hud-boot-seam" data-edge="right"></span>
+            <span class="hud-boot-seam" data-edge="bottom"></span>
+            <span class="hud-boot-seam" data-edge="left"></span>
+            <span class="hud-boot-joint" data-corner="tl"></span>
+            <span class="hud-boot-joint" data-corner="tr"></span>
+            <span class="hud-boot-joint" data-corner="br"></span>
+            <span class="hud-boot-joint" data-corner="bl"></span>
+          </div>
           <div class="hud-boot" aria-hidden="true">
             <span class="hud-boot-label">LOADING</span>
             <span class="hud-boot-bar"></span>
@@ -145,24 +165,31 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               runs the moment the body parses, with no framework on the critical path.
 
               The machine has three states:
-                • idle    — HUD off (scrolling the lifecycle, not at the black hole).
+                • idle    — HUD off (observation deck: the spectacle, minimal chrome).
                 • booting — the power-on / loader sequence is playing (body.hud-booting).
-                • ready   — HUD fully lit (body.hud-active → rail + compass + menu up).
-              The `forced` flag (corner power button engaged) is ORTHOGONAL — it is a
-              sticky request to be powered on regardless of scroll, mirrored to
-              body.hud-forced.
+                • ready   — HUD fully lit (body.hud-active → cockpit: instruments up).
 
-              transition(next) is the ONLY place body classes are mutated. Everything
-              else just calls it. Inputs that drive it:
-                • the HUD_POWER_EVENT ('hud:power') HeroIsland dispatches when real
-                  scroll reaches / leaves the black hole (detail.on);
-                • the power button (forced on/off).
-              Behaviour: once booted we STAY powered (scroll-up does not tear the HUD
-              down) — the only thing that returns us to idle is the power button
-              explicitly powering OFF (or a fresh load whose persisted state was off).
-              The state is mirrored to localStorage on every transition and restored
-              on init, so a returning visitor lands straight in `ready` (no replayed
-              3.6s boot) or `idle` exactly as they left it.
+              THE CONTRACT — "the story proposes once; the pilot decides after":
+                • The power button toggles ONE bit: powered. One click, always. Its
+                  aria-pressed mirrors the machine state (pressed = booting|ready),
+                  however the HUD got lit — there is no second flag to desync from
+                  what the visitor sees.
+                • Scroll reaching the lifecycle's ending (HUD_POWER_EVENT{on:true}
+                  from HeroIsland) auto-boots the HUD — but ONLY while the visitor
+                  has never touched the power button (userChosen === false). Once
+                  they have, scroll never drives power again: if they left the ship
+                  dark, arrival at the ending just PULSES the power button once
+                  ("systems standing by") instead of booting.
+                • Once booted we STAY powered (scroll-up does not tear the HUD down);
+                  only the power button returns us to idle.
+              userChosen is NOT the old `forced` flag reborn: it never affects the
+              button (which always toggles power directly) — it only gates the scroll
+              trigger. Write-once, read in one place, nothing to desync.
+
+              transition(next) is the ONLY place body classes are mutated; it also
+              mirrors { powered, userChosen } to localStorage, restored on init so a
+              returning visitor lands straight in `ready` (no replayed 3.6s boot) or
+              `idle` exactly as they left it.
 
               The class-string + storage-key + event-name literals below are the same
               ones centralized in src/hero/lib/constants.ts — this inline island can't
@@ -182,24 +209,26 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             // identical to the former <script is:inline> island.
             type HudState = 'idle' | 'booting' | 'ready';
             // The machine state persisted on window across ClientRouter swaps. The
-            // control functions (requestPowerOn/Off, toggleForced) are re-pointed to the
-            // current DOM by each init, so the single window listener + the once-per-node
-            // button listener always drive the live page.
+            // control functions (requestPowerOn/Off, togglePower, standbyPulse) are
+            // re-pointed to the current DOM by each init, so the single window listener
+            // + the once-per-node button listener always drive the live page.
             interface HudFsm {
               state: HudState;
-              forced: boolean;
+              /** True once the visitor has EVER clicked the power button. Gates the
+               *  scroll-driven auto-boot only — never the button itself. */
+              userChosen: boolean;
               bootEndTimer: number;
               lineTimers: number[];
               windowBound: boolean;
               requestPowerOn?: (skipBoot: boolean) => void;
               requestPowerOff?: () => void;
-              toggleForced?: () => void;
+              togglePower?: () => void;
+              standbyPulse?: () => void;
             }
             function initHudFsm(): void {
               // --- Centralized literals (mirror src/hero/lib/constants.ts) ---------
               const ACTIVE_CLASS = 'hud-active'; // HUD_ACTIVE_BODY_CLASS  (ready)
               const BOOTING_CLASS = 'hud-booting'; // HUD_BOOTING_BODY_CLASS (booting)
-              const FORCED_CLASS = 'hud-forced'; // HUD_FORCED_BODY_CLASS  (forced override)
               const STATE_KEY = 'hud-state'; // HUD_STATE_STORAGE_KEY
               const POWER_EVENT = 'hud:power'; // HUD_POWER_EVENT (from HeroIsland)
               const BOOT_MS = 3600; // HUD_BOOT_DURATION_MS — keep in sync with --hud-boot-dur
@@ -230,24 +259,27 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               const BOOT_LINES = ['LOADING', 'CALIBRATING', 'ALIGNING ARRAY', 'SYSTEMS NOMINAL'];
 
               // --- Persistence (try/catch — private mode must never throw) ---------
-              const readState = (): { powered: boolean; forced: boolean } => {
+              // Blob shape: { powered, userChosen }. Legacy blobs carried a `forced`
+              // flag instead — a visitor who had engaged the old forced override HAD
+              // touched the button, so `forced: true` migrates to userChosen: true.
+              const readState = (): { powered: boolean; userChosen: boolean } => {
                 try {
                   const raw = window.localStorage.getItem(STATE_KEY);
-                  if (!raw) return { powered: false, forced: false };
+                  if (!raw) return { powered: false, userChosen: false };
                   const parsed = JSON.parse(raw);
                   return {
                     powered: parsed.powered === true,
-                    forced: parsed.forced === true,
+                    userChosen: parsed.userChosen === true || parsed.forced === true,
                   };
                 } catch (_) {
-                  return { powered: false, forced: false };
+                  return { powered: false, userChosen: false };
                 }
               };
-              const writeState = (powered: boolean, forcedFlag: boolean): void => {
+              const writeState = (powered: boolean, chosen: boolean): void => {
                 try {
                   window.localStorage.setItem(
                     STATE_KEY,
-                    JSON.stringify({ powered: powered, forced: forcedFlag }),
+                    JSON.stringify({ powered: powered, userChosen: chosen }),
                   );
                 } catch (_) {
                   /* storage disabled — run without persistence */
@@ -255,23 +287,23 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               };
 
               // --- Persisted machine across swaps ----------------------------------
-              // The mutable state (current state, forced flag, live timers) lives ONCE
+              // The mutable state (current state, userChosen, live timers) lives ONCE
               // on window so a re-init after a navigation continues the same machine
-              // rather than resetting it. `state`/`forced` here are LOCAL working copies
-              // seeded from the persisted machine; transition()/applyForced() write them
-              // straight back to fsm so the next init reads them.
+              // rather than resetting it. `state`/`userChosen` here are LOCAL working
+              // copies seeded from the persisted machine; transition()/togglePower()
+              // write them straight back to fsm so the next init reads them.
               // Typed accessor for the window-level machine (the project's idiom for
               // __bh* globals in bundled scripts — see CustomCursor.astro).
               const fsmWindow = window as unknown as { __bhHudFsm?: HudFsm };
               const fsm: HudFsm = (fsmWindow.__bhHudFsm = fsmWindow.__bhHudFsm || {
                 state: 'idle', // 'idle' | 'booting' | 'ready'
-                forced: false, // power-button override (orthogonal to state)
+                userChosen: false, // pilot has taken the controls (gates auto-boot only)
                 bootEndTimer: 0,
                 lineTimers: [],
                 windowBound: false,
               });
               let state = fsm.state;
-              let forced = fsm.forced;
+              let userChosen = fsm.userChosen;
               const lineTimers = fsm.lineTimers;
 
               const clearLineTimers = () => {
@@ -281,14 +313,13 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 if (bootLabel) bootLabel.textContent = text;
               };
 
-              // Reflect `forced` onto the body + the power button's ARIA. The button
-              // is a toggle for the FORCED override specifically; its LIT (gold) look
-              // is keyed off body.hud-active in CSS so it reads ON whenever the HUD is
-              // up, however it got there.
-              const applyForced = () => {
-                fsm.forced = forced;
-                body.classList.toggle(FORCED_CLASS, forced);
-                if (btn) btn.setAttribute('aria-pressed', forced ? 'true' : 'false');
+              // Mirror the MACHINE state onto the power button's ARIA: pressed while
+              // powering up or lit (booting | ready), however the HUD got there. This
+              // matches the CSS, which lights the button gold off body.hud-active /
+              // hud-booting — what a screen reader hears and what the eye sees can't
+              // disagree. Called from every transition() and at init.
+              const applyPressed = () => {
+                if (btn) btn.setAttribute('aria-pressed', state !== 'idle' ? 'true' : 'false');
               };
 
               // transition(next) — the ONLY place the state classes change. Each call
@@ -304,11 +335,15 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 }
                 state = next;
                 fsm.state = next;
+                applyPressed();
+                // Any transition answers a standing invitation: drop the standby
+                // pulse class so it can't linger on a now-lit (or re-darkened) button.
+                if (btn) btn.classList.remove('is-standby');
 
                 if (next === 'idle') {
                   body.classList.remove(BOOTING_CLASS);
                   body.classList.remove(ACTIVE_CLASS);
-                  writeState(false, forced);
+                  writeState(false, userChosen);
                   return;
                 }
 
@@ -330,7 +365,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                   // Boot completes → ignite. Non-interruptible by scroll; a power-off
                   // press calls transition('idle') which clears this timer.
                   fsm.bootEndTimer = window.setTimeout(() => transition('ready'), bootMs);
-                  writeState(true, forced); // intent: we are powering up to ready
+                  writeState(true, userChosen); // intent: we are powering up to ready
                   return;
                 }
 
@@ -339,7 +374,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                   // rail cascade + compass + menu chrome ignite together.
                   body.classList.remove(BOOTING_CLASS);
                   body.classList.add(ACTIVE_CLASS);
-                  writeState(true, forced);
+                  writeState(true, userChosen);
                   return;
                 }
               };
@@ -366,15 +401,29 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               };
 
               // --- Inputs ----------------------------------------------------------
-              // The forced-override toggle, factored out so BOTH the window listener
-              // and the once-per-node button listener invoke the SAME latest closure
-              // (each init rewrites fsm.* to point at the current DOM). This keeps the
-              // button correct even when its listener was bound on an earlier init.
-              const toggleForced = (): void => {
-                forced = !forced;
-                applyForced();
-                if (forced) requestPowerOn(false);
-                else requestPowerOff();
+              // The power toggle: ONE bit, one click. Marks the pilot as having taken
+              // the controls (userChosen — persisted by the transition this always
+              // triggers), then flips the actual power state. Factored out so BOTH the
+              // window listener and the once-per-node button listener invoke the SAME
+              // latest closure (each init rewrites fsm.* to point at the current DOM).
+              const togglePower = (): void => {
+                userChosen = true;
+                fsm.userChosen = true;
+                if (state === 'idle') requestPowerOn(false);
+                else requestPowerOff(); // booting aborts the loader; ready tears down
+              };
+
+              // "Systems standing by" — the single soft pulse the power button gives
+              // when scroll arrives at the ending but the auto-boot is suppressed
+              // (the pilot previously chose dark). The ship asks instead of acting.
+              // Class-driven one-shot CSS animation (scene.css); re-triggerable by
+              // removing + re-adding across a reflow. Reduced motion drops the
+              // animation in CSS, so this is safe to call unconditionally.
+              const standbyPulse = (): void => {
+                if (!btn) return;
+                btn.classList.remove('is-standby');
+                void btn.offsetWidth; // restart the animation if mid-pulse
+                btn.classList.add('is-standby');
               };
 
               // Expose the current closure's controls on fsm BEFORE binding listeners,
@@ -382,24 +431,33 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               // by each initHudFsm() on astro:page-load).
               fsm.requestPowerOn = requestPowerOn;
               fsm.requestPowerOff = requestPowerOff;
-              fsm.toggleForced = toggleForced;
+              fsm.togglePower = togglePower;
+              fsm.standbyPulse = standbyPulse;
               if (!fsm.windowBound) {
                 fsm.windowBound = true;
                 window.addEventListener(POWER_EVENT, (event: Event) => {
                   const detail = (event as CustomEvent<{ on?: boolean } | null>).detail;
                   if (!detail) return;
-                  // Call the latest closure's power-on (fsm.requestPowerOn is rewritten
-                  // by each init, so it always targets the current page's nodes). We do
-                  // NOT re-run initHudFsm() here — that would re-add the per-init button
-                  // listener and stack duplicates on a non-swapped (home-page) button.
-                  if (detail.on && fsm.requestPowerOn) fsm.requestPowerOn(false);
-                  // detail.on === false (scroll left the black hole) is deliberately a
+                  // detail.on === false (scroll left the ending) is deliberately a
                   // no-op: once booted the HUD stays lit until the power button powers
-                  // it off. (The forced override would suppress it anyway.)
+                  // it off.
+                  if (!detail.on) return;
+                  // Call the latest closures via fsm (rewritten by each init, so they
+                  // always target the current page's nodes). We do NOT re-run
+                  // initHudFsm() here — that would re-add the per-init button listener
+                  // and stack duplicates on a non-swapped (home-page) button.
+                  if (!fsm.userChosen) {
+                    // The story's ignition: auto-boot, but only while the visitor has
+                    // never touched the power button.
+                    if (fsm.requestPowerOn) fsm.requestPowerOn(false);
+                  } else if (fsm.state === 'idle' && fsm.standbyPulse) {
+                    // Pilot chose dark: don't override them — pulse the button once.
+                    fsm.standbyPulse();
+                  }
                 });
               }
 
-              // 2) Power button — toggles the forced override. The button node is
+              // 2) Power button — toggles the power state. The button node is
               //    REPLACED on every swap (fresh node = no prior listener), but
               //    initHudFsm() can also run twice against the SAME node on the very
               //    first paint (the direct call + astro:page-load). A per-node dataset
@@ -409,8 +467,8 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 // Invoke the LATEST closure via fsm so a node bound on an earlier init
                 // still toggles the live machine (never the stale first-init locals).
                 btn.addEventListener('click', () => {
-                  if (fsmWindow.__bhHudFsm && fsmWindow.__bhHudFsm.toggleForced) {
-                    fsmWindow.__bhHudFsm.toggleForced();
+                  if (fsmWindow.__bhHudFsm && fsmWindow.__bhHudFsm.togglePower) {
+                    fsmWindow.__bhHudFsm.togglePower();
                   }
                 });
               }
@@ -418,16 +476,17 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               // --- Init: restore persisted power state (apply classes ASAP, no flash).
               // On a swap this RE-APPLIES the live state to the fresh body/button: the
               // localStorage restore lands us in ready/idle without replaying the boot,
-              // and applyForced() repaints the new button's ARIA + the body forced class.
+              // and applyPressed() repaints the new button's ARIA.
               const persisted = readState();
-              forced = persisted.forced;
-              applyForced();
+              // In-memory (mid-session) userChosen wins over the persisted blob —
+              // storage may be unavailable, and the flag is write-once anyway.
+              userChosen = userChosen || persisted.userChosen;
+              fsm.userChosen = userChosen;
               if (persisted.powered) {
                 // Returning visitor / post-swap with the HUD on: restore ready directly
-                // (no replayed boot). If they had forced it on, forced is already set.
-                // On a swap this also re-paints the fresh body with the active class
-                // (transition() no-ops if state is already 'ready', so applyForced +
-                // the body class are re-set below for that case).
+                // (no replayed boot). On a swap this also re-paints the fresh body with
+                // the active class (transition() no-ops if state is already 'ready',
+                // so the body class is re-set below for that case).
                 if (state === 'ready') {
                   // Already ready in-memory (mid-session swap): repaint the fresh body.
                   body.classList.remove(BOOTING_CLASS);
@@ -436,6 +495,10 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                   requestPowerOn(true);
                 }
               }
+              // Repaint the (possibly fresh) button's ARIA whatever path we took —
+              // transition() covers its own calls, but the no-op paths (already ready,
+              // or idle with nothing persisted) still need the fresh node stamped.
+              applyPressed();
             }
 
             // Re-run on every ClientRouter navigation (fires on the initial load too),

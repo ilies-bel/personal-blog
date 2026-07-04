@@ -128,16 +128,18 @@ const X_PATH =
         </a>
       )}
 
-      {/* Power button (home only): toggles the hud-active morph in place. Sticky —
-          once engaged it adds body.hud-forced so the scroll-driven toggle stands
-          down until toggled off. The HUD power FSM in BaseLayout binds to it by
+      {/* Power button (home only): the HUD master power. One click toggles the
+          powered state (idle ⇄ booting/ready); aria-pressed mirrors the machine, so
+          the button always reads exactly as lit as the HUD is. Clicking it also
+          marks the visitor as having taken the controls (userChosen), after which
+          scroll no longer auto-boots the HUD. The FSM in BaseLayout binds to it by
           class; on pages without it (about) the FSM simply runs buttonless. */}
       {showPower && (
         <button
           type="button"
           class="overlay-blog-power"
           aria-pressed="false"
-          aria-label="Toggle navigation"
+          aria-label="Power the navigation HUD"
         >
           {/* IEC power glyph: an open ring broken at the top by a vertical line. */}
           <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">

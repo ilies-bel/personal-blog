@@ -67,15 +67,6 @@ body.at-opening .hud-system[data-visible='true'] {
   pointer-events: none;
 }
 
-/* Short desktop viewports: the EXPANDED (hud-active) rail widens its row pitch to
-   5rem, making the band ~24.5rem tall — too tall to clear the bottom-left copy on
-   short screens. Lift the band a little higher AND cap the expanded pitch so it
-   still clears. Desktop only (min-width 60.01rem) so the mobile horizontal strip
-   is untouched. */
-@media (min-width: 60.01rem) and (max-height: 48rem) {
-  .hud-system { top: clamp(5.5rem, 18vh, 9rem); }
-  body.hud-active .hud-system { --rail-row-gap: 0.9rem; --rail-row-pitch: 4.3rem; }
-}
 .hud-nav {
   position: relative;
   width: max-content;
@@ -134,23 +125,6 @@ body.at-opening .hud-system[data-visible='true'] {
     transparent calc(var(--c5) - var(--rail-gap-half)),
     transparent calc(var(--c5) + var(--rail-gap-half)),
     black calc(var(--c5) + var(--rail-gap-half))
-  );
-}
-/* PROGRESSIVE LINE LENGTH (HUD OFF): clip the rail line so it ends just past
-   the deepest DISCOVERED glyph center.  --rail-revealed (1-based row count)
-   is set on the <nav> element from the discovered Set in HudNavigation.tsx.
-   Glyph center N sits at rail-first-center + (N-1)*rail-row-pitch from the
-   line's top edge; extending an extra rail-gap-half keeps the node visually
-   ON the line.  The mask gaps are top-anchored so shortening from the bottom
-   leaves all gaps correctly placed.
-   Under body.hud-active the base rule (bottom: -1.5rem) takes over again
-   because this selector no longer matches — no extra rule needed. */
-body:not(.hud-active) .hud-nav::before {
-  bottom: auto;
-  height: calc(
-    var(--rail-first-center) +
-    (var(--rail-revealed) - 1) * var(--rail-row-pitch) +
-    var(--rail-gap-half)
   );
 }
 .hud-nav-list {
@@ -261,89 +235,16 @@ body:not(.hud-active) .hud-nav::before {
   border-radius: var(--radius-sm);
 }
 
-/* LONGER rail once the HUD is active: the selector spreads vertically so it reads
-   as a full menu (more breathing room between rows), not a compact instrument. We
-   bump the row gap + pitch (and the first-glyph center, which the rail-line mask
-   gaps derive from, so the line stays aligned). Driven by overriding the geometry
-   knobs under body.hud-active; the row-gap transition animates the spread. */
-body.hud-active .hud-system,
-.hud-system.is-active {
-  --rail-row-gap: 1.6rem;
-  --rail-row-pitch: 5rem;        /* --rail-row-h (3.4) + --rail-row-gap (1.6) */
-  --rail-first-center: 3.2rem;   /* unchanged: first node still anchors near the top */
-}
-/* Note: body.hud-active is on <body>; the rail (.hud-system) is a descendant, so the
-   override above targets it. (gap doesn't reliably transition when its var() source
-   changes, so the rows snap to the wider spacing — the per-row label cascade still
-   carries the activation motion.) */
+/* DEAD-CODE TOMBSTONE: the desktop "quiet icon rail → explicit menu" morph that
+   used to live here (hud-active row-pitch spread, per-button width expansion,
+   label cascade with --rail-beat/--rail-step staggers, per-row dim/current
+   overrides) was removed: .hud-nav is display:none above 60rem (the arc gauge
+   replaced it as the desktop instrument) and the compact strip overrides every
+   one of those rules, so none of it rendered anywhere. The power-on choreography
+   those rules carried lives on the ARC now (see COCKPIT IGNITION below). */
 
-/* HUD activation at the black hole (body.hud-active, set by HeroIsland or forced by
-   the corner power button): the quiet icon rail becomes an explicit menu — every
-   button expands, labels reveal WITHOUT hover, the text lifts to full white and the
-   connector tick brightens to the rail's gold accent. (--hud-gold is the rail's
-   accent token in .hud-system above — there is no --hud-amber here.)
-
-   Cascade (#4): a HELD beat (--rail-beat) before anything moves, THEN each row
-   reveals top→bottom. The width-expand LEADS each row and the label fade-in FOLLOWS
-   (so a row "opens then writes"). Per-row delays are applied via :nth-child below;
-   the base transitions get the beat delay here. */
-/* LAYOUT (all rows): every button widens so the menu opens fully — this is the
-   "menu opens" expansion the cascade animates. COLOUR is deliberately NOT set here
-   so the resting/dimmed default (--fg-faint, from .hud-nav-button) stands for every
-   NON-current row; only [data-current='true'], :hover and :focus-visible lift a row
-   to full brightness (rules below + the existing hover/current ones above). The
-   color transition is still declared so the brighten eases rather than snaps. */
-body.hud-active .hud-nav-button {
-  width: var(--rail-expanded);
-  transition:
-    width 0.4s var(--ease-out-quint) var(--rail-beat),
-    color 0.3s ease var(--rail-beat);
-}
-/* The tick reveals its WIDTH (layout) for every row but holds its colour dim — only
-   the current row / hover gets the bright gold tick, never the whole menu. */
-body.hud-active .hud-nav-button::before {
-  width: 0.5rem;
-  transition:
-    width 0.3s var(--ease-out-quint) var(--rail-beat),
-    background-color 0.3s ease var(--rail-beat);
-}
-body.hud-active .hud-nav-copy {
-  max-width: var(--rail-copy-max);
-  opacity: 1;
-  transform: none;
-}
-/* RESTING / dimmed copy for NON-current rows in the open menu: the labels are now
-   revealed (layout above), so they must read at the faint level — NOT the bright
-   --hud-main / --hud-muted base — so exactly one row (the current) stands out. The
-   title sits at --fg-faint (matching the dimmed glyph, which follows the button's
-   --fg-faint via currentColor) and the destination at the dim --fg-dim tone. The
-   [data-current='true'] block below re-brightens the current row (higher specificity)
-   and the :hover / :focus-visible rules still lift any hovered row. */
-body.hud-active .hud-nav-title { color: var(--hud-rail-dim-text); }
-body.hud-active .hud-nav-destination { color: var(--hud-rail-dim-sub); }
-/* The CURRENT row in the active menu is the ONLY one lifted to full brightness.
-   Adding [data-current] gives these higher specificity than the blanket
-   `body.hud-active .hud-nav-*` rules (so the non-current default dim holds) AND than
-   the plain `.hud-nav-button[data-current='true']` scroll-spy tint (so the active
-   current row reads clearly SELECTED). Button text/title to the bright tones,
-   destination to --fg, the ::before tick to gold. Hover/focus still brighten ANY
-   row via the :hover / :focus-visible rules above (unchanged). */
-body.hud-active .hud-nav-button[data-current='true'] {
-  color: var(--fg-overlay);
-}
-body.hud-active .hud-nav-button[data-current='true']::before {
-  background: var(--hud-gold);
-}
-body.hud-active .hud-nav-button[data-current='true'] .hud-nav-title {
-  color: var(--fg-overlay);
-}
-body.hud-active .hud-nav-button[data-current='true'] .hud-nav-destination {
-  color: var(--fg-overlay);
-}
 /* HOVER / focus-visible brightens ANY row's copy in BOTH states (it must still lift
-   a non-current row past the dimmed resting default). Higher specificity than the
-   `body.hud-active .hud-nav-title/destination` dim rules above, so hovering a
-   non-current row in the open menu reveals it bright too. */
+   a non-current row past the dimmed resting default). */
 .hud-nav-button:hover .hud-nav-title,
 .hud-nav-button:focus-visible .hud-nav-title {
   color: var(--fg-overlay);
@@ -352,26 +253,6 @@ body.hud-active .hud-nav-button[data-current='true'] .hud-nav-destination {
 .hud-nav-button:focus-visible .hud-nav-destination {
   color: var(--fg-overlay);
 }
-
-/* Per-row stagger: row N reveals at beat + (N-1)*step. The label (copy) follows
-   the width slightly (its own +0.08s lead-out) so each row opens, then writes.
-   When hud-active turns OFF, the default (non-active) transitions above with NO
-   delay take over, so the rail collapses quickly — never a sluggish reverse. */
-body.hud-active .hud-nav-row:nth-child(1) .hud-nav-button { transition-delay: var(--rail-beat); }
-body.hud-active .hud-nav-row:nth-child(2) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 1 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(3) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 2 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(4) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 3 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(5) .hud-nav-button { transition-delay: calc(var(--rail-beat) + 4 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(1) .hud-nav-button::before { transition-delay: var(--rail-beat); }
-body.hud-active .hud-nav-row:nth-child(2) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 1 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(3) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 2 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(4) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 3 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(5) .hud-nav-button::before { transition-delay: calc(var(--rail-beat) + 4 * var(--rail-step)); }
-body.hud-active .hud-nav-row:nth-child(1) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 0.08s); }
-body.hud-active .hud-nav-row:nth-child(2) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 1 * var(--rail-step) + 0.08s); }
-body.hud-active .hud-nav-row:nth-child(3) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 2 * var(--rail-step) + 0.08s); }
-body.hud-active .hud-nav-row:nth-child(4) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 3 * var(--rail-step) + 0.08s); }
-body.hud-active .hud-nav-row:nth-child(5) .hud-nav-copy { transition-delay: calc(var(--rail-beat) + 4 * var(--rail-step) + 0.08s); }
 
 /* The glyph is an SVG (in public/glyphs/) applied as a mask and painted with the
    link's currentColor, so the rail's faint to gold to current color transitions
@@ -463,12 +344,9 @@ body.hud-active .hud-nav-row:nth-child(5) .hud-nav-copy { transition-delay: calc
 .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-number {
   color: var(--hud-rail-dim-text);
 }
-body.hud-active .hud-nav-button:not([data-current='true']):not(:hover):not(:focus-visible) .hud-nav-number {
-  color: var(--hud-rail-dim-text);
-}
 
 /* PROGRESSIVE DISCOVERY (FIX 2): while the HUD is OFF (the quiet icon rail before the
-   black-hole power-on), an UNDISCOVERED row's number is faded to 0 — but the row keeps
+   HUD powers on), an UNDISCOVERED row's number is faded to 0 — but the row keeps
    its fixed position/height (the .hud-nav::before connector-line mask assumes 5 fixed
    row positions), so ONLY the number's opacity is gated; the rail never reflows.
    Discovered numbers fade IN PLACE. Discovery is driven from data-discovered, set in the
@@ -966,13 +844,6 @@ body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay:
     -webkit-mask-image: none;
     mask-image: none;
   }
-  /* The mobile rail is horizontal; the vertical rail-revealed clipping rule
-     above has higher specificity and would override height: 1px here.
-     Restore the compact horizontal geometry so mobile is unaffected. */
-  body:not(.hud-active) .hud-nav::before {
-    height: 1px;
-    bottom: auto;
-  }
   .hud-nav-list {
     display: flex;
     justify-content: space-between;
@@ -987,13 +858,10 @@ body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay:
   .hud-nav-button:focus-visible {
     width: clamp(8.2rem, 39vw, 10.8rem);
   }
-  /* On the horizontal mobile rail, hud-active must NOT force the desktop width or
-     reveal every label — the buttons stay collapsed icons and the mobile readout
-     carries the text. Only an explicit hover/focus expands a single item. The
-     desktop cascade delays are also neutralised so a tapped item responds fast. */
-  body.hud-active .hud-nav-button { width: 2.45rem; transition-delay: 0s; }
-  body.hud-active .hud-nav-button::before { transition-delay: 0s; }
-  body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; transition-delay: 0s; }
+  /* On the horizontal mobile rail, hud-active keeps the buttons as collapsed
+     icons — the mobile readout below carries the text. */
+  body.hud-active .hud-nav-button { width: 2.45rem; }
+  body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; }
   .hud-nav-button::before {
     left: 1.15rem;
   }
@@ -1063,16 +931,6 @@ body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay:
   .hud-nav-number {
     transition: none;
   }
-  /* Drop the cascade (#4): everything snaps to the hud-active end state with no
-     per-row stagger delay (the :nth-child delays above are zeroed). */
-  body.hud-active .hud-nav-button,
-  body.hud-active .hud-nav-button::before,
-  body.hud-active .hud-nav-copy,
-  body.hud-active .hud-nav-row:nth-child(n) .hud-nav-button,
-  body.hud-active .hud-nav-row:nth-child(n) .hud-nav-button::before,
-  body.hud-active .hud-nav-row:nth-child(n) .hud-nav-copy {
-    transition-delay: 0s;
-  }
   .hud-compass {
     transition: none;
   }
@@ -1094,7 +952,8 @@ body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay:
      • .hud-boot          — the status readout + a STUTTERING progress bar.
      • .hud-boot-flicker  — a full-viewport power-surge light (hard flashes early,
                             settling late).
-     • .hud-boot-scan     — a thin line that SWEEPS the viewport once or twice.
+     • the VHS SIGNAL KIT — tape static field + head-switching band + canvas
+                            tracking slips (see its own block below).
    It reads like a machine starting up, not a flat bar. The duration lives in one
    var, --hud-boot-dur, which the FSM also writes from HUD_BOOT_DURATION_MS so the
    CSS animation length can never drift from the JS timer.
@@ -1209,39 +1068,149 @@ body.hud-booting .hud-boot-flicker {
   100% { opacity: 0; }
 }
 
-/* SCAN sweep — a thin bright line that travels DOWN the viewport (a sensor sweep /
-   CRT pass). Driven off body.hud-booting; fixed, pointer-events:none, low z. The
-   gradient is a narrow band; the animation slides it from above the top edge to
-   below the bottom. It runs ~twice across the window with an ease so each pass
-   accelerates. */
-.hud-boot-scan {
+/* VHS SIGNAL KIT — the boot reads like a tape deck acquiring signal, not a CRT
+   sweep. Two layers, both gray/white (no gold — the bezel owns the gold), both
+   loudest EARLY (signal acquiring) and dead by ignition, all timing off
+   --hud-boot-dur:
+     • TAPE STATIC FIELD (.hud-boot-static) — faint grayscale grain over the
+       whole frame, shuffling position in coarse steps (an inline SVG
+       feTurbulence tile, desaturated).
+     • TRACKING SLIPS (no element) — the scene CANVAS itself jumps sideways with
+       a slight skew tear in three stepped bursts, like the deck hunting for
+       tracking. steps(1, end) holds each pose discretely — raw jumps, no easing.
+   (A head-switching noise band along the bottom edge was tried and cut — too
+   much furniture at the readout's edge of the frame.) */
+.hud-boot-static {
   position: fixed;
   inset: 0;
-  z-index: 17;                 /* same layer as the flicker, below the HUD rail */
+  z-index: 17;                 /* with the flicker wash, below the HUD rail */
   pointer-events: none;
   opacity: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    transparent calc(50% - 1px),
-    color-mix(in oklch, var(--highlight) 60%, transparent) 50%,
-    transparent calc(50% + 1px),
-    transparent 100%
-  );
-  /* The band is one viewport tall but its bright line sits at 50%, so translating
-     by ±100% moves the line fully off-screen at each end. */
-  transform: translateY(-100%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
-body.hud-booting .hud-boot-scan {
-  /* Two passes across the boot window. The opacity is keyed in the same animation
-     so the line fades in at the top of a pass and out at the bottom. */
-  animation: hud-boot-scan calc(var(--hud-boot-dur) / 2) var(--ease-out-quint) 2;
+body.hud-booting .hud-boot-static {
+  animation:
+    vhs-static-shuffle 0.5s steps(5) infinite,
+    vhs-static-window var(--hud-boot-dur) linear 1 both;
 }
-@keyframes hud-boot-scan {
-  0%   { transform: translateY(-100%); opacity: 0; }
-  12%  { opacity: 0.5; }
-  88%  { opacity: 0.5; }
-  100% { transform: translateY(100%); opacity: 0; }
+/* Coarse discrete grain shuffles — offsets chosen off the 160px tile grid so no
+   two consecutive steps land on aligned texture. */
+@keyframes vhs-static-shuffle {
+  from { background-position: 0 0; }
+  to   { background-position: 137px -93px; }
+}
+/* Loud while acquiring, a small resurge mid-window, gone before ignition. */
+@keyframes vhs-static-window {
+  0%   { opacity: 0; }
+  4%   { opacity: 0.17; }
+  22%  { opacity: 0.10; }
+  42%  { opacity: 0.14; }
+  60%  { opacity: 0.07; }
+  88%  { opacity: 0.04; }
+  100% { opacity: 0; }
+}
+/* TRACKING SLIPS — the picture itself (the WebGL canvas, never the HUD chrome:
+   the instruments are fine, the SIGNAL is bad) jumps sideways in three bursts.
+   Safe to transform the canvas directly; transforming a wrapper would turn it
+   into the containing block for the fixed scene layers. */
+body.hud-booting .bh-stage canvas {
+  animation: vhs-tracking-slip var(--hud-boot-dur) steps(1, end) 1;
+}
+@keyframes vhs-tracking-slip {
+  0%, 100% { transform: none; }
+  12%   { transform: translateX(7px) skewX(0.4deg); }
+  12.8% { transform: translateX(-5px); }
+  13.6% { transform: translateX(2px) skewX(-0.3deg); }
+  14.4% { transform: none; }
+  40%   { transform: translateX(-9px) skewX(-0.5deg); }
+  40.9% { transform: translateX(4px); }
+  41.8% { transform: none; }
+  64%   { transform: translateX(5px) skewX(0.3deg); }
+  64.7% { transform: translateX(-3px); }
+  65.4% { transform: none; }
+}
+
+/* COCKPIT BEZEL — "the whole site is screen panels": during the boot window a
+   gold hairline traces the viewport perimeter CLOCKWISE from the top-left (top →
+   right → bottom → left), etching in the canopy frame around the visitor; a small
+   corner JOINT welds lit as the trace passes each corner. When booting ends the
+   whole bezel cross-fades out (container transition) exactly as the instruments
+   ignite — the frame dissolves into the four .hud-frame corner ticks the powered
+   HUD keeps.
+
+   Draw mechanics: the CHILDREN's resting state is the COMPLETED bezel (seams at
+   full scale, joints lit) and only the body.hud-booting animations start them
+   from nothing (fill-mode both + per-element delay = the clockwise sequencing).
+   This is deliberate: when hud-booting drops, the animations are removed and the
+   children SNAP to their completed resting state — invisible under the
+   container's opacity fade — instead of snapping to zero-length seams mid-fade.
+   All timing derives from --hud-boot-dur so the trace can never drift from the
+   FSM's window. Children are position:absolute inside the one fixed container. */
+.hud-boot-panels {
+  position: fixed;
+  inset: 0;
+  z-index: 17;                 /* with the flicker/scan wash, below the HUD rail */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+body.hud-booting .hud-boot-panels {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+.hud-boot-seam {
+  position: absolute;
+  background: color-mix(in oklch, var(--highlight) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--highlight) 35%, transparent);
+}
+/* Edge geometry + the DRAW ORIGIN each edge grows from (clockwise trace). */
+.hud-boot-seam[data-edge='top']    { top: 10px; left: 10px; right: 10px; height: 1px; transform-origin: left center; }
+.hud-boot-seam[data-edge='right']  { top: 10px; bottom: 10px; right: 10px; width: 1px; transform-origin: center top; }
+.hud-boot-seam[data-edge='bottom'] { bottom: 10px; left: 10px; right: 10px; height: 1px; transform-origin: right center; }
+.hud-boot-seam[data-edge='left']   { top: 10px; bottom: 10px; left: 10px; width: 1px; transform-origin: center bottom; }
+/* The clockwise trace: each seam draws over ~22% of the boot window, starting as
+   the previous edge finishes (4% → 24% → 44% → 64%), so the current runs the full
+   perimeter and closes the frame just before SYSTEMS NOMINAL. */
+body.hud-booting .hud-boot-seam[data-edge='top'],
+body.hud-booting .hud-boot-seam[data-edge='bottom'] {
+  animation: hud-boot-seam-x calc(var(--hud-boot-dur) * 0.22) var(--ease-out-quint) both;
+}
+body.hud-booting .hud-boot-seam[data-edge='right'],
+body.hud-booting .hud-boot-seam[data-edge='left'] {
+  animation: hud-boot-seam-y calc(var(--hud-boot-dur) * 0.22) var(--ease-out-quint) both;
+}
+body.hud-booting .hud-boot-seam[data-edge='top']    { animation-delay: calc(var(--hud-boot-dur) * 0.04); }
+body.hud-booting .hud-boot-seam[data-edge='right']  { animation-delay: calc(var(--hud-boot-dur) * 0.24); }
+body.hud-booting .hud-boot-seam[data-edge='bottom'] { animation-delay: calc(var(--hud-boot-dur) * 0.44); }
+body.hud-booting .hud-boot-seam[data-edge='left']   { animation-delay: calc(var(--hud-boot-dur) * 0.64); }
+@keyframes hud-boot-seam-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes hud-boot-seam-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+/* Corner joints: 3px gold studs a hair outside the seam crossings. Each one BLIPS
+   bright the moment the trace reaches its corner (same delays as the seams above)
+   then settles to a quiet hold — panels bolting on, one corner at a time. */
+.hud-boot-joint {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: var(--highlight);
+  opacity: 0.55;
+}
+.hud-boot-joint[data-corner='tl'] { top: 9px; left: 9px; }
+.hud-boot-joint[data-corner='tr'] { top: 9px; right: 9px; }
+.hud-boot-joint[data-corner='br'] { bottom: 9px; right: 9px; }
+.hud-boot-joint[data-corner='bl'] { bottom: 9px; left: 9px; }
+body.hud-booting .hud-boot-joint {
+  animation: hud-boot-joint-weld calc(var(--hud-boot-dur) * 0.18) ease-out both;
+}
+body.hud-booting .hud-boot-joint[data-corner='tl'] { animation-delay: calc(var(--hud-boot-dur) * 0.04); }
+body.hud-booting .hud-boot-joint[data-corner='tr'] { animation-delay: calc(var(--hud-boot-dur) * 0.26); }
+body.hud-booting .hud-boot-joint[data-corner='br'] { animation-delay: calc(var(--hud-boot-dur) * 0.46); }
+body.hud-booting .hud-boot-joint[data-corner='bl'] { animation-delay: calc(var(--hud-boot-dur) * 0.66); }
+@keyframes hud-boot-joint-weld {
+  0%   { opacity: 0; box-shadow: none; }
+  35%  { opacity: 1; box-shadow: 0 0 10px 2px color-mix(in oklch, var(--highlight) 80%, transparent); }
+  100% { opacity: 0.55; box-shadow: 0 0 4px 0 color-mix(in oklch, var(--highlight) 30%, transparent); }
 }
 
 /* Reduced motion: skip the flicker, scan and bar STUTTER entirely. The readout
@@ -1249,7 +1218,14 @@ body.hud-booting .hud-boot-scan {
    so the boot is felt, just without the machine-startup theatrics. */
 @media (prefers-reduced-motion: reduce) {
   body.hud-booting .hud-boot-flicker { animation: none; opacity: 0; }
-  body.hud-booting .hud-boot-scan { animation: none; opacity: 0; }
+  /* The whole VHS kit is theatrics — static and the canvas tracking slips both
+     stand down; the calm readout carries the boot. */
+  body.hud-booting .hud-boot-static { animation: none; opacity: 0; }
+  body.hud-booting .bh-stage canvas { animation: none; }
+  /* The bezel trace is pure theatrics too — the calm readout carries the boot. */
+  body.hud-booting .hud-boot-panels { opacity: 0; }
+  body.hud-booting .hud-boot-seam,
+  body.hud-booting .hud-boot-joint { animation: none; }
   body.hud-booting .hud-boot-bar::after {
     animation: hud-boot-fill-calm var(--hud-boot-dur) ease-out forwards;
   }
@@ -1425,11 +1401,39 @@ body:not(.loader-gone) .star-marker {
     0 0 5px 0 color-mix(in oklch, var(--marker-gold) 98%, transparent);
 }
 
+/* TARGET DESIGNATION PING (cockpit only): while the HUD is powered, each resting
+   marker breathes a slow expanding gold ring — "targets designated" — so the dive
+   points visibly answer the power switch. A ::after ring, NOT the dot itself: the
+   dot's transform/box-shadow belong to the hover→active→locked escalation
+   (transition-driven), and an animation there would fight it. Idle-state only, so
+   the ping stands down the moment the pointer engages; gated on data-visible so
+   hidden markers don't run a compositor animation. (Note: a whole-marker
+   brightness SPLIT between power states was tried before and read as
+   inconsistency — see the marker resting-look block; a ping is legible as a
+   signal where a static dim never was.) */
+body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marker-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--marker-gold) 70%, transparent);
+  opacity: 0;
+  animation: star-marker-designate 2.8s var(--ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)) infinite;
+  pointer-events: none;
+}
+@keyframes star-marker-designate {
+  0% { opacity: 0.8; transform: scale(1); }
+  /* The ring dies well before the cycle ends — a ping and a long quiet, not a strobe. */
+  55% { opacity: 0; transform: scale(3.6); }
+  100% { opacity: 0; transform: scale(3.6); }
+}
+
 /* THE BEGINNING marker frames the REAL pale blue dot (it is projection-anchored
    dead on the speck). A gold core here would sit exactly on top of the scene's
    payoff and turn the famous blue point amber — so this reticle has no core of
    its own; the WebGL speck plays that role. All other escalation cues (hex,
-   arms, card) still carry the interaction feedback. */
+   arms, card) still carry the interaction feedback. (display:none also kills the
+   designation ping here — deliberately: nothing amber may pulse over the speck.) */
 .star-marker[data-marker='beginning'] .star-marker-dot {
   display: none;
 }
@@ -1840,6 +1844,18 @@ body:not(.loader-gone) .star-marker {
   .star-marker-card {
     transition: none;
   }
+  /* The designation ping is a pure grace note — drop it entirely. Full selector
+     repeated: the ping rule's specificity is high, and a media query adds none. */
+  body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marker-dot::after {
+    animation: none;
+    content: none;
+  }
+}
+/* Manual reduced-motion override (data-reduced) mirrors the OS path: no ping.
+   [data-reduced] appended to the ping's own chain so this outranks it. */
+body.hud-active .star-marker[data-reduced='true'][data-visible='true'][data-state='idle'] .star-marker-dot::after {
+  animation: none;
+  content: none;
 }
 .star-marker[data-reduced='true'] .star-marker-dot,
 .star-marker[data-reduced='true'] .star-marker-plate,
@@ -2066,6 +2082,19 @@ body.bh-diving .hud-frame-readout {
    ticks only, fading with angular distance from the lubber (opacity is set
    per-tick inline by the component). The old vertical rail markup still renders
    for the compact layout; the swap is pure CSS (below).
+
+   TWO POWER STATES (the arc is the desktop instrument that answers the HUD
+   power switch — see the boot FSM in BaseLayout):
+     • GHOST (no body.hud-active) — a read-only gauge: fainter minor ticks + the
+       dimmed lubber still track scroll, but stations, numbers, label and the
+       click-travel buttons are dark/inert (buttons use visibility so they also
+       leave the tab order). Observation deck: the scene is the show.
+     • COCKPIT (body.hud-active) — full instrument: stations + digits cascade in
+       (staggered, echoing the old rail's ignition), the name label lights, the
+       buttons arm. This is what "powering the HUD on" MEANS on desktop.
+   Ghost-gating lives on the station CHILDREN (line/text), never the station <g>:
+   the <g>'s opacity attribute is written per-frame by the component (arcFade),
+   and a CSS opacity there would sever that scroll-follow entirely.
    ────────────────────────────────────────────────────────────────────────────── */
 .hud-arc {
   position: fixed;
@@ -2088,18 +2117,19 @@ body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
 .hud-arc-tick {
   stroke: color-mix(in oklch, var(--fg-faint) 45%, transparent);
   stroke-width: 1;
+  transition: stroke 0.5s ease;
 }
 .hud-arc-station line {
   stroke: var(--fg-dim);
   stroke-width: 1.25;
-  transition: stroke 0.24s ease;
+  transition: stroke 0.24s ease, opacity 0.45s var(--ease-out-quint);
 }
 .hud-arc-station text {
   fill: var(--fg-faint);
   font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.12em;
-  transition: fill 0.24s ease;
+  transition: fill 0.24s ease, opacity 0.45s var(--ease-out-quint);
 }
 .hud-arc-station[data-current='true'] line { stroke: var(--highlight); }
 .hud-arc-station[data-current='true'] text { fill: var(--highlight); }
@@ -2146,6 +2176,50 @@ body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
 }
 .hud-arc-label-title { color: var(--fg); }
 .hud-arc-label-dest { color: var(--fg-faint); }
+.hud-arc-label { transition: opacity 0.45s var(--ease-out-quint); }
+
+/* ── GHOST MODE (HUD off) — the gauge keeps reading, the navigator goes dark. ──
+   Stations/digits/label fade out; buttons drop out of BOTH hit-testing and the
+   tab order via visibility (an invisible focusable button is an a11y trap).
+   Minor ticks + lubber stay but step down — still an instrument, just unlit. */
+body:not(.hud-active) .hud-arc-station line,
+body:not(.hud-active) .hud-arc-station text {
+  opacity: 0;
+}
+body:not(.hud-active) .hud-arc-label { opacity: 0; }
+body:not(.hud-active) .hud-arc .hud-arc-btn { visibility: hidden; }
+body:not(.hud-active) .hud-arc-tick {
+  stroke: color-mix(in oklch, var(--fg-faint) 30%, transparent);
+}
+body:not(.hud-active) .hud-arc-lubber { opacity: 0.55; }
+.hud-arc-lubber { transition: opacity 0.5s ease; }
+
+/* ── COCKPIT IGNITION — when hud-active lands (boot finished), the stations
+   cascade in top→bottom, each digit writing in a beat after its tick mark; the
+   label follows last. The delays live on the ACTIVE side only, so powering OFF
+   collapses quickly with no sluggish reverse (same convention as the old rail
+   cascade). Station <g>s are the only g children of .hud-arc-rot, so
+   nth-of-type counts exactly the five stations. */
+body.hud-active .hud-arc-station:nth-of-type(1) line { transition-delay: 0.15s; }
+body.hud-active .hud-arc-station:nth-of-type(2) line { transition-delay: 0.27s; }
+body.hud-active .hud-arc-station:nth-of-type(3) line { transition-delay: 0.39s; }
+body.hud-active .hud-arc-station:nth-of-type(4) line { transition-delay: 0.51s; }
+body.hud-active .hud-arc-station:nth-of-type(5) line { transition-delay: 0.63s; }
+body.hud-active .hud-arc-station:nth-of-type(1) text { transition-delay: 0.23s; }
+body.hud-active .hud-arc-station:nth-of-type(2) text { transition-delay: 0.35s; }
+body.hud-active .hud-arc-station:nth-of-type(3) text { transition-delay: 0.47s; }
+body.hud-active .hud-arc-station:nth-of-type(4) text { transition-delay: 0.59s; }
+body.hud-active .hud-arc-station:nth-of-type(5) text { transition-delay: 0.71s; }
+body.hud-active .hud-arc-label { transition-delay: 0.85s; }
+@media (prefers-reduced-motion: reduce) {
+  /* No cascade: everything snaps to the powered state together. */
+  body.hud-active .hud-arc-station:nth-of-type(n) line,
+  body.hud-active .hud-arc-station:nth-of-type(n) text,
+  body.hud-active .hud-arc-label {
+    transition: none;
+  }
+}
+
 /* Breakpoint swap: the arc is the DESKTOP instrument; the old vertical rail list
    stays as the compact layout's horizontal strip. Same 60rem seam hud.css already
    uses for the compact HUD. */
