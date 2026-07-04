@@ -127,11 +127,16 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               off the body class (see hud.css → "HUD boot sequence"); aria-hidden so
               none of it ever announces:
                 • .hud-boot-flicker — a light layer that surges/settles (power surge).
-                • .hud-boot-scan    — a CRT roll bar: a luminous horizontal band
-                                      that rolls down the viewport and WRAPS (the
-                                      next copy enters the top as it exits the
-                                      bottom), three passes with a mid-window
-                                      v-hold catch.
+                • .hud-boot-static  — VHS tape-static field: faint grayscale grain
+                                      over the whole frame, shuffling in steps,
+                                      loud while the signal acquires, dead by
+                                      ignition.
+                • .hud-boot-headswitch — the head-switching noise band: the torn
+                                      static strip along the very bottom edge
+                                      every VHS tape has.
+                      (The third VHS layer — tracking slips — needs no element:
+                      hud.css steps the scene CANVAS itself sideways, so the
+                      picture jumps like a deck hunting for tracking.)
                 • .hud-boot-panels  — the cockpit BEZEL: four edge seams that etch in
                                       clockwise around the viewport (a current tracing
                                       the canopy frame) with corner joints that weld
@@ -141,7 +146,8 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               (LOADING → CALIBRATING → ALIGNING → SYSTEMS NOMINAL) so the readout
               reads like a machine running its start-up self-check. */}
           <div class="hud-boot-flicker" aria-hidden="true"></div>
-          <div class="hud-boot-scan" aria-hidden="true"></div>
+          <div class="hud-boot-static" aria-hidden="true"></div>
+          <div class="hud-boot-headswitch" aria-hidden="true"></div>
           <div class="hud-boot-panels" aria-hidden="true">
             <span class="hud-boot-seam" data-edge="top"></span>
             <span class="hud-boot-seam" data-edge="right"></span>

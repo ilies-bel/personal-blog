@@ -952,7 +952,8 @@ body.hud-booting .hud-compass:not(.warp-readout) { opacity: 0; transition-delay:
      • .hud-boot          — the status readout + a STUTTERING progress bar.
      • .hud-boot-flicker  — a full-viewport power-surge light (hard flashes early,
                             settling late).
-     • .hud-boot-scan     — a thin line that SWEEPS the viewport once or twice.
+     • the VHS SIGNAL KIT — tape static field + head-switching band + canvas
+                            tracking slips (see its own block below).
    It reads like a machine starting up, not a flat bar. The duration lives in one
    var, --hud-boot-dur, which the FSM also writes from HUD_BOOT_DURATION_MS so the
    CSS animation length can never drift from the JS timer.
@@ -1067,72 +1068,104 @@ body.hud-booting .hud-boot-flicker {
   100% { opacity: 0; }
 }
 
-/* CRT ROLL BAR — the old 1px scan, promoted to a proper vertical-hold roll: a
-   luminous horizontal BAND (soft glow ramping up to a hot hairline core, sharp
-   cutoff after it — a CRT losing v-hold) that rolls DOWN the viewport and WRAPS
-   seamlessly: as the band exits the bottom its next copy is already entering the
-   top. Mechanics: the fixed container clips; its ::before is 200% tall with the
-   band gradient TILED every half height (background-size 100% 50% = one viewport
-   period), and the roll animates translateY 0 → -50% — exactly one period — so
-   each of the three linear passes restarts on identical pixels. The container
-   fades the whole layer in/out across the boot window (opacity only, so it
-   composes with the ::before's transform roll). */
-.hud-boot-scan {
+/* VHS SIGNAL KIT — the boot reads like a tape deck acquiring signal, not a CRT
+   sweep. Three layers, all gray/white (no gold — the bezel owns the gold), all
+   loudest EARLY (signal acquiring) and dead by ignition, all timing off
+   --hud-boot-dur:
+     • TAPE STATIC FIELD (.hud-boot-static) — faint grayscale grain over the
+       whole frame, shuffling position in coarse steps.
+     • HEAD-SWITCHING BAND (.hud-boot-headswitch) — the torn static strip along
+       the very bottom edge every VHS tape has; horizontally-streaked noise,
+       stepped shear jitter.
+     • TRACKING SLIPS (no element) — the scene CANVAS itself jumps sideways with
+       a slight skew tear in three stepped bursts, like the deck hunting for
+       tracking. steps(1, end) holds each pose discretely — raw jumps, no easing.
+   The noise textures are inline SVG feTurbulence tiles (desaturated); the field
+   uses isotropic fine grain, the band an anisotropic base frequency (low x,
+   high y) so its noise reads as horizontal tape streaks. */
+.hud-boot-static {
   position: fixed;
   inset: 0;
-  z-index: 17;                 /* same layer as the flicker, below the HUD rail */
+  z-index: 17;                 /* with the flicker wash, below the HUD rail */
   pointer-events: none;
-  overflow: hidden;
   opacity: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
-.hud-boot-scan::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 200%;
-  /* One band per period (percentages are relative to the background-size box):
-     a long quiet, a glow ramping in ABOVE the core (the trail points against the
-     downward travel), the hot ~0.3%-tall core line, then a hard cutoff. */
-  background-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    transparent 78%,
-    color-mix(in oklch, var(--highlight) 4%, transparent) 84%,
-    color-mix(in oklch, var(--highlight) 14%, transparent) 90%,
-    color-mix(in oklch, var(--highlight) 34%, transparent) 93.2%,
-    color-mix(in oklch, var(--highlight) 78%, transparent) 93.5%,
-    color-mix(in oklch, var(--highlight) 10%, transparent) 93.9%,
-    transparent 94.6%,
-    transparent 100%
-  );
-  background-size: 100% 50%;
-  background-repeat: repeat-y;
+body.hud-booting .hud-boot-static {
+  animation:
+    vhs-static-shuffle 0.5s steps(5) infinite,
+    vhs-static-window var(--hud-boot-dur) linear 1 both;
 }
-body.hud-booting .hud-boot-scan {
-  animation: hud-boot-scan-window var(--hud-boot-dur) linear 1 both;
+/* Coarse discrete grain shuffles — offsets chosen off the 160px tile grid so no
+   two consecutive steps land on aligned texture. */
+@keyframes vhs-static-shuffle {
+  from { background-position: 0 0; }
+  to   { background-position: 137px -93px; }
 }
-body.hud-booting .hud-boot-scan::before {
-  /* Three wrapping passes across the boot window. Linear: a v-hold roll runs at
-     constant speed — the WRAP is the effect, not acceleration. */
-  animation: hud-boot-scan-roll calc(var(--hud-boot-dur) / 3) linear 3;
-}
-@keyframes hud-boot-scan-roll {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-50%); }
-}
-/* The layer's presence across the boot: in fast, a flickery mid-window dip (the
-   roll "catches" for a beat, like the tube almost finding hold), out before
-   ignition so the bezel + readout own the final beat. */
-@keyframes hud-boot-scan-window {
+/* Loud while acquiring, a small resurge mid-window, gone before ignition. */
+@keyframes vhs-static-window {
   0%   { opacity: 0; }
-  6%   { opacity: 0.9; }
-  38%  { opacity: 0.85; }
-  44%  { opacity: 0.35; }
-  50%  { opacity: 0.8; }
-  82%  { opacity: 0.7; }
+  4%   { opacity: 0.17; }
+  22%  { opacity: 0.10; }
+  42%  { opacity: 0.14; }
+  60%  { opacity: 0.07; }
+  88%  { opacity: 0.04; }
   100% { opacity: 0; }
+}
+.hud-boot-headswitch {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3.2vh;
+  z-index: 17;
+  pointer-events: none;
+  opacity: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='56'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.65' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='280' height='56' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 280px 100%;
+  /* The band's top edge is torn, not ruled — mask it off with a soft ramp. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
+}
+body.hud-booting .hud-boot-headswitch {
+  animation:
+    vhs-head-jitter 0.24s steps(3) infinite,
+    vhs-head-window var(--hud-boot-dur) linear 1 both;
+}
+/* Stepped shear + texture slide: the strip tears sideways in discrete snaps. */
+@keyframes vhs-head-jitter {
+  from { background-position: 0 0; transform: skewX(0deg) translateY(0); }
+  to   { background-position: -187px 0; transform: skewX(-1.4deg) translateY(1px); }
+}
+@keyframes vhs-head-window {
+  0%   { opacity: 0; }
+  5%   { opacity: 0.5; }
+  38%  { opacity: 0.4; }
+  42%  { opacity: 0.65; }  /* flares with the second tracking slip */
+  46%  { opacity: 0.35; }
+  84%  { opacity: 0.28; }
+  100% { opacity: 0; }
+}
+/* TRACKING SLIPS — the picture itself (the WebGL canvas, never the HUD chrome:
+   the instruments are fine, the SIGNAL is bad) jumps sideways in three bursts.
+   Safe to transform the canvas directly; transforming a wrapper would turn it
+   into the containing block for the fixed scene layers. */
+body.hud-booting .bh-stage canvas {
+  animation: vhs-tracking-slip var(--hud-boot-dur) steps(1, end) 1;
+}
+@keyframes vhs-tracking-slip {
+  0%, 100% { transform: none; }
+  12%   { transform: translateX(7px) skewX(0.4deg); }
+  12.8% { transform: translateX(-5px); }
+  13.6% { transform: translateX(2px) skewX(-0.3deg); }
+  14.4% { transform: none; }
+  40%   { transform: translateX(-9px) skewX(-0.5deg); }
+  40.9% { transform: translateX(4px); }
+  41.8% { transform: none; }
+  64%   { transform: translateX(5px) skewX(0.3deg); }
+  64.7% { transform: translateX(-3px); }
+  65.4% { transform: none; }
 }
 
 /* COCKPIT BEZEL — "the whole site is screen panels": during the boot window a
@@ -1222,8 +1255,11 @@ body.hud-booting .hud-boot-joint[data-corner='bl'] { animation-delay: calc(var(-
    so the boot is felt, just without the machine-startup theatrics. */
 @media (prefers-reduced-motion: reduce) {
   body.hud-booting .hud-boot-flicker { animation: none; opacity: 0; }
-  body.hud-booting .hud-boot-scan { animation: none; opacity: 0; }
-  body.hud-booting .hud-boot-scan::before { animation: none; }
+  /* The whole VHS kit is theatrics — static, head-switch band and the canvas
+     tracking slips all stand down; the calm readout carries the boot. */
+  body.hud-booting .hud-boot-static { animation: none; opacity: 0; }
+  body.hud-booting .hud-boot-headswitch { animation: none; opacity: 0; }
+  body.hud-booting .bh-stage canvas { animation: none; }
   /* The bezel trace is pure theatrics too — the calm readout carries the boot. */
   body.hud-booting .hud-boot-panels { opacity: 0; }
   body.hud-booting .hud-boot-seam,
