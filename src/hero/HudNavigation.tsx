@@ -2,8 +2,8 @@ import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   HUD_NAV_ITEMS,
   MARKER_PLACEMENTS,
+  anchorRawForScene,
   formatLifecycleTime,
-  legacyStageForProgressFromTable,
   lifecycleTimeGyr,
   sceneForProgress,
   settledIdForStage,
@@ -13,7 +13,7 @@ import {
   type MarkerPlacement,
 } from './sceneTable';
 import type { MarkerFrame } from './scene/types';
-import { hudIdForStage, lifecycleProgress, progressForLegacyStage } from './timeline';
+import { hudIdForStage } from './timeline';
 import {
   SCROLL_HINT_DISMISS_AT,
   SCENE_READY_BODY_CLASS,
@@ -41,10 +41,16 @@ interface HudNavigationProps {
   /** The target the current scroll position maps to (scroll-spy "you are here").
    *  Drives a quiet ambient marker so the rail reflects scroll position. */
   currentId: HudTargetId | null;
-  /** 0..1 scroll progress. Splits the compass idle copy: at/near a settled beat it
+  /** 0..1 PRESENTATION progress — the island clock's eased value, the same one
+   *  the canvas renders — so the gauge rotation and idle-copy phase track what is
+   *  actually on screen. Splits the compass idle copy: at/near a settled beat it
    *  is merely SCANNING; in a transition band past the opening hold it prompts the
    *  visitor to scroll back onto a beat. */
   progress: number;
+  /** The eased shader stage from the same clock tick as `progress`. Drives the
+   *  bottom-left instrument readout (station + lifecycle time), so it names the
+   *  body the canvas is actually showing. */
+  stage: number;
   /** Deploy base path (e.g. `/` or `/personal-blog/`). Retained on the props for
    *  caller compatibility (ExplorationHud still passes it); the rail no longer uses
    *  it now that the rows render bare numbers instead of base-resolved mask glyphs. */
@@ -56,20 +62,19 @@ interface HudNavigationProps {
 }
 
 /**
- * Travel to a lifecycle stage: map the stage to its scroll progress and scroll the
- * page there. Honours reduced-motion (jumps instead of smooth-scrolling). Used by
- * the HUD rail so clicking a glyph flies the visitor to that star rather than
- * navigating away to a page. RETURNS the target raw scroll-Y (px) it scrolled to,
- * so the caller can poll window.scrollY against it to detect when the smooth-scroll
- * has settled (and clear the click-lock highlight).
+ * Travel to a scene: scroll the page to the scene's canonical ANCHOR — the same
+ * raw-scroll position its arc-gauge station tick is placed at (SCENE_ANCHOR_RAW:
+ * the settled-hold midpoint, or the page edge for the two terminal scenes). One
+ * derivation for the tick and the destination means a click-travel always lands
+ * with the caret exactly on the clicked station, the row current, and the
+ * scene's marker inside its settledWindow. (The old stage-inverse mapping parked
+ * travel on hold EDGES or mid-transition — the rail and the gauge disagreed.)
+ * Honours reduced-motion (jumps instead of smooth-scrolling). RETURNS the target
+ * raw scroll-Y (px) so the caller can poll window.scrollY against it to detect
+ * when the smooth-scroll has settled (and clear the click-lock highlight).
  */
-function scrollToStage(stage: number, reduced: boolean): number {
-  // progressForLegacyStage returns LIFECYCLE-space progress (the inverse of the
-  // progress->stage table). The page maps RAW scroll -> stage by first running raw
-  // scroll through lifecycleProgress() (the LIFECYCLE_DIRECTION seam, = 1 - p under
-  // 'reverse'). So to scroll to a stage we must undo that flip: convert lifecycle
-  // progress back to raw scroll progress via lifecycleProgress() (its own inverse).
-  const raw = lifecycleProgress(progressForLegacyStage(stage));
+function scrollToScene(id: HudTargetId, reduced: boolean): number {
+  const raw = anchorRawForScene(id);
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
   const top = raw * max;
   window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
@@ -215,6 +220,7 @@ export default function HudNavigation({
   reduced,
   currentId,
   progress,
+  stage,
   markerFrameRef,
 }: HudNavigationProps) {
   // The rail item the pointer is hovering / the keyboard has focused. null when
@@ -283,7 +289,7 @@ export default function HudNavigation({
   // off or the page can't reach the exact top. Manual user scroll (wheel/touch/
   // keydown) during travel clears the lock immediately so grabbing the scrollbar mid
   // travel isn't left with a stale pin. Any prior watcher is torn down first.
-  function beginTravel(id: HudTargetId, stage: number): void {
+  function beginTravel(id: HudTargetId): void {
     // Tear down a previous in-flight watcher before starting a new one.
     travelWatchRef.current?.();
     travelWatchRef.current = null;
@@ -298,7 +304,7 @@ export default function HudNavigation({
       return next;
     });
 
-    const targetTop = scrollToStage(stage, reduced);
+    const targetTop = scrollToScene(id, reduced);
 
     let rafId = 0;
     let timeoutId = 0;
@@ -660,11 +666,12 @@ export default function HudNavigation({
   // bottom-left: the star's AGE on the lifecycle clock (billions of years —
   // falling as you scroll, since the story plays in reverse) and the nearest
   // station. CSS shows it only while the HUD is armed (body.hud-active) and
-  // hides it on compact layouts. (`frameStage` still drives the station lookup
-  // and the age readout; it is no longer surfaced as a raw STAGE number.)
-  const frameStage = legacyStageForProgressFromTable(progress);
-  const frameStation = stationForStage(frameStage);
-  const frameTime = formatLifecycleTime(lifecycleTimeGyr(frameStage));
+  // hides it on compact layouts. `stage` is the presentation clock's eased shader
+  // stage — the exact value the canvas is rendering — so the readout names the
+  // body actually on screen (re-deriving from progress would diverge from the
+  // morph, which eases the stage as its own scalar across the band-7→8 jump).
+  const frameStation = stationForStage(stage);
+  const frameTime = formatLifecycleTime(lifecycleTimeGyr(stage));
 
   // ---- HALF-CIRCLE TICK GAUGE (fixed-lubber heading card) -------------------
   // The lateral map as a true compass card: the ARROW IS FIXED on the horizontal
@@ -700,13 +707,17 @@ export default function HudNavigation({
     return fx(Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6));
   };
   const ARC_MINOR_TICKS = 44;
-  // Station angles in RAW scroll space — the same stage→scroll conversion the
-  // click-travel uses (progressForLegacyStage is lifecycle-space; the direction
-  // seam flips it to raw).
+  // Station angles at each scene's canonical RAW-scroll ANCHOR (settled-hold
+  // midpoint; page edges for the terminal scenes) — the SAME positions the
+  // click-travel scrolls to. With the caret driven by the eased presentation
+  // progress, the caret sits EXACTLY on a station whenever the page rests on
+  // that scene's settled beat: tick, label, highlighted row and travel
+  // destination all derive from one anchor, so the gauge can never point
+  // between stations while a settled scene is plainly on screen.
   const arcStations = HUD_NAV_ITEMS.map((item, i) => ({
     item,
     number: i + 1,
-    theta: fx(thetaOf(lifecycleProgress(progressForLegacyStage(item.stage)))),
+    theta: fx(thetaOf(anchorRawForScene(item.id))),
   }));
   // The label sits FIXED beside the lubber line (the current station is always
   // there) and names the pointed station (hover/focus), else the current one.
@@ -812,7 +823,7 @@ export default function HudNavigation({
             aria-label={`Travel to ${item.label}`}
             aria-current={effectiveCurrentId === item.id ? 'location' : undefined}
             tabIndex={visible && reachable ? 0 : -1}
-            onClick={() => beginTravel(item.id, item.stage)}
+            onClick={() => beginTravel(item.id)}
             onMouseEnter={() => setPointedId(item.id)}
             onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}
             onFocus={() => setPointedId(item.id)}
@@ -901,7 +912,7 @@ export default function HudNavigation({
                   aria-label={`Travel to ${item.label}`}
                   tabIndex={visible ? 0 : -1}
                   aria-current={isCurrent ? 'location' : undefined}
-                  onClick={() => beginTravel(item.id, item.stage)}
+                  onClick={() => beginTravel(item.id)}
                   // Feed the ASCII compass: hovering or focusing a row points at it.
                   onMouseEnter={() => setPointedId(item.id)}
                   onMouseLeave={() => setPointedId((prev) => (prev === item.id ? null : prev))}

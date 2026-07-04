@@ -24,8 +24,30 @@ const table = await import(
   'data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64')
 );
 
-const { SEGMENTS, STARTS, SCENES, legacyStageForProgressFromTable } = table;
+const {
+  SEGMENTS,
+  STARTS,
+  SCENES,
+  HUD_NAV_ITEMS,
+  legacyStageForProgressFromTable,
+  sceneForProgress,
+  sceneActivatesHud,
+  anchorRawForScene,
+} = table;
 const TOL = 1e-9;
+
+/** A scene's total LIFECYCLE span [start, end] — the union of its segments.
+ *  Segments of one scene are contiguous in the authored table. */
+function sceneLifecycleSpan(sceneId) {
+  let start = Infinity;
+  let end = -Infinity;
+  for (let i = 0; i < SEGMENTS.length; i += 1) {
+    if (SEGMENTS[i].sceneId !== sceneId) continue;
+    start = Math.min(start, STARTS[i]);
+    end = Math.max(end, STARTS[i + 1]);
+  }
+  return [start, end];
+}
 
 test('live SEGMENTS weights sum to exactly 1.0', () => {
   const sum = SEGMENTS.reduce((acc, seg) => acc + seg.weight, 0);
@@ -91,6 +113,80 @@ test('every beat text window sits inside [0, 1.02] and is ordered in→out', () 
       `beat ${scene.id} 'at' anchor outside its own text window`,
     );
   }
+});
+
+test("every beat's FULL text band stays inside its own scene's span", () => {
+  // The whole [inStart, outEnd] band — not just the fully-visible middle — must
+  // sit inside the beat's scene: ManifestoOverlay renders band(inStart, outEnd)
+  // as a hard cut, and the star-marker gate (beatIdForLifecycleP) reads the same
+  // band, so any overhang shows the copy AND its marker over the NEIGHBOURING
+  // scene's visuals. This is exactly the "ABOUT floating over the nebula" bug:
+  // the beginning beat's outEnd (0.17) overran its scene's end (0.10) into the
+  // dot→nebula grow. The terminal scene at lifecycle 1 may overshoot past 1.0
+  // (progress clamps there — the line deliberately holds through the top frame).
+  for (const scene of SCENES) {
+    if (!scene.beat) continue;
+    const [sceneStart, sceneEnd] = sceneLifecycleSpan(scene.id);
+    const { inStart, outEnd } = scene.beat.text;
+    assert.ok(
+      inStart >= sceneStart - TOL,
+      `beat ${scene.id}: text inStart ${inStart} begins before its scene (${sceneStart})`,
+    );
+    const cap = Math.abs(sceneEnd - 1) < TOL ? Infinity : sceneEnd;
+    assert.ok(
+      outEnd <= cap + TOL,
+      `beat ${scene.id}: text outEnd ${outEnd} overruns its scene (${sceneEnd}) — the copy/marker would ride the next scene's visuals`,
+    );
+  }
+});
+
+test('scene anchors land on the settled beat they name (tick = travel = spy)', () => {
+  // SCENE_ANCHOR_RAW is the ONE raw-scroll position per scene that the arc
+  // gauge's station ticks are placed at AND click-travel scrolls to. Resting
+  // there must (a) resolve to that scene (the spy highlights the right row) and
+  // (b) put the shader stage inside the scene's settledWindow (its marker shows,
+  // the beat is visually settled) — otherwise the gauge points between stations
+  // or travel parks mid-transition.
+  const windowBySceneId = {};
+  for (const seg of SEGMENTS) {
+    if (seg.phase === 'idle' && seg.settledWindow) windowBySceneId[seg.sceneId] = seg.settledWindow;
+  }
+  for (const scene of SCENES) {
+    const raw = anchorRawForScene(scene.id);
+    assert.ok(raw >= 0 && raw <= 1, `anchor for ${scene.id} out of range: ${raw}`);
+    assert.equal(
+      sceneForProgress(raw).sceneId,
+      scene.id,
+      `anchor for ${scene.id} (raw ${raw}) resolves to the wrong scene`,
+    );
+    const [lo, hi] = windowBySceneId[scene.id];
+    const stage = legacyStageForProgressFromTable(raw);
+    assert.ok(
+      stage >= lo - TOL && stage <= hi + TOL,
+      `anchor for ${scene.id}: stage ${stage} outside its settledWindow [${lo}, ${hi}]`,
+    );
+  }
+});
+
+test('scene anchors are strictly ordered along the rail (top → bottom)', () => {
+  // HUD_NAV_ITEMS is in physical scroll order; the gauge sweeps its stations in
+  // that order, so the anchors must be strictly increasing in raw scroll.
+  let prev = -Infinity;
+  for (const item of HUD_NAV_ITEMS) {
+    const raw = anchorRawForScene(item.id);
+    assert.ok(raw > prev, `anchor for ${item.id} (${raw}) not after previous (${prev})`);
+    prev = raw;
+  }
+});
+
+test('exactly one scene arms the HUD, and it owns the physical page bottom', () => {
+  const armed = SCENES.filter((s) => sceneActivatesHud(s.id));
+  assert.equal(armed.length, 1, 'exactly one activatesHud scene');
+  assert.equal(
+    armed[0].id,
+    sceneForProgress(1).sceneId,
+    'the HUD-arming scene must be the one the bottom of the page rests on',
+  );
 });
 
 test("every beat's readable band maps to its scene on the live curve", () => {

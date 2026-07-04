@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollTracker, clamp01 } from '../scroll';
 import { BUILT_STAGES } from '../timeline';
+import { PresentationClock } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
 import { isWebGLUnavailableError, type SceneHandle } from '../scene/types';
 import { PosterSlideshow, resolveReducedMotionNow } from './reduced-motion';
@@ -104,13 +105,25 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // not a flash of stage 0.
     progressRef.current = 0;
 
+    // The article's PRESENTATION CLOCK — the same single-eased-clock seam the hero
+    // uses (see presentationClock.ts). On the 'canvas' branch the engine samples
+    // this clock AND the scene:progress broadcast below reads it, so the readout
+    // chrome (ArticleHud / GraveyardHud) names the beat that is actually rendered,
+    // never the one the scrollbar raced ahead to. The poster/reduced branches have
+    // no smoothed canvas to sync to, so their clock is instant (reduced: true) —
+    // byte-identical to the old raw broadcast.
+    const clock = new PresentationClock(
+      () => ({ progress: progressRef.current, stage: stageFor(progressRef.current) }),
+      { reduced: renderMode !== 'canvas' },
+    );
+
     const broadcast = (force = false): void => {
-      const p = progressRef.current;
+      const { progress: p, stage } = clock.current;
       if (!force && Math.abs(p - publishedRef.current) < PROGRESS_MIN_DELTA) return;
       publishedRef.current = p;
       window.dispatchEvent(
         new CustomEvent<SceneProgressDetail>(SCENE_PROGRESS_EVENT, {
-          detail: { progress: p, stage: stageFor(p) },
+          detail: { progress: p, stage },
         }),
       );
       // Low-tier slideshow: nudge React only when the active poster slot changes.
@@ -123,6 +136,7 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
         });
       }
     };
+    const unsubClock = clock.subscribe(() => broadcast());
 
     // The scroll tracker is pure JS, so it is wired the instant this island hydrates;
     // only the heavy GPU engine waits for its own dynamic chunk. stageCount is
@@ -130,10 +144,14 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     const tracker = new ScrollTracker(1);
     const unsub = tracker.subscribe((s) => {
       progressRef.current = s.progress;
-      broadcast();
+      // New target: the clock eases toward it and re-broadcasts as it moves.
+      clock.wake();
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
+    // Start ON the live scroll position; the settle-snap window absorbs a late
+    // browser scroll restoration without gliding the journey up from the top.
+    clock.start();
     broadcast(true);
 
     // REDUCED MOTION: never import the WebGL engine. The CSS dim layer + the article's
@@ -142,6 +160,8 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // page layout's reduced-motion path, not this canvas host.
     if (renderMode === 'reduced') {
       return () => {
+        unsubClock();
+        clock.stop();
         unsub();
         tracker.stop();
       };
@@ -156,6 +176,8 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // slideshow — no second scroll probe, just like the brief asks.
     if (renderMode === 'poster') {
       return () => {
+        unsubClock();
+        clock.stop();
         unsub();
         tracker.stop();
       };
@@ -170,10 +192,11 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // fragment past the scroll range, restored scroll position, etc.).
     let offscreen = false;
 
-    // The article-scroll getStage — the ONE new mapping. Everything downstream
-    // (camera arc, shader stage, dwell, scene id) is the engine's existing pure
-    // function of this number, unchanged.
-    const getStage = (): number => stageFor(progressRef.current);
+    // The article-scroll getStage — the ONE mapping, sampled from the clock so the
+    // engine renders the same eased value the broadcast publishes. Everything
+    // downstream (camera arc, shader stage, scene id) is the engine's existing
+    // pure function of this number, unchanged.
+    const getStage = (): number => clock.current.stage;
 
     void import('../scene/createScene')
       .then(({ createScene }) => {
@@ -244,6 +267,8 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
       cancelled = true;
       document.removeEventListener('astro:before-swap', onBeforeSwap);
       observer?.disconnect();
+      unsubClock();
+      clock.stop();
       unsub();
       tracker.stop();
       dispose?.();
