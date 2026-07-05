@@ -26,12 +26,15 @@ export const COCKPIT_CENTER: Pt = [960, 626];
 /** How far past rest the frame starts when the power-on unzoom begins. */
 export const COCKPIT_ZOOM_START = 2.05;
 
-/** One cockpit member, fillets resolved: its polyline and its facing weight
+/** One cockpit member, fillets resolved: its polyline, its facing weight
  *  (how squarely the member's face points at the star — the multiplier on the
- *  lit passes; see buildCockpit's fragment shader / CockpitFrame's passes). */
+ *  lit passes; see buildCockpit's fragment shader / CockpitFrame's passes),
+ *  and its width in CSS px (the reference frame is glowing PIPING with a clear
+ *  hierarchy: fat canopy trim, medium sills, hairline echoes). */
 export interface CockpitLine {
   pts: ReadonlyArray<Pt>;
   w: number;
+  px: number;
   closed?: boolean;
 }
 
@@ -98,95 +101,104 @@ export function toPathD(pts: ReadonlyArray<Pt>, closed = false): string {
 }
 
 // ─── The line set ────────────────────────────────────────────────────────────
-// Same layout as the approved first pass: hexagonal front windshield with cut
-// top corners, inward-slanting A-pillars, side-window rakes, dashboard cowl,
-// centre console, right instrument arc. Corner radii are generous (24-34) so
-// the frame reads as moulded coachwork, matching the reference.
+// Round-3 layout, matched to the glowing-piping reference: the windshield is
+// WIDER (top edge spans 344..1592) and TALLER (pillar feet at y=800, the glass
+// bottom dipping to ~855), the dash carries three sweeping parallels so the
+// lower flanks read as machined structure instead of empty black, and every
+// line either exits the frame or flows into a junction — no floating ends.
 
-const R_HEX = 32; // windshield hexagon corners
-const R_CONSOLE = 24; // console plateau shoulders
+const R_HEX = 34; // windshield hexagon corners
+const R_CONSOLE = 34; // console plateau shoulders
 const CURVE_N = 26; // samples across the windshield's bottom sweep
 
 /** Windshield frame, outer edge (closed ring). The bottom edge is the swept
  *  cowl top: a quadratic from pillar foot to pillar foot. */
 const canopyOuterRaw: RawPt[] = [
-  [398, 86, R_HEX],
-  [1522, 86, R_HEX],
-  [1714, 248, R_HEX],
-  [1516, 742, R_HEX],
-  ...quad([1516, 742], [960, 950], [404, 742], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
-  [404, 742, R_HEX],
-  [206, 248, R_HEX],
+  [344, 78, R_HEX],
+  [1592, 78, R_HEX],
+  [1728, 252, R_HEX],
+  [1530, 800, R_HEX],
+  ...quad([1530, 800], [960, 910], [390, 800], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
+  [390, 800, R_HEX],
+  [192, 252, R_HEX],
 ];
 /** Windshield frame, inner lip (closed ring) — wider pillar offsets than the
  *  top edge, the perspective cue that gives the members thickness. */
 const canopyInnerRaw: RawPt[] = [
-  [420, 104, R_HEX],
-  [1500, 104, R_HEX],
-  [1668, 266, R_HEX],
-  [1482, 714, R_HEX],
-  ...quad([1482, 714], [960, 908], [438, 714], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
-  [438, 714, R_HEX],
-  [252, 266, R_HEX],
+  [360, 96, R_HEX],
+  [1576, 96, R_HEX],
+  [1690, 262, R_HEX],
+  [1500, 780, R_HEX],
+  ...quad([1500, 780], [960, 882], [420, 780], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
+  [420, 780, R_HEX],
+  [230, 262, R_HEX],
 ];
 
-export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.5, closed: true };
-export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, closed: true };
+export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.5, px: 2.2, closed: true };
+export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 2.6, closed: true };
 
 export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   CANOPY_OUTER,
   CANOPY_INNER,
 
   // Ceiling seams — the top-corner cuts continued up to the roof line.
-  { pts: [[398, 86], [340, 0]], w: 0.35 },
-  { pts: [[1522, 86], [1580, 0]], w: 0.35 },
+  { pts: [[344, 78], [286, 0]], w: 0.35, px: 1.3 },
+  { pts: [[1592, 78], [1650, 0]], w: 0.35, px: 1.3 },
 
   // Left side window: top rake to the screen edge + lower sill pair.
-  { pts: [[0, 168], [206, 248]], w: 0.55 },
-  { pts: [[404, 742], [0, 872]], w: 0.7 },
-  { pts: [[396, 764], [0, 898]], w: 0.45 },
+  { pts: [[0, 170], [192, 252]], w: 0.55, px: 1.8 },
+  { pts: [[390, 800], [0, 922]], w: 0.7, px: 1.8 },
+  { pts: [[380, 826], [0, 952]], w: 0.45, px: 1.3 },
 
   // Right side window, mirrored.
-  { pts: [[1920, 168], [1714, 248]], w: 0.55 },
-  { pts: [[1516, 742], [1920, 872]], w: 0.7 },
-  { pts: [[1524, 764], [1920, 898]], w: 0.45 },
+  { pts: [[1920, 170], [1728, 252]], w: 0.55, px: 1.8 },
+  { pts: [[1530, 800], [1920, 922]], w: 0.7, px: 1.8 },
+  { pts: [[1540, 826], [1920, 952]], w: 0.45, px: 1.3 },
 
-  // Dashboard cowl echo — the second sweep under the windshield's bottom edge.
-  { pts: [[368, 782], ...quad([368, 782], [960, 1005], [1552, 782], CURVE_N)], w: 0.75 },
+  // Dashboard sweeps — TWO echoes under the windshield's bottom edge, so the
+  // lower flanks carry machined structure (the centre spans dip off-frame,
+  // leaving the detail exactly where the dash was reading empty).
+  { pts: [[352, 846], ...quad([352, 846], [960, 1064], [1568, 846], CURVE_N)], w: 0.75, px: 1.5 },
+  { pts: [[322, 900], ...quad([322, 900], [960, 1160], [1598, 900], CURVE_N)], w: 0.55, px: 1.3 },
 
   // Centre console: plateau + shoulders, with a parallel inner echo.
   {
     pts: resolveCorners([
-      [556, 1080],
-      [572, 1016, R_CONSOLE],
-      [712, 886, R_CONSOLE],
-      [1208, 886, R_CONSOLE],
-      [1348, 1016, R_CONSOLE],
-      [1364, 1080],
+      [600, 1080],
+      [618, 1010, R_CONSOLE],
+      [742, 896, R_CONSOLE],
+      [1178, 896, R_CONSOLE],
+      [1302, 1010, R_CONSOLE],
+      [1320, 1080],
     ]),
     w: 0.9,
+    px: 2.2,
   },
   {
     pts: resolveCorners([
-      [598, 1080],
-      [610, 1030, 18],
-      [730, 904, 18],
-      [1190, 904, 18],
-      [1310, 1030, 18],
-      [1322, 1080],
+      [648, 1080],
+      [660, 1026, 26],
+      [766, 914, 26],
+      [1154, 914, 26],
+      [1260, 1026, 26],
+      [1272, 1080],
     ]),
     w: 0.55,
+    px: 1.4,
   },
 
-  // Lower wing diagonals — the dash edges running out to the corners.
-  { pts: [[0, 940], [360, 1035]], w: 0.4 },
-  { pts: [[1920, 940], [1560, 1035]], w: 0.4 },
+  // Lower wing diagonals — run corner to corner (a floating line end is what
+  // read as "cheap"; every member now exits the frame or joins a junction).
+  { pts: [[0, 982], [400, 1080]], w: 0.4, px: 1.4 },
+  { pts: [[0, 1032], [200, 1080]], w: 0.3, px: 1.2 },
+  { pts: [[1920, 982], [1520, 1080]], w: 0.4, px: 1.4 },
+  { pts: [[1920, 1032], [1720, 1080]], w: 0.3, px: 1.2 },
 
   // Right instrument arc: a large circle mostly off-screen bulging into the
   // frame (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
   // this is its silent structural twin), with a tighter inner echo.
-  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.5 },
-  { pts: arc(2150, 540, 316, (138 * Math.PI) / 180, (222 * Math.PI) / 180, 24), w: 0.3 },
+  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.5, px: 1.3 },
+  { pts: arc(2150, 540, 316, (138 * Math.PI) / 180, (222 * Math.PI) / 180, 24), w: 0.3, px: 1.2 },
 ];
 
 // ─── The interior masses ─────────────────────────────────────────────────────
@@ -198,23 +210,23 @@ export const PANEL_CEILING: ReadonlyArray<Pt> = resolveCorners(
   [
     [0, 0],
     [1920, 0],
-    [1920, 168],
-    [1714, 248, R_HEX],
-    [1522, 86, R_HEX],
-    [398, 86, R_HEX],
-    [206, 248, R_HEX],
-    [0, 168],
+    [1920, 170],
+    [1728, 252, R_HEX],
+    [1592, 78, R_HEX],
+    [344, 78, R_HEX],
+    [192, 252, R_HEX],
+    [0, 170],
   ],
   true,
 );
 
 export const PANEL_DASH: ReadonlyArray<Pt> = resolveCorners(
   [
-    [0, 872],
-    [404, 742, R_HEX],
-    ...quad([404, 742], [960, 950], [1516, 742], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
-    [1516, 742, R_HEX],
-    [1920, 872],
+    [0, 922],
+    [390, 800, R_HEX],
+    ...quad([390, 800], [960, 910], [1530, 800], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
+    [1530, 800, R_HEX],
+    [1920, 922],
     [1920, 1080],
     [0, 1080],
   ],

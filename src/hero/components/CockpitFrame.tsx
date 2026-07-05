@@ -25,7 +25,8 @@ const LIGHT_HOME_X = 960;
 const LIGHT_HOME_Y = 460;
 
 /** One full pass of the line set; `className` picks the pass's stroke colour,
- *  per-path opacity applies the facing weight over the pass's floor. */
+ *  per-path opacity applies the facing weight over the pass's floor, and each
+ *  member carries its authored piping width (non-scaling-stroke ⇒ CSS px). */
 function LinePass({ className, weightFloor }: { className: string; weightFloor: number }) {
   return (
     <g className={className}>
@@ -34,6 +35,7 @@ function LinePass({ className, weightFloor }: { className: string; weightFloor: 
           key={i}
           d={toPathD(line.pts, line.closed)}
           strokeOpacity={weightFloor + (1 - weightFloor) * line.w}
+          strokeWidth={line.px}
         />
       ))}
     </g>

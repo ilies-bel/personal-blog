@@ -10,15 +10,17 @@
 // Geometry comes from cockpitGeometry.ts (the single design-space source shared
 // with the SVG fallback): polylines are extruded here into indexed triangle
 // ribbons with mitred joints (aNorm carries the miter), rounded corners already
-// resolved upstream. Panels + the canopy strut band triangulate via
-// THREE.ShapeGeometry (earcut handles the concave outlines).
+// resolved upstream. The ribbon set draws TWICE — an additive glow pass (wide,
+// gaussian halo) under a normal-blended core pass (the member itself, white-hot
+// centre) — the glowing-piping look of the reference. Panels + the canopy strut
+// band triangulate via THREE.ShapeGeometry (earcut handles the concave outlines).
 //
 // POWER CONTRACT: frame() receives hudActive (read through the SceneHooks seam,
 // so the scene never touches the DOM's class names itself) and tweens a deploy
 // parameter — quint-out over 1.7s on power-up (the unzoom: scale
 // COCKPIT_ZOOM_START → 1), quad-in over 0.6s on power-down (the push back
-// toward the glass). Both meshes stand down (`visible = false`) at deploy 0, so
-// a powered-off cockpit costs zero draws (the draw-audit convention).
+// toward the glass). All three meshes stand down (`visible = false`) at deploy
+// 0, so a powered-off cockpit costs zero draws (the draw-audit convention).
 import * as THREE from 'three';
 import {
   COCKPIT_LINES,
@@ -36,6 +38,7 @@ import {
 import {
   cockpitLineVertexShader,
   cockpitLineFragmentShader,
+  cockpitGlowFragmentShader,
   cockpitPanelVertexShader,
   cockpitPanelFragmentShader,
 } from '../shaders/cockpit.glsl';
@@ -47,10 +50,8 @@ export interface CockpitRig extends Rig {
   frame(ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean): void;
 }
 
-/** Line thickness in CSS px (converted to design units per frame, so the
- *  hairline weight is viewport-independent — the WebGL twin of
- *  vector-effect: non-scaling-stroke). */
-const LINE_PX = 1.35;
+/** How much wider the glow pass's ribbon runs than its member. */
+const GLOW_WIDTH_SCALE = 6;
 
 // ── Star-light keyframes over the eased stage ───────────────────────────────
 // The chapter's light colour + intensity, matched to what the canvas actually
@@ -80,6 +81,7 @@ function starLightAt(stage: number, outColor: THREE.Color): number {
   const span = Math.max(1e-5, b.s - a.s);
   const k = Math.min(1, Math.max(0, (stage - a.s) / span));
   outColor.setRGB(a.c[0] + (b.c[0] - a.c[0]) * k, a.c[1] + (b.c[1] - a.c[1]) * k, a.c[2] + (b.c[2] - a.c[2]) * k);
+  outColor.convertSRGBToLinear(); // keys are authored in sRGB (see palette note)
   return a.i + (b.i - a.i) * k;
 }
 
@@ -88,13 +90,15 @@ function starLightAt(stage: number, outColor: THREE.Color): number {
 /** Extrude every cockpit polyline into one indexed ribbon geometry. Two
  *  vertices per point (±aSide); aNorm is the vertex's miter normal (average of
  *  adjoining segment normals, scaled 1/cos(half-angle), clamped — corners are
- *  pre-rounded upstream so miters stay shallow). Closed rings wrap and repeat
- *  their first point so the loop seals without a seam. */
+ *  pre-rounded upstream so miters stay shallow). aWidth carries the member's
+ *  authored CSS-px width. Closed rings wrap and repeat their first point so
+ *  the loop seals without a seam. */
 function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
   const pos: number[] = [];
   const norm: number[] = [];
   const side: number[] = [];
   const weight: number[] = [];
+  const width: number[] = [];
   const idx: number[] = [];
 
   for (const line of lines) {
@@ -132,6 +136,7 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
         norm.push(nx * miter, ny * miter);
         side.push(s);
         weight.push(line.w);
+        width.push(line.px);
       }
     }
     for (let i = 0; i < n - 1; i++) {
@@ -145,6 +150,7 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
   geo.setAttribute('aNorm', new THREE.BufferAttribute(new Float32Array(norm), 2));
   geo.setAttribute('aSide', new THREE.BufferAttribute(new Float32Array(side), 1));
   geo.setAttribute('aW', new THREE.BufferAttribute(new Float32Array(weight), 1));
+  geo.setAttribute('aWidth', new THREE.BufferAttribute(new Float32Array(width), 1));
   // three requires a `position` attribute for draw-range bookkeeping even when
   // the vertex shader never reads it — alias the 2D data (itemSize 2 is fine).
   geo.setAttribute('position', geo.getAttribute('aPos'));
@@ -179,11 +185,17 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     uStarColor: { value: new THREE.Color(0.88, 0.86, 0.8) },
     uStarIntensity: { value: 0.65 },
     uAlpha: { value: 0 },
+    uHalfW: { value: 0.55 }, // design units per CSS half-px; written per frame
+    // The piping palette: amber body, white-hot core (the reference trim).
+    // Authored in sRGB, converted to linear — the composer chain sRGB-encodes
+    // on output, so raw values here would wash to pale peach.
+    uAmber: { value: new THREE.Color(1.0, 0.55, 0.18).convertSRGBToLinear() },
+    uCoreTint: { value: new THREE.Color(1.0, 0.9, 0.72).convertSRGBToLinear() },
   };
 
   const panelUniforms: Uniforms = {
     ...shared,
-    uFill: { value: 0.78 },
+    uFill: { value: 0.9 },
   };
   const panelMat = new THREE.ShaderMaterial({
     uniforms: panelUniforms,
@@ -201,10 +213,32 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   scene.add(panels);
 
   const lineGeo = buildRibbons(COCKPIT_LINES);
+
+  // Glow pass first: the additive halo the members sit in.
+  const glowUniforms: Uniforms = {
+    ...shared,
+    uWidthScale: { value: GLOW_WIDTH_SCALE },
+  };
+  const glowMat = new THREE.ShaderMaterial({
+    uniforms: glowUniforms,
+    vertexShader: cockpitLineVertexShader,
+    fragmentShader: cockpitGlowFragmentShader,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+  const glow = new THREE.Mesh(lineGeo, glowMat);
+  glow.frustumCulled = false;
+  glow.renderOrder = 41; // halo under the members, over the panels
+  glow.visible = false;
+  scene.add(glow);
+
+  // Core pass: the members themselves.
   const lineUniforms: Uniforms = {
     ...shared,
-    uHalfW: { value: 0.75 },
-    uDim: { value: new THREE.Color('#8a8272') }, // warm bone-gold, unlit strut
+    uWidthScale: { value: 1 },
   };
   const lineMat = new THREE.ShaderMaterial({
     uniforms: lineUniforms,
@@ -217,7 +251,7 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   });
   const lines = new THREE.Mesh(lineGeo, lineMat);
   lines.frustumCulled = false;
-  lines.renderOrder = 41; // lines etch ON the panels
+  lines.renderOrder = 42; // members etch over their own halo
   lines.visible = false;
   scene.add(lines);
 
@@ -243,6 +277,7 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
 
     const on = deploy > 0.001;
     panels.visible = on;
+    glow.visible = on;
     lines.visible = on;
     if (!on) return;
 
@@ -259,17 +294,19 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     shared.uStarIntensity.value = starLightAt(stage, scratchColor);
     (shared.uStarColor.value as THREE.Color).copy(scratchColor);
 
-    // Hairline weight in design units, tracking the live viewport height (the
-    // non-scaling-stroke contract).
-    lineUniforms.uHalfW.value = (LINE_PX / 2) * (COCKPIT_H / window.innerHeight);
+    // Design units per CSS half-px, tracking the live viewport height (the
+    // non-scaling-stroke contract; per-member widths ride aWidth).
+    shared.uHalfW.value = 0.5 * (COCKPIT_H / window.innerHeight);
   };
 
   const dispose = (): void => {
     scene.remove(lines);
+    scene.remove(glow);
     scene.remove(panels);
     lineGeo.dispose();
     panelGeo.dispose();
     lineMat.dispose();
+    glowMat.dispose();
     panelMat.dispose();
   };
 

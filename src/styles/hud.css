@@ -2480,14 +2480,13 @@ body.scene-ready.hud-active .bh-cockpit {
 }
 .bh-cockpit path {
   fill: none;
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke; /* hairlines stay 1 device px under the stretch */
+  vector-effect: non-scaling-stroke; /* authored CSS-px widths survive the stretch */
   stroke-linejoin: round;
   stroke-linecap: round;
   transition: stroke 0.5s ease; /* per-scene temperature swaps ease, never pop */
 }
 .bh-cockpit-base path { stroke: var(--ckpt-dim); }
-.bh-cockpit-lit path { stroke: var(--ckpt-lit); stroke-width: 1.5; }
+.bh-cockpit-lit path { stroke: var(--ckpt-lit); }
 /* The canopy strut band — solid structure between the frame's edge pair, so the
    scene reads as sitting BEHIND the member, not between two floating lines. */
 .bh-cockpit path.bh-cockpit-band {
