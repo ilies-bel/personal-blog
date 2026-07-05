@@ -172,8 +172,10 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   CANOPY_OUTER,
   CANOPY_INNER,
 
-  // Left side window: top rake, the near-edge pane hairline dropping from the
-  // rake to the sill junction, and the lower sill BEAM (edge-tube pair).
+  // Left side window: ONE continuous frame member (rake in from the screen
+  // edge, down the pillar's side face — a constant dark strip against the
+  // pillar edge, never merging — around the bottom corner and out along the
+  // sill), plus the near-edge pane hairline and the sill's outer edge.
   { pts: resolveCorners([[-4, 166], [180, 250, 18], [239, 382]]), w: 0.55, px: 2.0 },
   { pts: [[40, 187], [16, 914]], w: 0.5, px: 1.7 },
   { pts: [[390, 800], [0, 922]], w: 0.75, px: 2.6 },

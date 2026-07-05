@@ -51,7 +51,7 @@ export interface CockpitRig extends Rig {
 }
 
 /** How much wider the glow pass's ribbon runs than its member. */
-const GLOW_WIDTH_SCALE = 5;
+const GLOW_WIDTH_SCALE = 4.5;
 
 // ── Star-light keyframes over the eased stage ───────────────────────────────
 // The chapter's light colour + intensity, matched to what the canvas actually
