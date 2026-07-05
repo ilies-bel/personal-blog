@@ -139,12 +139,17 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
       const nx = -ty;
       const ny = tx;
       const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
+      // Perspective taper: the reference cockpit's members thin with distance,
+      // so width scales with screen height (roof ~0.72x, cowl ~1.15x). The
+      // tapered value also feeds aWidth, so the white-hot core gate lets go of
+      // a member as it climbs toward the roof.
+      const taper = 0.72 + 0.5 * (p[1] / COCKPIT_H);
       for (const s of [-1, 1]) {
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
         side.push(s);
         weight.push(line.w);
-        width.push(line.px);
+        width.push(line.px * taper);
       }
     }
     for (let i = 0; i < n - 1; i++) {

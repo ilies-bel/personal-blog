@@ -126,17 +126,55 @@ const canopyOuterRaw: RawPt[] = [
 /** Windshield frame, inner lip (closed ring) — wider pillar offsets than the
  *  top edge, the perspective cue that gives the members thickness. */
 const canopyInnerRaw: RawPt[] = [
-  [360, 96, R_HEX],
-  [1576, 96, R_HEX],
-  [1690, 262, R_HEX],
+  [360, 96, 18],
+  [1576, 96, 18],
+  [1690, 262, 24],
   [1500, 780, R_HEX],
   ...quad([1500, 780], [960, 882], [420, 780], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
   [420, 780, R_HEX],
-  [230, 262, R_HEX],
+  [230, 262, 24],
 ];
 
+// The outer boundary is still a closed ring as a SHAPE (the strut band between
+// it and the inner lip), but it is no longer STROKED as one loop: at the roof
+// corners the reference's edges flow THROUGH the junction into the ceiling
+// seams (a true Y of beams), so the strokes are the two through-paths below.
 export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.4, closed: true };
-export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 4.2, closed: true };
+export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 3.6, closed: true };
+
+/** Roof-to-roof TOP path: down the left seam's right edge, a flat chamfer
+ *  across the Y crotch, along the windshield's top edge, and out through the
+ *  right seam — one continuous member, the reference's junction grammar. */
+const OUTER_TOP: CockpitLine = {
+  pts: resolveCorners([
+    [310, -4],
+    [352, 62, 12],
+    [386, 78, 10],
+    [1534, 78, 10],
+    [1568, 62, 12],
+    [1610, -4],
+  ]),
+  w: 0.72,
+  px: 2.4,
+};
+/** Roof-to-roof FLANK path: down the left seam's left edge, through the corner
+ *  cut, the pillar, the cowl sweep, and back up the right side — the outer
+ *  boundary's other through-flow. */
+const OUTER_FLANK: CockpitLine = {
+  pts: resolveCorners([
+    [282, -4],
+    [326, 74, 14],
+    [192, 252, R_HEX],
+    [390, 800, R_HEX],
+    ...quad([390, 800], [960, 910], [1530, 800], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
+    [1530, 800, R_HEX],
+    [1728, 252, R_HEX],
+    [1594, 74, 14],
+    [1638, -4],
+  ]),
+  w: 0.72,
+  px: 2.4,
+};
 
 /** Louver striations — the fine machined stack hugging the cowl's underside
  *  (the reference's tight parallel hairlines right below the fat rail). Each
@@ -169,17 +207,14 @@ function instrumentTicks(cx: number, cy: number): CockpitLine[] {
 }
 
 export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
-  CANOPY_OUTER,
+  OUTER_TOP,
+  OUTER_FLANK,
   CANOPY_INNER,
-
-  // Ceiling seams — the top-corner cuts continued up to the roof line.
-  { pts: [[344, 78], [286, 0]], w: 0.52, px: 1.9 },
-  { pts: [[1592, 78], [1650, 0]], w: 0.52, px: 1.9 },
 
   // Left side window: top rake, the near-edge pane hairline dropping from the
   // rake to the sill junction, and the lower sill BEAM (edge-tube pair).
   { pts: [[0, 170], [192, 252]], w: 0.55, px: 2.0 },
-  { pts: [[42, 196], [16, 914]], w: 0.5, px: 1.7 },
+  { pts: [[40, 187], [16, 914]], w: 0.5, px: 1.7 },
   { pts: [[390, 800], [0, 922]], w: 0.75, px: 2.6 },
   { pts: [[378, 830], [0, 958]], w: 0.62, px: 2.2 },
 

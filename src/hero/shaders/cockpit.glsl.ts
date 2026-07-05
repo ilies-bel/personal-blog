@@ -96,7 +96,7 @@ void main() {
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
   float litN = clamp(lit, 0.0, 1.0);
   float t = abs(vSide);
-  float widthGate = smoothstep(2.4, 4.2, vWidth);
+  float widthGate = smoothstep(2.2, 3.6, vWidth);
   float coreMask = (1.0 - smoothstep(0.0, 0.5, t)) * widthGate;
   vec3 base = mix(uAmber, uCoreTint, coreMask * (0.28 + 0.35 * litN));
   float energy = uFloor * (0.25 + 0.75 * vW * vW) * (1.0 + 0.5 * min(lit, 0.6)) * vigComp(vPos);
@@ -125,7 +125,7 @@ void main() {
   float g = exp(-vSide * vSide * 5.0);
   float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 4.0, vWidth));
   float energy = uFloor * 0.3 * hier * (1.0 + 0.7 * clamp(lit, 0.0, 0.5)) * vigComp(vPos);
-  gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.26);
+  gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.2);
 }
 `;
 
@@ -149,7 +149,7 @@ void main() {
   float lit = litAt(vPos, 1.0);
   // Near-black structure with a whisper of the piping's bounce, plus a faint
   // wash of the star's light nearby — surfaces catching the scene, not a hole.
-  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.005 + uStarColor * lit * 0.022;
+  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.003 + uStarColor * lit * 0.02;
   gl_FragColor = vec4(col, uFill * uAlpha);
 }
 `;
