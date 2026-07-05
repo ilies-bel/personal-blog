@@ -29,8 +29,10 @@ export const COCKPIT_ZOOM_START = 2.05;
 /** One cockpit member, fillets resolved: its polyline, its facing weight
  *  (how squarely the member's face points at the star — the multiplier on the
  *  lit passes; see buildCockpit's fragment shader / CockpitFrame's passes),
- *  and its width in CSS px (the reference frame is glowing PIPING with a clear
- *  hierarchy: fat canopy trim, medium sills, hairline echoes). */
+ *  and its width in CSS px. The piping stays THIN across the board (≈2px trim,
+ *  hairline echoes): a beam's structural width is the DARK BAND between its
+ *  edge pair, never the stroke — fat strokes + halo swallow the band and the
+ *  member reads as a neon tube instead of coachwork. */
 export interface CockpitLine {
   pts: ReadonlyArray<Pt>;
   w: number;
@@ -101,27 +103,61 @@ export function toPathD(pts: ReadonlyArray<Pt>, closed = false): string {
 }
 
 // ─── The line set ────────────────────────────────────────────────────────────
-// Round-4 layout, matched to the glowing-piping reference's FINISH: every major
-// member is a BEAM (two bright tubes bounding a dark band, not a lone stroke),
-// the cowl carries a tight louver striation stack, the console flows INTO the
-// full-width dash rails as one continuous swept member, the lower flanks fan
-// into the pillar-foot junctions with elongated seam blades between the sweeps,
-// and the right instrument circle wears its radial tick ring. Every line still
-// either exits the frame or flows into a junction — no floating ends.
+// Round-5 layout, reduced to the reference's essentials: the MAIN FRAME (the
+// windshield beam with its Y-junction rakes, the sill beams off the pillar
+// feet) and the CONSOLE (dash rails rising into the plateau, the companion
+// splitting down the console sides, the inner echo lip), plus the right
+// instrument circle. Every member is a BEAM (two lines bounding a dark band)
+// and every line either exits the frame or flows out of a junction — no
+// floating ends, no decorative clutter.
 
 const R_HEX = 34; // windshield hexagon corners
-const CURVE_N = 26; // samples across the windshield's bottom sweep
 
-/** Windshield frame, outer edge (closed ring). The bottom edge is the swept
- *  cowl top: a quadratic from pillar foot to pillar foot. */
+/** Windshield frame, outer edge (closed ring). The bottom edge is the cowl
+ *  top — the reference's profile: a quick filleted drop at each pillar foot
+ *  into a FLAT run across the centre (never a centre-sagging arc).
+ *
+ *  At each top corner the contour plays the reference's Y JUNCTION: instead of
+ *  a mitred corner, the top edge rounds UP into the side-window rake's upper
+ *  line (the V notch), the rake beam exits past the screen edge (its end cap
+ *  lives off-screen, never visible), and the beam's underside returns to round
+ *  into the pillar's outer face. The rake beam is thereby CONTINUOUS with the
+ *  frame — same contour, same stroke, and the band fill (this ring with the
+ *  inner ring as its hole) fuses the hub + rake band into one dark mass. */
 const canopyOuterRaw: RawPt[] = [
   [344, 78, 18],
   [1592, 78, 18],
-  [1728, 252, 26],
-  [1530, 800, R_HEX],
-  ...quad([1530, 800], [960, 910], [390, 800], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
-  [390, 800, R_HEX],
-  [192, 252, 26],
+  // Right junction: V notch → out the screen edge → back to the pillar face.
+  [1734, 251, 16],
+  [1944, 157],
+  [1946, 183],
+  [1714, 292, 30],
+  // Right pillar FOOT — the reference's construction: the whole bottom is ONE
+  // slim beam hugging the window's bottom edge. The pillar's outer face
+  // rounds at the foot into the sill's top edge, which BOWS away — flat off
+  // the foot, steepening toward the screen edge (the curve leans into the
+  // main window). The underside returns on the same bow and runs on as the
+  // window beam's outer line, sagging gently with the glass across the
+  // centre. (The inner ring's foot corner closes each hub.)
+  [1500, 790, 40],
+  [1740, 816, 170],
+  [1944, 856],
+  [1944, 868],
+  [1730, 832, 170],
+  [1500, 801, 150],
+  [960, 844, 380],
+  // Left pillar foot, mirrored.
+  [420, 801, 150],
+  [190, 832, 170],
+  [-24, 868],
+  [-24, 856],
+  [180, 816, 170],
+  [420, 790, 40],
+  // Left rake junction (up the pillar → out the screen edge → V notch).
+  [206, 292, 30],
+  [-26, 183],
+  [-24, 157],
+  [186, 251, 16],
 ];
 /** Windshield frame, inner lip (closed ring) — wider pillar offsets than the
  *  top edge, the perspective cue that gives the members thickness. */
@@ -129,23 +165,14 @@ const canopyInnerRaw: RawPt[] = [
   [360, 96, 18],
   [1576, 96, 18],
   [1690, 262, 24],
-  [1500, 780, R_HEX],
-  ...quad([1500, 780], [960, 882], [420, 780], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
-  [420, 780, R_HEX],
+  [1465, 786, R_HEX],
+  [960, 830, 380],
+  [455, 786, R_HEX],
   [230, 262, 24],
 ];
 
-export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.4, closed: true };
-export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 3.6, closed: true };
-
-/** Louver striations — the fine machined stack hugging the cowl's underside
- *  (the reference's tight parallel hairlines right below the fat rail). Each
- *  follows the cowl's own quadratic, shifted down and slightly fanned. */
-function louver(dy: number, inset: number): CockpitLine {
-  const p0: Pt = [1530 - inset, 800 + dy];
-  const p1: Pt = [390 + inset, 800 + dy];
-  return { pts: [p0, ...quad(p0, [960, 910 + dy * 1.2], p1, CURVE_N)], w: 0.28, px: 1.4 };
-}
+export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.0, closed: true };
+export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 2.2, closed: true };
 
 /** The right instrument circle's tick furniture: a fine radial dash ring just
  *  outside the main arc, plus three double-tick bracket markers riding it. */
@@ -172,77 +199,30 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   CANOPY_OUTER,
   CANOPY_INNER,
 
-  // Left side window: ONE continuous frame member (rake in from the screen
-  // edge, down the pillar's side face — a constant dark strip against the
-  // pillar edge, never merging — around the bottom corner and out along the
-  // sill), plus the near-edge pane hairline and the sill's outer edge.
-  { pts: resolveCorners([[-4, 166], [180, 250, 18], [239, 382]]), w: 0.55, px: 2.0 },
-  { pts: [[40, 187], [16, 914]], w: 0.5, px: 1.7 },
-  { pts: [[390, 800], [0, 922]], w: 0.75, px: 2.6 },
-  { pts: [[378, 830], [0, 958]], w: 0.62, px: 2.2 },
+  // (The sill beams live in CANOPY_OUTER's contour — the pillar-foot Y
+  // junctions above — so they carry the frame's exact finish and their band
+  // is filled by the strut band automatically.)
 
-  // Right side window, mirrored.
-  { pts: resolveCorners([[1924, 166], [1740, 250, 18], [1681, 382]]), w: 0.55, px: 2.0 },
-  { pts: [[1878, 196], [1904, 914]], w: 0.5, px: 1.7 },
-  { pts: [[1530, 800], [1920, 922]], w: 0.75, px: 2.6 },
-  { pts: [[1542, 830], [1920, 958]], w: 0.62, px: 2.2 },
-
-  // The cowl's louver stack — four striations, tight under the windshield's
-  // bottom sweep, fanning open a touch toward the centre dip.
-  louver(14, 10),
-  louver(26, 16),
-  louver(38, 22),
-  louver(50, 28),
-
-  // Console coachwork — ONE continuous swept member from screen edge to screen
-  // edge: down the dash, up into the console shoulder, across the plateau, and
-  // back out (the reference's flowing rail), plus the two flank curves that
-  // wrap the console's sides toward the floor, and a soft inner echo.
-  {
-    pts: resolveCorners([
-      [-6, 904],
-      [560, 996, 220],
-      [746, 898, 84],
-      [1174, 898, 84],
-      [1360, 996, 220],
-      [1926, 904],
-    ]),
-    w: 0.8,
-    px: 2.6,
-  },
-  { pts: resolveCorners([[-6, 1002], [520, 1054, 180], [618, 1096]]), w: 0.6, px: 2.0 },
-  { pts: resolveCorners([[1926, 1002], [1400, 1054, 180], [1302, 1096]]), w: 0.6, px: 2.0 },
-  {
-    pts: resolveCorners([
-      [664, 1084],
-      [676, 1024, 30],
-      [780, 918, 30],
-      [1140, 918, 30],
-      [1244, 1024, 30],
-      [1256, 1084],
-    ]),
-    w: 0.5,
-    px: 1.5,
-  },
-
-  // Lower corner fans — bowed sweeps converging on the pillar-foot junctions
-  // (straight diagonals read as wireframe; the reference's members bow).
-  { pts: [[-6, 968], ...quad([-6, 968], [230, 1006], [468, 1086], 12)], w: 0.6, px: 2.0 },
-  { pts: [[-6, 1022], ...quad([-6, 1022], [150, 1046], [286, 1090], 10)], w: 0.5, px: 1.7 },
-  { pts: [[1926, 968], ...quad([1926, 968], [1690, 1006], [1452, 1086], 12)], w: 0.6, px: 2.0 },
-  { pts: [[1926, 1022], ...quad([1926, 1022], [1770, 1046], [1634, 1090], 10)], w: 0.5, px: 1.7 },
-
-  // Seam blades — elongated closed slivers between the fan sweeps (the
-  // reference's specular panel seams; what turns "lines" into "machining").
-  { pts: resolveCorners([[170, 948, 6], [320, 986, 6], [308, 998, 6], [156, 958, 6]], true), w: 0.55, px: 1.6, closed: true },
-  { pts: resolveCorners([[96, 1014, 6], [212, 1040, 6], [202, 1050, 6], [84, 1022, 6]], true), w: 0.55, px: 1.6, closed: true },
-  { pts: resolveCorners([[1750, 948, 6], [1600, 986, 6], [1612, 998, 6], [1764, 958, 6]], true), w: 0.55, px: 1.6, closed: true },
-  { pts: resolveCorners([[1824, 1014, 6], [1708, 1040, 6], [1718, 1050, 6], [1836, 1022, 6]], true), w: 0.55, px: 1.6, closed: true },
+  // Console — measured off the reference, three swooping layers deep:
+  //   • the RAIL PAIR (tight, ~13 apart) arcing edge-to-edge, rising toward
+  //     the main window — flat ~864/877 across the centre, diving steeply to
+  //     the flanks — always passing clear above the screen,
+  //   • the SCREEN TOP: a third continuous edge-to-edge swoop that rises from
+  //     each screen edge INTO the pedestal's plateau (y≈911, shoulders r90),
+  //   • the PEDESTAL: sides splitting DOWN off the swoop at each shoulder
+  //     (~45° splay, caps hidden under the swoop's stroke) with a tight bezel
+  //     line ~17px inside — the machined double edge.
+  { pts: resolveCorners([[-6, 995], [240, 900, 140], [520, 864, 220], [1400, 864, 220], [1680, 900, 140], [1926, 995]]), w: 0.7, px: 2.0 },
+  { pts: resolveCorners([[-6, 1008], [248, 913, 140], [530, 877, 220], [1390, 877, 220], [1672, 913, 140], [1926, 1008]]), w: 0.55, px: 1.8 },
+  { pts: resolveCorners([[507, 1090], [690, 911, 90], [1230, 911, 90], [1413, 1090]]), w: 0.85, px: 2.2 },
+  { pts: resolveCorners([[-6, 1035], [350, 938, 220], [700, 927]]), w: 0.8, px: 2.1 },
+  { pts: resolveCorners([[1926, 1035], [1570, 938, 220], [1220, 927]]), w: 0.8, px: 2.1 },
+  { pts: resolveCorners([[520, 1098], [692, 929, 48], [1228, 929, 48], [1400, 1098]]), w: 0.5, px: 1.7 },
 
   // Right instrument circle: main arc + inner echo + the radial tick ring
   // (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
   // this is its silent structural twin).
-  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.6, px: 2.4 },
+  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.6, px: 2.0 },
   { pts: arc(2150, 540, 318, (138 * Math.PI) / 180, (222 * Math.PI) / 180, 24), w: 0.5, px: 1.7 },
   ...instrumentTicks(2150, 540),
 ];
@@ -268,13 +248,15 @@ export const PANEL_CEILING: ReadonlyArray<Pt> = resolveCorners(
 
 export const PANEL_DASH: ReadonlyArray<Pt> = resolveCorners(
   [
-    [0, 922],
-    [390, 800, R_HEX],
-    ...quad([390, 800], [960, 910], [1530, 800], CURVE_N).slice(0, -1).map(([x, y]): RawPt => [x, y]),
-    [1530, 800, R_HEX],
-    [1920, 922],
-    [1920, 1080],
-    [0, 1080],
+    [-30, 868],
+    [190, 832, 170],
+    [420, 801, 150],
+    [960, 844, 380],
+    [1500, 801, 150],
+    [1730, 832, 170],
+    [1944, 868],
+    [1944, 1090],
+    [-30, 1090],
   ],
   true,
 );

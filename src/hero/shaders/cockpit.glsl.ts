@@ -59,7 +59,7 @@ attribute float aSide;   // which ribbon edge: -1 | +1
 attribute float aW;      // facing weight (0..1)
 attribute float aWidth;  // member width, CSS px (the piping hierarchy)
 uniform float uHalfW;       // design units per CSS half-px (tracks viewport)
-uniform float uWidthScale;  // 1 for the core pass, ~7 for the glow pass
+uniform float uWidthScale;  // 1 for the core pass, ~3 for the glow pass
 ${designToClip}
 varying vec2 vPos;
 varying float vSide;
@@ -96,7 +96,7 @@ void main() {
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
   float litN = clamp(lit, 0.0, 1.0);
   float t = abs(vSide);
-  float widthGate = smoothstep(2.2, 3.6, vWidth);
+  float widthGate = smoothstep(1.9, 2.7, vWidth);
   float coreMask = (1.0 - smoothstep(0.0, 0.5, t)) * widthGate;
   vec3 base = mix(uAmber, uCoreTint, coreMask * (0.28 + 0.35 * litN));
   float energy = uFloor * (0.25 + 0.75 * vW * vW) * (1.0 + 0.5 * min(lit, 0.6)) * vigComp(vPos);
@@ -123,7 +123,7 @@ varying float vWidth;
 void main() {
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
   float g = exp(-vSide * vSide * 5.0);
-  float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 4.0, vWidth));
+  float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 2.7, vWidth));
   float energy = uFloor * 0.3 * hier * (1.0 + 0.7 * clamp(lit, 0.0, 0.5)) * vigComp(vPos);
   gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.2);
 }

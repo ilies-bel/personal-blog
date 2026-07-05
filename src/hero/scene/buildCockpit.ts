@@ -50,8 +50,10 @@ export interface CockpitRig extends Rig {
   frame(ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean): void;
 }
 
-/** How much wider the glow pass's ribbon runs than its member. */
-const GLOW_WIDTH_SCALE = 4.5;
+/** How much wider the glow pass's ribbon runs than its member. Kept TIGHT: the
+ *  reference's halo hugs its edge lines — a wide halo bridges a beam's two
+ *  edges and washes out the dark band that gives the member its width. */
+const GLOW_WIDTH_SCALE = 3.0;
 
 // ── Star-light keyframes over the eased stage ───────────────────────────────
 // The chapter's light colour + intensity, matched to what the canvas actually
