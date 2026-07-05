@@ -2460,7 +2460,6 @@ body.hud-active .hud-arc-label { transition-delay: 0.85s; }
      on a painted surface: it desaturates toward a warm neutral instead. */
   --ckpt-dim: color-mix(in oklab, var(--ckpt-gold) 45%, var(--hud-line));
   --ckpt-lit: color-mix(in oklab, var(--ckpt-gold) 68%, var(--hud-main));
-  --ckpt-hot: color-mix(in oklab, white 30%, var(--ckpt-gold));
   opacity: 0;
   visibility: hidden;
   transform: scale(2.05);
@@ -2489,7 +2488,6 @@ body.scene-ready.hud-active .bh-cockpit {
 }
 .bh-cockpit-base path { stroke: var(--ckpt-dim); }
 .bh-cockpit-lit path { stroke: var(--ckpt-lit); stroke-width: 1.5; }
-.bh-cockpit-hot path { stroke: var(--ckpt-hot); stroke-width: 1.75; }
 /* The canopy strut band — solid structure between the frame's edge pair, so the
    scene reads as sitting BEHIND the member, not between two floating lines. */
 .bh-cockpit path.bh-cockpit-band {
@@ -2501,13 +2499,6 @@ body.scene-ready.hud-active .bh-cockpit {
    glare on the structure rather than a hole in it. */
 .bh-cockpit path.bh-cockpit-panel {
   fill: rgb(2 2 4 / 0.78);
-  stroke: none;
-}
-/* The interior catching the star's own light (masked by the specular gradient):
-   a faint warm wash on the dash/ceiling nearest the body. */
-.bh-cockpit path.bh-cockpit-sheen {
-  fill: var(--ckpt-lit);
-  fill-opacity: 0.08;
   stroke: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2524,4 +2515,44 @@ body.scene-ready.hud-active .bh-cockpit {
    compact layout it would crowd the whole frame. */
 @media (max-width: 60rem) {
   .bh-cockpit { display: none; }
+}
+
+/* ── COCKPIT MODE: the journey's beat copy stands down while the HUD is powered.
+   The canopy + instruments ARE the powered experience; the manifesto prose is
+   the observation deck's (power the HUD off to read it). The FINALE beat is
+   exempt — it is the site's index (headline + ledger), not journey prose.
+   opacity needs !important: the overlay writes per-beat opacity inline every
+   frame from the presentation clock. visibility also drops it from AT while
+   hidden; both return the moment the HUD powers down. */
+body.hud-active .bh-beat:not(.bh-beat--finale) {
+  opacity: 0 !important;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0s 0.4s;
+}
+
+/* ── PULSING DOTS — the small cores breathe so they read as live signals, not
+   dead pixels. The marker core pulses around whatever its state scale is
+   (var(--core-scale) changes on hover/active/locked and the keyframes read it
+   live); the opening focus dot swells a touch wider. Transform-only, so both
+   stay on the compositor. The WebGL pale-blue dot has its own shader breath
+   (disk.glsl.ts dotPulse) deepened to match this cadence. */
+@keyframes bh-core-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(var(--core-scale, 0.62)); }
+  50% { transform: translate(-50%, -50%) scale(calc(var(--core-scale, 0.62) * 1.4)); }
+}
+.star-marker-dot {
+  animation: bh-core-pulse 2.4s ease-in-out infinite;
+}
+@keyframes bh-focus-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.35); }
+}
+body.scene-ready.at-opening .bh-focus-dot {
+  animation: bh-focus-pulse 2.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-marker-dot,
+  body.scene-ready.at-opening .bh-focus-dot {
+    animation: none;
+  }
 }

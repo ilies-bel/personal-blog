@@ -1,6 +1,7 @@
 declare module 'three' {
   export class AdditiveBlending {}
   export class BackSide {}
+  export class DoubleSide {}
   export class FloatType {}
   export class HalfFloatType {}
   export class LinearFilter {}
@@ -24,8 +25,11 @@ declare module 'three' {
   export class OrthographicCamera { constructor(...args: any[]); [key: string]: any; }
   export class PerspectiveCamera { constructor(...args: any[]); [key: string]: any; }
   export class PlaneGeometry { constructor(...args: any[]); [key: string]: any; }
+  export class Path { constructor(...args: any[]); [key: string]: any; }
   export class Points { constructor(...args: any[]); [key: string]: any; }
   export class Quaternion { constructor(...args: any[]); [key: string]: any; }
+  export class Shape { constructor(...args: any[]); [key: string]: any; }
+  export class ShapeGeometry { constructor(...args: any[]); [key: string]: any; }
   export class Raycaster { constructor(...args: any[]); [key: string]: any; }
   export class Scene { constructor(...args: any[]); [key: string]: any; }
   export class ShaderMaterial { constructor(...args: any[]); [key: string]: any; }

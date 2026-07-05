@@ -14,6 +14,7 @@ import { buildStarfield, buildDistantStar } from './buildStarfield';
 import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
+import { buildCockpit } from './buildCockpit';
 import { buildGranBake } from './buildGranBake';
 import { buildParticlePass, PARTICLE_RT_LAYER } from './buildParticlePass';
 import { buildPostChain } from './buildPostChain';
@@ -196,6 +197,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const ringUniforms = ringRig.uniforms; // updateLensUniforms() writes through this
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
+
+  // Cockpit canopy: the clip-space line/panel rig the HUD power-on unzooms into
+  // (see buildCockpit.ts). Cheap to build (a few hundred ribbon vertices); its
+  // per-frame update rides the same star projection the nova pass computes.
+  const cockpitRig = buildCockpit(scene);
 
   await yieldToMain(); // boot slice seam (warp/streak/ring line rigs built above)
 
@@ -1844,6 +1850,12 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk, beatId });
     }
 
+    // Cockpit canopy: deploy tween + star-light uniforms. flashOrigin still holds
+    // this frame's projected star NDC (computed above for the nova pass on the
+    // final camera orientation) — the cockpit's light IS that projection. The
+    // power bit flows through the hooks seam (HeroIsland reads the FSM body class).
+    cockpitRig.frame(flashOrigin.x, flashOrigin.y, stage, t, hooks.isHudActive ? hooks.isHudActive() : false);
+
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
     // Tiny and time-based: it sells one shock event without turning the scroll into
     // a game-camera wobble.
@@ -2297,7 +2309,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       // so teardown is ONE loop over the rig set instead of eight hand-listed calls
       // that drift as rigs are added/removed. Order preserved (post first). gravitySim
       // and renderer are NOT rigs (their own teardown contracts) so stay explicit.
-      const rigs: Rig[] = [postRig, diskRig, starRig, distantStarRig, warpRig, streakRig, ringRig, sunRig];
+      const rigs: Rig[] = [postRig, diskRig, starRig, distantStarRig, warpRig, streakRig, ringRig, sunRig, cockpitRig];
       if (particlePass) rigs.push(particlePass); // present only when the half-res split is active
       if (granBake) rigs.push(granBake); // present only when the granulation bake is active (high tier, ?rgbake≠0)
       for (const rig of rigs) rig.dispose();

@@ -36,6 +36,7 @@ import {
   CURSOR_WINDOW_KEYS,
   SCENE_READY_BODY_CLASS,
   LOADER_GONE_BODY_CLASS,
+  HUD_ACTIVE_BODY_CLASS,
   WEBGL_UNAVAILABLE_BODY_CLASS,
   REDUCED_MOTION_EXPLAINED_STORAGE_KEY,
   readDebugNumber,
@@ -434,6 +435,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           getProgress,
           getFocusTarget: () => null,
           isExplorationMode: () => explorationModeRef.current,
+          // The cockpit rig's power bit: the FSM body class, read at frame cadence.
+          // The literal lives in lib/constants (HUD_ACTIVE_BODY_CLASS) — the scene
+          // itself never touches DOM class names (see SceneHooks.isHudActive).
+          isHudActive: () => document.body.classList.contains(HUD_ACTIVE_BODY_CLASS),
           onMarkerFrame: (m) => { markerFrameRef.current = m; },
           // GPU context lost mid-session: the scene has already preventDefault'd and
           // paused its render loop. Reveal the on-brand fallback so the frozen canvas is
@@ -704,12 +709,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             ))}
           </>
         )}
-        {/* The cockpit canopy the HUD power-on unzooms into — hairline SVG struts
-            lit by the star's projected position (see CockpitFrame). Sits between
-            the canvas and the text overlay; visibility rides the power FSM's
-            body classes in CSS, so it mounts unconditionally (reduced motion
-            included — the light simply rests at the star's home position). */}
-        <CockpitFrame markerFrameRef={markerFrameRef} />
+        {/* The cockpit canopy the HUD power-on unzooms into. On the LIVE path it
+            is a WebGL rig inside the scene itself (buildCockpit — per-pixel star
+            lighting, bloom-lit, clip-space unzoom), so no DOM layer mounts here.
+            The SVG fallback below serves ONLY the reduced-motion poster path,
+            where there is no scene to light it (static frame, CSS crossfade). */}
+        {reduced && <CockpitFrame />}
         <HeroIdentity />
         <ManifestoOverlay />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
