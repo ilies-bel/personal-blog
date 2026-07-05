@@ -101,14 +101,15 @@ export function toPathD(pts: ReadonlyArray<Pt>, closed = false): string {
 }
 
 // ─── The line set ────────────────────────────────────────────────────────────
-// Round-3 layout, matched to the glowing-piping reference: the windshield is
-// WIDER (top edge spans 344..1592) and TALLER (pillar feet at y=800, the glass
-// bottom dipping to ~855), the dash carries three sweeping parallels so the
-// lower flanks read as machined structure instead of empty black, and every
-// line either exits the frame or flows into a junction — no floating ends.
+// Round-4 layout, matched to the glowing-piping reference's FINISH: every major
+// member is a BEAM (two bright tubes bounding a dark band, not a lone stroke),
+// the cowl carries a tight louver striation stack, the console flows INTO the
+// full-width dash rails as one continuous swept member, the lower flanks fan
+// into the pillar-foot junctions with elongated seam blades between the sweeps,
+// and the right instrument circle wears its radial tick ring. Every line still
+// either exits the frame or flows into a junction — no floating ends.
 
 const R_HEX = 34; // windshield hexagon corners
-const R_CONSOLE = 34; // console plateau shoulders
 const CURVE_N = 26; // samples across the windshield's bottom sweep
 
 /** Windshield frame, outer edge (closed ring). The bottom edge is the swept
@@ -134,71 +135,118 @@ const canopyInnerRaw: RawPt[] = [
   [230, 262, R_HEX],
 ];
 
-export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.5, px: 2.2, closed: true };
-export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 2.6, closed: true };
+export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.4, closed: true };
+export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 4.2, closed: true };
+
+/** Louver striations — the fine machined stack hugging the cowl's underside
+ *  (the reference's tight parallel hairlines right below the fat rail). Each
+ *  follows the cowl's own quadratic, shifted down and slightly fanned. */
+function louver(dy: number, inset: number): CockpitLine {
+  const p0: Pt = [1530 - inset, 800 + dy];
+  const p1: Pt = [390 + inset, 800 + dy];
+  return { pts: [p0, ...quad(p0, [960, 910 + dy * 1.2], p1, CURVE_N)], w: 0.28, px: 1.4 };
+}
+
+/** The right instrument circle's tick furniture: a fine radial dash ring just
+ *  outside the main arc, plus three double-tick bracket markers riding it. */
+function instrumentTicks(cx: number, cy: number): CockpitLine[] {
+  const out: CockpitLine[] = [];
+  for (let i = 0; i < 29; i++) {
+    const a = ((136 + i * 3.15) * Math.PI) / 180;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    out.push({ pts: [[cx + 358 * c, cy + 358 * s], [cx + 370 * c, cy + 370 * s]], w: 0.6, px: 1.5 });
+  }
+  for (const deg of [151, 179, 207]) {
+    for (const off of [-1.9, 1.9]) {
+      const a = ((deg + off) * Math.PI) / 180;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      out.push({ pts: [[cx + 340 * c, cy + 340 * s], [cx + 374 * c, cy + 374 * s]], w: 0.7, px: 1.8 });
+    }
+  }
+  return out;
+}
 
 export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   CANOPY_OUTER,
   CANOPY_INNER,
 
   // Ceiling seams — the top-corner cuts continued up to the roof line.
-  { pts: [[344, 78], [286, 0]], w: 0.35, px: 1.3 },
-  { pts: [[1592, 78], [1650, 0]], w: 0.35, px: 1.3 },
+  { pts: [[344, 78], [286, 0]], w: 0.52, px: 1.9 },
+  { pts: [[1592, 78], [1650, 0]], w: 0.52, px: 1.9 },
 
-  // Left side window: top rake to the screen edge + lower sill pair.
-  { pts: [[0, 170], [192, 252]], w: 0.55, px: 1.8 },
-  { pts: [[390, 800], [0, 922]], w: 0.7, px: 1.8 },
-  { pts: [[380, 826], [0, 952]], w: 0.45, px: 1.3 },
+  // Left side window: top rake, the near-edge pane hairline dropping from the
+  // rake to the sill junction, and the lower sill BEAM (edge-tube pair).
+  { pts: [[0, 170], [192, 252]], w: 0.55, px: 2.0 },
+  { pts: [[42, 196], [16, 914]], w: 0.5, px: 1.7 },
+  { pts: [[390, 800], [0, 922]], w: 0.75, px: 2.6 },
+  { pts: [[378, 830], [0, 958]], w: 0.62, px: 2.2 },
 
   // Right side window, mirrored.
-  { pts: [[1920, 170], [1728, 252]], w: 0.55, px: 1.8 },
-  { pts: [[1530, 800], [1920, 922]], w: 0.7, px: 1.8 },
-  { pts: [[1540, 826], [1920, 952]], w: 0.45, px: 1.3 },
+  { pts: [[1920, 170], [1728, 252]], w: 0.55, px: 2.0 },
+  { pts: [[1878, 196], [1904, 914]], w: 0.5, px: 1.7 },
+  { pts: [[1530, 800], [1920, 922]], w: 0.75, px: 2.6 },
+  { pts: [[1542, 830], [1920, 958]], w: 0.62, px: 2.2 },
 
-  // Dashboard sweeps — TWO echoes under the windshield's bottom edge, so the
-  // lower flanks carry machined structure (the centre spans dip off-frame,
-  // leaving the detail exactly where the dash was reading empty).
-  { pts: [[352, 846], ...quad([352, 846], [960, 1064], [1568, 846], CURVE_N)], w: 0.75, px: 1.5 },
-  { pts: [[322, 900], ...quad([322, 900], [960, 1160], [1598, 900], CURVE_N)], w: 0.55, px: 1.3 },
+  // The cowl's louver stack — four striations, tight under the windshield's
+  // bottom sweep, fanning open a touch toward the centre dip.
+  louver(14, 10),
+  louver(26, 16),
+  louver(38, 22),
+  louver(50, 28),
 
-  // Centre console: plateau + shoulders, with a parallel inner echo.
+  // Console coachwork — ONE continuous swept member from screen edge to screen
+  // edge: down the dash, up into the console shoulder, across the plateau, and
+  // back out (the reference's flowing rail), plus the two flank curves that
+  // wrap the console's sides toward the floor, and a soft inner echo.
   {
     pts: resolveCorners([
-      [600, 1080],
-      [618, 1010, R_CONSOLE],
-      [742, 896, R_CONSOLE],
-      [1178, 896, R_CONSOLE],
-      [1302, 1010, R_CONSOLE],
-      [1320, 1080],
+      [-6, 904],
+      [560, 996, 220],
+      [746, 898, 84],
+      [1174, 898, 84],
+      [1360, 996, 220],
+      [1926, 904],
     ]),
-    w: 0.9,
-    px: 2.2,
+    w: 0.8,
+    px: 2.6,
   },
+  { pts: resolveCorners([[-6, 1002], [520, 1054, 180], [618, 1096]]), w: 0.6, px: 2.0 },
+  { pts: resolveCorners([[1926, 1002], [1400, 1054, 180], [1302, 1096]]), w: 0.6, px: 2.0 },
   {
     pts: resolveCorners([
-      [648, 1080],
-      [660, 1026, 26],
-      [766, 914, 26],
-      [1154, 914, 26],
-      [1260, 1026, 26],
-      [1272, 1080],
+      [664, 1084],
+      [676, 1024, 30],
+      [780, 918, 30],
+      [1140, 918, 30],
+      [1244, 1024, 30],
+      [1256, 1084],
     ]),
-    w: 0.55,
-    px: 1.4,
+    w: 0.5,
+    px: 1.5,
   },
 
-  // Lower wing diagonals — run corner to corner (a floating line end is what
-  // read as "cheap"; every member now exits the frame or joins a junction).
-  { pts: [[0, 982], [400, 1080]], w: 0.4, px: 1.4 },
-  { pts: [[0, 1032], [200, 1080]], w: 0.3, px: 1.2 },
-  { pts: [[1920, 982], [1520, 1080]], w: 0.4, px: 1.4 },
-  { pts: [[1920, 1032], [1720, 1080]], w: 0.3, px: 1.2 },
+  // Lower corner fans — bowed sweeps converging on the pillar-foot junctions
+  // (straight diagonals read as wireframe; the reference's members bow).
+  { pts: [[-6, 968], ...quad([-6, 968], [230, 1006], [468, 1086], 12)], w: 0.6, px: 2.0 },
+  { pts: [[-6, 1022], ...quad([-6, 1022], [150, 1046], [286, 1090], 10)], w: 0.5, px: 1.7 },
+  { pts: [[1926, 968], ...quad([1926, 968], [1690, 1006], [1452, 1086], 12)], w: 0.6, px: 2.0 },
+  { pts: [[1926, 1022], ...quad([1926, 1022], [1770, 1046], [1634, 1090], 10)], w: 0.5, px: 1.7 },
 
-  // Right instrument arc: a large circle mostly off-screen bulging into the
-  // frame (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
-  // this is its silent structural twin), with a tighter inner echo.
-  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.5, px: 1.3 },
-  { pts: arc(2150, 540, 316, (138 * Math.PI) / 180, (222 * Math.PI) / 180, 24), w: 0.3, px: 1.2 },
+  // Seam blades — elongated closed slivers between the fan sweeps (the
+  // reference's specular panel seams; what turns "lines" into "machining").
+  { pts: resolveCorners([[170, 948, 6], [320, 986, 6], [308, 998, 6], [156, 958, 6]], true), w: 0.55, px: 1.6, closed: true },
+  { pts: resolveCorners([[96, 1014, 6], [212, 1040, 6], [202, 1050, 6], [84, 1022, 6]], true), w: 0.55, px: 1.6, closed: true },
+  { pts: resolveCorners([[1750, 948, 6], [1600, 986, 6], [1612, 998, 6], [1764, 958, 6]], true), w: 0.55, px: 1.6, closed: true },
+  { pts: resolveCorners([[1824, 1014, 6], [1708, 1040, 6], [1718, 1050, 6], [1836, 1022, 6]], true), w: 0.55, px: 1.6, closed: true },
+
+  // Right instrument circle: main arc + inner echo + the radial tick ring
+  // (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
+  // this is its silent structural twin).
+  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.6, px: 2.4 },
+  { pts: arc(2150, 540, 318, (138 * Math.PI) / 180, (222 * Math.PI) / 180, 24), w: 0.5, px: 1.7 },
+  ...instrumentTicks(2150, 540),
 ];
 
 // ─── The interior masses ─────────────────────────────────────────────────────

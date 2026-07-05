@@ -42,6 +42,14 @@ float litAt(vec2 p, float facing) {
   float hot = exp(-d * d / (2.0 * 300.0 * 300.0));
   return facing * (wide * 0.8 + hot * 1.6) * uStarIntensity;
 }
+// The post grade darkens the frame's corners (vignette, floor 0.66). The
+// reference's powered trim glows evenly to the very corner, so pre-boost the
+// members by (a clamp of) the vignette's inverse — same curve as post.glsl.
+float vigComp(vec2 p) {
+  vec2 q = vec2(p.x / 1920.0 - 0.5, 0.5 - p.y / 1080.0);
+  float vig = smoothstep(1.10, 0.28, length(q) * 1.25);
+  return 1.0 + 0.55 * (1.0 - vig);
+}
 `;
 
 export const cockpitLineVertexShader = /* glsl */ `
@@ -51,59 +59,73 @@ attribute float aSide;   // which ribbon edge: -1 | +1
 attribute float aW;      // facing weight (0..1)
 attribute float aWidth;  // member width, CSS px (the piping hierarchy)
 uniform float uHalfW;       // design units per CSS half-px (tracks viewport)
-uniform float uWidthScale;  // 1 for the core pass, ~6 for the glow pass
+uniform float uWidthScale;  // 1 for the core pass, ~7 for the glow pass
 ${designToClip}
 varying vec2 vPos;
 varying float vSide;
 varying float vW;
+varying float vWidth;
 void main() {
   vec2 p = aPos + aNorm * (aSide * uHalfW * aWidth * uWidthScale);
   vPos = p;
   vSide = aSide;
   vW = aW;
+  vWidth = aWidth;
   gl_Position = clipFromDesign(p);
 }
 `;
 
-/** Core pass: the member itself. Amber body, white-hot centre, brightness and
- *  temperature modulated by the star's light. Normal blending. */
+/** Core pass: the member itself. SELF-LUMINOUS powered trim, authored in HDR
+ *  (uFloor, keyframed per chapter roughly inverse to the grade's exposure) so
+ *  the piping survives the Reinhard tone-map + desaturation as saturated amber
+ *  instead of tan wireframe. The white-hot centre is gated by MEMBER WIDTH —
+ *  only the fat coachwork runs hot; hairlines stay pure orange (the reference
+ *  hierarchy). The star's light breathes on top of the floor. Normal blend. */
 export const cockpitLineFragmentShader = /* glsl */ `
 precision highp float;
 ${starLight}
 uniform vec3 uAmber;     // piping body colour
 uniform vec3 uCoreTint;  // white-hot centre
+uniform float uFloor;    // HDR self-luminous gain (per-chapter keyframe)
 uniform float uAlpha;    // deploy opacity (power fade)
 varying vec2 vPos;
 varying float vSide;
 varying float vW;
+varying float vWidth;
 void main() {
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
   float litN = clamp(lit, 0.0, 1.0);
   float t = abs(vSide);
-  float coreMask = 1.0 - smoothstep(0.0, 0.38, t);
-  vec3 col = mix(uAmber, uCoreTint, coreMask * (0.35 + 0.45 * litN));
-  col *= 0.95 + 1.15 * lit;        // the scene's light breathes on the trim
-  col += uStarColor * lit * 0.22;  // chapter temperature
-  float edge = 1.0 - smoothstep(0.62, 1.0, t);
-  gl_FragColor = vec4(col, uAlpha * edge * (0.72 + 0.28 * litN));
+  float widthGate = smoothstep(2.4, 4.2, vWidth);
+  float coreMask = (1.0 - smoothstep(0.0, 0.5, t)) * widthGate;
+  vec3 base = mix(uAmber, uCoreTint, coreMask * (0.28 + 0.35 * litN));
+  float energy = uFloor * (0.25 + 0.75 * vW * vW) * (1.0 + 0.5 * min(lit, 0.6)) * vigComp(vPos);
+  vec3 col = base * energy + uStarColor * min(lit, 1.2) * 0.9;
+  float edge = 1.0 - smoothstep(0.55, 1.0, t);
+  gl_FragColor = vec4(col, uAlpha * edge * 0.96);
 }
 `;
 
-/** Glow pass: the halo. Additive, gaussian across the wide ribbon, swelling
- *  where the star's light lands. */
+/** Glow pass: the halo. Additive, gaussian across the wide ribbon — carries
+ *  the edge-lit look on its own (the bloom pass's per-chapter strength cannot
+ *  be relied on at the quiet chapters). Halo energy follows the same member
+ *  hierarchy: the fat trim wears the big halo, hairlines barely any. */
 export const cockpitGlowFragmentShader = /* glsl */ `
 precision highp float;
 ${starLight}
 uniform vec3 uAmber;
+uniform float uFloor;
 uniform float uAlpha;
 varying vec2 vPos;
 varying float vSide;
 varying float vW;
+varying float vWidth;
 void main() {
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
-  float g = exp(-vSide * vSide * 4.0);
-  vec3 col = uAmber * (0.5 + 0.9 * lit) + uStarColor * lit * 0.2;
-  gl_FragColor = vec4(col, uAlpha * g * (0.2 + 0.27 * clamp(lit, 0.0, 1.0)));
+  float g = exp(-vSide * vSide * 5.0);
+  float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 4.0, vWidth));
+  float energy = uFloor * 0.3 * hier * (1.0 + 0.7 * clamp(lit, 0.0, 0.5)) * vigComp(vPos);
+  gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.26);
 }
 `;
 
@@ -119,14 +141,15 @@ void main() {
 export const cockpitPanelFragmentShader = /* glsl */ `
 precision highp float;
 ${starLight}
+uniform vec3 uAmber;   // a whisper of the trim's own bounce on the masses
 uniform float uAlpha;
 uniform float uFill;   // resting panel opacity (the interior's darkness)
 varying vec2 vPos;
 void main() {
   float lit = litAt(vPos, 1.0);
-  // Near-black structure with a faint wash of the star's own light nearby —
-  // the interior surfaces catching the scene (the sheen pass).
-  vec3 col = vec3(0.008, 0.008, 0.012) + uStarColor * lit * 0.03;
+  // Near-black structure with a whisper of the piping's bounce, plus a faint
+  // wash of the star's light nearby — surfaces catching the scene, not a hole.
+  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.005 + uStarColor * lit * 0.022;
   gl_FragColor = vec4(col, uFill * uAlpha);
 }
 `;

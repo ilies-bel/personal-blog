@@ -51,7 +51,7 @@ export interface CockpitRig extends Rig {
 }
 
 /** How much wider the glow pass's ribbon runs than its member. */
-const GLOW_WIDTH_SCALE = 6;
+const GLOW_WIDTH_SCALE = 5;
 
 // ── Star-light keyframes over the eased stage ───────────────────────────────
 // The chapter's light colour + intensity, matched to what the canvas actually
@@ -59,16 +59,24 @@ const GLOW_WIDTH_SCALE = 6;
 // giant, gold star, blue-white nebula core, then the pale dot. Linear-lerped
 // per frame; colours are sRGB-ish values tuned against screenshots, not
 // physical constants.
-const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number }> = [
-  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.65 }, // black hole: cold bone disk glare
-  { s: 0.5, c: [1.0, 1.0, 1.0], i: 1.35 }, // supernova flash
-  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05 }, // red giant: ember
-  { s: 2.9, c: [1.0, 0.84, 0.52], i: 1.2 }, // yellow star: gold
-  { s: 4.0, c: [0.78, 0.85, 1.0], i: 0.85 }, // nebula core: blue-white
-  { s: 4.7, c: [0.74, 0.82, 1.0], i: 0.6 }, // the pale dot
+//
+// `f` is the piping's HDR FLOOR GAIN — the self-luminous energy the trim emits
+// before any scene light lands on it. The cockpit renders INSIDE the graded
+// pipeline (exposure × Reinhard tone-map × per-chapter desaturation), so a
+// plain 0..1 colour arrives on screen as tan wireframe: to read as saturated
+// glowing amber the members must be authored HOT, roughly inverse to each
+// chapter's grade exposure (the pale dot grades at 0.46 exposure + 0.72 sat —
+// hence the biggest floor).
+const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number; f: number }> = [
+  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.65, f: 6 }, // black hole: cold bone disk glare
+  { s: 0.5, c: [1.0, 1.0, 1.0], i: 1.35, f: 4 }, // supernova flash
+  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05, f: 6.5 }, // red giant: ember (dim grade)
+  { s: 2.9, c: [1.0, 0.84, 0.52], i: 1.2, f: 6 }, // yellow star: gold (hot grade)
+  { s: 4.0, c: [0.78, 0.85, 1.0], i: 0.85, f: 13 }, // nebula core: blue-white
+  { s: 4.7, c: [0.74, 0.82, 1.0], i: 0.6, f: 55 }, // the pale dot (0.46 exposure + the output decode)
 ];
 
-function starLightAt(stage: number, outColor: THREE.Color): number {
+function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: number } {
   let a = STAR_KEYS[0];
   let b = STAR_KEYS[STAR_KEYS.length - 1];
   for (let i = 0; i < STAR_KEYS.length - 1; i++) {
@@ -82,7 +90,7 @@ function starLightAt(stage: number, outColor: THREE.Color): number {
   const k = Math.min(1, Math.max(0, (stage - a.s) / span));
   outColor.setRGB(a.c[0] + (b.c[0] - a.c[0]) * k, a.c[1] + (b.c[1] - a.c[1]) * k, a.c[2] + (b.c[2] - a.c[2]) * k);
   outColor.convertSRGBToLinear(); // keys are authored in sRGB (see palette note)
-  return a.i + (b.i - a.i) * k;
+  return { i: a.i + (b.i - a.i) * k, f: a.f + (b.f - a.f) * k };
 }
 
 // ── Ribbon extrusion ─────────────────────────────────────────────────────────
@@ -184,13 +192,16 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     uLight: { value: new THREE.Vector2(COCKPIT_W / 2, COCKPIT_H * 0.43) },
     uStarColor: { value: new THREE.Color(0.88, 0.86, 0.8) },
     uStarIntensity: { value: 0.65 },
+    uFloor: { value: 9 }, // HDR self-luminous gain, keyframed (STAR_KEYS.f)
     uAlpha: { value: 0 },
     uHalfW: { value: 0.55 }, // design units per CSS half-px; written per frame
     // The piping palette: amber body, white-hot core (the reference trim).
-    // Authored in sRGB, converted to linear — the composer chain sRGB-encodes
-    // on output, so raw values here would wash to pale peach.
-    uAmber: { value: new THREE.Color(1.0, 0.55, 0.18).convertSRGBToLinear() },
-    uCoreTint: { value: new THREE.Color(1.0, 0.9, 0.72).convertSRGBToLinear() },
+    // Authored in sRGB, converted to linear, then driven HOT by uFloor — the
+    // hue is deliberately redder than the on-screen target because the grade's
+    // Reinhard + desaturation pull HDR orange toward yellow-tan; this lands on
+    // the reference's saturated amber after the pipeline has its way.
+    uAmber: { value: new THREE.Color(1.0, 0.47, 0.13).convertSRGBToLinear() },
+    uCoreTint: { value: new THREE.Color(1.0, 0.93, 0.76).convertSRGBToLinear() },
   };
 
   const panelUniforms: Uniforms = {
@@ -291,7 +302,9 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     const lx = Math.max(-200, Math.min(COCKPIT_W + 200, (ndcX * 0.5 + 0.5) * COCKPIT_W));
     const ly = Math.max(-200, Math.min(COCKPIT_H + 200, (1 - (ndcY * 0.5 + 0.5)) * COCKPIT_H));
     (shared.uLight.value as THREE.Vector2).set(lx, ly);
-    shared.uStarIntensity.value = starLightAt(stage, scratchColor);
+    const light = starLightAt(stage, scratchColor);
+    shared.uStarIntensity.value = light.i;
+    shared.uFloor.value = light.f;
     (shared.uStarColor.value as THREE.Color).copy(scratchColor);
 
     // Design units per CSS half-px, tracking the live viewport height (the
