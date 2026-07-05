@@ -52,6 +52,7 @@ import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
+import CockpitFrame from './CockpitFrame';
 import StarMarker from './StarMarker';
 import {
   PosterSlideshow,
@@ -703,6 +704,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             ))}
           </>
         )}
+        {/* The cockpit canopy the HUD power-on unzooms into — hairline SVG struts
+            lit by the star's projected position (see CockpitFrame). Sits between
+            the canvas and the text overlay; visibility rides the power FSM's
+            body classes in CSS, so it mounts unconditionally (reduced motion
+            included — the light simply rests at the star's home position). */}
+        <CockpitFrame markerFrameRef={markerFrameRef} />
         <HeroIdentity />
         <ManifestoOverlay />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
