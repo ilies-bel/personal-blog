@@ -149,6 +149,11 @@ export interface SceneHooks {
   /** True while the final HUD is controlling previews. Suppresses cinematic-only
    *  effects such as the supernova whiteout so menu hover never becomes flashy. */
   isExplorationMode?: () => boolean;
+  /** True while the HUD is POWERED (the body-class FSM's hud-active state). Read
+   *  per frame by the cockpit canopy rig to drive its deploy/unzoom tween —
+   *  through this seam so the scene never reads DOM class names itself. Absent
+   *  (backdrop mode) means the cockpit never deploys. */
+  isHudActive?: () => boolean;
   /** Called once per frame with the projected position of the star object. Used by
    *  StarMarker to anchor HTML markers over the on-screen object without triggering
    *  React re-renders. Optional: backdrop mode does not provide this callback. */

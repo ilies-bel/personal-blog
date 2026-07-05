@@ -2185,7 +2185,7 @@ export const diskFragmentShader = /* glsl */ `
     // of), so it can't animate; uDotTime is the dedicated always-live clock. Under
     // reduced motion uDotTime is 0 → the dot holds steady at 0.78 (no pulse), as desired.
     if(vPlaceholder > 2.5 && vPlaceholder < 3.5){
-      float dotPulse = 0.78 + 0.34 * sin(uDotTime * 0.8);   // ~0.44..1.12, ~7.85s period
+      float dotPulse = 0.74 + 0.40 * sin(uDotTime * 2.1);   // ~0.34..1.14, ~3s period: a visible heartbeat
       inten *= dotPulse;
     }
     if(vPlaceholder > 1.5 && vPlaceholder < 2.9){
