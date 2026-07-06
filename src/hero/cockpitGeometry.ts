@@ -207,40 +207,34 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   // is filled by the strut band automatically.)
 
   // Console — re-measured off the reference crop (dense luminance trace with
-  // the sill pair + pillar feet as the crop↔design anchors):
-  //   • the RAIL PAIR crosses only the CENTRE (flat 864/877 with a gentle
-  //     bow); each end dives steeply and LANDS on a flank member (the upper
-  //     rail on the dash-top line, the lower rail continuing INTO the skirt)
-  //     — the reference's Y-merge, never a separate edge-to-edge swoop,
-  //   • one DASH-TOP LINE per flank runs from the screen edge (y≈949) rising
-  //     gently inboard, tucking under the pedestal shoulder, with a HAIRLINE
-  //     ECHO doubling it near the edge (merging back inboard),
-  //   • the PEDESTAL: flat top y≈911 spanning 760→1125 — narrower than round
-  //     5 — shoulders r85, sides diving at ~52° off the bottom of the frame,
-  //     wearing a SINGLE machined edge (the round-5 inner bezel is not in the
-  //     reference),
-  //   • a SKIRT PAIR per side: off the rail-merge junction, kneeing outward
-  //     through (553,969)→(450,1030) to exit at the bottom corners — the
-  //     console's flared base.
-  // Rail pair (centre only, ends landing on flank members):
-  { pts: resolveCorners([[612, 917], [746, 864, 170], [1174, 864, 170], [1308, 917]]), w: 0.7, px: 2.0 },
-  { pts: resolveCorners([[610, 938], [746, 877, 150], [1174, 877, 150], [1310, 938]]), w: 0.55, px: 1.8 },
-  // Dash-top flank lines + their near-edge hairline echoes:
-  { pts: resolveCorners([[-6, 949], [350, 928, 260], [720, 912]]), w: 0.6, px: 1.9 },
-  { pts: resolveCorners([[1926, 949], [1570, 928, 260], [1200, 912]]), w: 0.6, px: 1.9 },
-  { pts: resolveCorners([[-6, 933], [240, 919, 140], [520, 921, 80], [600, 917]]), w: 0.35, px: 1.4 },
-  { pts: resolveCorners([[1926, 933], [1680, 919, 140], [1400, 921, 80], [1320, 917]]), w: 0.35, px: 1.4 },
+  // the sill pair + pillar feet as the crop↔design anchors). The rail pair is
+  // NOT a separate centre member landing on flank lines: in the reference
+  // each flank line CONTINUES through the hub elbow into the rail — one
+  // stroke per line, screen edge to screen edge — so both rails are authored
+  // as single continuous members (no caps, no scissor crossings at the hub):
+  //   • UPPER RAIL: from the edge along the dash-top profile (y≈949→916),
+  //     elbow up at x≈610/1310, flat 864 across the centre, mirror out,
+  //   • LOWER RAIL: rises out of the SKIRT (the console's flared base,
+  //     kneeing through (450,1030)→(553,969)), same elbow, flat 877, mirror,
+  //   • a HAIRLINE ECHO doubles the dash-top near each edge, merging back
+  //     onto the upper rail before the hub,
+  //   • the PEDESTAL: flat top y≈911 spanning 760→1125, shoulders r85, sides
+  //     diving at ~52° off the bottom of the frame, a SINGLE machined edge
+  //     (the round-5 inner bezel is not in the reference),
+  //   • a lower skirt echo splits off each skirt mid-dive.
+  { pts: resolveCorners([[-6, 949], [350, 928, 260], [608, 916, 90], [746, 864, 170], [1174, 864, 170], [1312, 916, 90], [1570, 928, 260], [1926, 949]]), w: 0.7, px: 2.0 },
+  { pts: resolveCorners([[170, 1088], [430, 1035, 120], [520, 1000, 150], [610, 938, 90], [746, 877, 150], [1174, 877, 150], [1310, 938, 90], [1400, 1000, 150], [1490, 1035, 120], [1750, 1088]]), w: 0.6, px: 1.9 },
+  // Near-edge hairline echoes (merging onto the upper rail before the hub):
+  { pts: resolveCorners([[-6, 933], [240, 919, 140], [430, 924]]), w: 0.35, px: 1.4 },
+  { pts: resolveCorners([[1926, 933], [1680, 919, 140], [1490, 924]]), w: 0.35, px: 1.4 },
   // Pedestal:
   { pts: resolveCorners([[620, 1090], [760, 911, 85], [1125, 911, 85], [1265, 1090]]), w: 0.85, px: 2.2 },
-  // Skirt pairs (upper shares its junction point with the lower rail; the
-  // lower echo splits off the upper mid-dive):
-  { pts: resolveCorners([[610, 938], [520, 1000, 150], [430, 1035, 120], [170, 1088]]), w: 0.7, px: 1.9 },
-  { pts: resolveCorners([[1310, 938], [1400, 1000, 150], [1490, 1035, 120], [1750, 1088]]), w: 0.7, px: 1.9 },
+  // Lower skirt echoes (splitting off the lower rail's skirt mid-dive):
   { pts: resolveCorners([[585, 955], [505, 1018, 120], [420, 1052, 110], [130, 1097]]), w: 0.5, px: 1.6 },
   { pts: resolveCorners([[1335, 955], [1415, 1018, 120], [1500, 1052, 110], [1790, 1097]]), w: 0.5, px: 1.6 },
   // Flank plate seams (the faint service panels under each sill flank).
-  { pts: resolveCorners([[228, 861, 12], [392, 853, 12], [414, 893, 12], [258, 903, 12]], true), w: 0.3, px: 1.2, closed: true },
-  { pts: resolveCorners([[1692, 861, 12], [1528, 853, 12], [1506, 893, 12], [1662, 903, 12]], true), w: 0.3, px: 1.2, closed: true },
+  { pts: resolveCorners([[228, 861, 12], [392, 853, 12], [414, 893, 12], [258, 903, 12]], true), w: 0.22, px: 1.1, closed: true },
+  { pts: resolveCorners([[1692, 861, 12], [1528, 853, 12], [1506, 893, 12], [1662, 903, 12]], true), w: 0.22, px: 1.1, closed: true },
 
   // Right instrument circle: main arc + inner echo + the radial tick ring
   // (the left flank's half-circle gauge is the LIVE .hud-arc instrument;

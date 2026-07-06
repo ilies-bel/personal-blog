@@ -99,8 +99,8 @@ const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: numb
   // bloom lands near its 0.05 endpoint. `d` bridges the residual mid-band
   // super-saturation so the recovery band (JUMP TO WORK) reads the same calm
   // gold as the settled dot chapter.
-  { s: 4.4, c: [0.76, 0.83, 1.0], i: 0.7, f: 18, d: 0.7 },
-  { s: 4.47, c: [0.74, 0.82, 1.0], i: 0.62, f: 50, d: 0.95 },
+  { s: 4.35, c: [0.76, 0.83, 1.0], i: 0.7, f: 18, d: 0.7 },
+  { s: 4.45, c: [0.74, 0.82, 1.0], i: 0.62, f: 55, d: 0.95 },
   { s: 4.5, c: [0.74, 0.82, 1.0], i: 0.6, f: 55 }, // the pale dot (0.46 exposure + the output decode)
 ];
 

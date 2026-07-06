@@ -100,7 +100,10 @@ void main() {
   float coreMask = (1.0 - smoothstep(0.0, 0.5, t)) * widthGate;
   vec3 base = mix(uAmber, uCoreTint, coreMask * (0.28 + 0.35 * litN));
   float energy = uFloor * (0.25 + 0.75 * vW * vW) * (1.0 + 0.5 * min(lit, 0.6)) * vigComp(vPos);
-  vec3 col = base * energy + uStarColor * min(lit, 1.2) * 0.9;
+  // Additive star kiss, lidded LOW: at the glare-heavy chapters (the black
+  // hole's screen-wide disk light) the old 1.2/0.9 term bleached every member
+  // bone-white and fed the bloom until the piping read as fat soft tubes.
+  vec3 col = base * energy + uStarColor * min(lit, 0.9) * 0.65;
   float edge = 1.0 - smoothstep(0.55, 1.0, t);
   gl_FragColor = vec4(col, uAlpha * edge * 0.96);
 }
@@ -122,10 +125,14 @@ varying float vW;
 varying float vWidth;
 void main() {
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
-  float g = exp(-vSide * vSide * 5.0);
+  // Tighter falloff + lower lid than round 5: the reference's halo is a
+  // whisper hugging each line — under the glare-heavy chapters (the black
+  // hole's screen-wide bone light) the old 0.2 lid fogged the whole dash
+  // into a washed brown haze.
+  float g = exp(-vSide * vSide * 7.0);
   float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 2.7, vWidth));
-  float energy = uFloor * 0.3 * hier * (1.0 + 0.7 * clamp(lit, 0.0, 0.5)) * vigComp(vPos);
-  gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.2);
+  float energy = uFloor * 0.3 * hier * (1.0 + 0.4 * clamp(lit, 0.0, 0.5)) * vigComp(vPos);
+  gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.17);
 }
 `;
 
@@ -148,8 +155,11 @@ varying vec2 vPos;
 void main() {
   float lit = litAt(vPos, 1.0);
   // Near-black structure with a whisper of the piping's bounce, plus a faint
-  // wash of the star's light nearby — surfaces catching the scene, not a hole.
-  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.003 + uStarColor * lit * 0.02;
+  // wash of the star's light nearby — surfaces catching the scene, not a
+  // hole. The wash is kept a WHISPER (0.008): at 0.02 the black hole's
+  // screen-wide glare tinted the whole dash a washed brown instead of the
+  // reference's near-black panels.
+  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.003 + uStarColor * lit * 0.008;
   gl_FragColor = vec4(col, uFill * uAlpha);
 }
 `;
