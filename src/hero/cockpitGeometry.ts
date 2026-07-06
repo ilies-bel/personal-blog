@@ -134,25 +134,25 @@ const canopyOuterRaw: RawPt[] = [
   [1714, 292, 30],
   // Right pillar FOOT — the reference's construction: the whole bottom is ONE
   // slim beam hugging the window's bottom edge. The pillar's outer face
-  // rounds at the foot into the sill's top edge, which BOWS away — flat off
-  // the foot, steepening toward the screen edge (the curve leans into the
-  // main window). The underside returns on the same bow and runs on as the
-  // window beam's outer line, sagging gently with the glass across the
-  // centre. (The inner ring's foot corner closes each hub.)
-  [1500, 790, 40],
+  // rounds at the foot into the sill's top edge. Re-measured off the console
+  // crop (dense luminance trace): the sill is NEARLY FLAT with a subtle
+  // CROWN at the centre — the underside sits at ~841 mid-screen and ~850 near
+  // the feet (the round-5 layout bowed the opposite way, sagging 43px to the
+  // centre, which read as a drooping cowl against the reference).
+  [1500, 822, 40],
   [1740, 816, 170],
   [1944, 856],
   [1944, 868],
-  [1730, 832, 170],
-  [1500, 801, 150],
-  [960, 844, 380],
+  [1730, 845, 170],
+  [1470, 850, 220],
+  [960, 841, 480],
   // Left pillar foot, mirrored.
-  [420, 801, 150],
-  [190, 832, 170],
+  [450, 850, 220],
+  [190, 845, 170],
   [-24, 868],
   [-24, 856],
   [180, 816, 170],
-  [420, 790, 40],
+  [420, 822, 40],
   // Left rake junction (up the pillar → out the screen edge → V notch).
   [206, 292, 30],
   [-26, 183],
@@ -165,9 +165,12 @@ const canopyInnerRaw: RawPt[] = [
   [360, 96, 18],
   [1576, 96, 18],
   [1690, 262, 24],
-  [1465, 786, R_HEX],
-  [960, 830, 380],
-  [455, 786, R_HEX],
+  // The lip (the sill beam's TOP edge) mirrors the outer underside's profile:
+  // nearly flat, crowning ~6px at the centre, turning up the pillars at the
+  // feet (measured {829,841} at centre / {834,850} near the feet).
+  [1465, 834, 44],
+  [960, 828, 460],
+  [455, 834, 44],
   [230, 262, 24],
 ];
 
@@ -203,21 +206,41 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   // junctions above — so they carry the frame's exact finish and their band
   // is filled by the strut band automatically.)
 
-  // Console — measured off the reference, three swooping layers deep:
-  //   • the RAIL PAIR (tight, ~13 apart) arcing edge-to-edge, rising toward
-  //     the main window — flat ~864/877 across the centre, diving steeply to
-  //     the flanks — always passing clear above the screen,
-  //   • the SCREEN TOP: a third continuous edge-to-edge swoop that rises from
-  //     each screen edge INTO the pedestal's plateau (y≈911, shoulders r90),
-  //   • the PEDESTAL: sides splitting DOWN off the swoop at each shoulder
-  //     (~45° splay, caps hidden under the swoop's stroke) with a tight bezel
-  //     line ~17px inside — the machined double edge.
-  { pts: resolveCorners([[-6, 995], [240, 900, 140], [520, 864, 220], [1400, 864, 220], [1680, 900, 140], [1926, 995]]), w: 0.7, px: 2.0 },
-  { pts: resolveCorners([[-6, 1008], [248, 913, 140], [530, 877, 220], [1390, 877, 220], [1672, 913, 140], [1926, 1008]]), w: 0.55, px: 1.8 },
-  { pts: resolveCorners([[507, 1090], [690, 911, 90], [1230, 911, 90], [1413, 1090]]), w: 0.85, px: 2.2 },
-  { pts: resolveCorners([[-6, 1035], [350, 938, 220], [700, 927]]), w: 0.8, px: 2.1 },
-  { pts: resolveCorners([[1926, 1035], [1570, 938, 220], [1220, 927]]), w: 0.8, px: 2.1 },
-  { pts: resolveCorners([[520, 1098], [692, 929, 48], [1228, 929, 48], [1400, 1098]]), w: 0.5, px: 1.7 },
+  // Console — re-measured off the reference crop (dense luminance trace with
+  // the sill pair + pillar feet as the crop↔design anchors):
+  //   • the RAIL PAIR crosses only the CENTRE (flat 864/877 with a gentle
+  //     bow); each end dives steeply and LANDS on a flank member (the upper
+  //     rail on the dash-top line, the lower rail continuing INTO the skirt)
+  //     — the reference's Y-merge, never a separate edge-to-edge swoop,
+  //   • one DASH-TOP LINE per flank runs from the screen edge (y≈949) rising
+  //     gently inboard, tucking under the pedestal shoulder, with a HAIRLINE
+  //     ECHO doubling it near the edge (merging back inboard),
+  //   • the PEDESTAL: flat top y≈911 spanning 760→1125 — narrower than round
+  //     5 — shoulders r85, sides diving at ~52° off the bottom of the frame,
+  //     wearing a SINGLE machined edge (the round-5 inner bezel is not in the
+  //     reference),
+  //   • a SKIRT PAIR per side: off the rail-merge junction, kneeing outward
+  //     through (553,969)→(450,1030) to exit at the bottom corners — the
+  //     console's flared base.
+  // Rail pair (centre only, ends landing on flank members):
+  { pts: resolveCorners([[612, 917], [746, 864, 170], [1174, 864, 170], [1308, 917]]), w: 0.7, px: 2.0 },
+  { pts: resolveCorners([[610, 938], [746, 877, 150], [1174, 877, 150], [1310, 938]]), w: 0.55, px: 1.8 },
+  // Dash-top flank lines + their near-edge hairline echoes:
+  { pts: resolveCorners([[-6, 949], [350, 928, 260], [720, 912]]), w: 0.6, px: 1.9 },
+  { pts: resolveCorners([[1926, 949], [1570, 928, 260], [1200, 912]]), w: 0.6, px: 1.9 },
+  { pts: resolveCorners([[-6, 933], [240, 919, 140], [520, 921, 80], [600, 917]]), w: 0.35, px: 1.4 },
+  { pts: resolveCorners([[1926, 933], [1680, 919, 140], [1400, 921, 80], [1320, 917]]), w: 0.35, px: 1.4 },
+  // Pedestal:
+  { pts: resolveCorners([[620, 1090], [760, 911, 85], [1125, 911, 85], [1265, 1090]]), w: 0.85, px: 2.2 },
+  // Skirt pairs (upper shares its junction point with the lower rail; the
+  // lower echo splits off the upper mid-dive):
+  { pts: resolveCorners([[610, 938], [520, 1000, 150], [430, 1035, 120], [170, 1088]]), w: 0.7, px: 1.9 },
+  { pts: resolveCorners([[1310, 938], [1400, 1000, 150], [1490, 1035, 120], [1750, 1088]]), w: 0.7, px: 1.9 },
+  { pts: resolveCorners([[585, 955], [505, 1018, 120], [420, 1052, 110], [130, 1097]]), w: 0.5, px: 1.6 },
+  { pts: resolveCorners([[1335, 955], [1415, 1018, 120], [1500, 1052, 110], [1790, 1097]]), w: 0.5, px: 1.6 },
+  // Flank plate seams (the faint service panels under each sill flank).
+  { pts: resolveCorners([[228, 861, 12], [392, 853, 12], [414, 893, 12], [258, 903, 12]], true), w: 0.3, px: 1.2, closed: true },
+  { pts: resolveCorners([[1692, 861, 12], [1528, 853, 12], [1506, 893, 12], [1662, 903, 12]], true), w: 0.3, px: 1.2, closed: true },
 
   // Right instrument circle: main arc + inner echo + the radial tick ring
   // (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
@@ -249,11 +272,11 @@ export const PANEL_CEILING: ReadonlyArray<Pt> = resolveCorners(
 export const PANEL_DASH: ReadonlyArray<Pt> = resolveCorners(
   [
     [-30, 868],
-    [190, 832, 170],
-    [420, 801, 150],
-    [960, 844, 380],
-    [1500, 801, 150],
-    [1730, 832, 170],
+    [190, 845, 170],
+    [450, 850, 220],
+    [960, 841, 480],
+    [1470, 850, 220],
+    [1730, 845, 170],
     [1944, 868],
     [1944, 1090],
     [-30, 1090],

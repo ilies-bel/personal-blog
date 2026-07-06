@@ -764,6 +764,19 @@ export function lifecycle(input: LifecycleInput): StarState {
     gradeSat = gradeSat * (1 - ne) + 1.55 * ne; // vivid SHO palette
     diskSat = diskSat * (1 - ne) + 1.4 * ne;
     grain = grain * (1 - ne); // fade film grain out → smooth immersed gas (no speckle)
+    // Pre-dot handoff: by stage ~4.3 the dezoom has emptied the frame (the gas
+    // is a receding orb), so the vivid gas grade EASES into the dot endpoint
+    // across 4.3→4.5 instead of popping at the slot snap — the wide gas bloom,
+    // SHO super-saturation and gas exposure all land exactly on the `dot`
+    // branch's values as it takes over (and the cockpit's recovery band reads
+    // as the reference's calm gold piping, not red tubes under gas grading).
+    const de = smoothstep01((stage - 4.3) / 0.2);
+    bloomStrength = bloomStrength * (1 - de) + DOT_BLOOM_STRENGTH * de;
+    bloomRadius = bloomRadius * (1 - de) + DOT_BLOOM_RADIUS * de;
+    exposure = exposure * (1 - de) + DOT_EXPOSURE * de;
+    warmth = warmth * (1 - de) + -0.03 * de;
+    gradeSat = gradeSat * (1 - de) + 0.72 * de;
+    diskSat = diskSat * (1 - de) + 0.7 * de;
   } else if (dot) {
     // pale blue dot: the closing speck — a small, lonely, clearly-blue point with a
     // SOFT GLOW in a very large black field. Graded via the DOT_* endpoint constants
