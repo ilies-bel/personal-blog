@@ -53,7 +53,7 @@ export interface CockpitRig extends Rig {
 /** How much wider the glow pass's ribbon runs than its member. Kept TIGHT: the
  *  reference's halo hugs its edge lines — a wide halo bridges a beam's two
  *  edges and washes out the dark band that gives the member its width. */
-const GLOW_WIDTH_SCALE = 3.0;
+const GLOW_WIDTH_SCALE = 2.4;
 
 /** The authored piping body colour (linear); uAmber is derived from it per
  *  frame via the band's gold-shift key (STAR_KEYS.d). GOLD_BASE is the shift
@@ -85,9 +85,19 @@ const GOLD_BASE = new THREE.Color(1.0, 0.82, 0.4).convertSRGBToLinear();
 // red — so the nebula→dot run pre-shifts toward gold and lands on the same
 // calm gold the dot chapter shows.
 const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number; f: number; d?: number }> = [
-  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.65, f: 6 }, // black hole: cold bone disk glare
+  // Black hole: the chapter's grade is the near-monochrome COLD-SILVER room
+  // (uSat ≈ 0.38 + the cool shadow cast) — at that saturation a BRIGHT line
+  // can only land tan, whatever its authored hue (desat pulls toward a high
+  // luma). The reference's spans are mostly DIM rich umber with sparse hot
+  // flares, and dim survives the desat with its relative saturation intact.
+  // The floor must also hold the member BODY under the bloom pass's 0.55
+  // threshold: this chapter runs the photon ring's wide strong bloom, and any
+  // span sitting over the threshold along its whole length staircases through
+  // the deep mips into blocky beads. Only the star kiss may cross — its
+  // envelope is spatially smooth, so it blooms smoothly.
+  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.85, f: 1.35 }, // black hole: cold bone disk glare
   { s: 0.5, c: [1.0, 1.0, 1.0], i: 1.35, f: 4 }, // supernova flash
-  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05, f: 6.5 }, // red giant: ember (dim grade)
+  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05, f: 5.8 }, // red giant: ember (dim grade)
   { s: 2.9, c: [1.0, 0.84, 0.52], i: 1.2, f: 6 }, // yellow star: gold (hot grade)
   { s: 4.0, c: [0.78, 0.85, 1.0], i: 0.85, f: 13 }, // nebula core: blue-white
   // The gas grade EASES into the dot endpoint across stage 4.3→4.5 (the
@@ -100,8 +110,8 @@ const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: numb
   // super-saturation so the recovery band (JUMP TO WORK) reads the same calm
   // gold as the settled dot chapter.
   { s: 4.35, c: [0.76, 0.83, 1.0], i: 0.7, f: 18, d: 0.7 },
-  { s: 4.45, c: [0.74, 0.82, 1.0], i: 0.62, f: 55, d: 0.95 },
-  { s: 4.5, c: [0.74, 0.82, 1.0], i: 0.6, f: 55 }, // the pale dot (0.46 exposure + the output decode)
+  { s: 4.45, c: [0.74, 0.82, 1.0], i: 0.72, f: 62, d: 0.95 },
+  { s: 4.5, c: [0.74, 0.82, 1.0], i: 0.72, f: 62 }, // the pale dot (0.46 exposure + the output decode)
 ];
 
 function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: number; d: number } {
@@ -170,10 +180,13 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
       const ny = tx;
       const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
       // Perspective taper: the reference cockpit's members thin with distance,
-      // so width scales with screen height (roof ~0.72x, cowl ~1.15x). The
-      // tapered value also feeds aWidth, so the white-hot core gate lets go of
-      // a member as it climbs toward the roof.
-      const taper = 0.72 + 0.5 * (p[1] / COCKPIT_H);
+      // so width scales with screen height. MILD (roof ~0.85x, cowl ~1.23x):
+      // re-measured against the reference, its roof members run nearly as bold
+      // as the sill's — the old 0.72x roof landed sub-pixel after the DPR
+      // mapping and the whole top half read wispy. The tapered value also
+      // feeds aWidth, so the white-hot core gate lets go of a member as it
+      // climbs toward the roof.
+      const taper = 0.85 + 0.38 * (p[1] / COCKPIT_H);
       for (const s of [-1, 1]) {
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
