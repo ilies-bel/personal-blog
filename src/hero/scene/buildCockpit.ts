@@ -179,20 +179,15 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
       const nx = -ty;
       const ny = tx;
       const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
-      // Perspective taper: the reference cockpit's members thin with distance,
-      // so width scales with screen height. MILD (roof ~0.85x, cowl ~1.23x):
-      // re-measured against the reference, its roof members run nearly as bold
-      // as the sill's — the old 0.72x roof landed sub-pixel after the DPR
-      // mapping and the whole top half read wispy. The tapered value also
-      // feeds aWidth, so the white-hot core gate lets go of a member as it
-      // climbs toward the roof.
-      const taper = 0.85 + 0.38 * (p[1] / COCKPIT_H);
+      // NO perspective taper: each member keeps its authored width for its
+      // whole run (the pilot's call — a line that thins as it climbs reads as
+      // an inconsistent stroke, not depth; luminance carries the perspective).
       for (const s of [-1, 1]) {
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
         side.push(s);
         weight.push(line.w);
-        width.push(line.px * taper);
+        width.push(line.px);
       }
     }
     for (let i = 0; i < n - 1; i++) {

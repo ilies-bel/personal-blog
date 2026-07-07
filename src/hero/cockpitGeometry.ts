@@ -216,25 +216,17 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   //     elbow up at x≈610/1310, flat 864 across the centre, mirror out,
   //   • LOWER RAIL: rises out of the SKIRT (the console's flared base,
   //     kneeing through (450,1030)→(553,969)), same elbow, flat 877, mirror,
-  //   • a HAIRLINE ECHO doubles the dash-top near each edge, merging back
-  //     onto the upper rail before the hub,
   //   • the PEDESTAL: flat top y≈911 spanning 760→1125, shoulders r85, sides
   //     diving at ~52° off the bottom of the frame, a SINGLE machined edge
-  //     (the round-5 inner bezel is not in the reference),
-  //   • a lower skirt echo splits off each skirt mid-dive.
+  //     (the round-5 inner bezel is not in the reference).
+  // (The hairline echoes that used to double the rails — near-edge dash-top
+  // echoes and the lower skirt echoes — and the flank plate seam rectangles
+  // are GONE by the pilot's call: on screen they read as accidental doubled
+  // lines and floating clutter, not structure.)
   { pts: resolveCorners([[-6, 949], [350, 928, 260], [608, 916, 90], [746, 864, 170], [1174, 864, 170], [1312, 916, 90], [1570, 928, 260], [1926, 949]]), w: 0.7, px: 2.0 },
   { pts: resolveCorners([[170, 1088], [430, 1035, 120], [520, 1000, 150], [610, 938, 90], [746, 877, 150], [1174, 877, 150], [1310, 938, 90], [1400, 1000, 150], [1490, 1035, 120], [1750, 1088]]), w: 0.6, px: 1.9 },
-  // Near-edge hairline echoes (merging onto the upper rail before the hub):
-  { pts: resolveCorners([[-6, 933], [240, 919, 140], [430, 924]]), w: 0.35, px: 1.4 },
-  { pts: resolveCorners([[1926, 933], [1680, 919, 140], [1490, 924]]), w: 0.35, px: 1.4 },
   // Pedestal:
   { pts: resolveCorners([[620, 1090], [760, 911, 85], [1125, 911, 85], [1265, 1090]]), w: 0.85, px: 2.2 },
-  // Lower skirt echoes (splitting off the lower rail's skirt mid-dive):
-  { pts: resolveCorners([[585, 955], [505, 1018, 120], [420, 1052, 110], [130, 1097]]), w: 0.5, px: 1.6 },
-  { pts: resolveCorners([[1335, 955], [1415, 1018, 120], [1500, 1052, 110], [1790, 1097]]), w: 0.5, px: 1.6 },
-  // Flank plate seams (the faint service panels under each sill flank).
-  { pts: resolveCorners([[228, 861, 12], [392, 853, 12], [414, 893, 12], [258, 903, 12]], true), w: 0.22, px: 1.1, closed: true },
-  { pts: resolveCorners([[1692, 861, 12], [1528, 853, 12], [1506, 893, 12], [1662, 903, 12]], true), w: 0.22, px: 1.1, closed: true },
 
   // Right instrument circle: main arc + inner echo + the radial tick ring
   // (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
