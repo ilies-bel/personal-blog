@@ -53,7 +53,16 @@ export interface CockpitRig extends Rig {
 /** How much wider the glow pass's ribbon runs than its member. Kept TIGHT: the
  *  reference's halo hugs its edge lines — a wide halo bridges a beam's two
  *  edges and washes out the dark band that gives the member its width. */
-const GLOW_WIDTH_SCALE = 3.0;
+const GLOW_WIDTH_SCALE = 2.4;
+
+/** The authored piping body colour (linear); uAmber is derived from it per
+ *  frame via the band's gold-shift key (STAR_KEYS.d). GOLD_BASE is the shift
+ *  TARGET: graying the amber toward luma lifts its blue channel and the
+ *  super-saturating nebula grade amplifies that into salmon-pink — the
+ *  compensation must move along the amber→gold hue line (blue stays low),
+ *  never toward neutral gray. */
+const AMBER_BASE = new THREE.Color(1.0, 0.47, 0.13).convertSRGBToLinear();
+const GOLD_BASE = new THREE.Color(1.0, 0.82, 0.4).convertSRGBToLinear();
 
 // ── Star-light keyframes over the eased stage ───────────────────────────────
 // The chapter's light colour + intensity, matched to what the canvas actually
@@ -69,16 +78,43 @@ const GLOW_WIDTH_SCALE = 3.0;
 // glowing amber the members must be authored HOT, roughly inverse to each
 // chapter's grade exposure (the pale dot grades at 0.46 exposure + 0.72 sat —
 // hence the biggest floor).
-const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number; f: number }> = [
-  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.65, f: 6 }, // black hole: cold bone disk glare
+// `d` is the band's GOLD SHIFT (1 = the authored red-leaning amber, <1 =
+// slid toward GOLD_BASE before the grade). The authored hue banks on the
+// grade desaturating (cfg.saturation 0.38 … dot 0.72); the nebula grade
+// instead SUPER-saturates (uSat 1.55), which drives the same amber to blood
+// red — so the nebula→dot run pre-shifts toward gold and lands on the same
+// calm gold the dot chapter shows.
+const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number; f: number; d?: number }> = [
+  // Black hole: the chapter's grade is the near-monochrome COLD-SILVER room
+  // (uSat ≈ 0.38 + the cool shadow cast) — at that saturation a BRIGHT line
+  // can only land tan, whatever its authored hue (desat pulls toward a high
+  // luma). The reference's spans are mostly DIM rich umber with sparse hot
+  // flares, and dim survives the desat with its relative saturation intact.
+  // The floor must also hold the member BODY under the bloom pass's 0.55
+  // threshold: this chapter runs the photon ring's wide strong bloom, and any
+  // span sitting over the threshold along its whole length staircases through
+  // the deep mips into blocky beads. Only the star kiss may cross — its
+  // envelope is spatially smooth, so it blooms smoothly.
+  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.85, f: 1.35 }, // black hole: cold bone disk glare
   { s: 0.5, c: [1.0, 1.0, 1.0], i: 1.35, f: 4 }, // supernova flash
-  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05, f: 6.5 }, // red giant: ember (dim grade)
+  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05, f: 5.8 }, // red giant: ember (dim grade)
   { s: 2.9, c: [1.0, 0.84, 0.52], i: 1.2, f: 6 }, // yellow star: gold (hot grade)
   { s: 4.0, c: [0.78, 0.85, 1.0], i: 0.85, f: 13 }, // nebula core: blue-white
-  { s: 4.7, c: [0.74, 0.82, 1.0], i: 0.6, f: 55 }, // the pale dot (0.46 exposure + the output decode)
+  // The gas grade EASES into the dot endpoint across stage 4.3→4.5 (the
+  // pre-dot handoff in lifecycle.ts — bloom 0.38/0.75 → 0.05/0.16, sat 1.55 →
+  // 0.72, exposure 0.58 → 0.46). The floor rides it: held LOW while the wide
+  // gas bloom is live (bloom runs BEFORE the grade, so halo energy scales
+  // with the raw HDR floor — a big floor here fogs the whole sill band into
+  // red tubes), then climbing to the dot's dim-grade compensation only as the
+  // bloom lands near its 0.05 endpoint. `d` bridges the residual mid-band
+  // super-saturation so the recovery band (JUMP TO WORK) reads the same calm
+  // gold as the settled dot chapter.
+  { s: 4.35, c: [0.76, 0.83, 1.0], i: 0.7, f: 18, d: 0.7 },
+  { s: 4.45, c: [0.74, 0.82, 1.0], i: 0.72, f: 62, d: 0.95 },
+  { s: 4.5, c: [0.74, 0.82, 1.0], i: 0.72, f: 62 }, // the pale dot (0.46 exposure + the output decode)
 ];
 
-function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: number } {
+function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: number; d: number } {
   let a = STAR_KEYS[0];
   let b = STAR_KEYS[STAR_KEYS.length - 1];
   for (let i = 0; i < STAR_KEYS.length - 1; i++) {
@@ -92,7 +128,9 @@ function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: numb
   const k = Math.min(1, Math.max(0, (stage - a.s) / span));
   outColor.setRGB(a.c[0] + (b.c[0] - a.c[0]) * k, a.c[1] + (b.c[1] - a.c[1]) * k, a.c[2] + (b.c[2] - a.c[2]) * k);
   outColor.convertSRGBToLinear(); // keys are authored in sRGB (see palette note)
-  return { i: a.i + (b.i - a.i) * k, f: a.f + (b.f - a.f) * k };
+  const da = a.d ?? 1;
+  const db = b.d ?? 1;
+  return { i: a.i + (b.i - a.i) * k, f: a.f + (b.f - a.f) * k, d: da + (db - da) * k };
 }
 
 // ── Ribbon extrusion ─────────────────────────────────────────────────────────
@@ -141,17 +179,15 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
       const nx = -ty;
       const ny = tx;
       const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
-      // Perspective taper: the reference cockpit's members thin with distance,
-      // so width scales with screen height (roof ~0.72x, cowl ~1.15x). The
-      // tapered value also feeds aWidth, so the white-hot core gate lets go of
-      // a member as it climbs toward the roof.
-      const taper = 0.72 + 0.5 * (p[1] / COCKPIT_H);
+      // NO perspective taper: each member keeps its authored width for its
+      // whole run (the pilot's call — a line that thins as it climbs reads as
+      // an inconsistent stroke, not depth; luminance carries the perspective).
       for (const s of [-1, 1]) {
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
         side.push(s);
         weight.push(line.w);
-        width.push(line.px * taper);
+        width.push(line.px);
       }
     }
     for (let i = 0; i < n - 1; i++) {
@@ -206,8 +242,9 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     // Authored in sRGB, converted to linear, then driven HOT by uFloor — the
     // hue is deliberately redder than the on-screen target because the grade's
     // Reinhard + desaturation pull HDR orange toward yellow-tan; this lands on
-    // the reference's saturated amber after the pipeline has its way.
-    uAmber: { value: new THREE.Color(1.0, 0.47, 0.13).convertSRGBToLinear() },
+    // the reference's saturated amber after the pipeline has its way. The
+    // frame loop rewrites this from AMBER_BASE each tick (STAR_KEYS.d).
+    uAmber: { value: AMBER_BASE.clone() },
     uCoreTint: { value: new THREE.Color(1.0, 0.93, 0.76).convertSRGBToLinear() },
   };
 
@@ -313,6 +350,14 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     shared.uStarIntensity.value = light.i;
     shared.uFloor.value = light.f;
     (shared.uStarColor.value as THREE.Color).copy(scratchColor);
+    // Amber gold-shift (STAR_KEYS.d): slide the authored red-leaning amber
+    // along the amber→gold hue line where the live grade super-saturates
+    // instead of muting (d = 1 authored, d = 0 full gold).
+    (shared.uAmber.value as THREE.Color).setRGB(
+      GOLD_BASE.r + (AMBER_BASE.r - GOLD_BASE.r) * light.d,
+      GOLD_BASE.g + (AMBER_BASE.g - GOLD_BASE.g) * light.d,
+      GOLD_BASE.b + (AMBER_BASE.b - GOLD_BASE.b) * light.d,
+    );
 
     // Design units per CSS half-px, tracking the live viewport height (the
     // non-scaling-stroke contract; per-member widths ride aWidth).

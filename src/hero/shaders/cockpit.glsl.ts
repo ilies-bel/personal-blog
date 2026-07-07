@@ -42,6 +42,27 @@ float litAt(vec2 p, float facing) {
   float hot = exp(-d * d / (2.0 * 300.0 * 300.0));
   return facing * (wide * 0.8 + hot * 1.6) * uStarIntensity;
 }
+// Angular terms off the member's cross-section normal — the reference's whole
+// character: a beam is METAL TRIM catching the scene, so its brightness flows
+// along its length. Spans whose face squares up to the star flare white-gold
+// (grazeSpec), spans running radial to it fall into umber (grazeDiff), and a
+// fillet sweeps the normal through the whole range — the traveling highlight.
+// abs(): the trim is double-sided, either face catches. Callers must pass a
+// re-NORMALIZED normal — the varying interpolates between unit normals along a
+// fillet, which shortens it mid-segment (the raw value scalloped every curve).
+// The dark floor sits LOW (0.34): dim spans must land clearly under the bloom
+// pass's 0.55 threshold — spans hovering AT it alias through the mip chain
+// into periodic beads along the line.
+float grazeDiff(vec2 p, vec2 n) {
+  vec2 L = uLight - p;
+  float ndl = abs(dot(normalize(L), n));
+  return 0.34 + 0.66 * ndl;
+}
+float grazeSpec(vec2 p, vec2 n) {
+  vec2 L = uLight - p;
+  float ndl = abs(dot(normalize(L), n));
+  return pow(ndl, 5.0);
+}
 // The post grade darkens the frame's corners (vignette, floor 0.66). The
 // reference's powered trim glows evenly to the very corner, so pre-boost the
 // members by (a clamp of) the vignette's inverse — same curve as post.glsl.
@@ -65,12 +86,24 @@ varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vWidth;
+varying vec2 vN;
+varying float vCover;
 void main() {
-  vec2 p = aPos + aNorm * (aSide * uHalfW * aWidth * uWidthScale);
+  // Sub-pixel guard: a hairline tapered below ~1px stops covering pixel
+  // centres in the (MSAA-less) scene target and draws as DASHES, and its
+  // too-thin bright core aliases through the bloom downsample into periodic
+  // blobs. Never extrude thinner than 0.85 CSS half-px; pay the lost width
+  // back as alpha (vCover) so the hairline hierarchy still reads — a fine
+  // line is a FAINT continuous line, never a dashed one.
+  float halfPx = 0.5 * aWidth * uWidthScale;
+  float drawnPx = max(halfPx, 0.85);
+  vCover = halfPx / drawnPx;
+  vec2 p = aPos + aNorm * (aSide * uHalfW * 2.0 * drawnPx);
   vPos = p;
   vSide = aSide;
   vW = aW;
   vWidth = aWidth;
+  vN = normalize(aNorm); // unit cross-section normal (aNorm itself is miter-scaled)
   gl_Position = clipFromDesign(p);
 }
 `;
@@ -92,17 +125,31 @@ varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vWidth;
+varying vec2 vN;
+varying float vCover;
 void main() {
+  // Per-pixel angular lighting off the member's cross-section normal: the
+  // floor DIMS on spans running radial to the star (grazeDiff → umber) and the
+  // hot kiss lands ONLY where the face squares up (grazeSpec) — brightness
+  // flows along each line and sweeps through every fillet, the reference's
+  // lit-metal-trim read. The old flat per-line weight made every member one
+  // uniform brightness: neon tube, not coachwork.
+  vec2 n = normalize(vN);
+  float diff = grazeDiff(vPos, n);
+  float spec = grazeSpec(vPos, n);
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
-  float litN = clamp(lit, 0.0, 1.0);
+  float kiss = min(lit * spec, 0.9);
   float t = abs(vSide);
   float widthGate = smoothstep(1.9, 2.7, vWidth);
   float coreMask = (1.0 - smoothstep(0.0, 0.5, t)) * widthGate;
-  vec3 base = mix(uAmber, uCoreTint, coreMask * (0.28 + 0.35 * litN));
-  float energy = uFloor * (0.25 + 0.75 * vW * vW) * (1.0 + 0.5 * min(lit, 0.6)) * vigComp(vPos);
-  vec3 col = base * energy + uStarColor * min(lit, 1.2) * 0.9;
+  vec3 base = mix(uAmber, uCoreTint, coreMask * (0.22 + 0.5 * kiss));
+  float energy = uFloor * (0.25 + 0.75 * vW * vW) * diff * (1.0 + 0.6 * kiss) * vigComp(vPos);
+  // The kiss stays AMBER-LEANING (mix toward the star colour, never pure): the
+  // old raw uStarColor term bleached every member bone-tan under the black
+  // hole's disk glare — saturation is the difference between trim and tube.
+  vec3 col = base * energy + mix(uAmber * 1.4, uStarColor, 0.45) * kiss * 0.9;
   float edge = 1.0 - smoothstep(0.55, 1.0, t);
-  gl_FragColor = vec4(col, uAlpha * edge * 0.96);
+  gl_FragColor = vec4(col, uAlpha * edge * vCover * 0.96);
 }
 `;
 
@@ -120,12 +167,25 @@ varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vWidth;
+varying vec2 vN;
+varying float vCover;
 void main() {
+  vec2 n = normalize(vN);
+  float diff = grazeDiff(vPos, n);
+  float spec = grazeSpec(vPos, n);
   float lit = litAt(vPos, 0.35 + 0.65 * vW);
-  float g = exp(-vSide * vSide * 5.0);
+  float kiss = min(lit * spec, 0.6);
+  // The halo follows the LIGHT, not the line: in the reference it blooms only
+  // off the hot lit spans and vanishes on the umber ones — a uniform halo is
+  // what fogged the dash into washed brown haze (it fed the scene bloom along
+  // every member at once).
+  float g = exp(-vSide * vSide * 7.0);
   float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 2.7, vWidth));
-  float energy = uFloor * 0.3 * hier * (1.0 + 0.7 * clamp(lit, 0.0, 0.5)) * vigComp(vPos);
-  gl_FragColor = vec4(uAmber * energy, uAlpha * g * 0.2);
+  // The 0.6 floor keeps a faint CONTINUOUS ribbon of light under every member:
+  // it pre-blurs the bloom pass's input so a span crossing the threshold blooms
+  // smoothly instead of beading (thin 2px cores alias in the mip chain).
+  float energy = uFloor * 0.3 * hier * diff * (0.6 + 1.0 * kiss) * vigComp(vPos);
+  gl_FragColor = vec4(uAmber * energy, uAlpha * g * vCover * 0.16);
 }
 `;
 
@@ -148,8 +208,11 @@ varying vec2 vPos;
 void main() {
   float lit = litAt(vPos, 1.0);
   // Near-black structure with a whisper of the piping's bounce, plus a faint
-  // wash of the star's light nearby — surfaces catching the scene, not a hole.
-  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.003 + uStarColor * lit * 0.02;
+  // wash of the star's light nearby — surfaces catching the scene, not a
+  // hole. The wash is kept a WHISPER (0.008): at 0.02 the black hole's
+  // screen-wide glare tinted the whole dash a washed brown instead of the
+  // reference's near-black panels.
+  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.003 + uStarColor * lit * 0.008;
   gl_FragColor = vec4(col, uFill * uAlpha);
 }
 `;
