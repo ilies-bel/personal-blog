@@ -873,12 +873,11 @@ export default function HudNavigation({
       {arcShownItem && (
         <span
           className="hud-arc-label"
-          /* Clear of the A-pillar: the label parks just INSIDE the glass (the
-             reference prints the station name beside the pillar, on the
-             screen). vw so it tracks the design-space pillar (x≈274/1920) at
-             every viewport width; the px fallback keeps it sane if the dial
-             ever outgrows it. */
-          style={{ left: `max(${ARC_LABEL_X}px, 15vw)`, top: '300px' }}
+          /* On the hull flank between the edge seam and the canopy side (the
+             reference prints the station name at design (195-300, 505-560)).
+             vw so it tracks the design space at every viewport width; the px
+             fallback keeps it clear of the dial on narrow desktops. */
+          style={{ left: `max(${ARC_LABEL_X}px, 9.6vw)`, top: '300px' }}
         >
           <span className="hud-arc-label-title">{arcShownItem.label}</span>
           <span className="hud-arc-label-dest">{arcShownItem.destination}</span>

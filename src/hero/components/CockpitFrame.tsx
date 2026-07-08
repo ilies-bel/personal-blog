@@ -17,8 +17,9 @@
 // "COCKPIT CANOPY", the prefers-reduced-motion branch).
 import {
   COCKPIT_BEAMS,
-  PANEL_CEILING,
-  PANEL_DASH,
+  HULL_OUTER,
+  HULL_HOLE,
+  PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
   toPathD,
@@ -65,9 +66,15 @@ export default function CockpitFrame() {
         </mask>
       </defs>
 
-      {/* The opaque interior: ceiling + dashboard masses. */}
-      <path className="bh-cockpit-panel" d={toPathD(PANEL_CEILING, true)} />
-      <path className="bh-cockpit-panel" d={toPathD(PANEL_DASH, true)} />
+      {/* The opaque interior: one hull shell with the glass as a hole
+          (even-odd — outer rect + the canopy ring as subpaths). */}
+      <path
+        className="bh-cockpit-panel"
+        d={`${toPathD(HULL_OUTER, true)} ${toPathD(HULL_HOLE, true)}`}
+        fillRule="evenodd"
+      />
+      {/* The recessed console screen glass. */}
+      <path className="bh-cockpit-panel" d={toPathD(PANEL_SCREEN, true)} />
 
       {/* Beam underlays: dim base, then the lit pass under the resting light. */}
       <BeamEdgePass className="bh-cockpit-beam-base" />

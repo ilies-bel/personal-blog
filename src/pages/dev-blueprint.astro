@@ -1,0 +1,53 @@
+---
+// DEV BLUEPRINT — the measuring bench for the cockpit geometry. Renders the
+// authored design-space geometry (cockpitGeometry.ts, the live source) ON TOP
+// of the generated reference so shape drift is VISIBLE before it ships: cyan
+// centrelines + translucent magenta band widths + yellow glints over the
+// amber reference lines. Iterate until every cyan line sits on an amber one.
+//
+// DEV-ONLY: the production build emits an empty shell (the reference PNG is
+// read from the worktree root at render time and inlined as base64 — it never
+// enters the built asset graph).
+import { readFileSync } from 'node:fs';
+import {
+  COCKPIT_BEAMS,
+  COCKPIT_GLINTS,
+  PANEL_SCREEN,
+  toPathD,
+} from '../hero/cockpitGeometry';
+
+const dev = import.meta.env.DEV;
+let refHref = '';
+if (dev) {
+  try {
+    refHref = `data:image/png;base64,${readFileSync(new URL('../../reference-v2.png', import.meta.url)).toString('base64')}`;
+  } catch {
+    refHref = '';
+  }
+}
+const beams = COCKPIT_BEAMS.map((b) => ({ d: toPathD(b.pts, b.closed), dw: b.dw, w: b.w }));
+const screenD = toPathD(PANEL_SCREEN, true);
+---
+
+<html lang="en">
+  <head><meta charset="utf-8" /><title>cockpit blueprint</title></head>
+  <body style="margin:0;background:#111">
+    {dev && (
+      <svg id="overlay" viewBox="0 0 1920 1080" width="1920" height="1080" style="display:block">
+        {refHref && <image href={refHref} x="0" y="0" width="1920" height="1080" opacity="0.92" />}
+        <g>
+          {beams.map((b) => (
+            <path d={b.d} fill="none" stroke="rgba(255,0,255,0.22)" stroke-width={b.dw} />
+          ))}
+          {beams.map((b) => (
+            <path d={b.d} fill="none" stroke="rgba(0,255,255,0.85)" stroke-width={1.4} />
+          ))}
+          <path d={screenD} fill="none" stroke="rgba(120,255,120,0.8)" stroke-width={1.4} />
+          {COCKPIT_GLINTS.map((g) => (
+            <circle cx={g.x} cy={g.y} r={g.r * 0.4} fill="none" stroke="rgba(255,255,0,0.9)" stroke-width={1.2} />
+          ))}
+        </g>
+      </svg>
+    )}
+  </body>
+</html>

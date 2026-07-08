@@ -1894,38 +1894,22 @@ body.hud-active .hud-frame {
 }
 .hud-frame-readout {
   position: fixed;
-  left: 2.5vw;
-  /* On the dash flank facet (the reference's bottom-left plate sits above the
-     bottom row seam, not on the frame edge). */
-  bottom: 6.5vh;
+  /* BARE text seated INSIDE the hull's bottom-left dash plate (the WebGL
+     draws the plate etch at design (115-460, 955-1048) — the reference
+     carves the instrument into the hull; the DOM contributes only type). */
+  left: 7.2vw;
+  bottom: 5.6vh;
   display: flex;
   flex-direction: row;
   align-items: baseline;
   gap: 1.2em;
-  padding: 0.55rem 1.2rem 0.6rem;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fg-faint);
-  /* The etched bezel (the reference's bottom-left recess): thin amber outline,
-     square corners, a dot terminal — an incision in the dash, not a card.
-     The line is the TRIM's saturated amber (matching the WebGL beam edges,
-     sRGB 255/153/48), not the pale readout gold — plate and hull are one metal. */
-  border: 1px solid oklch(0.74 0.15 62 / 0.5);
-  border-radius: 2px;
   opacity: 1;
   transition: opacity 0.35s var(--ease-out-quint);
-}
-.hud-frame-readout::after {
-  content: '';
-  position: absolute;
-  right: -2.5px;
-  bottom: -2.5px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: oklch(0.78 0.155 64 / 0.9);
 }
 /* Diving into a marker: the telemetry readout would just clutter the plunge, so
    it fades out for the duration of the dive (body.bh-diving, set by
@@ -1948,7 +1932,9 @@ body.bh-diving .hud-frame-readout {
    caret parks under the strip's centre, pointing up at 000. */
 .hud-frame-compass-num {
   position: fixed;
-  top: 11.6vh;
+  /* Measured off the reference: numerals ride at design y≈158-172, the WebGL
+     tick strip below at y≈182-198, the caret under the strip. */
+  top: 14.6vh;
   translate: -50% 0;
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -1957,7 +1943,7 @@ body.bh-diving .hud-frame-readout {
 }
 .hud-frame-compass-caret {
   position: fixed;
-  top: 15.9vh;
+  top: 18.8vh;
   translate: -50% 0;
   width: 0;
   height: 0;
@@ -2003,9 +1989,9 @@ body.bh-diving .hud-frame-readout {
    leaves the un-powered (observation deck) compass exactly as it was. */
 @media (min-width: 60.0625rem) {
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) {
-    /* The screen recess rides HIGHER after the reference re-measure (lip top
-       at design y≈880) — the readout parks mid-screen, not at the frame edge. */
-    bottom: 5.8vh;
+    /* The measured screen recess spans design y 898-1030 with the CTA row at
+       y≈940 — the readout parks mid-screen, not at the frame edge. */
+    bottom: 7.4vh;
     width: clamp(17rem, 19vw, 24rem);
     padding: 1.1vh 1rem 1.3vh;
     /* Materialise with the hull on power-on. No fill mode: once the strobe
@@ -2024,7 +2010,7 @@ body.bh-diving .hud-frame-readout {
      swaps content, never chrome. (The loading/ready phases and the glide
      itself stay bare — those live in/over the loader.) */
   body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] {
-    bottom: 5.8vh;
+    bottom: 7.4vh;
     width: clamp(17rem, 19vw, 24rem);
     padding: 1.1vh 1rem 1.3vh;
   }

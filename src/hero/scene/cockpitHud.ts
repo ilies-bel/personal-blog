@@ -111,8 +111,9 @@ function hudLines(): HudLine[] {
     });
   }
 
-  // ── The compass strip (fixed, just inside the canopy's top beam) ─────────
-  const compY = 146;
+  // ── The compass strip (fixed, just inside the canopy's top beam;
+  //    measured y≈183-192 in the reference, numerals riding above) ──────────
+  const compY = 182;
   const compHalf = 300;
   for (let i = -6; i <= 6; i++) {
     const x = CX + (i / 6) * compHalf;

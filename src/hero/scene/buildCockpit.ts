@@ -26,8 +26,8 @@ import * as THREE from 'three';
 import {
   COCKPIT_BEAMS,
   COCKPIT_GLINTS,
-  PANEL_CEILING,
-  PANEL_DASH,
+  HULL_OUTER,
+  HULL_HOLE,
   PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
@@ -145,7 +145,7 @@ function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeomet
         norm.push(nx * miter, ny * miter);
         side.push(s);
         weight.push(beam.w);
-        dw.push(beam.dw);
+        dw.push(beam.dwAt ? beam.dwAt(p[0], p[1]) : beam.dw);
       }
     }
     for (let i = 0; i < n - 1; i++) {
@@ -227,9 +227,12 @@ export function buildCockpit(): CockpitRig {
     uCoreTint: { value: CORE_TINT.clone() },
   };
 
-  // Hull masses: ceiling + dashboard. Together they tile EVERYTHING outside
-  // the glass — opaque occlusion is what turns floating trim into a ship.
-  const panelGeo = new THREE.ShapeGeometry([shapeFromPts(PANEL_CEILING), shapeFromPts(PANEL_DASH)]);
+  // The hull mass: ONE shell covering the whole frame with the glass as a
+  // HOLE — opaque occlusion is what turns floating trim into a ship. The
+  // hole's edge is the canopy centreline (the beam band overlaps it).
+  const hullShape = shapeFromPts(HULL_OUTER);
+  hullShape.holes.push(new THREE.Path(HULL_HOLE.map(([x, y]) => new THREE.Vector2(x, y))));
+  const panelGeo = new THREE.ShapeGeometry(hullShape);
   const panelUniforms: Uniforms = { ...shared, uFill: { value: 1.0 } };
   const panelMat = new THREE.ShaderMaterial({
     uniforms: panelUniforms,
