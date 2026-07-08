@@ -5,18 +5,21 @@ import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 
 // ---------------------------------------------------------------------------
-// GitHub Pages config
+// GitHub Pages config — custom domain
 // ---------------------------------------------------------------------------
-// `site` + `base` assume a PROJECT page deployed at:
-//     https://<user>.github.io/personal-blog/
-// If you later move to a user page (https://<user>.github.io) or a custom
-// domain, set `base` to '/' and update `site` accordingly.
+// The site is served from the apex custom domain `ilies-bel.dev` (GitHub Pages
+// + Cloudflare DNS). Because it lives at the domain root, there is no path
+// prefix: `base` is '/'. The `public/CNAME` file tells GitHub Pages which
+// custom domain to bind on each deploy.
+//
+// (History: this used to be a PROJECT page at
+// https://ilies-bel.github.io/personal-blog/ with base '/personal-blog'.)
 //
 // Change SITE / BASE here and everything (links, sitemap, canonical URLs)
 // follows automatically.
 // ---------------------------------------------------------------------------
-const SITE = 'https://ilies-bel.github.io';
-const BASE = '/personal-blog';
+const SITE = 'https://ilies-bel.dev';
+const BASE = '/';
 
 // https://astro.build/config
 export default defineConfig({
