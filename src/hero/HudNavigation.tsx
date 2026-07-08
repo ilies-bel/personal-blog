@@ -686,15 +686,17 @@ export default function HudNavigation({
   // guard the lookup and render the readout only once there is a scene to name.
   const mobileReadout = effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null;
 
-  // INSTRUMENT FRAME — sitewide on the hero (the black-hole section mock was
-  // approved). Four hairline corner ticks framing the viewport + a live readout
-  // bottom-left: the star's AGE on the lifecycle clock (billions of years —
-  // falling as you scroll, since the story plays in reverse) and the nearest
-  // station. CSS shows it only while the HUD is armed (body.hud-active) and
-  // hides it on compact layouts. `stage` is the presentation clock's eased shader
-  // stage — the exact value the canvas is rendering — so the readout names the
-  // body actually on screen (re-deriving from progress would diverge from the
-  // morph, which eases the stage as its own scalar across the band-7→8 jump).
+  // TELEMETRY SCREEN — the metadata readout, mounted IN the cockpit: a small
+  // MFD on the left dash face (hud.css positions + skins it into the console
+  // under body.hud-active): the star's AGE on the lifecycle clock (billions of
+  // years — falling as you scroll, since the story plays in reverse) and the
+  // nearest station, under a TELEMETRY header. The old floating corner ticks
+  // are gone — the cockpit itself is the frame now. CSS shows the screen only
+  // while the HUD is armed (body.hud-active) and hides it on compact layouts.
+  // `stage` is the presentation clock's eased shader stage — the exact value
+  // the canvas is rendering — so the readout names the body actually on screen
+  // (re-deriving from progress would diverge from the morph, which eases the
+  // stage as its own scalar across the band-7→8 jump).
   const frameStation = stationForStage(stage);
   const frameTime = formatLifecycleTime(lifecycleTimeGyr(stage));
 
@@ -756,11 +758,8 @@ export default function HudNavigation({
         frame, and .hud-system's transform would trap position:fixed). Gated by
         body.hud-active in CSS. */}
     <div className="hud-frame" aria-hidden="true">
-      <span className="hud-frame-tick" data-corner="tl" />
-      <span className="hud-frame-tick" data-corner="tr" />
-      <span className="hud-frame-tick" data-corner="bl" />
-      <span className="hud-frame-tick" data-corner="br" />
       <span className="hud-frame-readout">
+        <span className="hud-frame-readout-head">TELEMETRY</span>
         <span className="hud-frame-readout-stage">{frameTime}</span>
         <span className="hud-frame-readout-station">{frameStation.label}</span>
       </span>

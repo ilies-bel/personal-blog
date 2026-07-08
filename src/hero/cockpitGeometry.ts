@@ -20,11 +20,6 @@ export type Pt = readonly [number, number];
 
 export const COCKPIT_W = 1920;
 export const COCKPIT_H = 1080;
-/** The unzoom's fixed point — pull back toward the pilot seat, not dead-centre
- *  (58% down, matching the SVG fallback's transform-origin). */
-export const COCKPIT_CENTER: Pt = [960, 626];
-/** How far past rest the frame starts when the power-on unzoom begins. */
-export const COCKPIT_ZOOM_START = 2.05;
 
 /** One cockpit member, fillets resolved: its polyline, its facing weight
  *  (how squarely the member's face points at the star — the multiplier on the

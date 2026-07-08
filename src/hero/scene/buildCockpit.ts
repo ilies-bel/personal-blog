@@ -5,7 +5,7 @@
 //   • bloom genuinely lights the hot spans nearest the star,
 //   • the lighting is computed per-pixel from the star's projected position in
 //     the star's own per-chapter colour (keyframed over the eased stage below),
-//   • the power-on unzoom is a vertex-shader scale — zero layout/compositor work.
+//   • the power transition is a pure shader DECLOAK — no scale, no travel.
 //
 // Geometry comes from cockpitGeometry.ts (the single design-space source shared
 // with the SVG fallback): polylines are extruded here into indexed triangle
@@ -16,11 +16,15 @@
 // band triangulate via THREE.ShapeGeometry (earcut handles the concave outlines).
 //
 // POWER CONTRACT: frame() receives hudActive (read through the SceneHooks seam,
-// so the scene never touches the DOM's class names itself) and tweens a deploy
-// parameter — quint-out over 1.7s on power-up (the unzoom: scale
-// COCKPIT_ZOOM_START → 1), quad-in over 0.6s on power-down (the push back
-// toward the glass). All three meshes stand down (`visible = false`) at deploy
-// 0, so a powered-off cockpit costs zero draws (the draw-audit convention).
+// so the scene never touches the DOM's class names itself) and tweens the
+// DECLOAK envelope — the Predator reveal: the ship never moves or zooms, it
+// simply STOPS BEING INVISIBLE. Cells of the hull flicker into existence over
+// ~1.8s on power-up (glinting electric before settling into the amber trim, a
+// heat-haze ripple on the members while the field fills) and dissolve back the
+// same way over ~0.8s on power-down. The envelope + flicker live entirely in
+// cockpit.glsl.ts (uDecloak / uTime); this file only drives the tween. All
+// three meshes stand down (`visible = false`) at decloak 0, so a powered-off
+// cockpit costs zero draws (the draw-audit convention).
 import * as THREE from 'three';
 import {
   COCKPIT_LINES,
@@ -28,8 +32,6 @@ import {
   CANOPY_INNER,
   PANEL_CEILING,
   PANEL_DASH,
-  COCKPIT_CENTER,
-  COCKPIT_ZOOM_START,
   COCKPIT_W,
   COCKPIT_H,
   type CockpitLine,
@@ -230,8 +232,8 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   const panelGeo = new THREE.ShapeGeometry([shapeFromPts(PANEL_CEILING), shapeFromPts(PANEL_DASH), band]);
 
   const shared = {
-    uZoom: { value: COCKPIT_ZOOM_START },
-    uCenter: { value: new THREE.Vector2(COCKPIT_CENTER[0], COCKPIT_CENTER[1]) },
+    uDecloak: { value: 0 },
+    uTime: { value: 0 },
     uLight: { value: new THREE.Vector2(COCKPIT_W / 2, COCKPIT_H * 0.43) },
     uStarColor: { value: new THREE.Color(0.88, 0.86, 0.8) },
     uStarIntensity: { value: 0.65 },
@@ -310,8 +312,8 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   lines.visible = false;
   scene.add(lines);
 
-  // ── Deploy tween state (the unzoom) ────────────────────────────────────────
-  let deploy = 0;
+  // ── Decloak tween state (the power envelope) ────────────────────────────────
+  let decloak = 0;
   let animFrom = 0;
   let animStart = -1;
   let target: boolean | null = null; // null until the first frame samples power
@@ -320,25 +322,28 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   const frame = (ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean): void => {
     if (target === null || hudActive !== target) {
       target = hudActive;
-      animFrom = deploy;
+      animFrom = decloak;
       animStart = t;
     }
-    const dur = target ? 1.7 : 0.6;
+    // Power-up: a near-LINEAR fill (the cell field reads as steadily
+    // materialising patches — an eased envelope just makes the flicker stall).
+    // Power-down: quad-in, the cloak snapping back over the hull.
+    const dur = target ? 1.8 : 0.8;
     const raw = Math.min(1, Math.max(0, (t - animStart) / dur));
-    // Power-up: quint-out (the settling pull-back). Power-down: quad-in (the
-    // accelerating push toward the glass).
-    const e = target ? 1 - Math.pow(1 - raw, 5) : raw * raw;
-    deploy = animFrom + ((target ? 1 : 0) - animFrom) * e;
+    const e = target ? raw * (0.85 + 0.15 * raw) : raw * raw;
+    decloak = animFrom + ((target ? 1 : 0) - animFrom) * e;
 
-    const on = deploy > 0.001;
+    const on = decloak > 0.001;
     panels.visible = on;
     glow.visible = on;
     lines.visible = on;
     if (!on) return;
 
-    shared.uZoom.value = COCKPIT_ZOOM_START + (1 - COCKPIT_ZOOM_START) * deploy;
-    // Opacity leads the scale (the lines must be seen travelling): full by 55%.
-    shared.uAlpha.value = Math.min(1, deploy * 1.8);
+    // The decloak owns visibility per pixel (cloakMask in the shaders); the
+    // master alpha stays at 1 so the reveal is materialisation, never a fade.
+    shared.uDecloak.value = decloak;
+    shared.uTime.value = t;
+    shared.uAlpha.value = 1;
 
     // The star's light: position from the same NDC projection the nova pass
     // uses, clamped just past the frame so an off-screen body still rakes the

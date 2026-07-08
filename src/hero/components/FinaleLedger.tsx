@@ -50,6 +50,11 @@ export default function FinaleLedger({ visible }: FinaleLedgerProps) {
   const { base } = useSceneState();
   return (
     <nav className="bh-finale-ledger" aria-label="Site index" data-visible={visible}>
+      {/* The console skin's header strip (hero.css shows it only on the powered
+          directory-screen layout; the floating centre column hides it). */}
+      <span className="bh-finale-ledger-head" aria-hidden="true">
+        DIRECTORY
+      </span>
       {ROWS.map((row) => (
         <a key={row.href} className="bh-finale-ledger-row" href={resolveHref(base, row.href)}>
           <span className="bh-finale-ledger-label">{row.label}</span>

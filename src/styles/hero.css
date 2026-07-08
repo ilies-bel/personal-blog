@@ -539,6 +539,23 @@ body.graveyard-page .bh-backdrop::before {
 .bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
 .bh-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 
+/* COCKPIT NAMEPLATE — with the ship de-cloaked (body.hud-active) the identity
+   stops floating on the glass and reads as an etched plate riveted to the
+   ceiling panel: dark plate fill, amber hairline bezel, a soft top highlight.
+   Desktop-only; the observation deck (HUD off) keeps the bare lockup. */
+@media (min-width: 60.0625rem) {
+  body.bare.hud-active .bh-identity {
+    animation: hud-decloak 1.4s steps(1, end);
+    padding: 0.5rem 0.8rem 0.55rem;
+    background: linear-gradient(180deg, rgba(28, 20, 12, 0.82), rgba(11, 8, 5, 0.9));
+    border: 1px solid color-mix(in oklch, var(--highlight) 26%, transparent);
+    border-radius: 0.35rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 200, 140, 0.07),
+      0 2px 8px rgba(0, 0, 0, 0.45);
+  }
+}
+
 /* The SAME identity lockup, reused as the sitewide brand mark on the reading-page
    header (.site-header .brand) and the about overlay (.overlay-brand) — see
    BaseLayout. It is the hero's name + role stack, so the logo is one consistent
@@ -853,6 +870,72 @@ body.scene-ready.at-opening .bh-focus-dot {
 .bh-finale-ledger[data-visible='true'] {
   visibility: visible;
   pointer-events: auto;
+}
+/* The directory screen's header strip — only exists on the powered console
+   skin (below); the floating centre-column ledger hides it. */
+.bh-finale-ledger-head {
+  display: none;
+}
+
+/* DIRECTORY SCREEN — with the ship de-cloaked (body.hud-active) the finale
+   site index leaves the floating centre column and mounts INTO the main
+   console: an MFD on the right dash face (the dash masses run from ≈80vh
+   down; the pedestal screen holds the centre, telemetry the left), wearing
+   the shared cockpit screen skin (tokens in hud.css). Rows compress to the
+   instrument register. Scroll still owns WHEN it shows (the finale beat's
+   band drives the parent opacity + data-visible); power owns WHERE it lives.
+   Desktop-only — the compact layouts keep the two-column floating grid. */
+@media (min-width: 60.0625rem) {
+  body.hud-active .bh-finale-ledger {
+    position: fixed;
+    right: 2.5vw;
+    bottom: 1.8vh;
+    width: clamp(20rem, 23vw, 26rem);
+    margin: 0;
+    padding: 0.6rem 1rem 0.55rem;
+    background: var(--cockpit-screen-glass);
+    border: 1px solid var(--cockpit-screen-line);
+    border-radius: 0.4rem;
+    box-shadow: var(--cockpit-screen-shadow);
+  }
+  body.hud-active .bh-finale-ledger-head {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: color-mix(in oklch, var(--highlight) 55%, var(--fg-faint));
+    border-bottom: 1px solid color-mix(in oklch, var(--highlight) 18%, transparent);
+    padding-bottom: 0.35rem;
+  }
+  /* The screen flicker-materialises when its page loads in (the finale beat
+     arriving) — same decloak strobe as the rest of the console chrome. */
+  body.hud-active .bh-finale-ledger[data-visible='true'] {
+    animation: hud-decloak 0.7s steps(1, end);
+  }
+  /* Instrument-register rows: tighter pitch than the floating column, one
+     line per row (labels drop a rung, notes to the micro register, both
+     nowrap — a directory page, not prose). */
+  body.hud-active .bh-finale-ledger-row {
+    padding: 0.24rem 0.1rem;
+    gap: 0.9rem;
+  }
+  body.hud-active .bh-finale-ledger-label {
+    font-size: var(--text-label);
+    white-space: nowrap;
+  }
+  body.hud-active .bh-finale-ledger-note {
+    font-size: 0.62rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  body.hud-active .bh-finale-ledger-row:first-of-type {
+    border-top: 0;
+  }
+  body.hud-active .bh-finale-ledger-row:last-child {
+    border-bottom: 0;
+  }
 }
 .bh-finale-ledger-row {
   display: flex;

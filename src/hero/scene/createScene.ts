@@ -198,7 +198,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
 
-  // Cockpit canopy: the clip-space line/panel rig the HUD power-on unzooms into
+  // Cockpit canopy: the clip-space line/panel rig the HUD power-on DE-CLOAKS
   // (see buildCockpit.ts). Cheap to build (a few hundred ribbon vertices); its
   // per-frame update rides the same star projection the nova pass computes.
   const cockpitRig = buildCockpit(scene);
@@ -1850,7 +1850,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       hooks.onMarkerFrame({ x: cssX, y: cssY, stage, visible: onScreen && gateOk, gateOk, beatId });
     }
 
-    // Cockpit canopy: deploy tween + star-light uniforms. flashOrigin still holds
+    // Cockpit canopy: decloak tween + star-light uniforms. flashOrigin still holds
     // this frame's projected star NDC (computed above for the nova pass on the
     // final camera orientation) — the cockpit's light IS that projection. The
     // power bit flows through the hooks seam (HeroIsland reads the FSM body class).
