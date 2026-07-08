@@ -1,8 +1,21 @@
 name: Deploy to GitHub Pages
 
+# ---------------------------------------------------------------------------
+# Deploys ONLY on version tags (v1.0.0, v2.3.1, …), not on every push to main.
+# Day-to-day commits to main no longer burn CI minutes; a deploy is an explicit
+# act — you cut a tag when you want the site to go live. `workflow_dispatch`
+# keeps a manual "Run workflow" button in the Actions tab as an escape hatch.
+#
+#   # cut a release and publish it:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# See docs/DEPLOY.md for the full runbook.
+# ---------------------------------------------------------------------------
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 # Allow the workflow to publish to Pages.
@@ -11,7 +24,7 @@ permissions:
   pages: write
   id-token: write
 
-# One concurrent deploy; newer pushes cancel in-flight ones.
+# One concurrent deploy; newer tags cancel in-flight ones.
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -23,17 +36,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # This repo uses pnpm (packageManager is pinned in package.json).
+      # setup-node's `cache: pnpm` needs pnpm on PATH first, so install it here.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build with Astro
-        run: npm run build
+        run: pnpm run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
