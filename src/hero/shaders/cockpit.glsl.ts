@@ -100,7 +100,12 @@ float litAt(vec2 p, float facing) {
 float grazeDiff(vec2 p, vec2 n) {
   vec2 L = uLight - p;
   float ndl = abs(dot(normalize(L), n));
-  return 0.34 + 0.66 * ndl;
+  // The angular swing is COMPRESSED (floor 0.62, not 0.34): the reference trim
+  // is powered piping that glows EVENLY around the whole canopy — only a gentle
+  // brightness flow along each member, never half the frame dropping into
+  // near-black umber. The old 0.34 floor made spans running radial to the star
+  // vanish, which read as a broken/disconnected frame rather than one lit hull.
+  return 0.62 + 0.38 * ndl;
 }
 float grazeSpec(vec2 p, vec2 n) {
   vec2 L = uLight - p;
@@ -200,7 +205,11 @@ void main() {
   float widthGate = smoothstep(1.9, 2.7, vWidth);
   float coreMask = (1.0 - smoothstep(0.0, 0.5, t)) * widthGate;
   vec3 base = mix(uAmber, uCoreTint, coreMask * (0.22 + 0.5 * kiss));
-  float energy = uFloor * (0.25 + 0.75 * vW * vW) * diff * (1.0 + 0.6 * kiss) * vigComp(vPos);
+  // Facing weight now rides GENTLY (0.55 floor + 0.45·vW, linear not squared):
+  // every member is unmistakably lit amber trim, the low-facing console rails
+  // included. The squared term used to sink them ~2× below the canopy beam and
+  // read as an unlit, disconnected console.
+  float energy = uFloor * (0.55 + 0.45 * vW) * diff * (1.0 + 0.6 * kiss) * vigComp(vPos);
   // The kiss stays AMBER-LEANING (mix toward the star colour, never pure): the
   // old raw uStarColor term bleached every member bone-tan under the black
   // hole's disk glare — saturation is the difference between trim and tube.
@@ -240,7 +249,9 @@ void main() {
   // what fogged the dash into washed brown haze (it fed the scene bloom along
   // every member at once).
   float g = exp(-vSide * vSide * 7.0);
-  float hier = (0.4 + 0.6 * vW * vW) * (0.35 + 0.65 * smoothstep(1.4, 2.7, vWidth));
+  // Facing weight rides gently here too (match the core pass), so the halo hugs
+  // the console rails as much as the canopy beam — one evenly-lit trim set.
+  float hier = (0.55 + 0.45 * vW) * (0.35 + 0.65 * smoothstep(1.4, 2.7, vWidth));
   // The 0.6 floor keeps a faint CONTINUOUS ribbon of light under every member:
   // it pre-blurs the bloom pass's input so a span crossing the threshold blooms
   // smoothly instead of beading (thin 2px cores alias in the mip chain).
@@ -264,18 +275,32 @@ export const cockpitPanelFragmentShader = /* glsl */ `
 precision highp float;
 ${starLight}
 ${cloak}
-uniform vec3 uAmber;   // a whisper of the trim's own bounce on the masses
+uniform vec3 uAmber;   // the trim's own bounce on the masses
 uniform float uAlpha;
 uniform float uFill;   // resting panel opacity (the interior's darkness)
 varying vec2 vPos;
 void main() {
   float lit = litAt(vPos, 1.0);
-  // Near-black structure with a whisper of the piping's bounce, plus a faint
-  // wash of the star's light nearby — surfaces catching the scene, not a
-  // hole. The wash is kept a WHISPER (0.008): at 0.02 the black hole's
-  // screen-wide glare tinted the whole dash a washed brown instead of the
-  // reference's near-black panels.
-  vec3 col = vec3(0.006, 0.005, 0.007) + uAmber * 0.003 + uStarColor * lit * 0.008;
+  // The hull is a near-black OCCLUDER first (it blocks the starfield so the
+  // scene shows only through the glass — that occlusion is what actually turns
+  // floating trim into "a ship you sit inside"). The reference interior is
+  // almost pure black; the mass reads only from the trim edge-lighting it, so
+  // the surface terms here stay a WHISPER — just enough that the panel is a
+  // machined surface catching a hair of light near the opening, never a lit
+  // wall that competes with the glass.
+  //
+  // edgeGlow: the panel edges nearest the windshield opening (the ceiling's
+  // lower lip, the dash's upper lip) catch a touch more of the interior bounce
+  // than the deep top/bottom — a coarse AO fake that reads as a curved hull.
+  vec2 q = vec2(vPos.x / 1920.0 - 0.5, vPos.y / 1080.0 - 0.5);
+  float toGlass = 1.0 - smoothstep(0.02, 0.40, abs(q.y));   // near the opening
+  float toCentre = 1.0 - smoothstep(0.10, 0.62, abs(q.x));  // away from edges
+  float edgeGlow = toGlass * (0.35 + 0.65 * toCentre);
+  vec3 metal = vec3(0.009, 0.0085, 0.011);                  // machined hull base
+  vec3 shell = metal + vec3(0.011, 0.0095, 0.009) * edgeGlow;
+  // The star wash stays a WHISPER (0.008) so the black hole's screen-wide disk
+  // glare can't tint the whole dash brown; the amber bounce hugs the trim edge.
+  vec3 col = shell + uAmber * (0.004 + 0.010 * edgeGlow) + uStarColor * lit * 0.008;
   // The interior masses de-cloak on the same cell field as the trim.
   gl_FragColor = vec4(col, uFill * uAlpha * cloakMask(vPos));
 }

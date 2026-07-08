@@ -107,54 +107,59 @@ const R_HEX = 34; // windshield hexagon corners
  *  into the pillar's outer face. The rake beam is thereby CONTINUOUS with the
  *  frame — same contour, same stroke, and the band fill (this ring with the
  *  inner ring as its hole) fuses the hub + rake band into one dark mass. */
+// The windshield is a clean INSET HEXAGON — the reference's canopy: a flat top
+// beam, a chamfer diagonal down each top corner, near-vertical pillars, and a
+// near-flat sill, all sitting INSET from the screen edges (black margin beyond
+// the frame on both flanks, exactly as the reference shows). The prior pass ran
+// a "V notch → out the screen edge → back" excursion at each top corner, which
+// poked a little triangular wedge off the frame and read as a tangle rather than
+// a clean coachwork bend. Here each corner is ONE chamfered beam: top edge
+// rounds into the rake, the rake runs straight down-out to the pillar top, the
+// pillar rounds into the sill. One continuous stroke, no floating ends, no
+// screen-edge wedge.
 const canopyOuterRaw: RawPt[] = [
-  [344, 78, 18],
-  [1592, 78, 18],
-  // Right junction: V notch → out the screen edge → back to the pillar face.
-  [1734, 251, 16],
-  [1944, 157],
-  [1946, 183],
-  [1714, 292, 30],
-  // Right pillar FOOT — the reference's construction: the whole bottom is ONE
-  // slim beam hugging the window's bottom edge. The pillar's outer face
-  // rounds at the foot into the sill's top edge. Re-measured off the console
-  // crop (dense luminance trace): the sill is NEARLY FLAT with a subtle
-  // CROWN at the centre — the underside sits at ~841 mid-screen and ~850 near
-  // the feet (the round-5 layout bowed the opposite way, sagging 43px to the
-  // centre, which read as a drooping cowl against the reference).
-  [1500, 822, 40],
-  [1740, 816, 170],
-  [1944, 856],
-  [1944, 868],
-  [1730, 845, 170],
+  // Top beam (flat), rounding into each corner chamfer.
+  [470, 74, 40],
+  [1450, 74, 40],
+  // Right chamfer → pillar top → pillar (angles gently outward going down).
+  [1690, 262, 70],
+  [1792, 470, 60],
+  // Right pillar foot: rounds into the sill's top edge. The sill is ONE slim
+  // near-flat beam with a subtle centre crown (underside ~838 mid, ~846 feet).
+  [1806, 792, 90],
+  [1720, 846, 200],
   [1470, 850, 220],
-  [960, 841, 480],
-  // Left pillar foot, mirrored.
+  [960, 842, 480],
+  // Left sill + pillar foot, mirrored.
   [450, 850, 220],
-  [190, 845, 170],
-  [-24, 868],
-  [-24, 856],
-  [180, 816, 170],
-  [420, 822, 40],
-  // Left rake junction (up the pillar → out the screen edge → V notch).
-  [206, 292, 30],
-  [-26, 183],
-  [-24, 157],
-  [186, 251, 16],
+  [200, 846, 200],
+  [114, 792, 90],
+  // Left pillar → pillar top → chamfer back into the top beam.
+  [128, 470, 60],
+  [230, 262, 70],
 ];
-/** Windshield frame, inner lip (closed ring) — wider pillar offsets than the
- *  top edge, the perspective cue that gives the members thickness. */
+/** Windshield frame, inner lip (closed ring) — a slightly smaller concentric
+ *  hexagon. The offset between the two rings is the member THICKNESS (the strut
+ *  band fills the gap), and it's a touch wider down the pillars than along the
+ *  top, the perspective cue that gives the coachwork depth. */
 const canopyInnerRaw: RawPt[] = [
-  [360, 96, 18],
-  [1576, 96, 18],
-  [1690, 262, 24],
-  // The lip (the sill beam's TOP edge) mirrors the outer underside's profile:
-  // nearly flat, crowning ~6px at the centre, turning up the pillars at the
-  // feet (measured {829,841} at centre / {834,850} near the feet).
-  [1465, 834, 44],
-  [960, 828, 460],
-  [455, 834, 44],
-  [230, 262, 24],
+  [486, 92, 38],
+  [1434, 92, 38],
+  [1662, 268, 64],
+  [1758, 470, 56],
+  [1770, 786, 84],
+  // Track the outer ring's sill profile (an intermediate foot point at the
+  // pillar, then the near-flat run) so the two rings stay PARALLEL down the
+  // pillar foot — without this the inner ring cut one long diagonal while the
+  // outer stepped through its foot, splaying the trim's thickness open there.
+  [1690, 840, 200],
+  [1462, 838, 210],
+  [960, 830, 460],
+  [458, 838, 210],
+  [230, 840, 200],
+  [150, 786, 84],
+  [162, 470, 56],
+  [258, 268, 64],
 ];
 
 export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.0, closed: true };
@@ -168,27 +173,30 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   // junctions above — so they carry the frame's exact finish and their band
   // is filled by the strut band automatically.)
 
-  // Console — re-measured off the reference crop (dense luminance trace with
-  // the sill pair + pillar feet as the crop↔design anchors). The rail pair is
-  // NOT a separate centre member landing on flank lines: in the reference
-  // each flank line CONTINUES through the hub elbow into the rail — one
-  // stroke per line, screen edge to screen edge — so both rails are authored
-  // as single continuous members (no caps, no scissor crossings at the hub):
-  //   • UPPER RAIL: from the edge along the dash-top profile (y≈949→916),
-  //     elbow up at x≈610/1310, flat 864 across the centre, mirror out,
-  //   • LOWER RAIL: rises out of the SKIRT (the console's flared base,
-  //     kneeing through (450,1030)→(553,969)), same elbow, flat 877, mirror,
-  //   • the PEDESTAL: flat top y≈911 spanning 760→1125, shoulders r85, sides
-  //     diving at ~52° off the bottom of the frame, a SINGLE machined edge
-  //     (the round-5 inner bezel is not in the reference).
-  // (The hairline echoes that used to double the rails — near-edge dash-top
-  // echoes and the lower skirt echoes — and the flank plate seam rectangles
-  // are GONE by the pilot's call: on screen they read as accidental doubled
-  // lines and floating clutter, not structure.)
-  { pts: resolveCorners([[-6, 949], [350, 928, 260], [608, 916, 90], [746, 864, 170], [1174, 864, 170], [1312, 916, 90], [1570, 928, 260], [1926, 949]]), w: 0.7, px: 2.0 },
-  { pts: resolveCorners([[170, 1088], [430, 1035, 120], [520, 1000, 150], [610, 938, 90], [746, 877, 150], [1174, 877, 150], [1310, 938, 90], [1400, 1000, 150], [1490, 1035, 120], [1750, 1088]]), w: 0.6, px: 1.9 },
-  // Pedestal:
-  { pts: resolveCorners([[620, 1090], [760, 911, 85], [1125, 911, 85], [1265, 1090]]), w: 0.85, px: 2.2 },
+  // Console — a CONTAINED central dashboard, not full-width rails. The prior
+  // pass ran both rails screen-edge to screen-edge (x −6 → 1926), which stacked
+  // three near-parallel horizontal bands (sill + two rails) across the whole
+  // bottom and read as loose wires draped under the glass rather than an
+  // instrument console. The reference instead shows a compact trapezoidal
+  // dashboard: the rails ANCHOR at the pillar feet (where the sill meets the
+  // pillar, ≈{200,846}/{1720,846}), sweep DOWN-and-IN to a raised central
+  // plateau, and bound a contained console body that frames the pedestal — the
+  // structure the finale copy + ledger sit inside. Both rails still START on the
+  // frame (they flow out of the pillar foot, no floating end) and mirror about
+  // centre; they simply no longer run off the screen edges.
+  //   • DECK RAIL (upper): out of the pillar foot, a shallow dip to the plateau
+  //     shoulders (x≈700/1220), flat across the centre at y≈900, mirror. This is
+  //     the dashboard's top lip — the horizon line of the console.
+  //   • APRON RAIL (lower): the console's flared base — drops from the deck-rail
+  //     ends down the console flanks (the knee at ≈{560,1002}), across a wider
+  //     flat at y≈1004, and mirrors. Deck + apron together read as one solid
+  //     console mass (their band is dark, the pedestal mounted on top).
+  //   • PEDESTAL: the raised centre block the copy sits above — flat top y≈938
+  //     spanning 770→1150, shoulders r70, sides diving to the frame bottom.
+  { pts: resolveCorners([[200, 846], [310, 892, 90], [700, 902, 150], [820, 900, 120], [1100, 900, 120], [1220, 902, 150], [1610, 892, 90], [1720, 846]]), w: 0.72, px: 2.0 },
+  { pts: resolveCorners([[310, 892], [440, 986, 90], [560, 1002, 150], [820, 1004, 150], [1100, 1004, 150], [1360, 1002, 150], [1480, 986, 90], [1610, 892]]), w: 0.6, px: 1.9 },
+  // Pedestal — the raised centre block, mounted on the deck rail:
+  { pts: resolveCorners([[700, 1090], [770, 938, 70], [1150, 938, 70], [1220, 1090]]), w: 0.85, px: 2.2 },
 
   // (The right instrument circle — main arc, inner echo and radial tick ring —
   // is GONE by the pilot's call: on screen its edge-clipped ticks read as
@@ -201,31 +209,43 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
 // into a ship (the scene stays visible only through glass). Corners rounded
 // with the same radii as the lines that trace them.
 
+// The ceiling mass fills the whole top band down to the hexagon's top edge —
+// its lower contour traces the new inset hexagon (top beam 470→1450 @ y74, the
+// chamfer down to the pillar tops), so the opaque hull meets the trim exactly
+// and the starfield shows only through the glass below. The mass runs full
+// screen width up top (the ship's roof spans past the frame's inset flanks).
 export const PANEL_CEILING: ReadonlyArray<Pt> = resolveCorners(
   [
     [0, 0],
     [1920, 0],
-    [1920, 170],
-    [1728, 252, R_HEX],
-    [1592, 78, R_HEX],
-    [344, 78, R_HEX],
-    [192, 252, R_HEX],
-    [0, 170],
+    [1920, 470],
+    [1792, 470, R_HEX],
+    [1690, 262, R_HEX],
+    [1450, 74, R_HEX],
+    [470, 74, R_HEX],
+    [230, 262, R_HEX],
+    [128, 470, R_HEX],
+    [0, 470],
   ],
   true,
 );
 
+// The dash mass fills the bottom band up to the sill — its upper contour traces
+// the new sill profile (pillar feet 200/1720 @ y846, the near-flat sill), full
+// screen width so the console hull spans past the frame's inset flanks.
 export const PANEL_DASH: ReadonlyArray<Pt> = resolveCorners(
   [
-    [-30, 868],
-    [190, 845, 170],
+    [0, 470],
+    [114, 792, 170],
+    [200, 846, 200],
     [450, 850, 220],
-    [960, 841, 480],
+    [960, 842, 480],
     [1470, 850, 220],
-    [1730, 845, 170],
-    [1944, 868],
-    [1944, 1090],
-    [-30, 1090],
+    [1720, 846, 200],
+    [1806, 792, 170],
+    [1920, 470],
+    [1920, 1090],
+    [0, 1090],
   ],
   true,
 );
