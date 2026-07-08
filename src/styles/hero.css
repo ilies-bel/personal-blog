@@ -549,7 +549,9 @@ body.graveyard-page .bh-backdrop::before {
   body.bare.hud-active .bh-identity {
     animation: hud-decloak 1.4s steps(1, end);
     padding: 0.7rem 1.15rem 0.75rem;
-    border: 1px solid color-mix(in oklch, var(--highlight) 34%, transparent);
+    /* The bezel line is the TRIM's saturated amber (the WebGL beam-edge hue,
+       sRGB 255/153/48) so the plate reads as mounted on the same metal. */
+    border: 1px solid oklch(0.74 0.15 62 / 0.5);
     border-radius: 2px;
     background: rgb(8 6 4 / 0.4);
   }
@@ -560,7 +562,7 @@ body.graveyard-page .bh-backdrop::before {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: color-mix(in oklch, var(--highlight) 72%, transparent);
+    background: oklch(0.78 0.155 64 / 0.9);
   }
   body.bare.hud-active .bh-identity::before { left: -2.5px; top: -2.5px; }
   body.bare.hud-active .bh-identity::after { right: -2.5px; bottom: -2.5px; }

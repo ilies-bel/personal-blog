@@ -52,7 +52,7 @@ function hudLines(): HudLine[] {
   // inside, a fainter inner disc, a hex lock on the body, a full thin
   // CROSSHAIR passing through (gapped at the hex), and four L-shaped corner
   // brackets on the enclosing square — a camera viewfinder, not arc jewellery.
-  const R = 110;
+  const R = 132;
   // Main ring + the fainter inner disc.
   lines.push({ pts: circle(0, 0, R), hw: 0.55, follow: 1, closed: true });
   lines.push({ pts: circle(0, 0, R * 0.62), hw: 0.35, follow: 1, closed: true });
@@ -111,8 +111,8 @@ function hudLines(): HudLine[] {
     });
   }
 
-  // ── The compass strip (fixed, hugging the canopy's top beam) ─────────────
-  const compY = 118;
+  // ── The compass strip (fixed, just inside the canopy's top beam) ─────────
+  const compY = 146;
   const compHalf = 300;
   for (let i = -6; i <= 6; i++) {
     const x = CX + (i / 6) * compHalf;

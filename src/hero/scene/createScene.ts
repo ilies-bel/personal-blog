@@ -198,10 +198,12 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
 
-  // Cockpit canopy: the clip-space line/panel rig the HUD power-on DE-CLOAKS
+  // Cockpit canopy: the clip-space beam/panel rig the HUD power-on DE-CLOAKS
   // (see buildCockpit.ts). Cheap to build (a few hundred ribbon vertices); its
   // per-frame update rides the same star projection the nova pass computes.
-  const cockpitRig = buildCockpit(scene);
+  // It owns a PRIVATE overlay scene composited AFTER the post chain (see the
+  // cockpitRig.render call below) so its authored sRGB is WYSIWYG.
+  const cockpitRig = buildCockpit();
 
   await yieldToMain(); // boot slice seam (warp/streak/ring line rigs built above)
 
@@ -1854,7 +1856,9 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // this frame's projected star NDC (computed above for the nova pass on the
     // final camera orientation) — the cockpit's light IS that projection. The
     // power bit flows through the hooks seam (HeroIsland reads the FSM body class).
-    cockpitRig.frame(flashOrigin.x, flashOrigin.y, stage, t, hooks.isHudActive ? hooks.isHudActive() : false);
+    // screenNova rides along so the post-grade overlay washes out with the blast
+    // (it no longer sits under the nova pass).
+    cockpitRig.frame(flashOrigin.x, flashOrigin.y, stage, t, hooks.isHudActive ? hooks.isHudActive() : false, screenNova);
 
     // --- supernova shake/rumble + idle roll (applied AFTER lookAt) -------------
     // Tiny and time-based: it sells one shock event without turning the scroll into
@@ -2086,6 +2090,10 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       if (particlesLive) particlePass.renderInto(renderer, scene, camera);
     }
     postRig.render();
+    // Cockpit overlay: composited OVER the graded frame (autoClear off inside
+    // rig.render), the same side of the pipeline as the DOM instruments —
+    // authored sRGB lands on screen untouched. Skipped entirely while cloaked.
+    cockpitRig.render(renderer, camera);
     if (drawAuditArmed) {
       drawAuditFrame.calls = renderer.info.render.calls;
       drawAuditFrame.points = renderer.info.render.points;
