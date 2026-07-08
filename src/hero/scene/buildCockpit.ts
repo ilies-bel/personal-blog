@@ -43,7 +43,10 @@ import {
   cockpitGlowFragmentShader,
   cockpitPanelVertexShader,
   cockpitPanelFragmentShader,
+  cockpitHudVertexShader,
+  cockpitHudFragmentShader,
 } from '../shaders/cockpit.glsl';
+import { buildHudGeometry } from './cockpitHud';
 import type { Rig, Uniforms } from './types';
 
 export interface CockpitRig extends Rig {
@@ -312,6 +315,30 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   lines.visible = false;
   scene.add(lines);
 
+  // HUD pass: the white holographic instruments on the glass (scanner reticle
+  // tracking the star via uLight + the fixed compass strip). A projection, not
+  // metal — no star lighting, just a floor gain through the grade.
+  const hudGeo = buildHudGeometry();
+  const hudUniforms: Uniforms = {
+    ...shared,
+    uHud: { value: new THREE.Color(0.82, 0.88, 0.97).convertSRGBToLinear() },
+    uHudFloor: { value: 2.4 },
+  };
+  const hudMat = new THREE.ShaderMaterial({
+    uniforms: hudUniforms,
+    vertexShader: cockpitHudVertexShader,
+    fragmentShader: cockpitHudFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+  const hud = new THREE.Mesh(hudGeo, hudMat);
+  hud.frustumCulled = false;
+  hud.renderOrder = 43; // holography over the members
+  hud.visible = false;
+  scene.add(hud);
+
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
   let animFrom = 0;
@@ -337,6 +364,7 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     panels.visible = on;
     glow.visible = on;
     lines.visible = on;
+    hud.visible = on;
     if (!on) return;
 
     // The decloak owns visibility per pixel (cloakMask in the shaders); the
@@ -370,11 +398,14 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   };
 
   const dispose = (): void => {
+    scene.remove(hud);
     scene.remove(lines);
     scene.remove(glow);
     scene.remove(panels);
+    hudGeo.dispose();
     lineGeo.dispose();
     panelGeo.dispose();
+    hudMat.dispose();
     lineMat.dispose();
     glowMat.dispose();
     panelMat.dispose();

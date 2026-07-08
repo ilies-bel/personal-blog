@@ -932,15 +932,13 @@ body.scene-ready.at-opening .bh-focus-dot {
   body.hud-active .bh-finale-ledger {
     position: fixed;
     right: 2.5vw;
-    bottom: 1.8vh;
+    bottom: 2.4vh;
     width: clamp(20rem, 23vw, 26rem);
     margin: 0;
-    padding: 0.6rem 1rem 0.55rem;
-    background: var(--cockpit-screen-glass);
-    border: 1px solid var(--cockpit-screen-line);
-    border-radius: 0.4rem;
-    box-shadow: var(--cockpit-screen-shadow);
+    padding: 0;
   }
+  /* The header keeps its etched legend but the rule FADES OUT rightward — an
+     instrument label printed on the dash hull, never a card's top bar. */
   body.hud-active .bh-finale-ledger-head {
     display: block;
     font-family: var(--font-mono);
@@ -948,7 +946,13 @@ body.scene-ready.at-opening .bh-focus-dot {
     letter-spacing: 0.34em;
     text-transform: uppercase;
     color: color-mix(in oklch, var(--highlight) 55%, var(--fg-faint));
-    border-bottom: 1px solid color-mix(in oklch, var(--highlight) 18%, transparent);
+    border-bottom: 1px solid;
+    border-image: linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--highlight) 30%, transparent),
+        transparent 85%
+      )
+      1;
     padding-bottom: 0.35rem;
   }
   /* The screen flicker-materialises when its page loads in (the finale beat

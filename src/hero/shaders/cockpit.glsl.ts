@@ -210,10 +210,11 @@ void main() {
   // included. The squared term used to sink them ~2× below the canopy beam and
   // read as an unlit, disconnected console.
   float energy = uFloor * (0.55 + 0.45 * vW) * diff * (1.0 + 0.6 * kiss) * vigComp(vPos);
-  // The kiss stays AMBER-LEANING (mix toward the star colour, never pure): the
-  // old raw uStarColor term bleached every member bone-tan under the black
-  // hole's disk glare — saturation is the difference between trim and tube.
-  vec3 col = base * energy + mix(uAmber * 1.4, uStarColor, 0.45) * kiss * 0.9;
+  // The kiss stays AMBER-DOMINANT (only a 0.25 lean toward the star colour):
+  // the reference's hot spans are gold-white GLINTS, and at the black hole the
+  // bone disk glare used to pull every kiss patch pale — desaturated smears,
+  // not lit metal. Saturation is the difference between trim and tube.
+  vec3 col = base * energy + mix(uAmber * 1.4, uStarColor, 0.25) * kiss * 0.8;
   float edge = 1.0 - smoothstep(0.55, 1.0, t);
   // Decloak: materialisation cells gate presence; fresh pixels glint electric.
   col = cloakTint(col, vPos);
@@ -255,10 +256,62 @@ void main() {
   // The 0.6 floor keeps a faint CONTINUOUS ribbon of light under every member:
   // it pre-blurs the bloom pass's input so a span crossing the threshold blooms
   // smoothly instead of beading (thin 2px cores alias in the mip chain).
-  float energy = uFloor * 0.3 * hier * diff * (0.6 + 1.0 * kiss) * vigComp(vPos);
+  // Kiss rides the halo GENTLY (0.5, was 1.0): the wide additive ribbon
+  // amplifying a full-strength kiss painted elongated pale smears along the
+  // console runs under the black hole's glare — the glint belongs to the core
+  // pass; the halo only warms around it.
+  float energy = uFloor * 0.3 * hier * diff * (0.6 + 0.5 * kiss) * vigComp(vPos);
   // The halo materialises with its member (same cells), no electric tint here —
   // an additive glow flashing blue would flood the bloom pass.
   gl_FragColor = vec4(uAmber * energy, uAlpha * g * vCover * cloakMask(vPos) * 0.16);
+}
+`;
+
+/** HUD pass: white holographic instruments projected on the glass. Lines with
+ *  aFollow = 1 are authored around the origin and re-centred on the star's
+ *  projected position every frame (uLight) — the scanner reticle rides the
+ *  body like a target lock. aFollow = 0 lines are fixed design furniture (the
+ *  compass strip). Same sub-pixel guard as the struts: never extrude under
+ *  0.85 CSS half-px, pay the lost width back as alpha, so hairlines stay
+ *  continuous instead of dashing. */
+export const cockpitHudVertexShader = /* glsl */ `
+attribute vec2 aPos;
+attribute vec2 aNorm;
+attribute float aSide;
+attribute float aHalf;    // CSS half-px width
+attribute float aFollow;  // 1 = star-anchored, 0 = fixed
+uniform vec2 uLight;
+uniform float uHalfW;     // design units per CSS half-px
+${designToClip}
+varying float vAcross;
+varying vec2 vPos;
+varying float vCover;
+void main() {
+  float drawnHalf = max(aHalf, 0.85);
+  vCover = aHalf / drawnHalf;
+  vec2 p = aPos + uLight * aFollow + aNorm * (aSide * uHalfW * 2.0 * drawnHalf);
+  vPos = p;
+  vAcross = aSide;
+  gl_Position = clipFromDesign(p);
+}
+`;
+
+/** Crisp white holographic lines with a soft edge. Presence follows the
+ *  decloak so the HUD boots in with the hull; the hologram is NOT lit by the
+ *  star (it is a projection, not metal) — only uHudFloor pushes it through
+ *  the grade. */
+export const cockpitHudFragmentShader = /* glsl */ `
+precision highp float;
+${cloak}
+uniform vec3 uHud;       // site white (slightly cool)
+uniform float uHudFloor; // brightness gain through the grade
+uniform float uAlpha;
+varying float vAcross;
+varying vec2 vPos;
+varying float vCover;
+void main() {
+  float edge = 1.0 - smoothstep(0.35, 1.0, abs(vAcross));
+  gl_FragColor = vec4(uHud * uHudFloor, uAlpha * edge * vCover * 0.72 * cloakMask(vPos));
 }
 `;
 

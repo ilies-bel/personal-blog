@@ -1873,8 +1873,11 @@ body.hud-active .star-marker[data-reduced='true'][data-visible='true'][data-stat
     0 0 18px rgba(0, 0, 0, 0.6);
 }
 
-/* TELEMETRY SCREEN (the metadata MFD, left dash face). The wrapper is the
-   mount layer; the readout is the screen itself. */
+/* TELEMETRY READOUT (bottom-left, etched on the dash hull). The reference's
+   grammar exactly: ONE bare line of mono — the lifecycle time bright, the
+   station dim — printed straight on the console mass. No card, no bezel: the
+   hull behind it IS the panel (compare "+9 MYR  THE BEGINNING" in
+   reference.png's bottom-left corner). */
 .hud-frame {
   position: fixed;
   inset: 0;
@@ -1892,41 +1895,32 @@ body.hud-active .hud-frame {
 .hud-frame-readout {
   position: fixed;
   left: 2.5vw;
-  bottom: 2.4vh;
+  bottom: 2.8vh;
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.65rem 1rem 0.75rem;
-  min-width: 11.5rem;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 1.2em;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fg-faint);
-  background: var(--cockpit-screen-glass);
-  border: 1px solid var(--cockpit-screen-line);
-  border-radius: 0.4rem;
-  box-shadow: var(--cockpit-screen-shadow);
   opacity: 1;
   transition: opacity 0.35s var(--ease-out-quint);
 }
-/* Diving into a marker: the telemetry screen would just clutter the plunge, so it
-   fades out for the duration of the dive (body.bh-diving, set by HeroIsland.beginDive). */
+/* Diving into a marker: the telemetry readout would just clutter the plunge, so
+   it fades out for the duration of the dive (body.bh-diving, set by
+   HeroIsland.beginDive). */
 body.bh-diving .hud-frame-readout {
   opacity: 0;
 }
-/* The screen's header strip: a dim etched label with its own hairline, so the
-   panel reads as an instrument page, not a caption. */
+/* The header collapses into the line itself: the readout is self-evident as an
+   instrument (time + station), the reference prints no label. */
 .hud-frame-readout-head {
-  font-size: 0.6rem;
-  letter-spacing: 0.34em;
-  color: color-mix(in oklch, var(--highlight) 55%, var(--fg-faint));
-  border-bottom: 1px solid color-mix(in oklch, var(--highlight) 18%, transparent);
-  padding-bottom: 0.35rem;
-  margin-bottom: 0.15rem;
+  display: none;
 }
 .hud-frame-readout-stage {
-  color: color-mix(in oklch, var(--highlight) 80%, var(--fg-faint));
+  color: color-mix(in oklch, var(--highlight) 88%, var(--fg-faint));
   font-variant-numeric: tabular-nums;
 }
 /* Compact layouts: the console screens are desktop instruments (the compact
@@ -1935,98 +1929,68 @@ body.bh-diving .hud-frame-readout {
   .hud-frame { display: none; }
 }
 
-/* PEDESTAL SCREEN (the main console MFD, centre pedestal). Under power the
-   bottom-centre compass/CTA readout parks INTO the pedestal mass (design
-   x 760–1125 from y≈911 down — the pedestal the WebGL console draws dead
-   centre) and wears the screen skin. Excludes the loader's boot readout and
-   the warp readout — those own the slot on their own terms — and leaves the
-   un-powered (observation deck) compass exactly as it was. */
+/* PEDESTAL READOUT (bottom centre). Under power the compass/CTA parks INTO
+   the pedestal mass — the WebGL console draws the pedestal AND its inner
+   screen-recess lip dead centre — as BARE amber mono, exactly the reference's
+   "[ JUMP TO WORK ]" floating inside the pedestal band. The structure is the
+   WebGL's job; the DOM contributes only the type. Excludes the loader's boot
+   readout and the warp readout — those own the slot on their own terms — and
+   leaves the un-powered (observation deck) compass exactly as it was. */
 @media (min-width: 60.0625rem) {
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) {
-    bottom: 2.4vh;
+    bottom: 2.6vh;
     width: clamp(17rem, 19vw, 24rem);
     padding: 1.1vh 1rem 1.3vh;
-    background: var(--cockpit-screen-glass);
-    border: 1px solid var(--cockpit-screen-line);
-    border-radius: 0.45rem;
-    box-shadow: var(--cockpit-screen-shadow);
     /* Materialise with the hull on power-on. No fill mode: once the strobe
        ends the declared opacity rules (scene-ready / data-visible gating)
        take back over, so the flicker can never pin a hidden compass visible. */
     animation: hud-decloak 1.4s steps(1, end);
   }
-  /* The radial text scrim is the FLOATING readout's legibility pool — the
-     screen's own glass replaces it. */
+  /* The radial text scrim is the FLOATING readout's legibility pool — inside
+     the pedestal the console mass is the dark behind the type. */
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout)::before {
     display: none;
   }
   /* The STANDING CUE readout (the boot slot's final phase, landed in the
      bottom slot: data-boot='cue' + glided) is the same instrument the live
-     compass takes over — it wears the same pedestal glass so the pre-scroll
-     frame already shows the console screen, and the cue → live hand-off swaps
-     content, never chrome. (The loading/ready phases and the glide itself
-     stay bare — those live in/over the loader.) */
+     compass takes over — same bare pedestal seat, so the cue → live hand-off
+     swaps content, never chrome. (The loading/ready phases and the glide
+     itself stay bare — those live in/over the loader.) */
   body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] {
-    bottom: 2.4vh;
+    bottom: 2.6vh;
     width: clamp(17rem, 19vw, 24rem);
     padding: 1.1vh 1rem 1.3vh;
-    background: var(--cockpit-screen-glass);
-    border: 1px solid var(--cockpit-screen-line);
-    border-radius: 0.45rem;
-    box-shadow: var(--cockpit-screen-shadow);
   }
-  /* Inside the pedestal glass the readout drops from the floating --text-hud
-     display size to the instrument register (--text-label): an MFD line, not a
+  /* Inside the pedestal the readout drops from the floating --text-hud display
+     size to the instrument register (--text-label): an MFD line, not a
      billboard — and the longest labels (REVERSE COLLAPSE, SCROLL TO EXPLORE)
-     hold one line inside the bezel. Applies to the live compass AND the
-     standing cue (same slot, same glass). */
+     hold one line inside the recess. Applies to the live compass AND the
+     standing cue (same slot, same seat). */
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) .hud-compass-read,
   body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] .hud-compass-read {
     font-size: var(--text-label);
   }
+  /* Console hardware speaks AMBER (the reference's "[ JUMP TO WORK ]"): the
+     pedestal CTA is powered trim, not a glass hologram — white stays the
+     holography's colour (markers, scanner ring, dial labels). */
+  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) .hud-compass-label,
+  body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] .hud-compass-label {
+    color: color-mix(in oklch, var(--highlight) 80%, var(--fg));
+  }
 }
 
-/* NAV SCREEN (the heading gauge, left flank). Under power the half-circle
-   tick gauge stops floating on the glass and mounts in its own MFD: a tall
-   side-console screen off the left pillar, the dial face reading as a card
-   segment behind glass. The whole instrument (svg + hit buttons + label share
-   one coordinate space) is scaled as a unit, and the container's PADDING is
-   what insets the face — absolutely-positioned children resolve against the
-   padding edge, so the svg, the buttons and the label all shift together and
-   the click targets stay glued to their ticks. */
+/* NAV DIAL (the heading gauge, left flank). Under power the half-circle tick
+   gauge is a HOLOGRAPHIC dial projected straight on the glass — the
+   reference's left-flank instrument exactly: radial ticks, station text and
+   the lubber chevron floating bare over the scene, the amber piping passing
+   behind them. No card, no bezel — brightness is the hierarchy. It keeps the
+   ghost gauge's geometry (same face, same coordinates for the click targets)
+   and simply ARMS: stations light, buttons wake, and the decloak strobe plays
+   it in with the hull. */
 @media (min-width: 60.0625rem) {
   body.hud-active .hud-arc {
-    left: 1.4vw;
-    width: 282px;
-    height: auto;
-    padding: 2.5rem 0 1.1rem 0.5rem;
-    transform: translateY(-50%) scale(0.82);
-    transform-origin: left center;
-    background: var(--cockpit-screen-glass);
-    border: 1px solid var(--cockpit-screen-line);
-    border-radius: 0.5rem;
-    /* The shared skin plus a uniform deepening layer: this MFD is far larger
-       than the readout screens, and at this size the bare glass gradient reads
-       washed brown over the bright disk band — the extra inset floor keeps the
-       big face reading as dark powered glass. */
-    box-shadow:
-      var(--cockpit-screen-shadow),
-      inset 0 0 0 100rem rgba(6, 4, 3, 0.38);
+    left: 1.6vw;
     animation: hud-decloak 1.4s steps(1, end);
-  }
-  body.hud-active .hud-arc-head {
-    display: block;
-    position: absolute;
-    top: 0.8rem;
-    left: 0.9rem;
-    right: 0.9rem;
-    font-family: var(--font-mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.34em;
-    text-transform: uppercase;
-    color: color-mix(in oklch, var(--highlight) 55%, var(--fg-faint));
-    border-bottom: 1px solid color-mix(in oklch, var(--highlight) 18%, transparent);
-    padding-bottom: 0.35rem;
   }
 }
 
@@ -2172,6 +2136,15 @@ body:not(.hud-active) .hud-arc-tick {
 }
 body:not(.hud-active) .hud-arc-lubber { opacity: 0.55; }
 .hud-arc-lubber { transition: opacity 0.5s ease; }
+/* POWERED dial: the tick face ARMS in the trim's own amber — the reference's
+   left-flank instrument is an amber holograph, not a gray ghost. Stations keep
+   their interactive white; the minor ticks carry the dial's material. */
+body.hud-active .hud-arc-tick {
+  stroke: color-mix(in oklch, var(--highlight) 60%, transparent);
+}
+body.hud-active .hud-arc-station line {
+  stroke: color-mix(in oklch, var(--highlight) 55%, var(--fg-dim));
+}
 
 /* ── COCKPIT IGNITION — when hud-active lands (boot finished), the stations
    cascade in top→bottom, each digit writing in a beat after its tick mark; the

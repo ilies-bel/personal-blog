@@ -194,9 +194,18 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   //   • PEDESTAL: the raised centre block the copy sits above — flat top y≈938
   //     spanning 770→1150, shoulders r70, sides diving to the frame bottom.
   { pts: resolveCorners([[200, 846], [310, 892, 90], [700, 902, 150], [820, 900, 120], [1100, 900, 120], [1220, 902, 150], [1610, 892, 90], [1720, 846]]), w: 0.72, px: 2.0 },
-  { pts: resolveCorners([[310, 892], [440, 986, 90], [560, 1002, 150], [820, 1004, 150], [1100, 1004, 150], [1360, 1002, 150], [1480, 986, 90], [1610, 892]]), w: 0.6, px: 1.9 },
+  // The apron rail TERMINATES on the pedestal's sides (x≈740/1180 at y1004,
+  // where the slope [700,1090]→[770,938] crosses the flat) — flowing into a
+  // junction like every other member. The old single run crossed straight
+  // through both pedestal slopes and read as loose wires X-ing the console.
+  { pts: resolveCorners([[310, 892], [440, 986, 90], [560, 1002, 150], [740, 1004]]), w: 0.6, px: 1.9 },
+  { pts: resolveCorners([[1180, 1004], [1360, 1002, 150], [1480, 986, 90], [1610, 892]]), w: 0.6, px: 1.9 },
   // Pedestal — the raised centre block, mounted on the deck rail:
   { pts: resolveCorners([[700, 1090], [770, 938, 70], [1150, 938, 70], [1220, 1090]]), w: 0.85, px: 2.2 },
+  // Pedestal screen recess — the inner lip (the reference pedestal's double
+  // top edge): a hairline trapezoid inset inside the pedestal, both feet
+  // exiting below the screen. The compass CTA readout parks inside it.
+  { pts: resolveCorners([[742, 1090], [796, 962, 54], [1124, 962, 54], [1178, 1090]]), w: 0.55, px: 1.4 },
 
   // (The right instrument circle — main arc, inner echo and radial tick ring —
   // is GONE by the pilot's call: on screen its edge-clipped ticks read as
