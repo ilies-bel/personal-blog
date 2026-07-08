@@ -2269,11 +2269,18 @@ body.hud-active .hud-arc-label { transition-delay: 0.85s; }
   height: 100%;
   z-index: 6; /* above the canvas (0), below .bh-overlay copy (10) */
   pointer-events: none;
-  /* Neutral-metal canopy: the solid faceted look, edge-lit in a cool accent.
-     --ckpt-edge is the strut chamfer rim (a calm cool line, not amber); the
-     reduced-motion still can't track the scene light, so it rests at this fixed
-     cool tone rather than the live per-chapter star colour. */
-  --ckpt-edge: color-mix(in oklab, var(--hud-main) 55%, var(--hud-line));
+  /* Pass colours. --ckpt-gold re-states the --hud-gold formula (same reason the
+     compass re-declares it: this subtree is outside .hud-system, so the local
+     cascade never reaches here). The lit/hot mixes lean on --hud-main so the
+     per-scene temperature swap and the bright-zone graphite flip are free. */
+  --ckpt-gold: color-mix(in oklch, var(--highlight) 86%, var(--fg));
+  /* The lit/hot mixes run in OKLAB (rectangular), NOT oklch: the cockpit's warm
+     gold (h≈78) crossed with the finale's signal-blue --hud-main (h≈265) is a
+     >180° hue arc, and oklch's angular interpolation walks it through magenta —
+     the canopy read PINK over the last chapter. Oklab blends the two like light
+     on a painted surface: it desaturates toward a warm neutral instead. */
+  --ckpt-dim: color-mix(in oklab, var(--ckpt-gold) 45%, var(--hud-line));
+  --ckpt-lit: color-mix(in oklab, var(--ckpt-gold) 68%, var(--hud-main));
   opacity: 0;
   visibility: hidden;
   transform: scale(2.05);
@@ -2299,18 +2306,19 @@ body.scene-ready.hud-active .bh-cockpit {
   stroke-linecap: round;
   transition: stroke 0.5s ease; /* per-scene temperature swaps ease, never pop */
 }
-/* The struts + pane outlines — cool edge-lit strokes over the metal fill. */
-.bh-cockpit-strut path { stroke: var(--ckpt-edge); }
-/* The opaque metal hull + console mass. Heavy dark neutral, not pure black: the
-   scene's brightest beats still ghost through at ~1/6 strength, reading as glare
-   on the structure rather than a hole in it. */
-.bh-cockpit path.bh-cockpit-panel {
-  fill: rgb(9 10 13 / 0.9);
+.bh-cockpit-base path { stroke: var(--ckpt-dim); }
+.bh-cockpit-lit path { stroke: var(--ckpt-lit); }
+/* The canopy strut band — solid structure between the frame's edge pair, so the
+   scene reads as sitting BEHIND the member, not between two floating lines. */
+.bh-cockpit path.bh-cockpit-band {
+  fill: rgb(3 3 4 / 0.7);
   stroke: none;
 }
-/* The recessed console screen — a cool dark glass inset. */
-.bh-cockpit path.bh-cockpit-screen {
-  fill: rgb(6 12 18 / 0.92);
+/* The opaque interior masses (ceiling / dashboard). Heavy but not pure black:
+   the scene's brightest beats still ghost through at ~1/5 strength, reading as
+   glare on the structure rather than a hole in it. */
+.bh-cockpit path.bh-cockpit-panel {
+  fill: rgb(2 2 4 / 0.78);
   stroke: none;
 }
 @media (prefers-reduced-motion: reduce) {
