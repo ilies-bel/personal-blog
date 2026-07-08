@@ -15,7 +15,8 @@
 // shared with the SVG fallback): polylines are extruded here into indexed
 // triangle ribbons with mitred joints, rounded corners resolved upstream.
 // Draw order inside the overlay scene: hull panels → console screen glass →
-// metal beams → additive edge glow → junction glints → white HUD holography.
+// flat graphic beams → white HUD holography. (The glow halo, junction glint
+// and smoked-glass passes are gone — the minimal grammar is band + hairline.)
 //
 // POWER CONTRACT: frame() receives hudActive (read through the SceneHooks
 // seam) and tweens the DECLOAK envelope — the Predator reveal: the ship never
@@ -25,10 +26,8 @@
 import * as THREE from 'three';
 import {
   COCKPIT_BEAMS,
-  COCKPIT_GLINTS,
   HULL_OUTER,
   HULL_HOLES,
-  SIDE_PANES,
   PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
@@ -38,13 +37,8 @@ import {
 import {
   cockpitBeamVertexShader,
   cockpitBeamFragmentShader,
-  cockpitGlowVertexShader,
-  cockpitGlowFragmentShader,
-  cockpitGlintVertexShader,
-  cockpitGlintFragmentShader,
   cockpitPanelVertexShader,
   cockpitPanelFragmentShader,
-  cockpitGlassFragmentShader,
   cockpitScreenFragmentShader,
   cockpitHudVertexShader,
   cockpitHudFragmentShader,
@@ -104,9 +98,10 @@ function starLightAt(stage: number, outColor: THREE.Color): number {
 // ── Ribbon extrusion ─────────────────────────────────────────────────────────
 
 /** Extrude the structural BEAMS: mitred joints; the width attribute (aDW) is
- *  the member's full width in DESIGN units — the vertex shader extrudes half
- *  per side (plus the glow pad on the halo pass), and the fragment shader
- *  draws metal fill + edge hairlines + echo off the cross coordinate. */
+ *  the member's full width in DESIGN units (per-vertex via dwAt — junction
+ *  chisel tapers ride this) — the vertex shader extrudes half per side, and
+ *  the fragment shader draws flat fill + edge hairlines off the cross
+ *  coordinate. */
 function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeometry {
   const pos: number[] = [];
   const norm: number[] = [];
@@ -168,34 +163,6 @@ function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeomet
   return geo;
 }
 
-/** One quad per junction glint (aCorner spans the quad, additive shader). */
-function buildGlintGeometry(): THREE.BufferGeometry {
-  const pos: number[] = [];
-  const corner: number[] = [];
-  const radius: number[] = [];
-  const intensity: number[] = [];
-  const idx: number[] = [];
-  for (const g of COCKPIT_GLINTS) {
-    const first = pos.length / 2;
-    for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
-      pos.push(g.x, g.y);
-      corner.push(cx, cy);
-      radius.push(g.r);
-      intensity.push(g.i);
-    }
-    idx.push(first, first + 1, first + 2, first, first + 2, first + 3);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('aPos', new THREE.BufferAttribute(new Float32Array(pos), 2));
-  geo.setAttribute('aCorner', new THREE.BufferAttribute(new Float32Array(corner), 2));
-  geo.setAttribute('aR', new THREE.BufferAttribute(new Float32Array(radius), 1));
-  geo.setAttribute('aI', new THREE.BufferAttribute(new Float32Array(intensity), 1));
-  geo.setAttribute('position', geo.getAttribute('aPos'));
-  geo.setIndex(idx);
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(960, 540, 0), 4000);
-  return geo;
-}
-
 function shapeFromPts(pts: ReadonlyArray<Pt>): THREE.Shape {
   const s = new THREE.Shape();
   s.moveTo(pts[0][0], pts[0][1]);
@@ -251,23 +218,6 @@ export function buildCockpit(): CockpitRig {
   panels.visible = false;
   overlay.add(panels);
 
-  // Smoked glass over the SIDE panes only — the corner and flank windows sit
-  // visibly darker than the central view (angled, thicker glass), which is
-  // what keeps the central gem reading as THE view.
-  const glassGeo = new THREE.ShapeGeometry(SIDE_PANES.map((pane) => shapeFromPts(pane)));
-  const glassUniforms: Uniforms = { ...shared };
-  const glassMat = new THREE.ShaderMaterial({
-    uniforms: glassUniforms,
-    vertexShader: cockpitPanelVertexShader,
-    fragmentShader: cockpitGlassFragmentShader,
-    ...overlayMatOpts,
-  });
-  const glass = new THREE.Mesh(glassGeo, glassMat);
-  glass.frustumCulled = false;
-  glass.renderOrder = 40;
-  glass.visible = false;
-  overlay.add(glass);
-
   // The recessed console screen — powered display glass under the CTA readout.
   const screenGeo = new THREE.ShapeGeometry(shapeFromPts(PANEL_SCREEN));
   const screenUniforms: Uniforms = { ...shared };
@@ -299,37 +249,6 @@ export function buildCockpit(): CockpitRig {
   beams.visible = false;
   overlay.add(beams);
 
-  // Edge-glow halo: the SAME ribbon geometry extruded wider, additive.
-  const glowUniforms: Uniforms = { ...shared, uGlowPad: { value: 9 } };
-  const glowMat = new THREE.ShaderMaterial({
-    uniforms: glowUniforms,
-    vertexShader: cockpitGlowVertexShader,
-    fragmentShader: cockpitGlowFragmentShader,
-    blending: THREE.AdditiveBlending,
-    ...overlayMatOpts,
-  });
-  const glow = new THREE.Mesh(beamGeo, glowMat);
-  glow.frustumCulled = false;
-  glow.renderOrder = 43;
-  glow.visible = false;
-  overlay.add(glow);
-
-  // Junction glints: additive white-gold sparks where members meet.
-  const glintGeo = buildGlintGeometry();
-  const glintUniforms: Uniforms = { ...shared };
-  const glintMat = new THREE.ShaderMaterial({
-    uniforms: glintUniforms,
-    vertexShader: cockpitGlintVertexShader,
-    fragmentShader: cockpitGlintFragmentShader,
-    blending: THREE.AdditiveBlending,
-    ...overlayMatOpts,
-  });
-  const glints = new THREE.Mesh(glintGeo, glintMat);
-  glints.frustumCulled = false;
-  glints.renderOrder = 44;
-  glints.visible = false;
-  overlay.add(glints);
-
   // HUD pass: the white holographic instruments on the glass (scanner reticle
   // tracking the star via uLight + the fixed compass strip).
   const hudGeo = buildHudGeometry();
@@ -349,7 +268,7 @@ export function buildCockpit(): CockpitRig {
   hud.visible = false;
   overlay.add(hud);
 
-  const meshes = [panels, glass, screen, beams, glow, glints, hud];
+  const meshes = [panels, screen, beams, hud];
 
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
@@ -408,17 +327,12 @@ export function buildCockpit(): CockpitRig {
   const dispose = (): void => {
     for (const m of meshes) overlay.remove(m);
     hudGeo.dispose();
-    glintGeo.dispose();
     beamGeo.dispose();
     screenGeo.dispose();
-    glassGeo.dispose();
     panelGeo.dispose();
     hudMat.dispose();
-    glintMat.dispose();
-    glowMat.dispose();
     beamMat.dispose();
     screenMat.dispose();
-    glassMat.dispose();
     panelMat.dispose();
   };
 

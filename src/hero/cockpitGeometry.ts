@@ -53,16 +53,6 @@ export interface CockpitBeam {
   dwAt?: (x: number, y: number) => number;
 }
 
-/** One junction glint: a hot white-gold spark where members meet. */
-export interface CockpitGlint {
-  x: number;
-  y: number;
-  /** Radius, design px. */
-  r: number;
-  /** Intensity multiplier. */
-  i: number;
-}
-
 // ─── Builders ────────────────────────────────────────────────────────────────
 
 /** Sample the quadratic bézier p0→(control c)→p1, EXCLUDING p0 (so consecutive
@@ -221,24 +211,18 @@ export const CANOPY_BEAM: CockpitBeam = {
   dwAt: canopyDW,
 };
 
-// ─── Hull lamination rings ───────────────────────────────────────────────────
-// Parallel to the canopy run two more hairlines — a thin lip rimming the
-// glass, and ONE outer lamination that exists only across the roof and
+// ─── Hull lamination ─────────────────────────────────────────────────────────
+// ONE outer lamination parallel to the canopy, only across the roof and
 // chamfers (scan: y≈28 above the top beam, +26 outside the chamfers, and
-// NOTHING parallel below the waist — the reference pillars carry a single
-// band + inner lip, so the trim stops at the waist junctions).
+// NOTHING parallel below the waist). Its clipped ends TAPER to a sliver
+// approaching the waist junctions so no ribbon cap dangles on the hull.
+// (The glass-side inner lip is gone — one line per member, no inside layer.)
 
-/** Glass-side lip (roof + chamfers + pillars; the sill has none). */
-export const CANOPY_INNER_LIP: CockpitBeam = {
-  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, -34), 730),
-  dw: 5,
-  w: 0.68,
-};
-/** The hull lamination just outside the main band — roof + chamfers only. */
 export const CANOPY_OUTER_TRIM: CockpitBeam = {
-  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, 28), 250),
+  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, 28), 256),
   dw: 9,
   w: 0.58,
+  dwAt: (_x, y) => 9 - 6 * Math.min(1, Math.max(0, (y - 195) / 53)),
 };
 
 // ─── Side-window mullions ────────────────────────────────────────────────────
@@ -249,12 +233,43 @@ export const CANOPY_OUTER_TRIM: CockpitBeam = {
 // hull between diagonal and chamfer is the wide mullion FACE the reference
 // shows between the corner pane and the glass.
 
-export const CONN_L: CockpitBeam = { pts: [[-30, 150], [205, 245]] as Pt[], dw: 16, w: 0.7 };
-export const CONN_R: CockpitBeam = { pts: [[1950, 150], [1715, 245]] as Pt[], dw: 16, w: 0.7 };
-export const DIAG_L: CockpitBeam = { pts: [[558, -30], [132, 215]] as Pt[], dw: 12, w: 0.55 };
-export const DIAG_R: CockpitBeam = { pts: [[1362, -30], [1788, 215]] as Pt[], dw: 12, w: 0.55 };
+// JOIN GRAMMAR: an open member never shows its ribbon cap. Each terminating
+// end runs INTO the receiving band's interior and TAPERS to a sliver over its
+// last ~60px (a chisel merge, like the reference's flowing junctions) — the
+// intermediate point pins the taper local so the run keeps constant width.
+const taperTo = (ex: number, ey: number, wEnd: number, wFull: number, reach: number) => {
+  return (x: number, y: number): number =>
+    wEnd + (wFull - wEnd) * Math.min(1, Math.hypot(x - ex, y - ey) / reach);
+};
 
-const MULLION_BEAMS: ReadonlyArray<CockpitBeam> = [CONN_L, CONN_R, DIAG_L, DIAG_R];
+export const CONN_L: CockpitBeam = {
+  pts: [[-30, 150], [176, 234], [232, 256]] as Pt[],
+  dw: 16,
+  w: 0.7,
+  dwAt: taperTo(232, 256, 6, 16, 60),
+};
+export const CONN_R: CockpitBeam = {
+  pts: [[1950, 150], [1744, 234], [1688, 256]] as Pt[],
+  dw: 16,
+  w: 0.7,
+  dwAt: taperTo(1688, 256, 6, 16, 60),
+};
+export const DIAG_L: CockpitBeam = {
+  pts: [[558, -30], [195, 179], [137, 212]] as Pt[],
+  dw: 12,
+  w: 0.55,
+  dwAt: taperTo(137, 212, 4.5, 12, 64),
+};
+export const DIAG_R: CockpitBeam = {
+  pts: [[1362, -30], [1725, 179], [1783, 212]] as Pt[],
+  dw: 12,
+  w: 0.55,
+  dwAt: taperTo(1783, 212, 4.5, 12, 64),
+};
+
+// Diagonals BEFORE connectors: the diag tips tuck under the connector bands,
+// and paint order must put the receiving member on top.
+const MULLION_BEAMS: ReadonlyArray<CockpitBeam> = [DIAG_L, DIAG_R, CONN_L, CONN_R];
 
 // ─── The deck wrap ───────────────────────────────────────────────────────────
 // THE integration move: the sill does not stop at its corners — the deck's
@@ -263,42 +278,46 @@ const MULLION_BEAMS: ReadonlyArray<CockpitBeam> = [CONN_L, CONN_R, DIAG_L, DIAG_
 // converges beneath it into the screen housing. This perspective wrap is what
 // reads as one hull instead of stacked stripes.
 
-/** Flank wraps of the sill line, each ending INSIDE the canopy's sill-corner
- *  band (the deck top edge between the corners IS the ring's sill segment). */
+/** Flank wraps of the sill line. Each end runs INTO the ring's sill-corner
+ *  fillet (the r90 curve pulls the centreline ~27px inside the vertex, so the
+ *  old vertex-end left the cap exposed on the hull) and chisel-tapers there. */
 const WRAP_L_RAW: RawPt[] = [
   [-10, 928],
   [100, 906, 60],
   [220, 878, 120],
   [340, 844, 160],
-  [413, 826],
+  [425, 812],
 ];
 const WRAP_R_RAW: RawPt[] = [
-  [1507, 826],
+  [1495, 812],
   [1580, 844, 160],
   [1700, 878, 120],
   [1820, 906, 60],
   [1930, 928],
 ];
-/** Mid lamination: screen edge down-left/right, merging into the housing. */
+/** Mid lamination: screen edge down-left/right, chisel-merging into the
+ *  housing band's interior. */
 const MID_L_RAW: RawPt[] = [
   [-10, 1012],
   [100, 986, 80],
   [180, 960, 100],
   [300, 934, 120],
-  [680, 930],
+  [610, 931],
+  [668, 930],
 ];
 const MID_R_RAW: RawPt[] = [
-  [1240, 930],
+  [1252, 930],
+  [1310, 931],
   [1620, 934, 120],
   [1740, 960, 100],
   [1820, 986, 80],
   [1930, 1012],
 ];
 export const WRAP_BEAMS: ReadonlyArray<CockpitBeam> = [
-  { pts: resolveCorners(WRAP_L_RAW), dw: 14, w: 0.75 },
-  { pts: resolveCorners(WRAP_R_RAW), dw: 14, w: 0.75 },
-  { pts: resolveCorners(MID_L_RAW), dw: 10, w: 0.6 },
-  { pts: resolveCorners(MID_R_RAW), dw: 10, w: 0.6 },
+  { pts: resolveCorners(WRAP_L_RAW), dw: 14, w: 0.75, dwAt: taperTo(425, 812, 6, 14, 70) },
+  { pts: resolveCorners(WRAP_R_RAW), dw: 14, w: 0.75, dwAt: taperTo(1495, 812, 6, 14, 70) },
+  { pts: resolveCorners(MID_L_RAW), dw: 10, w: 0.6, dwAt: taperTo(668, 930, 6, 10, 50) },
+  { pts: resolveCorners(MID_R_RAW), dw: 10, w: 0.6, dwAt: taperTo(1252, 930, 6, 10, 50) },
 ];
 
 // ─── The console ─────────────────────────────────────────────────────────────
@@ -329,36 +348,16 @@ const GROOVES: ReadonlyArray<CockpitBeam> = [
   { pts: resolveCorners([[640, 1030, 24], [706, 898, 36], [1214, 898, 36], [1280, 1030, 24]], true), dw: 7, w: 0.45, closed: true },
 ];
 
+// PAINT ORDER = JOIN ORDER: every chisel tip tucks under a band drawn LATER
+// (trim/mullions/wraps under the ring, the mid laminations under the housing),
+// so no dark fill ever crosses a receiving member's hairline.
 export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [
-  CANOPY_BEAM,
-  CANOPY_INNER_LIP,
   CANOPY_OUTER_TRIM,
   ...MULLION_BEAMS,
   ...WRAP_BEAMS,
-  HOUSING_BEAM,
   ...GROOVES,
-];
-
-// ─── Junction glints ─────────────────────────────────────────────────────────
-// Hot white-gold sparks where members meet. Positions sit ON the centrelines
-// at their junctions.
-
-export const COCKPIT_GLINTS: ReadonlyArray<CockpitGlint> = [
-  // Canopy top corners.
-  { x: 525, y: 60, r: 22, i: 0.9 },
-  { x: 1395, y: 60, r: 22, i: 0.9 },
-  // Waists (the widest vertices).
-  { x: 221, y: 262, r: 24, i: 0.85 },
-  { x: 1699, y: 262, r: 24, i: 0.85 },
-  // Sill corners (side ↔ sill ↔ wrap).
-  { x: 413, y: 826, r: 20, i: 0.8 },
-  { x: 1507, y: 826, r: 20, i: 0.8 },
-  // Screen housing shoulders (deck ↔ housing ↔ mid wrap).
-  { x: 700, y: 887, r: 18, i: 0.75 },
-  { x: 1220, y: 887, r: 18, i: 0.75 },
-  // Mullion T-vertices (diagonal ↔ connector).
-  { x: 132, y: 215, r: 14, i: 0.6 },
-  { x: 1788, y: 215, r: 14, i: 0.6 },
+  HOUSING_BEAM,
+  CANOPY_BEAM,
 ];
 
 // ─── The hull mass ───────────────────────────────────────────────────────────
@@ -400,6 +399,10 @@ const HOLE_CORNER_R: ReadonlyArray<Pt> = resolveCorners(
 );
 /** Tall flank panes: connector top, pillar (ring centreline) inboard, the
  *  deck wrap below, the screen edge outboard. */
+// NOTE: the pillar edge must stay EXACTLY on the ring's straight waist→sill
+// segment (shared vertices, collinear edge). Tilting it even a few px inward
+// overlaps this hole with the central one — and overlapping holes break
+// earcut's hull triangulation (a giant fill wedge across the glass).
 const HOLE_FLANK_L: ReadonlyArray<Pt> = resolveCorners(
   [
     [-30, 154],
@@ -427,14 +430,6 @@ const HOLE_FLANK_R: ReadonlyArray<Pt> = resolveCorners(
 /** Every glass pane, in one list — what both renderers punch out of the hull. */
 export const HULL_HOLES: ReadonlyArray<ReadonlyArray<Pt>> = [
   HULL_HOLE,
-  HOLE_CORNER_L,
-  HOLE_CORNER_R,
-  HOLE_FLANK_L,
-  HOLE_FLANK_R,
-];
-/** The SIDE panes only — they get a smoked-glass tint (the reference's side
- *  windows sit visibly darker than the central view; angled, thicker glass). */
-export const SIDE_PANES: ReadonlyArray<ReadonlyArray<Pt>> = [
   HOLE_CORNER_L,
   HOLE_CORNER_R,
   HOLE_FLANK_L,

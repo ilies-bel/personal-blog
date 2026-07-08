@@ -118,13 +118,13 @@ vec3 novaWash(vec3 col) {
 }
 `;
 
-/** BEAM pass — the reference's structural grammar: every member is a wide
- *  band of dark milled metal whose cross-section coordinate (vSide, -1..1)
- *  lets the fragment shader draw the whole member off one ribbon: bright
- *  amber hairlines on BOTH edges, a dimmer echo line inset from each edge,
- *  a specular crown down the middle where the member's face catches the
- *  star, and the graphite fill between. Extruded in DESIGN units (aDW is
- *  the member's authored width) so the metal band scales with the frame. */
+/** BEAM pass — MINIMAL graphic grammar: every member is a flat near-black
+ *  band with ONE crisp amber hairline per edge, drawn off the cross-section
+ *  coordinate (vSide, -1..1). No milled-metal modelling — no bevel, crown,
+ *  specular kiss, echo or halo (the realism experiments read as noise at
+ *  this scale); the star only breathes brightness into the edges radially.
+ *  Extruded in DESIGN units (aDW is the member's authored width, per-vertex
+ *  tapered at junction merges) so the band scales with the frame. */
 export const cockpitBeamVertexShader = /* glsl */ `
 attribute vec2 aPos;
 attribute vec2 aNorm;
@@ -138,7 +138,6 @@ varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vDW;
-varying vec2 vN;
 void main() {
   vec2 p = aPos + aNorm * (aSide * aDW * 0.5);
   // Decloak heat-haze: the member ripples along its normal while
@@ -153,7 +152,6 @@ void main() {
   vSide = aSide;
   vW = aW;
   vDW = aDW;
-  vN = normalize(aNorm);
   gl_Position = clipFromDesign(p);
 }
 `;
@@ -163,176 +161,36 @@ precision highp float;
 ${starLight}
 ${cloak}
 uniform vec3 uAmber;
-uniform vec3 uCoreTint;
 uniform float uAlpha;
 uniform float uHalfW;  // design units per CSS half-px (edge lines stay CSS-px)
 varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vDW;
-varying vec2 vN;
 void main() {
   float t = abs(vSide);
-  vec2 n = normalize(vN);
-  float diff = grazeDiff(vPos, n);
-  float spec = grazeSpec(vPos, n);
-  float lit = litAt(vPos, 0.35 + 0.65 * vW);
-  // The kiss rides lit QUADRATICALLY: the canopy ENCLOSES the star, so every
-  // member's normal squares up to it (spec ≈ 1 all around) — only the radial
-  // falloff can pool the highlight near the body instead of igniting the ring.
-  float kiss = min(lit * lit * spec, 0.85);
+  float lit = litAt(vPos, 1.0);
   float half_ = vDW * 0.5;                 // design px per t-unit
   float pxT = (2.0 * uHalfW) / half_;      // t-units per CSS px
 
-  // ── The milled metal fill: warm graphite, a bevel that lifts toward the
-  // edges, and a specular CROWN down the face where it squares to the star.
-  // Values are DISPLAY sRGB — the reference band reads ~0.05-0.12, clearly
-  // lighter than the hull masses and clearly darker than its edge lines.
-  float bevel = smoothstep(0.30, 0.95, t);
-  float crown = 1.0 - t * t;
-  vec3 fill = vec3(0.064, 0.059, 0.054) * (0.75 + 1.15 * bevel) * diff
-            + vec3(0.10, 0.095, 0.088) * crown * (0.10 + 1.3 * kiss)
-            + uAmber * (0.026 + 0.052 * bevel) * diff;
+  // Flat graphite band — a single value, a whisper above the hull so the
+  // member reads as a surface, not a void.
+  vec3 fill = vec3(0.040, 0.037, 0.034) + uAmber * 0.014;
 
-  // ── Edge hairlines (both edges, ~1.3 CSS px) + inset echo (~0.8 px, sitting
-  // ~5.5 px inside each edge — only on members wide enough to carry it).
-  float ew = 1.3 * pxT;
-  float edgeLine = smoothstep(1.0 - 2.2 * ew, 1.0 - ew, t) * (1.0 - smoothstep(1.0 - 0.4 * ew, 1.0, t) * 0.35);
-  float echoPos = 1.0 - 5.5 * pxT;
-  float echoLine = (1.0 - smoothstep(0.0, 1.2 * pxT, abs(t - echoPos))) * step(4.0, half_ / (2.0 * uHalfW));
-  // Facing weight rides QUADRATICALLY: structural members (w 0.7-1) keep full
-  // presence while the grooves (w 0.3-0.45) drop to seam level — the
-  // reference's seams are dark plate splits, not radiating gold rays. The
-  // resting level stays RESTRAINED (the reference is mostly dark metal; only
-  // the star kiss pushes a span toward hot gold).
-  float energy = (0.30 + 0.70 * vW * vW) * diff * (0.42 + 0.9 * kiss);
-  vec3 edgeCol = mix(uAmber, uCoreTint, 0.18 + 0.62 * kiss) * energy;
-  vec3 col = fill + edgeCol * edgeLine + uAmber * energy * 0.16 * echoLine;
+  // One crisp hairline per edge (~1.2 CSS px). Structural members carry it
+  // brighter than grooves (vW), and the star's radial reach breathes it up —
+  // no specular pooling, no gradient along the run.
+  float ew = 1.2 * pxT;
+  float edgeLine = smoothstep(1.0 - 2.0 * ew, 1.0 - 0.7 * ew, t);
+  float energy = (0.45 + 0.55 * vW) * (0.5 + 0.5 * min(lit, 1.0));
+  vec3 col = fill + uAmber * edgeLine * energy;
 
-  col *= vigMul(vPos);
-  // 8-bit canvas dither: the fill's gentle gradients band without it.
-  col += (ckHash(vPos * 0.37) - 0.5) * 0.006;
   col = novaWash(col);
-  // Rim anti-aliasing: fade the outermost ~0.8 px so the metal band never
+  col = cloakTint(col, vPos);
+  // Rim anti-aliasing: fade the outermost ~0.8 px so the band never
   // hard-edges against glass or hull.
   float rim = 1.0 - smoothstep(1.0 - 0.8 * pxT, 1.0, t);
-  col = cloakTint(col, vPos);
   gl_FragColor = vec4(col, uAlpha * rim * cloakMask(vPos));
-}
-`;
-
-/** GLOW pass — the halo the scene bloom used to (unreliably) provide. The same
- *  ribbon geometry extruded WIDER (uGlowPad design px past each edge); the
- *  fragment lays an additive gaussian centred on each edge hairline plus a
- *  faint fill light across the member. Peaks where the star kisses. */
-export const cockpitGlowVertexShader = /* glsl */ `
-attribute vec2 aPos;
-attribute vec2 aNorm;
-attribute float aSide;
-attribute float aW;
-attribute float aDW;
-uniform float uDecloak;
-uniform float uTime;
-uniform float uGlowPad; // design px of halo reach past each edge
-${designToClip}
-varying vec2 vPos;
-varying float vSide;
-varying float vW;
-varying float vDW;
-varying vec2 vN;
-void main() {
-  vec2 p = aPos + aNorm * (aSide * (aDW * 0.5 + uGlowPad));
-  float haze = 1.0 - uDecloak;
-  if (haze > 0.001) {
-    vec2 nu = normalize(aNorm);
-    float w = sin(aPos.x * 0.021 + uTime * 9.0) * sin(aPos.y * 0.017 - uTime * 7.0);
-    p += nu * (haze * 7.0 * w);
-  }
-  vPos = p;
-  vSide = aSide;
-  vW = aW;
-  vDW = aDW;
-  vN = normalize(aNorm);
-  gl_Position = clipFromDesign(p);
-}
-`;
-
-export const cockpitGlowFragmentShader = /* glsl */ `
-precision highp float;
-${starLight}
-${cloak}
-uniform vec3 uAmber;
-uniform float uAlpha;
-uniform float uGlowPad;
-varying vec2 vPos;
-varying float vSide;
-varying float vW;
-varying float vDW;
-varying vec2 vN;
-void main() {
-  vec2 n = normalize(vN);
-  float diff = grazeDiff(vPos, n);
-  float spec = grazeSpec(vPos, n);
-  float lit = litAt(vPos, 0.35 + 0.65 * vW);
-  float kiss = min(lit * lit * spec, 1.0); // quadratic in lit — see the beam pass
-  // Signed design-px distance from this pixel to the nearest edge hairline
-  // (negative inside the band, positive out on the pad).
-  float halfPad = vDW * 0.5 + uGlowPad;
-  float dPx = abs(vSide) * halfPad - vDW * 0.5;
-  float halo = exp(-dPx * dPx / 40.0);            // σ ≈ 4.5 design px on the hairline
-  float inner = exp(-vSide * vSide * 2.2) * 0.16; // soft light across the member
-  // The halo follows the LIGHT, not the line: it blooms off the star-kissed
-  // spans and stays a whisper elsewhere — a uniform halo melts the whole frame
-  // into molten piping. Kept TIGHT: where members stack (the deck band) fat
-  // halos fuse the lines into one molten wash.
-  float energy = (0.30 + 0.70 * vW * vW) * diff * (0.14 + 1.1 * kiss);
-  vec3 col = uAmber * (halo * 0.13 + inner * 0.04) * energy;
-  col *= vigMul(vPos);
-  col *= (1.0 - uNova * 0.85); // additive light stands down under the whiteout
-  gl_FragColor = vec4(col, uAlpha * cloakMask(vPos));
-}
-`;
-
-/** GLINT pass — hot white-gold sparks at member junctions (the reference
- *  flares every major corner). Each glint is a quad (aCorner spans -1..1)
- *  drawn additively: a tight gaussian core with a faint horizontal streak. */
-export const cockpitGlintVertexShader = /* glsl */ `
-attribute vec2 aPos;     // glint centre, design px
-attribute vec2 aCorner;  // quad corner, -1..1
-attribute float aR;      // radius, design px
-attribute float aI;      // intensity
-${designToClip}
-varying vec2 vCorner;
-varying float vI;
-varying vec2 vPos;
-void main() {
-  vec2 p = aPos + aCorner * aR * vec2(2.6, 1.0); // wide quad for the streak
-  vPos = p;
-  vCorner = aCorner;
-  vI = aI;
-  gl_Position = clipFromDesign(p);
-}
-`;
-
-export const cockpitGlintFragmentShader = /* glsl */ `
-precision highp float;
-${starLight}
-${cloak}
-uniform vec3 uAmber;
-uniform float uAlpha;
-varying vec2 vCorner;
-varying float vI;
-varying vec2 vPos;
-void main() {
-  // Core: tight gaussian. Streak: horizontal lens smear, much fainter.
-  float dCore = length(vCorner * vec2(2.6, 1.0));
-  float core = exp(-dCore * dCore * 7.0);
-  float streak = exp(-vCorner.y * vCorner.y * 60.0) * exp(-vCorner.x * vCorner.x * 3.2) * 0.32;
-  float lit = 0.55 + 0.45 * litAt(vPos, 1.0);
-  vec3 gold = mix(uAmber * 1.25, vec3(1.0, 0.97, 0.90), 0.60);
-  vec3 col = gold * (core + streak) * vI * lit * 1.1;
-  col *= (1.0 - uNova * 0.85);
-  gl_FragColor = vec4(col, uAlpha * cloakMask(vPos));
 }
 `;
 
@@ -420,29 +278,6 @@ void main() {
   col = novaWash(col);
   // The interior masses de-cloak on the same cell field as the trim.
   gl_FragColor = vec4(col, uFill * uAlpha * cloakMask(vPos));
-}
-`;
-
-/** SMOKED GLASS on the SIDE panes (corner + flank windows). The reference's
- *  side windows read distinctly darker than the central view — angled, thicker
- *  glass — so this pass dims the scene behind them (normal blending over the
- *  graded frame) and adds a whisper of amber sheen so the surface reads as a
- *  material, not a shadow. The central gem stays untouched: it is THE view. */
-export const cockpitGlassFragmentShader = /* glsl */ `
-precision highp float;
-${starLight}
-${cloak}
-uniform vec3 uAmber;
-uniform float uAlpha;
-varying vec2 vPos;
-void main() {
-  float lit = litAt(vPos, 1.0);
-  vec2 q = vec2(vPos.x / 1920.0 - 0.5, vPos.y / 1080.0 - 0.5);
-  // Denser smoke toward the screen edges (steeper viewing angle).
-  float a = 0.5 + 0.16 * smoothstep(0.30, 0.50, abs(q.x));
-  vec3 col = vec3(0.006, 0.005, 0.004) + uAmber * 0.007 + uStarColor * lit * 0.010;
-  col = novaWash(col);
-  gl_FragColor = vec4(col, a * uAlpha * cloakMask(vPos));
 }
 `;
 
