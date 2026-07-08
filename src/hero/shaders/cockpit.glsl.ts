@@ -122,6 +122,154 @@ float vigComp(vec2 p) {
 }
 `;
 
+/** BEAM pass — the reference's structural grammar: every member is a wide
+ *  band of dark milled metal whose cross-section coordinate (vSide, -1..1)
+ *  lets the fragment shader draw the whole member off one ribbon: bright
+ *  amber hairlines on BOTH edges, a dimmer echo line inset from each edge,
+ *  a specular crown down the middle where the member's face catches the
+ *  star, and the dark metal fill between. Extruded in DESIGN units (aDW is
+ *  the member's authored width) so the metal band scales with the frame. */
+export const cockpitBeamVertexShader = /* glsl */ `
+attribute vec2 aPos;
+attribute vec2 aNorm;
+attribute float aSide;
+attribute float aW;    // facing weight
+attribute float aDW;   // member width, design px
+uniform float uDecloak;
+uniform float uTime;
+${designToClip}
+varying vec2 vPos;
+varying float vSide;
+varying float vW;
+varying float vDW;
+varying vec2 vN;
+void main() {
+  vec2 p = aPos + aNorm * (aSide * aDW * 0.5);
+  // Decloak heat-haze, matching the hairline pass: the member ripples along
+  // its normal while materialising, exactly zero once settled.
+  float haze = 1.0 - uDecloak;
+  if (haze > 0.001) {
+    vec2 nu = normalize(aNorm);
+    float w = sin(aPos.x * 0.021 + uTime * 9.0) * sin(aPos.y * 0.017 - uTime * 7.0);
+    p += nu * (haze * 7.0 * w);
+  }
+  vPos = p;
+  vSide = aSide;
+  vW = aW;
+  vDW = aDW;
+  vN = normalize(aNorm);
+  gl_Position = clipFromDesign(p);
+}
+`;
+
+export const cockpitBeamFragmentShader = /* glsl */ `
+precision highp float;
+${starLight}
+${cloak}
+uniform vec3 uAmber;
+uniform vec3 uCoreTint;
+uniform float uFloor;
+uniform float uAlpha;
+uniform float uHalfW;  // design units per CSS half-px (edge lines stay CSS-px)
+varying vec2 vPos;
+varying float vSide;
+varying float vW;
+varying float vDW;
+varying vec2 vN;
+void main() {
+  float t = abs(vSide);
+  vec2 n = normalize(vN);
+  float diff = grazeDiff(vPos, n);
+  float spec = grazeSpec(vPos, n);
+  float lit = litAt(vPos, 0.35 + 0.65 * vW);
+  float kiss = min(lit * spec, 0.9);
+  float half_ = vDW * 0.5;                 // design px per t-unit
+  float pxT = (2.0 * uHalfW) / half_;      // t-units per CSS px
+
+  // ── The milled metal fill. Authored HOT relative to the hull masses (the
+  // reference members read clearly lighter than the void panels): a graphite
+  // base, a bevel that lifts toward the edges, and a specular CROWN down the
+  // face where it squares to the star. fGain rides the per-chapter HDR floor
+  // SQRT-compressed: linear tracking turned the dim-graded finale's band into
+  // flat sepia (fill caught up with the edges) — the band must stay clearly
+  // darker than its edge lines at every chapter.
+  float fGain = 0.55 + 0.14 * sqrt(uFloor);
+  vec3 metal = vec3(0.036, 0.036, 0.042);
+  float bevel = smoothstep(0.35, 0.98, t);              // edge faces catch more
+  float crown = (1.0 - t * t);                          // centre of the face
+  vec3 fill = (metal * (0.8 + 0.9 * bevel)
+            + vec3(0.05, 0.05, 0.055) * crown * (0.25 + 1.6 * spec) * (0.4 + 0.6 * lit)
+            + uAmber * 0.010 * (0.5 + 0.5 * bevel)) * fGain;
+
+  // ── Edge hairlines (both edges, ~1.25 CSS px) + inset echo (~0.8 px, sitting
+  // ~5.5 px inside each edge). The energy model matches the old piping BUT at
+  // 0.42 strength: uFloor was tuned for alpha-blended 2px strokes, and an
+  // OPAQUE beam edge at full floor clips through the tonemap to bone-white —
+  // the reference trim is gold everywhere, white only at the glints.
+  float ew = 1.25 * pxT;
+  float edgeLine = smoothstep(1.0 - 2.2 * ew, 1.0 - ew, t) * (1.0 - smoothstep(1.0 - 0.4 * ew, 1.0, t) * 0.35);
+  float echoPos = 1.0 - 5.5 * pxT;
+  float echoLine = (1.0 - smoothstep(0.0, 1.2 * pxT, abs(t - echoPos))) * step(4.0, half_ / (2.0 * uHalfW));
+  // Facing weight rides QUADRATICALLY here: structural members (w 0.7-1) keep
+  // full presence while the grooves (w 0.3-0.45) drop to whisper level — the
+  // reference's seams are dark plate splits, not radiating gold rays.
+  float energy = uFloor * (0.15 + 0.85 * vW * vW) * diff * (1.0 + 0.6 * kiss) * vigComp(vPos);
+  vec3 edgeCol = mix(uAmber, uCoreTint, 0.10 + 0.38 * kiss) * energy * 0.5;
+  vec3 col = fill + edgeCol * edgeLine + uAmber * energy * 0.17 * echoLine;
+
+  // Rim anti-aliasing: fade the outermost ~0.8 px so the metal band never
+  // hard-edges against glass or hull.
+  float rim = 1.0 - smoothstep(1.0 - 0.8 * pxT, 1.0, t);
+  col = cloakTint(col, vPos);
+  gl_FragColor = vec4(col, uAlpha * rim * cloakMask(vPos));
+}
+`;
+
+/** GLINT pass — hot white-gold sparks at member junctions (the reference
+ *  flares every major corner). Each glint is a quad (aCorner spans -1..1)
+ *  drawn additively: a tight gaussian core with a faint horizontal streak. */
+export const cockpitGlintVertexShader = /* glsl */ `
+attribute vec2 aPos;     // glint centre, design px
+attribute vec2 aCorner;  // quad corner, -1..1
+attribute float aR;      // radius, design px
+attribute float aI;      // intensity
+${designToClip}
+varying vec2 vCorner;
+varying float vI;
+varying vec2 vPos;
+void main() {
+  vec2 p = aPos + aCorner * aR * vec2(2.6, 1.0); // wide quad for the streak
+  vPos = p;
+  vCorner = aCorner;
+  vI = aI;
+  gl_Position = clipFromDesign(p);
+}
+`;
+
+export const cockpitGlintFragmentShader = /* glsl */ `
+precision highp float;
+${starLight}
+${cloak}
+uniform vec3 uAmber;
+uniform float uFloor;
+uniform float uAlpha;
+varying vec2 vCorner;
+varying float vI;
+varying vec2 vPos;
+void main() {
+  // Core: tight gaussian. Streak: horizontal lens smear, much fainter.
+  float dCore = length(vCorner * vec2(2.6, 1.0));
+  float core = exp(-dCore * dCore * 7.0);
+  float streak = exp(-vCorner.y * vCorner.y * 60.0) * exp(-vCorner.x * vCorner.x * 3.2) * 0.32;
+  float lit = 0.55 + 0.45 * litAt(vPos, 1.0);
+  vec3 gold = mix(uAmber * 1.3, vec3(1.05, 0.98, 0.88), 0.55);
+  // sqrt-compress the per-chapter floor: the glint is a bloom POINT — at the
+  // dim-graded finale the raw floor (62) turned every corner into a blob.
+  vec3 col = gold * (core + streak) * vI * lit * (0.2 + 0.3 * sqrt(uFloor));
+  gl_FragColor = vec4(col, uAlpha * cloakMask(vPos));
+}
+`;
+
 export const cockpitLineVertexShader = /* glsl */ `
 attribute vec2 aPos;     // ribbon centreline point (design px)
 attribute vec2 aNorm;    // miter normal (design space, miter-scaled)

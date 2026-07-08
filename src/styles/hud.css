@@ -1900,13 +1900,28 @@ body.hud-active .hud-frame {
   flex-direction: row;
   align-items: baseline;
   gap: 1.2em;
+  padding: 0.55rem 1.2rem 0.6rem;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fg-faint);
+  /* The etched bezel (the reference's bottom-left recess): thin amber outline,
+     square corners, a dot terminal — an incision in the dash, not a card. */
+  border: 1px solid color-mix(in oklch, var(--highlight) 26%, transparent);
+  border-radius: 2px;
   opacity: 1;
   transition: opacity 0.35s var(--ease-out-quint);
+}
+.hud-frame-readout::after {
+  content: '';
+  position: absolute;
+  right: -2.5px;
+  bottom: -2.5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--highlight) 70%, transparent);
 }
 /* Diving into a marker: the telemetry readout would just clutter the plunge, so
    it fades out for the duration of the dive (body.bh-diving, set by
@@ -1923,6 +1938,52 @@ body.bh-diving .hud-frame-readout {
   color: color-mix(in oklch, var(--highlight) 88%, var(--fg-faint));
   font-variant-numeric: tabular-nums;
 }
+/* COMPASS NUMERALS — DOM type over the WebGL tick strip (the canvas draws the
+   ticks; text lives up here). Positions are design-space percentages: the
+   strip's long ticks sit at design x 810/960/1110 = 42.19/50/57.81vw. The
+   caret parks under the strip's centre, pointing up at 000. */
+.hud-frame-compass-num {
+  position: fixed;
+  top: 8.1vh;
+  translate: -50% 0;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  color: rgb(235 240 250 / 0.62);
+}
+.hud-frame-compass-caret {
+  position: fixed;
+  top: 13.4vh;
+  translate: -50% 0;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid rgb(235 240 250 / 0.75);
+}
+
+/* SITE NAV BEZEL — the top-right section links sit in the same etched recess
+   as the nameplate (reference grammar), with a dot terminal on the left. */
+@media (min-width: 60.0625rem) {
+  body.hud-active .overlay-blog-links {
+    position: relative;
+    padding: 0.4rem 1rem;
+    border: 1px solid color-mix(in oklch, var(--highlight) 26%, transparent);
+    border-radius: 2px;
+  }
+  body.hud-active .overlay-blog-links::before {
+    content: '';
+    position: absolute;
+    left: -2.5px;
+    top: 50%;
+    translate: 0 -50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--highlight) 70%, transparent);
+  }
+}
+
 /* Compact layouts: the console screens are desktop instruments (the compact
    HUD keeps its own bottom strip; the readout would fight the scene-name line). */
 @media (max-width: 60rem) {
@@ -1968,7 +2029,7 @@ body.bh-diving .hud-frame-readout {
      standing cue (same slot, same seat). */
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) .hud-compass-read,
   body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] .hud-compass-read {
-    font-size: var(--text-label);
+    font-size: var(--text-hud);
   }
   /* Console hardware speaks AMBER (the reference's "[ JUMP TO WORK ]"): the
      pedestal CTA is powered trim, not a glass hologram — white stays the
@@ -2068,8 +2129,8 @@ body.at-opening:not(.hud-active) .hud-arc .hud-arc-btn { pointer-events: none; }
      stations read reliably; the decorative minor ticks keep their faint mix. */
   fill: var(--fg-hud-interactive);
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  letter-spacing: 0.14em;
   transition: fill 0.24s ease, opacity 0.45s var(--ease-out-quint);
 }
 .hud-arc-station[data-current='true'] line { stroke: var(--highlight); }
@@ -2137,13 +2198,17 @@ body:not(.hud-active) .hud-arc-tick {
 body:not(.hud-active) .hud-arc-lubber { opacity: 0.55; }
 .hud-arc-lubber { transition: opacity 0.5s ease; }
 /* POWERED dial: the tick face ARMS in the trim's own amber — the reference's
-   left-flank instrument is an amber holograph, not a gray ghost. Stations keep
-   their interactive white; the minor ticks carry the dial's material. */
+   left-flank instrument is an amber holograph, not a gray ghost. Station
+   digits go amber too (reference: 01 bright at the chevron, 02/03 dim), the
+   current station keeps its full-highlight override below. */
 body.hud-active .hud-arc-tick {
   stroke: color-mix(in oklch, var(--highlight) 60%, transparent);
 }
 body.hud-active .hud-arc-station line {
   stroke: color-mix(in oklch, var(--highlight) 55%, var(--fg-dim));
+}
+body.hud-active .hud-arc-station:not([data-current='true']) text {
+  fill: color-mix(in oklch, var(--highlight) 52%, var(--fg-faint));
 }
 
 /* ── COCKPIT IGNITION — when hud-active lands (boot finished), the stations
@@ -2279,13 +2344,22 @@ body.scene-ready.hud-active .bh-cockpit {
   stroke-linecap: round;
   transition: stroke 0.5s ease; /* per-scene temperature swaps ease, never pop */
 }
-.bh-cockpit-base path { stroke: var(--ckpt-dim); }
-.bh-cockpit-lit path { stroke: var(--ckpt-lit); }
-/* The canopy strut band — solid structure between the frame's edge pair, so the
-   scene reads as sitting BEHIND the member, not between two floating lines. */
-.bh-cockpit path.bh-cockpit-band {
-  fill: rgb(3 3 4 / 0.7);
-  stroke: none;
+/* Structural BEAMS (the reference's milled-metal members): a wide amber stroke
+   UNDER a slightly narrower dark-metal stroke — the exposed sliver each side is
+   the edge-lit hairline pair; grooves (narrow beams) read as seams for free.
+   Widths are DESIGN units (the band scales with the frame), so these override
+   the non-scaling default above. */
+.bh-cockpit-beam-base path {
+  vector-effect: none;
+  stroke: var(--ckpt-dim);
+}
+.bh-cockpit-beam-lit path {
+  vector-effect: none;
+  stroke: var(--ckpt-lit);
+}
+.bh-cockpit path.bh-cockpit-beam-metal {
+  vector-effect: none;
+  stroke: rgb(13 13 16 / 0.97);
 }
 /* The opaque interior masses (ceiling / dashboard). Heavy but not pure black:
    the scene's brightest beats still ghost through at ~1/5 strength, reading as

@@ -35,15 +35,6 @@ function circle(cx: number, cy: number, r: number, segs = 72): Pt[] {
   return out;
 }
 
-function arc(cx: number, cy: number, r: number, a0: number, a1: number, segs = 24): Pt[] {
-  const out: Pt[] = [];
-  for (let i = 0; i <= segs; i++) {
-    const a = a0 + (a1 - a0) * (i / segs);
-    out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
-  }
-  return out;
-}
-
 function hex(cx: number, cy: number, r: number): Pt[] {
   const out: Pt[] = [];
   for (let i = 0; i <= 6; i++) {
@@ -57,46 +48,65 @@ function hudLines(): HudLine[] {
   const lines: HudLine[] = [];
 
   // ── The scanner reticle (star-anchored, authored around the origin) ──────
-  // Sized to sit between the finale's pale dot and the black hole's glare
-  // band: big enough to ring the disk's core, small enough not to dominate
-  // the dot chapter's empty glass.
-  const R = 112;
-  // Outer ring + a concentric inner ring (nested scanner discs).
-  lines.push({ pts: circle(0, 0, R), hw: 0.6, follow: 1, closed: true });
-  lines.push({ pts: circle(0, 0, R - 28), hw: 0.45, follow: 1, closed: true });
-  // Radial tick ring just inside the inner disc; every 4th tick runs long.
+  // The reference's rectilinear lock: a main ring with its tick ring just
+  // inside, a fainter inner disc, a hex lock on the body, a full thin
+  // CROSSHAIR passing through (gapped at the hex), and four L-shaped corner
+  // brackets on the enclosing square — a camera viewfinder, not arc jewellery.
+  const R = 110;
+  // Main ring + the fainter inner disc.
+  lines.push({ pts: circle(0, 0, R), hw: 0.55, follow: 1, closed: true });
+  lines.push({ pts: circle(0, 0, R * 0.62), hw: 0.35, follow: 1, closed: true });
+  // Radial tick ring just inside the main ring; every 4th tick runs long.
   for (let i = 0; i < 48; i++) {
     const a = (i / 48) * Math.PI * 2;
     const long = i % 4 === 0;
-    const r0 = R - 28;
-    const r1 = r0 - (long ? 10 : 5);
+    const r0 = R - 4;
+    const r1 = r0 - (long ? 12 : 6);
     lines.push({
       pts: [
         [Math.cos(a) * r0, Math.sin(a) * r0],
         [Math.cos(a) * r1, Math.sin(a) * r1],
       ],
-      hw: long ? 0.6 : 0.4,
+      hw: long ? 0.55 : 0.4,
       follow: 1,
     });
   }
-  // Inner hex reticle — the lock mark on the body itself.
-  lines.push({ pts: hex(0, 0, 22), hw: 0.6, follow: 1, closed: true });
-  // Corner bracket arcs at the diagonals, just inside the outer ring.
-  const br = R - 5;
-  const d = Math.PI / 9;
-  for (const base of [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75]) {
-    lines.push({ pts: arc(0, 0, br, base - d, base + d, 12), hw: 0.8, follow: 1 });
-  }
-  // Crosshair stubs at N/E/S/W, pointing inward across the ring.
-  for (const a of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
-    const ox = Math.cos(a);
-    const oy = Math.sin(a);
+  // Hex lock — the mark on the body itself.
+  lines.push({ pts: hex(0, 0, 24), hw: 0.65, follow: 1, closed: true });
+  // Full crosshair, gapped at the hex: thin lines running well past the ring.
+  const reach = R * 1.75;
+  const gap = 36;
+  for (const [dx, dy] of [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ] as const) {
     lines.push({
       pts: [
-        [ox * (R + 10), oy * (R + 10)],
-        [ox * (R - 2), oy * (R - 2)],
+        [dx * gap, dy * gap],
+        [dx * reach, dy * reach],
       ],
-      hw: 0.6,
+      hw: 0.4,
+      follow: 1,
+    });
+  }
+  // L-shaped corner brackets on the enclosing square.
+  const s = R * 1.35;
+  const arm = 36;
+  for (const [sx, sy] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ] as const) {
+    lines.push({
+      pts: [
+        [sx * s - sx * arm, sy * s],
+        [sx * s, sy * s],
+        [sx * s, sy * s - sy * arm],
+      ],
+      hw: 0.7,
       follow: 1,
     });
   }

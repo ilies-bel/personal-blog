@@ -338,7 +338,15 @@ body.bare.hud-active .overlay-blog {
    labels) and scoped to the powered state — the observation deck (HUD off)
    keeps the bare standby labels. */
 @media (min-width: 60.0625rem) {
-  body.bare.hud-active .overlay-blog .overlay-blog-link {
+  /* SECTION LINKS go BARE under power: they live inside the etched nav bezel
+     (hud.css .overlay-blog-links) — reference grammar is amber mono text in
+     one plate, not per-word button caps. Only the icon CONTROLS keep the
+     machined cap footprint. */
+  body.bare.hud-active .overlay-blog .overlay-blog-section .overlay-blog-label {
+    color: color-mix(in oklch, var(--highlight) 40%, var(--fg));
+  }
+  body.bare.hud-active .overlay-blog .overlay-blog-social {
+    padding: 0.3rem 0.4rem;
     border: 1px solid color-mix(in oklch, var(--highlight) 28%, transparent);
     background: linear-gradient(180deg, rgba(30, 21, 12, 0.82), rgba(12, 9, 6, 0.92));
     border-radius: 0.35rem;
@@ -347,12 +355,8 @@ body.bare.hud-active .overlay-blog {
       inset 0 -3px 6px rgba(0, 0, 0, 0.4),
       0 2px 7px rgba(0, 0, 0, 0.5);
   }
-  /* Icon-only caps (socials) get the same footprint as the label caps. */
-  body.bare.hud-active .overlay-blog .overlay-blog-social {
-    padding: 0.3rem 0.4rem;
-  }
-  body.bare.hud-active .overlay-blog .overlay-blog-link:hover,
-  body.bare.hud-active .overlay-blog .overlay-blog-link:focus-visible {
+  body.bare.hud-active .overlay-blog .overlay-blog-social:hover,
+  body.bare.hud-active .overlay-blog .overlay-blog-social:focus-visible {
     border-color: color-mix(in oklch, var(--highlight) 55%, transparent);
     box-shadow:
       inset 0 1px 0 rgba(255, 200, 140, 0.1),

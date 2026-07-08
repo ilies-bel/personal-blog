@@ -540,62 +540,35 @@ body.graveyard-page .bh-backdrop::before {
 .bh-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 
 /* COCKPIT NAMEPLATE — with the ship de-cloaked (body.hud-active) the identity
-   reads as a MACHINED METAL PLATE bolted to the ceiling panel: brushed warm
-   alloy (fine horizontal grain under a diagonal sheen), a chamfered edge (lit
-   top bevel, shadowed underside), four countersunk rivets, and ENGRAVED
-   lettering (dark cut above, a hair of catch-light below — light comes from
-   the cabin, so an incision shadows its top edge). No amber bezel here: the
-   plate is structure, not an instrument — the screens keep the powered glass.
-   Desktop-only; the observation deck (HUD off) keeps the bare lockup. */
+   sits in an ETCHED BEZEL on the ceiling hull: a thin amber hairline outline
+   with square corners and small dot terminals (the reference's top-left plate
+   grammar — the same bezel language the telemetry and nav recesses wear). No
+   fill beyond a whisper of shadow: the hull behind IS the plate. Desktop-only;
+   the observation deck (HUD off) keeps the bare lockup. */
 @media (min-width: 60.0625rem) {
   body.bare.hud-active .bh-identity {
     animation: hud-decloak 1.4s steps(1, end);
     padding: 0.7rem 1.15rem 0.75rem;
-    border: 1px solid rgba(0, 0, 0, 0.85);
-    border-radius: 0.3rem;
-    background:
-      /* Four countersunk rivets, one per corner: a dark well with a small
-         off-centre crown catching the cabin light. */
-      radial-gradient(circle at 0.62rem 0.62rem, rgba(214, 186, 148, 0.4) 0 0.5px, #3b332a 1px, #0a0705 1.9px, rgba(0, 0, 0, 0) 2.6px),
-      radial-gradient(circle at calc(100% - 0.62rem) 0.62rem, rgba(214, 186, 148, 0.4) 0 0.5px, #3b332a 1px, #0a0705 1.9px, rgba(0, 0, 0, 0) 2.6px),
-      radial-gradient(circle at 0.62rem calc(100% - 0.62rem), rgba(214, 186, 148, 0.3) 0 0.5px, #362e26 1px, #0a0705 1.9px, rgba(0, 0, 0, 0) 2.6px),
-      radial-gradient(circle at calc(100% - 0.62rem) calc(100% - 0.62rem), rgba(214, 186, 148, 0.3) 0 0.5px, #362e26 1px, #0a0705 1.9px, rgba(0, 0, 0, 0) 2.6px),
-      /* Brushed grain: fine horizontal streaks. */
-      repeating-linear-gradient(
-        180deg,
-        rgba(255, 236, 210, 0.03) 0 1px,
-        rgba(0, 0, 0, 0.05) 1px 2px,
-        rgba(255, 236, 210, 0.012) 2px 3px
-      ),
-      /* The alloy body: a diagonal sheen rolling across warm gunmetal. */
-      linear-gradient(
-        168deg,
-        #3a332c 0%,
-        #2a241e 30%,
-        #1c1712 55%,
-        #241e18 78%,
-        #2f2822 100%
-      );
-    box-shadow:
-      inset 0 1px 0 rgba(255, 228, 195, 0.16),   /* lit chamfer, top edge */
-      inset 1px 0 0 rgba(255, 228, 195, 0.06),   /* lit chamfer, left edge */
-      inset 0 -1px 0 rgba(0, 0, 0, 0.7),         /* shadowed underside */
-      0 3px 10px rgba(0, 0, 0, 0.55),            /* the plate stands off the panel */
-      0 1px 2px rgba(0, 0, 0, 0.75);
+    border: 1px solid color-mix(in oklch, var(--highlight) 34%, transparent);
+    border-radius: 2px;
+    background: rgb(8 6 4 / 0.4);
   }
-  /* Engraved lettering: drop the floating-canvas glow shadows for an incision
-     cut — dark above the strokes, a hair of light beneath. */
+  body.bare.hud-active .bh-identity::before,
+  body.bare.hud-active .bh-identity::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--highlight) 72%, transparent);
+  }
+  body.bare.hud-active .bh-identity::before { left: -2.5px; top: -2.5px; }
+  body.bare.hud-active .bh-identity::after { right: -2.5px; bottom: -2.5px; }
   body.bare.hud-active .bh-identity .bh-identity-name {
-    color: #cfc6b8;
-    text-shadow:
-      0 -1px 1px rgba(0, 0, 0, 0.9),
-      0 1px 0 rgba(255, 236, 205, 0.1);
+    color: color-mix(in oklch, var(--highlight) 42%, var(--fg));
   }
   body.bare.hud-active .bh-identity .bh-identity-role {
-    color: #8d8272;
-    text-shadow:
-      0 -1px 1px rgba(0, 0, 0, 0.85),
-      0 1px 0 rgba(255, 236, 205, 0.07);
+    color: color-mix(in oklch, var(--highlight) 30%, var(--fg-faint));
   }
 }
 

@@ -766,6 +766,13 @@ export default function HudNavigation({
         <span className="hud-frame-readout-stage">{frameTime}</span>
         <span className="hud-frame-readout-station">{frameStation.label}</span>
       </span>
+      {/* Compass numerals over the WebGL tick strip (the canvas draws the
+          ticks; the type lives up here in the DOM). Static headings — the
+          strip is set dressing; the caret marks 000 dead centre. */}
+      <span className="hud-frame-compass-num" style={{ left: '42.19vw' }}>330</span>
+      <span className="hud-frame-compass-num" style={{ left: '50vw' }}>000</span>
+      <span className="hud-frame-compass-num" style={{ left: '57.81vw' }}>030</span>
+      <span className="hud-frame-compass-caret" style={{ left: '50vw' }} />
     </div>
     {/* The arc gauge — also a sibling (position:fixed vs .hud-system's transform).
         Mirrors the rail's data-visible gating; buttons drive the SAME beginTravel

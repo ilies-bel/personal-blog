@@ -5,10 +5,11 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 2 });
 await page.goto(`http://localhost:4325/personal-blog?tier=high&r=${Date.now() % 100000}`, { waitUntil: 'load' });
 await page.waitForTimeout(4000);
-await page.evaluate(() => {
-  document.body.classList.add('hud-active');
-  document.body.classList.remove('at-opening', 'bare');
-});
+const power = page.locator('button[aria-label="Power the navigation HUD"]');
+if ((await power.count()) > 0 && (await power.getAttribute('aria-pressed')) !== 'true') {
+  await power.click();
+}
+await page.waitForTimeout(6000);
 for (let i = 0; i < 3; i++) {
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForTimeout(2500);

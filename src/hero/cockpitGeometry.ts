@@ -1,15 +1,20 @@
 // The cockpit canopy's geometry — ONE source of truth consumed by BOTH renderers:
-// buildCockpit.ts (the live WebGL rig: ribbons + panel meshes, lit by the scene)
-// and CockpitFrame.tsx (the reduced-motion SVG fallback). Everything is authored
-// in a fixed 1920×1080, y-down design space that each renderer stretches to the
-// viewport, so the drawing behaves like a cockpit moulded to the glass.
+// buildCockpit.ts (the live WebGL rig) and CockpitFrame.tsx (the reduced-motion
+// SVG fallback). Everything is authored in a fixed 1920×1080, y-down design
+// space that each renderer stretches to the viewport, so the drawing behaves
+// like a cockpit moulded to the glass.
 //
-// Corners are ROUNDED (the reference frame flows through its bends — the sharp
-// mitred joints of the first pass read as wireframe, not coachwork): every
-// authored corner carries a rounding length and is replaced by a sampled
-// quadratic bézier fillet at build time. Curves (the windshield's bottom sweep,
-// the flank arcs) are pre-sampled into the same polyline representation, so
-// downstream consumers only ever see point lists.
+// REFERENCE GRAMMAR (reference.png, the ChatGPT-generated north star): the
+// structure is THICK MILLED METAL, not piping. Every member is a BEAM — a wide
+// dark-metal band whose two edges carry bright amber hairlines with a dimmer
+// echo line inset from each edge (the beam shader draws all of it off one
+// cross-section coordinate). Hairline SEAMS split the hull masses into facets,
+// junctions flare with hot glints, and the console is a real dashboard: a
+// central recessed screen flanked by inset panels.
+//
+// Corners are ROUNDED: every authored corner carries a rounding length and is
+// replaced by a sampled quadratic bézier fillet at build time, so downstream
+// consumers only ever see point lists.
 
 /** An authored vertex: x, y, and an optional corner-rounding length (design
  *  units). r > 0 replaces the corner with a quadratic fillet; endpoints and
@@ -21,18 +26,26 @@ export type Pt = readonly [number, number];
 export const COCKPIT_W = 1920;
 export const COCKPIT_H = 1080;
 
-/** One cockpit member, fillets resolved: its polyline, its facing weight
- *  (how squarely the member's face points at the star — the multiplier on the
- *  lit passes; see buildCockpit's fragment shader / CockpitFrame's passes),
- *  and its width in CSS px. The piping stays THIN across the board (≈2px trim,
- *  hairline echoes): a beam's structural width is the DARK BAND between its
- *  edge pair, never the stroke — fat strokes + halo swallow the band and the
- *  member reads as a neon tube instead of coachwork. */
-export interface CockpitLine {
+/** One structural BEAM: its centreline polyline, its width in DESIGN units
+ *  (the metal band the shader fills and edge-lights), and its facing weight
+ *  (how squarely the member faces the star — multiplies the lit passes). */
+export interface CockpitBeam {
   pts: ReadonlyArray<Pt>;
+  /** Full member width, design px. */
+  dw: number;
+  /** Facing weight 0..1. */
   w: number;
-  px: number;
   closed?: boolean;
+}
+
+/** One junction glint: a hot white-gold spark where members meet. */
+export interface CockpitGlint {
+  x: number;
+  y: number;
+  /** Radius, design px. */
+  r: number;
+  /** Intensity multiplier. */
+  i: number;
 }
 
 // ─── Builders ────────────────────────────────────────────────────────────────
@@ -86,172 +99,188 @@ export function toPathD(pts: ReadonlyArray<Pt>, closed = false): string {
   return closed ? `${body} Z` : body;
 }
 
-// ─── The line set ────────────────────────────────────────────────────────────
-// Round-5 layout, reduced to the reference's essentials: the MAIN FRAME (the
-// windshield beam with its Y-junction rakes, the sill beams off the pillar
-// feet) and the CONSOLE (dash rails rising into the plateau, the companion
-// splitting down the console sides, the inner echo lip). Every member is a
-// BEAM (two lines bounding a dark band) and every line either exits the frame
-// or flows out of a junction — no floating ends, no decorative clutter.
+// ─── The canopy ──────────────────────────────────────────────────────────────
+// The windshield is an inset hexagon — flat top beam, chamfer diagonals, near
+// vertical pillars, a near-flat sill — authored as ONE closed BEAM centreline.
+// The beam shader extrudes the metal band around it, so the glass opening is
+// the centreline inset by half the width, and the hull masses (below) abut the
+// other half.
 
-const R_HEX = 34; // windshield hexagon corners
-
-/** Windshield frame, outer edge (closed ring). The bottom edge is the cowl
- *  top — the reference's profile: a quick filleted drop at each pillar foot
- *  into a FLAT run across the centre (never a centre-sagging arc).
- *
- *  At each top corner the contour plays the reference's Y JUNCTION: instead of
- *  a mitred corner, the top edge rounds UP into the side-window rake's upper
- *  line (the V notch), the rake beam exits past the screen edge (its end cap
- *  lives off-screen, never visible), and the beam's underside returns to round
- *  into the pillar's outer face. The rake beam is thereby CONTINUOUS with the
- *  frame — same contour, same stroke, and the band fill (this ring with the
- *  inner ring as its hole) fuses the hub + rake band into one dark mass. */
-// The windshield is a clean INSET HEXAGON — the reference's canopy: a flat top
-// beam, a chamfer diagonal down each top corner, near-vertical pillars, and a
-// near-flat sill, all sitting INSET from the screen edges (black margin beyond
-// the frame on both flanks, exactly as the reference shows). The prior pass ran
-// a "V notch → out the screen edge → back" excursion at each top corner, which
-// poked a little triangular wedge off the frame and read as a tangle rather than
-// a clean coachwork bend. Here each corner is ONE chamfered beam: top edge
-// rounds into the rake, the rake runs straight down-out to the pillar top, the
-// pillar rounds into the sill. One continuous stroke, no floating ends, no
-// screen-edge wedge.
-const canopyOuterRaw: RawPt[] = [
+const CANOPY_RAW: RawPt[] = [
   // Top beam (flat), rounding into each corner chamfer.
-  [470, 74, 40],
-  [1450, 74, 40],
+  [478, 84, 40],
+  [1442, 84, 40],
   // Right chamfer → pillar top → pillar (angles gently outward going down).
-  [1690, 262, 70],
-  [1792, 470, 60],
-  // Right pillar foot: rounds into the sill's top edge. The sill is ONE slim
-  // near-flat beam with a subtle centre crown (underside ~838 mid, ~846 feet).
-  [1806, 792, 90],
-  [1720, 846, 200],
-  [1470, 850, 220],
-  [960, 842, 480],
+  [1676, 266, 66],
+  [1776, 470, 58],
+  // Right pillar foot rounds into the sill: the console is TALLER than the old
+  // pass (reference: the dash claims the bottom ~26% of frame) so the sill
+  // rides higher and the feet pull inboard.
+  [1788, 760, 86],
+  [1700, 818, 190],
+  [1450, 824, 210],
+  [960, 816, 460],
   // Left sill + pillar foot, mirrored.
-  [450, 850, 220],
-  [200, 846, 200],
-  [114, 792, 90],
+  [470, 824, 210],
+  [220, 818, 190],
+  [132, 760, 86],
   // Left pillar → pillar top → chamfer back into the top beam.
-  [128, 470, 60],
-  [230, 262, 70],
-];
-/** Windshield frame, inner lip (closed ring) — a slightly smaller concentric
- *  hexagon. The offset between the two rings is the member THICKNESS (the strut
- *  band fills the gap), and it's a touch wider down the pillars than along the
- *  top, the perspective cue that gives the coachwork depth. */
-const canopyInnerRaw: RawPt[] = [
-  [486, 92, 38],
-  [1434, 92, 38],
-  [1662, 268, 64],
-  [1758, 470, 56],
-  [1770, 786, 84],
-  // Track the outer ring's sill profile (an intermediate foot point at the
-  // pillar, then the near-flat run) so the two rings stay PARALLEL down the
-  // pillar foot — without this the inner ring cut one long diagonal while the
-  // outer stepped through its foot, splaying the trim's thickness open there.
-  [1690, 840, 200],
-  [1462, 838, 210],
-  [960, 830, 460],
-  [458, 838, 210],
-  [230, 840, 200],
-  [150, 786, 84],
-  [162, 470, 56],
-  [258, 268, 64],
+  [144, 470, 58],
+  [244, 266, 66],
 ];
 
-export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.0, closed: true };
-export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 2.2, closed: true };
+export const CANOPY_BEAM: CockpitBeam = {
+  pts: resolveCorners(CANOPY_RAW, true),
+  dw: 34,
+  w: 1,
+  closed: true,
+};
 
-export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
-  CANOPY_OUTER,
-  CANOPY_INNER,
+// ─── The console beams ───────────────────────────────────────────────────────
+// A real dashboard (the reference's bottom band): the deck rail crowns the
+// dash, the apron rails flare down its flanks and TERMINATE on the screen
+// housing, and the housing itself is the widest member on screen — the
+// recessed console screen the CTA readout lives in.
 
-  // (The sill beams live in CANOPY_OUTER's contour — the pillar-foot Y
-  // junctions above — so they carry the frame's exact finish and their band
-  // is filled by the strut band automatically.)
+/** Deck rail — out of each pillar foot, dipping to the console shoulders,
+ *  flat across the centre. The dash's horizon line. Ends overshoot the canopy
+ *  centreline so the butt caps hide INSIDE the canopy beam's dark band. */
+const DECK_RAW: RawPt[] = [
+  [208, 813],
+  [330, 868, 80],
+  [700, 878, 140],
+  [960, 876, 200],
+  [1220, 878, 140],
+  [1590, 868, 80],
+  [1712, 813],
+];
+export const DECK_BEAM: CockpitBeam = { pts: resolveCorners(DECK_RAW), dw: 22, w: 0.8 };
 
-  // Console — a CONTAINED central dashboard, not full-width rails. The prior
-  // pass ran both rails screen-edge to screen-edge (x −6 → 1926), which stacked
-  // three near-parallel horizontal bands (sill + two rails) across the whole
-  // bottom and read as loose wires draped under the glass rather than an
-  // instrument console. The reference instead shows a compact trapezoidal
-  // dashboard: the rails ANCHOR at the pillar feet (where the sill meets the
-  // pillar, ≈{200,846}/{1720,846}), sweep DOWN-and-IN to a raised central
-  // plateau, and bound a contained console body that frames the pedestal — the
-  // structure the finale copy + ledger sit inside. Both rails still START on the
-  // frame (they flow out of the pillar foot, no floating end) and mirror about
-  // centre; they simply no longer run off the screen edges.
-  //   • DECK RAIL (upper): out of the pillar foot, a shallow dip to the plateau
-  //     shoulders (x≈700/1220), flat across the centre at y≈900, mirror. This is
-  //     the dashboard's top lip — the horizon line of the console.
-  //   • APRON RAIL (lower): the console's flared base — drops from the deck-rail
-  //     ends down the console flanks (the knee at ≈{560,1002}), across a wider
-  //     flat at y≈1004, and mirrors. Deck + apron together read as one solid
-  //     console mass (their band is dark, the pedestal mounted on top).
-  //   • PEDESTAL: the raised centre block the copy sits above — flat top y≈938
-  //     spanning 770→1150, shoulders r70, sides diving to the frame bottom.
-  { pts: resolveCorners([[200, 846], [310, 892, 90], [700, 902, 150], [820, 900, 120], [1100, 900, 120], [1220, 902, 150], [1610, 892, 90], [1720, 846]]), w: 0.72, px: 2.0 },
-  // The apron rail TERMINATES on the pedestal's sides (x≈740/1180 at y1004,
-  // where the slope [700,1090]→[770,938] crosses the flat) — flowing into a
-  // junction like every other member. The old single run crossed straight
-  // through both pedestal slopes and read as loose wires X-ing the console.
-  { pts: resolveCorners([[310, 892], [440, 986, 90], [560, 1002, 150], [740, 1004]]), w: 0.6, px: 1.9 },
-  { pts: resolveCorners([[1180, 1004], [1360, 1002, 150], [1480, 986, 90], [1610, 892]]), w: 0.6, px: 1.9 },
-  // Pedestal — the raised centre block, mounted on the deck rail:
-  { pts: resolveCorners([[700, 1090], [770, 938, 70], [1150, 938, 70], [1220, 1090]]), w: 0.85, px: 2.2 },
-  // Pedestal screen recess — the inner lip (the reference pedestal's double
-  // top edge): a hairline trapezoid inset inside the pedestal, both feet
-  // exiting below the screen. The compass CTA readout parks inside it.
-  { pts: resolveCorners([[742, 1090], [796, 962, 54], [1124, 962, 54], [1178, 1090]]), w: 0.55, px: 1.4 },
+/** Screen housing — the central recessed console screen (a wide-shouldered
+ *  trapezoid whose feet exit below the frame). The CTA text parks inside. */
+const HOUSING_RAW: RawPt[] = [
+  [640, 1090],
+  [700, 926, 60],
+  [1220, 926, 60],
+  [1280, 1090],
+];
+export const HOUSING_BEAM: CockpitBeam = { pts: resolveCorners(HOUSING_RAW), dw: 24, w: 0.85 };
 
-  // (The right instrument circle — main arc, inner echo and radial tick ring —
-  // is GONE by the pilot's call: on screen its edge-clipped ticks read as
-  // brown dashes floating off the frame, not structure. The LIVE navigation
-  // gauge is the left flank's .hud-arc, now mounted in its own console screen.)
+/** Apron rails — the console's flared base, one per flank, each flowing out
+ *  of the deck rail's knee and terminating INSIDE the screen housing's band
+ *  (the housing slope crosses y996 at x≈674/1246; the extra reach hides the
+ *  butt cap in the housing's dark fill). */
+const APRON_L_RAW: RawPt[] = [
+  [330, 868],
+  [430, 972, 80],
+  [560, 992, 120],
+  [688, 997],
+];
+const APRON_R_RAW: RawPt[] = [
+  [1232, 997],
+  [1360, 992, 120],
+  [1490, 972, 80],
+  [1590, 868],
+];
+export const APRON_BEAMS: ReadonlyArray<CockpitBeam> = [
+  { pts: resolveCorners(APRON_L_RAW), dw: 16, w: 0.7 },
+  { pts: resolveCorners(APRON_R_RAW), dw: 16, w: 0.7 },
+];
+
+// ─── Grooves: facet seams, inset panels, the screen recess lip ──────────────
+// The hull masses read as FACETED metal because seams split them into plates
+// (the reference's roof triangles and dash facets), and the flat dash faces
+// carry recessed blank panels the way real consoles do. Every seam is a narrow
+// GROOVE — the same beam material at ~7 design px, which the shader renders as
+// a dark channel between two faint amber edge lines. Every groove either exits
+// the frame edge or lands inside a beam's band — no floating ends.
+
+const GROOVES: ReadonlyArray<CockpitBeam> = [
+  // Roof facet seams: short corner cuts off the canopy's top corners. They
+  // STOP well before the DOM plates (nameplate top-left, site nav top-right)
+  // — a full run to the screen edge sliced straight through both.
+  { pts: [[460, 66], [388, 22]] as Pt[], dw: 7, w: 0.4 },
+  { pts: [[1460, 66], [1532, 22]] as Pt[], dw: 7, w: 0.4 },
+  // Flank seams: pillar mid-height out to the screen flanks.
+  { pts: [[150, 560], [-8, 548]] as Pt[], dw: 6, w: 0.3 },
+  { pts: [[1770, 560], [1928, 548]] as Pt[], dw: 6, w: 0.3 },
+  // Dash facet seams: deck-rail knees down to the bottom screen corners.
+  { pts: [[330, 872], [180, 1088]] as Pt[], dw: 7, w: 0.35 },
+  { pts: [[1590, 872], [1740, 1088]] as Pt[], dw: 7, w: 0.35 },
+  // Console inset panels — recessed blanks on the flanking dash faces (closed
+  // groove outlines, parallelogram lean following the deck/apron slopes).
+  { pts: resolveCorners([[368, 912], [600, 922, 16], [582, 972, 16], [378, 950, 16]], true), dw: 6, w: 0.35, closed: true },
+  { pts: resolveCorners([[1320, 922], [1552, 912, 16], [1542, 950, 16], [1338, 972, 16]], true), dw: 6, w: 0.35, closed: true },
+  // Screen recess lip — the inner rounded outline INSIDE the housing beam,
+  // the visible edge of the screen the CTA sits on.
+  { pts: resolveCorners([[672, 1090], [724, 950, 44], [1196, 950, 44], [1248, 1090]]), dw: 7, w: 0.45 },
+];
+
+export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [
+  CANOPY_BEAM,
+  DECK_BEAM,
+  HOUSING_BEAM,
+  ...APRON_BEAMS,
+  ...GROOVES,
+];
+
+// ─── Junction glints ─────────────────────────────────────────────────────────
+// Hot white-gold sparks where members meet — the reference flares every major
+// corner. Positions sit ON the beam centrelines at their junctions.
+
+export const COCKPIT_GLINTS: ReadonlyArray<CockpitGlint> = [
+  // Canopy top corners (chamfer ↔ top beam).
+  { x: 478, y: 84, r: 26, i: 1.0 },
+  { x: 1442, y: 84, r: 26, i: 1.0 },
+  // Chamfer ↔ pillar tops.
+  { x: 1776, y: 470, r: 24, i: 0.85 },
+  { x: 144, y: 470, r: 24, i: 0.85 },
+  // Pillar feet ↔ sill.
+  { x: 132, y: 760, r: 22, i: 0.8 },
+  { x: 1788, y: 760, r: 22, i: 0.8 },
+  // Deck rail ↔ pillar feet.
+  { x: 220, y: 818, r: 20, i: 0.75 },
+  { x: 1700, y: 818, r: 20, i: 0.75 },
+  // Deck knees (apron take-off).
+  { x: 330, y: 868, r: 18, i: 0.7 },
+  { x: 1590, y: 868, r: 18, i: 0.7 },
+  // Screen housing shoulders.
+  { x: 700, y: 926, r: 18, i: 0.75 },
+  { x: 1220, y: 926, r: 18, i: 0.75 },
 ];
 
 // ─── The interior masses ─────────────────────────────────────────────────────
 // Ceiling band and dashboard: the opaque structure that turns floating lines
-// into a ship (the scene stays visible only through glass). Corners rounded
-// with the same radii as the lines that trace them.
+// into a ship (the scene stays visible only through glass). Their glass-side
+// contours trace the canopy beam's centreline — the beam's inner half overlaps
+// them, so the metal band and the mass meet without a gap.
 
-// The ceiling mass fills the whole top band down to the hexagon's top edge —
-// its lower contour traces the new inset hexagon (top beam 470→1450 @ y74, the
-// chamfer down to the pillar tops), so the opaque hull meets the trim exactly
-// and the starfield shows only through the glass below. The mass runs full
-// screen width up top (the ship's roof spans past the frame's inset flanks).
 export const PANEL_CEILING: ReadonlyArray<Pt> = resolveCorners(
   [
     [0, 0],
     [1920, 0],
     [1920, 470],
-    [1792, 470, R_HEX],
-    [1690, 262, R_HEX],
-    [1450, 74, R_HEX],
-    [470, 74, R_HEX],
-    [230, 262, R_HEX],
-    [128, 470, R_HEX],
+    [1776, 470, 58],
+    [1676, 266, 66],
+    [1442, 84, 40],
+    [478, 84, 40],
+    [244, 266, 66],
+    [144, 470, 58],
     [0, 470],
   ],
   true,
 );
 
-// The dash mass fills the bottom band up to the sill — its upper contour traces
-// the new sill profile (pillar feet 200/1720 @ y846, the near-flat sill), full
-// screen width so the console hull spans past the frame's inset flanks.
 export const PANEL_DASH: ReadonlyArray<Pt> = resolveCorners(
   [
     [0, 470],
-    [114, 792, 170],
-    [200, 846, 200],
-    [450, 850, 220],
-    [960, 842, 480],
-    [1470, 850, 220],
-    [1720, 846, 200],
-    [1806, 792, 170],
+    [132, 760, 160],
+    [220, 818, 190],
+    [470, 824, 210],
+    [960, 816, 460],
+    [1450, 824, 210],
+    [1700, 818, 190],
+    [1788, 760, 160],
     [1920, 470],
     [1920, 1090],
     [0, 1090],

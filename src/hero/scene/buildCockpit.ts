@@ -27,20 +27,20 @@
 // cockpit costs zero draws (the draw-audit convention).
 import * as THREE from 'three';
 import {
-  COCKPIT_LINES,
-  CANOPY_OUTER,
-  CANOPY_INNER,
+  COCKPIT_BEAMS,
+  COCKPIT_GLINTS,
   PANEL_CEILING,
   PANEL_DASH,
   COCKPIT_W,
   COCKPIT_H,
-  type CockpitLine,
+  type CockpitBeam,
   type Pt,
 } from '../cockpitGeometry';
 import {
-  cockpitLineVertexShader,
-  cockpitLineFragmentShader,
-  cockpitGlowFragmentShader,
+  cockpitBeamVertexShader,
+  cockpitBeamFragmentShader,
+  cockpitGlintVertexShader,
+  cockpitGlintFragmentShader,
   cockpitPanelVertexShader,
   cockpitPanelFragmentShader,
   cockpitHudVertexShader,
@@ -54,11 +54,6 @@ export interface CockpitRig extends Rig {
    *  eased stage, the render clock, and the HUD power bit. */
   frame(ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean): void;
 }
-
-/** How much wider the glow pass's ribbon runs than its member. Kept TIGHT: the
- *  reference's halo hugs its edge lines — a wide halo bridges a beam's two
- *  edges and washes out the dark band that gives the member its width. */
-const GLOW_WIDTH_SCALE = 2.4;
 
 /** The authored piping body colour (linear); uAmber is derived from it per
  *  frame via the band's gold-shift key (STAR_KEYS.d). GOLD_BASE is the shift
@@ -140,31 +135,27 @@ function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: numb
 
 // ── Ribbon extrusion ─────────────────────────────────────────────────────────
 
-/** Extrude every cockpit polyline into one indexed ribbon geometry. Two
- *  vertices per point (±aSide); aNorm is the vertex's miter normal (average of
- *  adjoining segment normals, scaled 1/cos(half-angle), clamped — corners are
- *  pre-rounded upstream so miters stay shallow). aWidth carries the member's
- *  authored CSS-px width. Closed rings wrap and repeat their first point so
- *  the loop seals without a seam. */
-function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
+/** Extrude the structural BEAMS: same miter scheme as the hairline ribbons but
+ *  the width attribute (aDW) is the member's full width in DESIGN units — the
+ *  vertex shader extrudes half of it per side, and the fragment shader draws
+ *  metal fill + edge hairlines + echo off the cross coordinate. */
+function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeometry {
   const pos: number[] = [];
   const norm: number[] = [];
   const side: number[] = [];
   const weight: number[] = [];
-  const width: number[] = [];
+  const dw: number[] = [];
   const idx: number[] = [];
 
-  for (const line of lines) {
-    const pts = line.closed ? [...line.pts, line.pts[0]] : [...line.pts];
+  for (const beam of beams) {
+    const pts = beam.closed ? [...beam.pts, beam.pts[0]] : [...beam.pts];
     const n = pts.length;
     if (n < 2) continue;
     const first = pos.length / 2;
     for (let i = 0; i < n; i++) {
       const p = pts[i];
-      // Wrap neighbours for closed rings (pts already repeats the seam point,
-      // so wrap indices skip the duplicate); clamp at open ends.
-      const prev: Pt = i > 0 ? pts[i - 1] : line.closed ? pts[n - 2] : pts[0];
-      const next: Pt = i < n - 1 ? pts[i + 1] : line.closed ? pts[1] : pts[n - 1];
+      const prev: Pt = i > 0 ? pts[i - 1] : beam.closed ? pts[n - 2] : pts[0];
+      const next: Pt = i < n - 1 ? pts[i + 1] : beam.closed ? pts[1] : pts[n - 1];
       let d1x = p[0] - prev[0];
       let d1y = p[1] - prev[1];
       let d2x = next[0] - p[0];
@@ -180,19 +171,15 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
       const tl = Math.hypot(tx, ty) || 1;
       tx /= tl;
       ty /= tl;
-      // Perpendicular of the averaged tangent, miter-scaled against segment 1.
       const nx = -ty;
       const ny = tx;
       const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
-      // NO perspective taper: each member keeps its authored width for its
-      // whole run (the pilot's call — a line that thins as it climbs reads as
-      // an inconsistent stroke, not depth; luminance carries the perspective).
       for (const s of [-1, 1]) {
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
         side.push(s);
-        weight.push(line.w);
-        width.push(line.px);
+        weight.push(beam.w);
+        dw.push(beam.dw);
       }
     }
     for (let i = 0; i < n - 1; i++) {
@@ -206,12 +193,38 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
   geo.setAttribute('aNorm', new THREE.BufferAttribute(new Float32Array(norm), 2));
   geo.setAttribute('aSide', new THREE.BufferAttribute(new Float32Array(side), 1));
   geo.setAttribute('aW', new THREE.BufferAttribute(new Float32Array(weight), 1));
-  geo.setAttribute('aWidth', new THREE.BufferAttribute(new Float32Array(width), 1));
-  // three requires a `position` attribute for draw-range bookkeeping even when
-  // the vertex shader never reads it — alias the 2D data (itemSize 2 is fine).
+  geo.setAttribute('aDW', new THREE.BufferAttribute(new Float32Array(dw), 1));
   geo.setAttribute('position', geo.getAttribute('aPos'));
   geo.setIndex(idx);
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  return geo;
+}
+
+/** One quad per junction glint (aCorner spans the quad, additive shader). */
+function buildGlintGeometry(): THREE.BufferGeometry {
+  const pos: number[] = [];
+  const corner: number[] = [];
+  const radius: number[] = [];
+  const intensity: number[] = [];
+  const idx: number[] = [];
+  for (const g of COCKPIT_GLINTS) {
+    const first = pos.length / 2;
+    for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+      pos.push(g.x, g.y);
+      corner.push(cx, cy);
+      radius.push(g.r);
+      intensity.push(g.i);
+    }
+    idx.push(first, first + 1, first + 2, first, first + 2, first + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('aPos', new THREE.BufferAttribute(new Float32Array(pos), 2));
+  geo.setAttribute('aCorner', new THREE.BufferAttribute(new Float32Array(corner), 2));
+  geo.setAttribute('aR', new THREE.BufferAttribute(new Float32Array(radius), 1));
+  geo.setAttribute('aI', new THREE.BufferAttribute(new Float32Array(intensity), 1));
+  geo.setAttribute('position', geo.getAttribute('aPos'));
+  geo.setIndex(idx);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(960, 540, 0), 4000);
   return geo;
 }
 
@@ -224,15 +237,10 @@ function shapeFromPts(pts: ReadonlyArray<Pt>): THREE.Shape {
 }
 
 export function buildCockpit(scene: THREE.Scene): CockpitRig {
-  // Panels: ceiling + dashboard masses, plus the strut band between the
-  // windshield's edge pair (outer ring with the inner ring as a hole).
-  const band = shapeFromPts(CANOPY_OUTER.pts);
-  const bandHole = new THREE.Path();
-  bandHole.moveTo(CANOPY_INNER.pts[0][0], CANOPY_INNER.pts[0][1]);
-  for (let i = 1; i < CANOPY_INNER.pts.length; i++) bandHole.lineTo(CANOPY_INNER.pts[i][0], CANOPY_INNER.pts[i][1]);
-  bandHole.closePath();
-  band.holes.push(bandHole);
-  const panelGeo = new THREE.ShapeGeometry([shapeFromPts(PANEL_CEILING), shapeFromPts(PANEL_DASH), band]);
+  // Panels: ceiling + dashboard masses. The canopy's metal band is a BEAM now
+  // (see below) — its inner half overlaps these masses so metal meets hull
+  // without a seam.
+  const panelGeo = new THREE.ShapeGeometry([shapeFromPts(PANEL_CEILING), shapeFromPts(PANEL_DASH)]);
 
   const shared = {
     uDecloak: { value: 0 },
@@ -272,48 +280,43 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   panels.visible = false;
   scene.add(panels);
 
-  const lineGeo = buildRibbons(COCKPIT_LINES);
+  // Structural beams: the thick milled-metal members (canopy ring, deck rail,
+  // screen housing, aprons) with edge hairlines + echo drawn in-shader.
+  const beamGeo = buildBeamRibbons(COCKPIT_BEAMS);
+  const beamUniforms: Uniforms = { ...shared };
+  const beamMat = new THREE.ShaderMaterial({
+    uniforms: beamUniforms,
+    vertexShader: cockpitBeamVertexShader,
+    fragmentShader: cockpitBeamFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+  const beams = new THREE.Mesh(beamGeo, beamMat);
+  beams.frustumCulled = false;
+  beams.renderOrder = 41; // metal over the hull masses
+  beams.visible = false;
+  scene.add(beams);
 
-  // Glow pass first: the additive halo the members sit in.
-  const glowUniforms: Uniforms = {
-    ...shared,
-    uWidthScale: { value: GLOW_WIDTH_SCALE },
-  };
-  const glowMat = new THREE.ShaderMaterial({
-    uniforms: glowUniforms,
-    vertexShader: cockpitLineVertexShader,
-    fragmentShader: cockpitGlowFragmentShader,
+  // Junction glints: additive white-gold sparks where members meet.
+  const glintGeo = buildGlintGeometry();
+  const glintUniforms: Uniforms = { ...shared };
+  const glintMat = new THREE.ShaderMaterial({
+    uniforms: glintUniforms,
+    vertexShader: cockpitGlintVertexShader,
+    fragmentShader: cockpitGlintFragmentShader,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
     side: THREE.DoubleSide,
   });
-  const glow = new THREE.Mesh(lineGeo, glowMat);
-  glow.frustumCulled = false;
-  glow.renderOrder = 41; // halo under the members, over the panels
-  glow.visible = false;
-  scene.add(glow);
-
-  // Core pass: the members themselves.
-  const lineUniforms: Uniforms = {
-    ...shared,
-    uWidthScale: { value: 1 },
-  };
-  const lineMat = new THREE.ShaderMaterial({
-    uniforms: lineUniforms,
-    vertexShader: cockpitLineVertexShader,
-    fragmentShader: cockpitLineFragmentShader,
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    side: THREE.DoubleSide,
-  });
-  const lines = new THREE.Mesh(lineGeo, lineMat);
-  lines.frustumCulled = false;
-  lines.renderOrder = 42; // members etch over their own halo
-  lines.visible = false;
-  scene.add(lines);
+  const glints = new THREE.Mesh(glintGeo, glintMat);
+  glints.frustumCulled = false;
+  glints.renderOrder = 44; // sparks over the metal
+  glints.visible = false;
+  scene.add(glints);
 
   // HUD pass: the white holographic instruments on the glass (scanner reticle
   // tracking the star via uLight + the fixed compass strip). A projection, not
@@ -321,8 +324,8 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   const hudGeo = buildHudGeometry();
   const hudUniforms: Uniforms = {
     ...shared,
-    uHud: { value: new THREE.Color(0.82, 0.88, 0.97).convertSRGBToLinear() },
-    uHudFloor: { value: 2.4 },
+    uHud: { value: new THREE.Color(0.85, 0.9, 0.97).convertSRGBToLinear() },
+    uHudFloor: { value: 3.4 },
   };
   const hudMat = new THREE.ShaderMaterial({
     uniforms: hudUniforms,
@@ -335,7 +338,7 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
   });
   const hud = new THREE.Mesh(hudGeo, hudMat);
   hud.frustumCulled = false;
-  hud.renderOrder = 43; // holography over the members
+  hud.renderOrder = 45; // holography over everything structural
   hud.visible = false;
   scene.add(hud);
 
@@ -362,8 +365,8 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
 
     const on = decloak > 0.001;
     panels.visible = on;
-    glow.visible = on;
-    lines.visible = on;
+    beams.visible = on;
+    glints.visible = on;
     hud.visible = on;
     if (!on) return;
 
@@ -399,15 +402,16 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
 
   const dispose = (): void => {
     scene.remove(hud);
-    scene.remove(lines);
-    scene.remove(glow);
+    scene.remove(glints);
+    scene.remove(beams);
     scene.remove(panels);
     hudGeo.dispose();
-    lineGeo.dispose();
+    glintGeo.dispose();
+    beamGeo.dispose();
     panelGeo.dispose();
     hudMat.dispose();
-    lineMat.dispose();
-    glowMat.dispose();
+    glintMat.dispose();
+    beamMat.dispose();
     panelMat.dispose();
   };
 

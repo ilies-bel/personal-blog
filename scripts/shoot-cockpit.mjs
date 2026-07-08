@@ -25,14 +25,17 @@ await page.goto(`http://localhost:${port}/personal-blog?tier=high&r=${Date.now()
   waitUntil: 'load',
 });
 await page.waitForTimeout(4000);
+// Power the HUD through the REAL power button so the boot FSM runs (boot
+// theater → hud-active → the cue glides into its pedestal seat) — forcing
+// body classes by hand shows pre-glide states that never rest in production.
+const power = page.locator('button[aria-label="Power the navigation HUD"]');
+if ((await power.count()) > 0 && (await power.getAttribute('aria-pressed')) !== 'true') {
+  await power.click();
+}
+await page.waitForTimeout(6000);
 await page.evaluate((m) => {
   window.__bhMorph = m;
-  document.body.classList.add('hud-active');
-  document.body.classList.remove('at-opening', 'bare');
 }, morph);
-// A tiny real scroll flips the boot FSM cue → live so the compass readout
-// parks in its pedestal seat (the canvas itself stays pinned by __bhMorph).
-await page.mouse.wheel(0, 120);
 await page.waitForTimeout(3000);
 
 await page.screenshot({ path: out });
