@@ -10,23 +10,26 @@
 // burns a labeled grid over it). Verify changes against the reference with the
 // dev blueprint overlay (/dev-blueprint) BEFORE wiring them into the scene.
 //
-// THE SHAPE (reference truth): the glass is a faceted GEM, not a rounded
-// hexagon — a THIN flat top beam (y≈60), long chamfers diving to the WAIST at
-// (≈221, 262) (the widest point sits HIGH), lower sides leaning INWARD going
-// down, and a low, nearly-flat sill (y≈820) that bows UP a hair at centre.
-// THE GREENHOUSE: the central gem is not the only glass. Each side has TWO
-// MORE PANES cut out of the hull — an upper CORNER pane (the nameplate/nav
-// float on it) and a tall FLANK pane (the NAV dial floats on it) — separated
-// by a straight CONNECTOR mullion that runs from the screen edge (≈0,151)
-// through the measured T-vertex (≈132,215) into the waist junction, and
-// bounded inward by a DIAGONAL mullion from the screen top (≈510,0) parallel
-// to the chamfer (ridge scan: (445,40)→(346,100)→(187,200)).
-// THE INTEGRATION: members flow into each other — the sill continues past its
-// corners and WRAPS DOWN the flanks toward the screen edges (the perspective
-// that makes it one hull), the diagonal lands on the connector mid-run, the
-// connector buries into the waist junction, the aprons/mid-wrap merge into
-// the screen housing, and every groove ends inside another member's band.
-// No floating parallels.
+// THE SHAPE (reference-v3 truth): the glass is ONE faceted GEM — a THIN flat
+// top band (centreline y≈80, hairlines 73/87) spanning x≈368–1552, STRAIGHT
+// chamfers at slope −1.0 dx/dy diving to the waist vertices (≈169,278)/
+// (≈1751,278) under a BIG fillet, then wide pillars leaning inward-right at
+// +0.52 dx/dy down to the sill corners (≈461,838)/(≈1459,838), and a nearly
+// flat sill that bows UP to ≈830 at centre. The sides are SOLID HULL (the
+// star test: the gem shows blue space + stars, the flanks show warm black) —
+// no corner panes, no flank panes, no outer trim.
+// THE Y-MERGE (the one structural flourish): per side, ONE wide arm (~64px)
+// runs from the screen edge (0,≈140) at slope 0.88 dy/dx straight into the
+// ring's waist fillet — its lower edge flows into the pillar's outer edge,
+// the chamfer's inner edge flows into the pillar's window edge, and the arm's
+// upper edge meets the chamfer's outer edge at the crotch (≈176,255). The
+// ring band itself carries the merge: thin (14) across the top, ~17 down the
+// chamfers, swelling to ~44 through the waist fillet, tapering to ~35 at the
+// pillar foot, and back to 14 around the sill corners.
+// THE INTEGRATION below the waist is unchanged: the deck wraps sweep down
+// from the sill corners toward the screen edges, the mid laminations merge
+// into the screen housing, and every groove ends inside another member's
+// band. No floating parallels.
 
 /** An authored vertex: x, y, and an optional corner-rounding length (design
  *  units). r > 0 replaces the corner with a quadratic fillet; endpoints and
@@ -78,7 +81,7 @@ const toward = (from: Pt, to: Pt, t: number): Pt => [from[0] + (to[0] - from[0])
 export function resolveCorners(raw: ReadonlyArray<RawPt>, closed = false): Pt[] {
   const n = raw.length;
   const out: Pt[] = [];
-  const FILLET_SAMPLES = 8;
+  const FILLET_SAMPLES = 14;
   for (let i = 0; i < n; i++) {
     const [x, y, r = 0] = raw[i];
     const b: Pt = [x, y];
@@ -105,102 +108,39 @@ export function toPathD(pts: ReadonlyArray<Pt>, closed = false): string {
   return closed ? `${body} Z` : body;
 }
 
-/** Signed area (shoelace) — used only to normalise offset direction. */
-function signedArea(pts: ReadonlyArray<Pt>): number {
-  let a = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const [x1, y1] = pts[i];
-    const [x2, y2] = pts[(i + 1) % pts.length];
-    a += x1 * y2 - x2 * y1;
-  }
-  return a / 2;
-}
-
-/** Offset a CLOSED resolved polyline by `delta` design px along its miter
- *  normals — positive delta always GROWS the ring (offsets away from the
- *  interior, whatever the authored winding). This is how the hull's parallel
- *  trim/seam rings are derived from the canopy centreline, so re-measuring the
- *  canopy re-measures every lamination line with it. */
-export function offsetClosed(pts: ReadonlyArray<Pt>, delta: number): Pt[] {
-  const n = pts.length;
-  const grow = signedArea(pts) > 0 ? -1 : 1;
-  const out: Pt[] = [];
-  for (let i = 0; i < n; i++) {
-    const p = pts[i];
-    const prev = pts[(i - 1 + n) % n];
-    const next = pts[(i + 1) % n];
-    let d1x = p[0] - prev[0];
-    let d1y = p[1] - prev[1];
-    let d2x = next[0] - p[0];
-    let d2y = next[1] - p[1];
-    const l1 = Math.hypot(d1x, d1y) || 1;
-    const l2 = Math.hypot(d2x, d2y) || 1;
-    d1x /= l1;
-    d1y /= l1;
-    d2x /= l2;
-    d2y /= l2;
-    let tx = d1x + d2x;
-    let ty = d1y + d2y;
-    const tl = Math.hypot(tx, ty) || 1;
-    tx /= tl;
-    ty /= tl;
-    const nx = -ty;
-    const ny = tx;
-    const miter = 1 / Math.max(0.35, Math.abs(nx * -d1y + ny * d1x));
-    out.push([p[0] + nx * miter * delta * grow, p[1] + ny * miter * delta * grow]);
-  }
-  return out;
-}
-
-/** Rotate a ring so the points BELOW yMax form one contiguous run, and return
- *  that run as an OPEN polyline — the outer hull seams wrap the roof and
- *  waist but stop before the deck band (the wrap lines own the bottom). */
-function clipRingAboveY(pts: ReadonlyArray<Pt>, yMax: number): Pt[] {
-  const n = pts.length;
-  let start = -1;
-  for (let i = 0; i < n; i++) {
-    const prevBelow = pts[(i - 1 + n) % n][1] > yMax;
-    if (prevBelow && pts[i][1] <= yMax) {
-      start = i;
-      break;
-    }
-  }
-  if (start < 0) return [...pts];
-  const out: Pt[] = [];
-  for (let i = 0; i < n; i++) {
-    const p = pts[(start + i) % n];
-    if (p[1] > yMax) break;
-    out.push(p);
-  }
-  return out;
-}
-
 // ─── The canopy ring ─────────────────────────────────────────────────────────
-// The glass opening's centreline, authored CLOSED (the hull mass and every
-// offset lamination derive from it). Measured vertices (ridge scan):
-//   top beam edges y52/67 (centreline 60), corners x525/1395
-//   chamfers CURVE through (≈433,100)/(≈384,130) → mid vertex (330,165) r100
-//   waist (widest point) at (221,262)/(1699,262)
-//   lower sides lean INWARD going down: (221,262)→(374,700) → slope 0.35 x/y
-//   sill corners (413,826)/(1507,826), centre (960,812) — the sill bows UP.
+// The glass opening's centreline, authored CLOSED (the hull mass derives from
+// it). Measured vertices (ridge scan of reference-v3):
+//   top band hairlines y73/87 (centreline 80), corners x≈368/1552
+//   chamfers STRAIGHT at slope −1.0 dx/dy: (347,100)→(247,200)
+//   waist vertices (169,278)/(1751,278) under a BIG fillet (apex x≈205)
+//   pillars lean inward-right at +0.52 dx/dy: centres (259,450)→(420,760)
+//   sill corners (461,838)/(1459,838), centre bows UP to ≈830.
 
 const RING_RAW: RawPt[] = [
-  [525, 60, 40],
-  [1395, 60, 40],
-  [1590, 165, 100],
-  [1699, 262, 60],
-  [1507, 826, 90],
-  [960, 812, 420],
-  [413, 826, 90],
-  [221, 262, 60],
-  [330, 165, 100],
+  [368, 80, 40],
+  [1552, 80, 40],
+  [1751, 278, 120],
+  [1459, 841, 55],
+  [960, 830, 420],
+  [461, 841, 55],
+  [169, 278, 120],
 ];
 
-/** Per-point canopy width: THIN across the top beam (the reference top is a
- *  ~15px band), fattening through the chamfers to the full ~34px sides. */
+/** Per-point canopy width — the measured band profile: thin top (14), ~17 on
+ *  the chamfers, swelling to 44 through the waist fillet (the Y-merge mass),
+ *  tapering to 35 down the pillar, back to 14 around the sill corners. */
 function canopyDW(_x: number, y: number): number {
-  const k = Math.min(1, Math.max(0, (y - 60) / 202)); // 60 → 262 (waist)
-  return 15 + 19 * k;
+  const stops: ReadonlyArray<Pt> = [[96, 14], [230, 17], [360, 46], [740, 35], [800, 14]];
+  if (y <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i++) {
+    if (y <= stops[i][0]) {
+      const [y0, w0] = stops[i - 1];
+      const [y1, w1] = stops[i];
+      return w0 + (w1 - w0) * ((y - y0) / (y1 - y0));
+    }
+  }
+  return stops[stops.length - 1][1];
 }
 
 export const CANOPY_BEAM: CockpitBeam = {
@@ -211,65 +151,40 @@ export const CANOPY_BEAM: CockpitBeam = {
   dwAt: canopyDW,
 };
 
-// ─── Hull lamination ─────────────────────────────────────────────────────────
-// ONE outer lamination parallel to the canopy, only across the roof and
-// chamfers (scan: y≈28 above the top beam, +26 outside the chamfers, and
-// NOTHING parallel below the waist). Its clipped ends TAPER to a sliver
-// approaching the waist junctions so no ribbon cap dangles on the hull.
-// (The glass-side inner lip is gone — one line per member, no inside layer.)
-
-export const CANOPY_OUTER_TRIM: CockpitBeam = {
-  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, 28), 256),
-  dw: 9,
-  w: 0.58,
-  dwAt: (_x, y) => 9 - 6 * Math.min(1, Math.max(0, (y - 195) / 53)),
-};
-
-// ─── Side-window mullions ────────────────────────────────────────────────────
-// The greenhouse dividers. Per side: a DIAGONAL from the screen top, parallel
-// to the chamfer ~87px outside it (scan (445,40)/(346,100)/(187,200)), landing
-// mid-run on a straight CONNECTOR that goes screen edge → waist junction
-// (through the measured T-vertex (132,215), exiting the edge at y≈151). The
-// hull between diagonal and chamfer is the wide mullion FACE the reference
-// shows between the corner pane and the glass.
+// ─── The side arms (the Y-merge) ─────────────────────────────────────────────
+// Per side, ONE wide arm from the screen edge into the ring's waist fillet —
+// the members the reference merges "into one shape". Measured centreline
+// (left): (0,140)→(140,263.5), slope 0.88 dy/dx, band ~64px perpendicular.
+// The tip runs INSIDE the swollen waist band (drawn later, so the ring's
+// hairlines stay unbroken) and chisel-tapers over its last ~130px; the arm's
+// lower edge then reads as flowing into the pillar's outer edge.
 
 // JOIN GRAMMAR: an open member never shows its ribbon cap. Each terminating
 // end runs INTO the receiving band's interior and TAPERS to a sliver over its
-// last ~60px (a chisel merge, like the reference's flowing junctions) — the
+// last stretch (a chisel merge, like the reference's flowing junctions) — the
 // intermediate point pins the taper local so the run keeps constant width.
 const taperTo = (ex: number, ey: number, wEnd: number, wFull: number, reach: number) => {
   return (x: number, y: number): number =>
     wEnd + (wFull - wEnd) * Math.min(1, Math.hypot(x - ex, y - ey) / reach);
 };
 
-export const CONN_L: CockpitBeam = {
-  pts: [[-30, 150], [176, 234], [232, 256]] as Pt[],
-  dw: 16,
+export const ARM_L: CockpitBeam = {
+  // Full width until 55px from the tip: the upper hairline must reach the
+  // crotch at (176,255) — the ref's V where it meets the chamfer's outer
+  // edge — BEFORE the chisel pulls it down. The tip hides in the waist band.
+  pts: [[-40, 105], [155, 277], [208, 323]] as Pt[],
+  dw: 64,
   w: 0.7,
-  dwAt: taperTo(232, 256, 6, 16, 60),
+  dwAt: taperTo(208, 323, 26, 64, 70),
 };
-export const CONN_R: CockpitBeam = {
-  pts: [[1950, 150], [1744, 234], [1688, 256]] as Pt[],
-  dw: 16,
+export const ARM_R: CockpitBeam = {
+  pts: [[1960, 105], [1765, 277], [1712, 323]] as Pt[],
+  dw: 64,
   w: 0.7,
-  dwAt: taperTo(1688, 256, 6, 16, 60),
-};
-export const DIAG_L: CockpitBeam = {
-  pts: [[558, -30], [195, 179], [137, 212]] as Pt[],
-  dw: 12,
-  w: 0.55,
-  dwAt: taperTo(137, 212, 4.5, 12, 64),
-};
-export const DIAG_R: CockpitBeam = {
-  pts: [[1362, -30], [1725, 179], [1783, 212]] as Pt[],
-  dw: 12,
-  w: 0.55,
-  dwAt: taperTo(1783, 212, 4.5, 12, 64),
+  dwAt: taperTo(1712, 323, 26, 64, 70),
 };
 
-// Diagonals BEFORE connectors: the diag tips tuck under the connector bands,
-// and paint order must put the receiving member on top.
-const MULLION_BEAMS: ReadonlyArray<CockpitBeam> = [DIAG_L, DIAG_R, CONN_L, CONN_R];
+const ARM_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_L, ARM_R];
 
 // ─── The deck wrap ───────────────────────────────────────────────────────────
 // THE integration move: the sill does not stop at its corners — the deck's
@@ -286,10 +201,10 @@ const WRAP_L_RAW: RawPt[] = [
   [100, 906, 60],
   [220, 878, 120],
   [340, 844, 160],
-  [425, 812],
+  [468, 828],
 ];
 const WRAP_R_RAW: RawPt[] = [
-  [1495, 812],
+  [1452, 828],
   [1580, 844, 160],
   [1700, 878, 120],
   [1820, 906, 60],
@@ -314,8 +229,8 @@ const MID_R_RAW: RawPt[] = [
   [1930, 1012],
 ];
 export const WRAP_BEAMS: ReadonlyArray<CockpitBeam> = [
-  { pts: resolveCorners(WRAP_L_RAW), dw: 14, w: 0.75, dwAt: taperTo(425, 812, 6, 14, 70) },
-  { pts: resolveCorners(WRAP_R_RAW), dw: 14, w: 0.75, dwAt: taperTo(1495, 812, 6, 14, 70) },
+  { pts: resolveCorners(WRAP_L_RAW), dw: 14, w: 0.75, dwAt: taperTo(468, 828, 6, 14, 70) },
+  { pts: resolveCorners(WRAP_R_RAW), dw: 14, w: 0.75, dwAt: taperTo(1452, 828, 6, 14, 70) },
   { pts: resolveCorners(MID_L_RAW), dw: 10, w: 0.6, dwAt: taperTo(668, 930, 6, 10, 50) },
   { pts: resolveCorners(MID_R_RAW), dw: 10, w: 0.6, dwAt: taperTo(1252, 930, 6, 10, 50) },
 ];
@@ -349,11 +264,10 @@ const GROOVES: ReadonlyArray<CockpitBeam> = [
 ];
 
 // PAINT ORDER = JOIN ORDER: every chisel tip tucks under a band drawn LATER
-// (trim/mullions/wraps under the ring, the mid laminations under the housing),
-// so no dark fill ever crosses a receiving member's hairline.
+// (arms/wraps under the ring, the mid laminations under the housing), so no
+// dark fill ever crosses a receiving member's hairline.
 export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [
-  CANOPY_OUTER_TRIM,
-  ...MULLION_BEAMS,
+  ...ARM_BEAMS,
   ...WRAP_BEAMS,
   ...GROOVES,
   HOUSING_BEAM,
@@ -361,15 +275,14 @@ export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [
 ];
 
 // ─── The hull mass ───────────────────────────────────────────────────────────
-// ONE opaque shell with the glass as HOLES (even-odd) — occlusion is what
-// turns floating trim into a ship. Five panes: the central gem plus, per
-// side, the upper CORNER pane and the tall FLANK pane. Every hole edge sits
-// ON a member's centreline so the metal band overlaps it — no naked seams.
-// The corner and flank holes stay a few px clear of the shared connector
-// centreline so even-odd never XORs an overlap back to solid.
+// ONE opaque shell with the glass as a HOLE (even-odd) — occlusion is what
+// turns floating trim into a ship. Reference-v3 has exactly ONE pane: the
+// central gem (the flanks and upper corners are solid hull — the nameplate,
+// nav, and dials all sit on metal). The hole edge is the ring's centreline,
+// so the band overlaps the rim — no naked seams.
 
-// Oversized so every hole stays strictly inside it (THREE.Shape holes must
-// not touch or cross the outer contour).
+// Oversized so the hole stays strictly inside it (THREE.Shape holes must not
+// touch or cross the outer contour).
 export const HULL_OUTER: ReadonlyArray<Pt> = [
   [-60, -60],
   [1980, -60],
@@ -378,63 +291,8 @@ export const HULL_OUTER: ReadonlyArray<Pt> = [
 ];
 /** The central glass hole — the canopy ring's resolved centreline. */
 export const HULL_HOLE: ReadonlyArray<Pt> = CANOPY_BEAM.pts;
-/** Upper corner panes: screen edges + the diagonal + the connector. */
-const HOLE_CORNER_L: ReadonlyArray<Pt> = resolveCorners(
-  [
-    [-30, 146],
-    [-30, -40],
-    [575, -40],
-    [132, 212, 36],
-  ],
-  true,
-);
-const HOLE_CORNER_R: ReadonlyArray<Pt> = resolveCorners(
-  [
-    [1950, 146],
-    [1950, -40],
-    [1345, -40],
-    [1788, 212, 36],
-  ],
-  true,
-);
-/** Tall flank panes: connector top, pillar (ring centreline) inboard, the
- *  deck wrap below, the screen edge outboard. */
-// NOTE: the pillar edge must stay EXACTLY on the ring's straight waist→sill
-// segment (shared vertices, collinear edge). Tilting it even a few px inward
-// overlaps this hole with the central one — and overlapping holes break
-// earcut's hull triangulation (a giant fill wedge across the glass).
-const HOLE_FLANK_L: ReadonlyArray<Pt> = resolveCorners(
-  [
-    [-30, 154],
-    [221, 262, 54],
-    [413, 826, 80],
-    [340, 844, 120],
-    [220, 878, 120],
-    [100, 906, 60],
-    [-30, 928],
-  ],
-  true,
-);
-const HOLE_FLANK_R: ReadonlyArray<Pt> = resolveCorners(
-  [
-    [1950, 154],
-    [1699, 262, 54],
-    [1507, 826, 80],
-    [1580, 844, 120],
-    [1700, 878, 120],
-    [1820, 906, 60],
-    [1950, 928],
-  ],
-  true,
-);
 /** Every glass pane, in one list — what both renderers punch out of the hull. */
-export const HULL_HOLES: ReadonlyArray<ReadonlyArray<Pt>> = [
-  HULL_HOLE,
-  HOLE_CORNER_L,
-  HOLE_CORNER_R,
-  HOLE_FLANK_L,
-  HOLE_FLANK_R,
-];
+export const HULL_HOLES: ReadonlyArray<ReadonlyArray<Pt>> = [HULL_HOLE];
 
 /** The recessed console SCREEN — the dark display glass the CTA readout sits
  *  on (its own surface under the recess groove, slightly warmer than the hull

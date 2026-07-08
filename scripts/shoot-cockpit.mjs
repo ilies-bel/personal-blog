@@ -30,7 +30,9 @@ await page.waitForTimeout(4000);
 // body classes by hand shows pre-glide states that never rest in production.
 const power = page.locator('button[aria-label="Power the navigation HUD"]');
 if ((await power.count()) > 0 && (await power.getAttribute('aria-pressed')) !== 'true') {
-  await power.click();
+  // Dispatch the click on the element directly: at DSF 2 + tier=high the GPU
+  // load starves Playwright's scroll-into-view actionability wait.
+  await power.evaluate((el) => el.click());
 }
 await page.waitForTimeout(6000);
 await page.evaluate((m) => {
