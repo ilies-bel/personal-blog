@@ -121,11 +121,13 @@ export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained
 /** localStorage key persisting the HUD power state across reloads. The boot FSM
  *  writes a small JSON blob `{ powered: boolean }` here on every transition and
  *  restores it on init, so a returning visitor finds the HUD lit (or dark) exactly
- *  as they left it — without replaying the ~3.6s sequence either way. The HUD is ON
- *  BY DEFAULT: absence of a stored blob (a first-time visitor) is read as powered.
- *  Legacy blobs carried extra flags (`forced` / `userChosen` from the old scroll
- *  auto-boot); they are simply ignored — only `powered` is read. All access is
- *  wrapped in try/catch (private mode / disabled storage must never throw). */
+ *  as they left it — without replaying the ~3.6s sequence either way. The HUD is OFF
+ *  BY DEFAULT: absence of a stored blob (a first-time visitor, or a private-mode
+ *  visitor whose read throws) is read as un-powered, so only an explicit stored
+ *  `{ powered: true }` lights the HUD on load. Legacy blobs carried extra flags
+ *  (`forced` / `userChosen` from the old scroll auto-boot); they are simply ignored
+ *  — only `powered` is read. All access is wrapped in try/catch (private mode /
+ *  disabled storage must never throw). */
 export const HUD_STATE_STORAGE_KEY = 'hud-state';
 
 /** The HUD power sequence duration, in milliseconds. The single source of truth for

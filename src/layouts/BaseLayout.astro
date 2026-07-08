@@ -177,10 +177,11 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 • shutting-down — the power-OFF sequence is playing (body.hud-shutting-down):
                                   the boot layers run IN REVERSE, then we land in idle.
 
-              THE CONTRACT — "on by default; the pilot can power it down":
-                • The HUD is ON BY DEFAULT. A first-time visitor lands straight in
-                  `ready` (fully lit, no boot sequence — the boot only plays when they
-                  later power the HUD back ON). Scroll never drives power at all.
+              THE CONTRACT — "off by default; the pilot can power it up":
+                • The HUD is OFF BY DEFAULT. A first-time visitor (and any visitor
+                  whose storage can't record a choice — private mode) lands in `idle`
+                  (dark, no boot sequence). The boot only plays when they power the HUD
+                  ON. Scroll never drives power at all.
                 • The power button toggles ONE bit: powered. One click, always. Its
                   aria-pressed mirrors the machine state (pressed = booting|ready), so
                   the button always reads exactly as lit as the HUD is.
@@ -255,12 +256,14 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
 
               // --- Persistence (try/catch — private mode must never throw) ---------
               // Blob shape: { powered }. Absence of a blob means FIRST VISIT → the HUD
-              // defaults ON (see init below). Legacy blobs carried extra flags
-              // (forced / userChosen); we simply ignore them and read `powered`.
+              // defaults OFF (see init below). A thrown read (private mode / disabled
+              // storage) is likewise `null` → OFF, so an incognito visitor lands dark.
+              // Legacy blobs carried extra flags (forced / userChosen); we simply
+              // ignore them and read `powered`.
               const readPowered = (): boolean | null => {
                 try {
                   const raw = window.localStorage.getItem(STATE_KEY);
-                  if (!raw) return null; // no choice recorded → default ON
+                  if (!raw) return null; // no choice recorded → default OFF
                   return JSON.parse(raw).powered === true;
                 } catch (_) {
                   return null;
@@ -283,7 +286,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               // project's idiom for __bh* globals — see CustomCursor.astro).
               const fsmWindow = window as unknown as { __bhHudFsm?: HudFsm };
               const fsm: HudFsm = (fsmWindow.__bhHudFsm = fsmWindow.__bhHudFsm || {
-                state: 'ready', // on by default; overridden below if storage says idle
+                state: 'idle', // off by default; overridden below if storage says ready
                 seqEndTimer: 0,
                 lineTimers: [],
               });
@@ -408,20 +411,21 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               // --- Init: apply the resting power state to the (possibly fresh) DOM,
               // no flash and no replayed sequence. On a swap this RE-APPLIES the live
               // state to the fresh body/button. First visit (no stored choice) defaults
-              // the HUD ON. A mid-sequence swap (booting/shutting-down) is rare, but we
+              // the HUD OFF. A mid-sequence swap (booting/shutting-down) is rare, but we
               // settle it to its destination rather than leave the loader half-drawn on
               // a brand-new body that never scheduled its timers.
-              const stored = readPowered(); // true | false | null(first visit → ON)
-              const powered = stored !== false; // null or true → on
+              const stored = readPowered(); // true | false | null(first visit → OFF)
+              const powered = stored === true; // only an explicit stored ON powers up
               if (powered) {
-                // Land straight in ready (default-on first visit, returning-lit visitor,
-                // or repainting a mid-boot swap onto the fresh body — no replayed boot).
+                // Land straight in ready (returning-lit visitor, or repainting a
+                // mid-boot swap onto the fresh body — no replayed boot).
                 state = 'ready';
                 fsm.state = 'ready';
                 body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS);
                 body.classList.add(ACTIVE_CLASS);
               } else {
-                // Stored OFF: land dark. Repaints a mid-shutdown swap straight to idle.
+                // Default-off first visit, private mode, or a stored OFF: land dark.
+                // Also repaints a mid-shutdown swap straight to idle.
                 state = 'idle';
                 fsm.state = 'idle';
                 body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS, ACTIVE_CLASS);
