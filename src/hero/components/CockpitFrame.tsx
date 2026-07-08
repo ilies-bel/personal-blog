@@ -18,7 +18,7 @@
 import {
   COCKPIT_BEAMS,
   HULL_OUTER,
-  HULL_HOLE,
+  HULL_HOLES,
   PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
@@ -66,11 +66,12 @@ export default function CockpitFrame() {
         </mask>
       </defs>
 
-      {/* The opaque interior: one hull shell with the glass as a hole
-          (even-odd — outer rect + the canopy ring as subpaths). */}
+      {/* The opaque interior: one hull shell with every glass pane as a hole
+          (even-odd — outer rect + the central gem + the corner and flank
+          side windows as subpaths). */}
       <path
         className="bh-cockpit-panel"
-        d={`${toPathD(HULL_OUTER, true)} ${toPathD(HULL_HOLE, true)}`}
+        d={`${toPathD(HULL_OUTER, true)} ${HULL_HOLES.map((hole) => toPathD(hole, true)).join(' ')}`}
         fillRule="evenodd"
       />
       {/* The recessed console screen glass. */}

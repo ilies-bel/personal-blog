@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import {
   COCKPIT_BEAMS,
   COCKPIT_GLINTS,
+  HULL_HOLES,
   PANEL_SCREEN,
   toPathD,
 } from '../hero/cockpitGeometry';
@@ -27,6 +28,7 @@ if (dev) {
 }
 const beams = COCKPIT_BEAMS.map((b) => ({ d: toPathD(b.pts, b.closed), dw: b.dw, w: b.w }));
 const screenD = toPathD(PANEL_SCREEN, true);
+const holeDs = HULL_HOLES.map((hole) => toPathD(hole, true));
 ---
 
 <html lang="en">
@@ -43,6 +45,9 @@ const screenD = toPathD(PANEL_SCREEN, true);
             <path d={b.d} fill="none" stroke="rgba(0,255,255,0.85)" stroke-width={1.4} />
           ))}
           <path d={screenD} fill="none" stroke="rgba(120,255,120,0.8)" stroke-width={1.4} />
+          {holeDs.map((d) => (
+            <path d={d} fill="none" stroke="rgba(255,150,0,0.9)" stroke-width={1.2} stroke-dasharray="8 5" />
+          ))}
           {COCKPIT_GLINTS.map((g) => (
             <circle cx={g.x} cy={g.y} r={g.r * 0.4} fill="none" stroke="rgba(255,255,0,0.9)" stroke-width={1.2} />
           ))}

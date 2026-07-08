@@ -27,7 +27,8 @@ import {
   COCKPIT_BEAMS,
   COCKPIT_GLINTS,
   HULL_OUTER,
-  HULL_HOLE,
+  HULL_HOLES,
+  SIDE_PANES,
   PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
@@ -43,6 +44,7 @@ import {
   cockpitGlintFragmentShader,
   cockpitPanelVertexShader,
   cockpitPanelFragmentShader,
+  cockpitGlassFragmentShader,
   cockpitScreenFragmentShader,
   cockpitHudVertexShader,
   cockpitHudFragmentShader,
@@ -227,11 +229,14 @@ export function buildCockpit(): CockpitRig {
     uCoreTint: { value: CORE_TINT.clone() },
   };
 
-  // The hull mass: ONE shell covering the whole frame with the glass as a
-  // HOLE — opaque occlusion is what turns floating trim into a ship. The
-  // hole's edge is the canopy centreline (the beam band overlaps it).
+  // The hull mass: ONE shell covering the whole frame with every glass pane
+  // as a HOLE — the central gem plus the corner and flank side windows.
+  // Opaque occlusion is what turns floating trim into a ship; each hole's
+  // edge sits on a member's centreline (the beam band overlaps it).
   const hullShape = shapeFromPts(HULL_OUTER);
-  hullShape.holes.push(new THREE.Path(HULL_HOLE.map(([x, y]) => new THREE.Vector2(x, y))));
+  for (const hole of HULL_HOLES) {
+    hullShape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
+  }
   const panelGeo = new THREE.ShapeGeometry(hullShape);
   const panelUniforms: Uniforms = { ...shared, uFill: { value: 1.0 } };
   const panelMat = new THREE.ShaderMaterial({
@@ -245,6 +250,23 @@ export function buildCockpit(): CockpitRig {
   panels.renderOrder = 40;
   panels.visible = false;
   overlay.add(panels);
+
+  // Smoked glass over the SIDE panes only — the corner and flank windows sit
+  // visibly darker than the central view (angled, thicker glass), which is
+  // what keeps the central gem reading as THE view.
+  const glassGeo = new THREE.ShapeGeometry(SIDE_PANES.map((pane) => shapeFromPts(pane)));
+  const glassUniforms: Uniforms = { ...shared };
+  const glassMat = new THREE.ShaderMaterial({
+    uniforms: glassUniforms,
+    vertexShader: cockpitPanelVertexShader,
+    fragmentShader: cockpitGlassFragmentShader,
+    ...overlayMatOpts,
+  });
+  const glass = new THREE.Mesh(glassGeo, glassMat);
+  glass.frustumCulled = false;
+  glass.renderOrder = 40;
+  glass.visible = false;
+  overlay.add(glass);
 
   // The recessed console screen — powered display glass under the CTA readout.
   const screenGeo = new THREE.ShapeGeometry(shapeFromPts(PANEL_SCREEN));
@@ -327,7 +349,7 @@ export function buildCockpit(): CockpitRig {
   hud.visible = false;
   overlay.add(hud);
 
-  const meshes = [panels, screen, beams, glow, glints, hud];
+  const meshes = [panels, glass, screen, beams, glow, glints, hud];
 
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
@@ -389,12 +411,14 @@ export function buildCockpit(): CockpitRig {
     glintGeo.dispose();
     beamGeo.dispose();
     screenGeo.dispose();
+    glassGeo.dispose();
     panelGeo.dispose();
     hudMat.dispose();
     glintMat.dispose();
     glowMat.dispose();
     beamMat.dispose();
     screenMat.dispose();
+    glassMat.dispose();
     panelMat.dispose();
   };
 

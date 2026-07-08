@@ -14,11 +14,19 @@
 // hexagon — a THIN flat top beam (y≈60), long chamfers diving to the WAIST at
 // (≈221, 262) (the widest point sits HIGH), lower sides leaning INWARD going
 // down, and a low, nearly-flat sill (y≈820) that bows UP a hair at centre.
+// THE GREENHOUSE: the central gem is not the only glass. Each side has TWO
+// MORE PANES cut out of the hull — an upper CORNER pane (the nameplate/nav
+// float on it) and a tall FLANK pane (the NAV dial floats on it) — separated
+// by a straight CONNECTOR mullion that runs from the screen edge (≈0,151)
+// through the measured T-vertex (≈132,215) into the waist junction, and
+// bounded inward by a DIAGONAL mullion from the screen top (≈510,0) parallel
+// to the chamfer (ridge scan: (445,40)→(346,100)→(187,200)).
 // THE INTEGRATION: members flow into each other — the sill continues past its
 // corners and WRAPS DOWN the flanks toward the screen edges (the perspective
-// that makes it one hull), the hull-edge seams merge into that wrap, the
-// aprons/mid-wrap merge into the screen housing, and every groove ends inside
-// another member's band. No floating parallels.
+// that makes it one hull), the diagonal lands on the connector mid-run, the
+// connector buries into the waist junction, the aprons/mid-wrap merge into
+// the screen housing, and every groove ends inside another member's band.
+// No floating parallels.
 
 /** An authored vertex: x, y, and an optional corner-rounding length (design
  *  units). r > 0 replaces the corner with a quadratic fillet; endpoints and
@@ -214,28 +222,39 @@ export const CANOPY_BEAM: CockpitBeam = {
 };
 
 // ─── Hull lamination rings ───────────────────────────────────────────────────
-// Parallel to the canopy run more hairlines — a thin lip rimming the glass,
-// then seam lines stepping outward across the hull plates (the roof outer
-// seam measures y≈28 ≙ offset 32 above the top beam's centreline).
+// Parallel to the canopy run two more hairlines — a thin lip rimming the
+// glass, and ONE outer lamination that exists only across the roof and
+// chamfers (scan: y≈28 above the top beam, +26 outside the chamfers, and
+// NOTHING parallel below the waist — the reference pillars carry a single
+// band + inner lip, so the trim stops at the waist junctions).
 
-/** Glass-side lip (roof + chamfers + upper sides only). */
+/** Glass-side lip (roof + chamfers + pillars; the sill has none). */
 export const CANOPY_INNER_LIP: CockpitBeam = {
-  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, -34), 620),
+  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, -34), 730),
   dw: 5,
   w: 0.68,
 };
-/** First hull lamination just outside the main band. */
+/** The hull lamination just outside the main band — roof + chamfers only. */
 export const CANOPY_OUTER_TRIM: CockpitBeam = {
-  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, 33), 700),
+  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, 28), 250),
   dw: 9,
   w: 0.58,
 };
-/** Second, fainter hull seam further out. */
-export const CANOPY_OUTER_SEAM: CockpitBeam = {
-  pts: clipRingAboveY(offsetClosed(CANOPY_BEAM.pts, 62), 720),
-  dw: 6,
-  w: 0.38,
-};
+
+// ─── Side-window mullions ────────────────────────────────────────────────────
+// The greenhouse dividers. Per side: a DIAGONAL from the screen top, parallel
+// to the chamfer ~87px outside it (scan (445,40)/(346,100)/(187,200)), landing
+// mid-run on a straight CONNECTOR that goes screen edge → waist junction
+// (through the measured T-vertex (132,215), exiting the edge at y≈151). The
+// hull between diagonal and chamfer is the wide mullion FACE the reference
+// shows between the corner pane and the glass.
+
+export const CONN_L: CockpitBeam = { pts: [[-30, 150], [205, 245]] as Pt[], dw: 16, w: 0.7 };
+export const CONN_R: CockpitBeam = { pts: [[1950, 150], [1715, 245]] as Pt[], dw: 16, w: 0.7 };
+export const DIAG_L: CockpitBeam = { pts: [[558, -30], [132, 215]] as Pt[], dw: 12, w: 0.55 };
+export const DIAG_R: CockpitBeam = { pts: [[1362, -30], [1788, 215]] as Pt[], dw: 12, w: 0.55 };
+
+const MULLION_BEAMS: ReadonlyArray<CockpitBeam> = [CONN_L, CONN_R, DIAG_L, DIAG_R];
 
 // ─── The deck wrap ───────────────────────────────────────────────────────────
 // THE integration move: the sill does not stop at its corners — the deck's
@@ -301,14 +320,6 @@ export const HOUSING_BEAM: CockpitBeam = { pts: resolveCorners(HOUSING_RAW), dw:
 // another member's band — no floating ends.
 
 const GROOVES: ReadonlyArray<CockpitBeam> = [
-  // Roof corner stubs: from just outside the outer-trim corners off the
-  // screen top (measured against the reference diagonals in /dev-blueprint).
-  { pts: [[470, 42], [398, -12]] as Pt[], dw: 7, w: 0.4 },
-  { pts: [[1450, 42], [1522, -12]] as Pt[], dw: 7, w: 0.4 },
-  // Hull edge seams: top-outer corner down the flank, merging into the wrap
-  // (measured (63,95)→(136,400)→ into (220,878)).
-  { pts: resolveCorners([[63, 95], [100, 202, 140], [150, 520, 160], [220, 878]]), dw: 7, w: 0.35 },
-  { pts: resolveCorners([[1857, 95], [1820, 202, 140], [1770, 520, 160], [1700, 878]]), dw: 7, w: 0.35 },
   // Dash plates — the reference's bottom-left plate CARRIES the telemetry
   // readout (the DOM prints bare text inside this etch), the right one seats
   // the finale ledger. Tilted with the wrap perspective.
@@ -322,7 +333,7 @@ export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [
   CANOPY_BEAM,
   CANOPY_INNER_LIP,
   CANOPY_OUTER_TRIM,
-  CANOPY_OUTER_SEAM,
+  ...MULLION_BEAMS,
   ...WRAP_BEAMS,
   HOUSING_BEAM,
   ...GROOVES,
@@ -345,24 +356,90 @@ export const COCKPIT_GLINTS: ReadonlyArray<CockpitGlint> = [
   // Screen housing shoulders (deck ↔ housing ↔ mid wrap).
   { x: 700, y: 887, r: 18, i: 0.75 },
   { x: 1220, y: 887, r: 18, i: 0.75 },
-  // Wrap forks (hull edge seam ↔ sill wrap).
-  { x: 220, y: 878, r: 14, i: 0.6 },
-  { x: 1700, y: 878, r: 14, i: 0.6 },
+  // Mullion T-vertices (diagonal ↔ connector).
+  { x: 132, y: 215, r: 14, i: 0.6 },
+  { x: 1788, y: 215, r: 14, i: 0.6 },
 ];
 
 // ─── The hull mass ───────────────────────────────────────────────────────────
-// ONE opaque shell with the glass as a HOLE (even-odd) — occlusion is what
-// turns floating trim into a ship. The hole's edge is the canopy centreline;
-// the beam band overlaps it, so metal meets hull without a seam.
+// ONE opaque shell with the glass as HOLES (even-odd) — occlusion is what
+// turns floating trim into a ship. Five panes: the central gem plus, per
+// side, the upper CORNER pane and the tall FLANK pane. Every hole edge sits
+// ON a member's centreline so the metal band overlaps it — no naked seams.
+// The corner and flank holes stay a few px clear of the shared connector
+// centreline so even-odd never XORs an overlap back to solid.
 
+// Oversized so every hole stays strictly inside it (THREE.Shape holes must
+// not touch or cross the outer contour).
 export const HULL_OUTER: ReadonlyArray<Pt> = [
-  [-20, -20],
-  [1940, -20],
-  [1940, 1100],
-  [-20, 1100],
+  [-60, -60],
+  [1980, -60],
+  [1980, 1140],
+  [-60, 1140],
 ];
-/** The glass hole — the canopy ring's resolved centreline. */
+/** The central glass hole — the canopy ring's resolved centreline. */
 export const HULL_HOLE: ReadonlyArray<Pt> = CANOPY_BEAM.pts;
+/** Upper corner panes: screen edges + the diagonal + the connector. */
+const HOLE_CORNER_L: ReadonlyArray<Pt> = resolveCorners(
+  [
+    [-30, 146],
+    [-30, -40],
+    [575, -40],
+    [132, 212, 36],
+  ],
+  true,
+);
+const HOLE_CORNER_R: ReadonlyArray<Pt> = resolveCorners(
+  [
+    [1950, 146],
+    [1950, -40],
+    [1345, -40],
+    [1788, 212, 36],
+  ],
+  true,
+);
+/** Tall flank panes: connector top, pillar (ring centreline) inboard, the
+ *  deck wrap below, the screen edge outboard. */
+const HOLE_FLANK_L: ReadonlyArray<Pt> = resolveCorners(
+  [
+    [-30, 154],
+    [221, 262, 54],
+    [413, 826, 80],
+    [340, 844, 120],
+    [220, 878, 120],
+    [100, 906, 60],
+    [-30, 928],
+  ],
+  true,
+);
+const HOLE_FLANK_R: ReadonlyArray<Pt> = resolveCorners(
+  [
+    [1950, 154],
+    [1699, 262, 54],
+    [1507, 826, 80],
+    [1580, 844, 120],
+    [1700, 878, 120],
+    [1820, 906, 60],
+    [1950, 928],
+  ],
+  true,
+);
+/** Every glass pane, in one list — what both renderers punch out of the hull. */
+export const HULL_HOLES: ReadonlyArray<ReadonlyArray<Pt>> = [
+  HULL_HOLE,
+  HOLE_CORNER_L,
+  HOLE_CORNER_R,
+  HOLE_FLANK_L,
+  HOLE_FLANK_R,
+];
+/** The SIDE panes only — they get a smoked-glass tint (the reference's side
+ *  windows sit visibly darker than the central view; angled, thicker glass). */
+export const SIDE_PANES: ReadonlyArray<ReadonlyArray<Pt>> = [
+  HOLE_CORNER_L,
+  HOLE_CORNER_R,
+  HOLE_FLANK_L,
+  HOLE_FLANK_R,
+];
 
 /** The recessed console SCREEN — the dark display glass the CTA readout sits
  *  on (its own surface under the recess groove, slightly warmer than the hull

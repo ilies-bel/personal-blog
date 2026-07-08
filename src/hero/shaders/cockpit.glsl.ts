@@ -423,6 +423,29 @@ void main() {
 }
 `;
 
+/** SMOKED GLASS on the SIDE panes (corner + flank windows). The reference's
+ *  side windows read distinctly darker than the central view — angled, thicker
+ *  glass — so this pass dims the scene behind them (normal blending over the
+ *  graded frame) and adds a whisper of amber sheen so the surface reads as a
+ *  material, not a shadow. The central gem stays untouched: it is THE view. */
+export const cockpitGlassFragmentShader = /* glsl */ `
+precision highp float;
+${starLight}
+${cloak}
+uniform vec3 uAmber;
+uniform float uAlpha;
+varying vec2 vPos;
+void main() {
+  float lit = litAt(vPos, 1.0);
+  vec2 q = vec2(vPos.x / 1920.0 - 0.5, vPos.y / 1080.0 - 0.5);
+  // Denser smoke toward the screen edges (steeper viewing angle).
+  float a = 0.5 + 0.16 * smoothstep(0.30, 0.50, abs(q.x));
+  vec3 col = vec3(0.006, 0.005, 0.004) + uAmber * 0.007 + uStarColor * lit * 0.010;
+  col = novaWash(col);
+  gl_FragColor = vec4(col, a * uAlpha * cloakMask(vPos));
+}
+`;
+
 /** The recessed console SCREEN — powered display glass inside the housing:
  *  near-black with a warm glow that gathers toward the top lip (the CTA
  *  readout's backlight), clearly a different material from the hull. */
