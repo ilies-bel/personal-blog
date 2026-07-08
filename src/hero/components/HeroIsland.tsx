@@ -192,10 +192,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Whether scroll is still in the opening hold (progress <= SCROLL_HINT_DISMISS_AT).
   // Ref-tracked so the body class only flips on an actual transition, not every sample.
   const atOpeningRef = useRef(true);
-  // NOTE: scroll no longer drives HUD power. The HUD is ON BY DEFAULT (the boot FSM in
-  // BaseLayout lands a first-time visitor straight in `ready`) and only the corner
-  // power button toggles it off/on — so this island dispatches no HUD_POWER_EVENT and
-  // keeps no at-end / pending-power-on refs.
+  // NOTE: scroll no longer drives HUD power. The HUD is OFF BY DEFAULT (the power FSM
+  // in BaseLayout lands a first-time visitor in `idle` — the bare spectacle) and only
+  // the corner power button toggles it on/off — so this island dispatches no
+  // HUD_POWER_EVENT and keeps no at-end / pending-power-on refs.
 
   useEffect(() => {
     const host = hostRef.current;
