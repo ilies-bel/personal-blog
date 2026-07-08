@@ -726,12 +726,15 @@ export default function HudNavigation({
   });
   // The card's rotation: bring the CURRENT progress angle onto the lubber line.
   const caretDeg = fx(thetaOf(Math.min(1, Math.max(0, progress))));
-  // Angular fade around the lubber line — full presence within ~10°, gone past
-  // ~65°. Ticks are static geometry inside the rotating group; only this opacity
-  // (and the group rotation) changes per frame.
+  // Angular fade around the lubber line — full presence within ~10°, easing off
+  // with distance. FLOORED at 0.14 (it used to reach 0): the gauge lives in a
+  // console screen now, and an MFD shows its WHOLE scale — the far ticks and
+  // stations hold as a faint etched dial, the active region reads bright. Ticks
+  // are static geometry inside the rotating group; only this opacity (and the
+  // group rotation) changes per frame.
   const arcFade = (deg: number): number => {
     const d = Math.abs(deg - caretDeg);
-    return fx(Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6));
+    return fx(Math.max(0.14, Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6)));
   };
   const ARC_MINOR_TICKS = 44;
   // Station angles at each scene's canonical RAW-scroll ANCHOR (settled-hold
@@ -768,6 +771,11 @@ export default function HudNavigation({
         Mirrors the rail's data-visible gating; buttons drive the SAME beginTravel
         click-jump + pointedId aiming the rail rows used. */}
     <div className="hud-arc" data-visible={visible} aria-hidden={!visible}>
+      {/* The console skin's header strip (hud.css shows it only on the powered
+          NAV-screen layout; the un-powered ghost gauge hides it). */}
+      <span className="hud-arc-head" aria-hidden="true">
+        NAVIGATION
+      </span>
       <svg className="hud-arc-svg" viewBox="0 -300 190 600" width="190" height="600" aria-hidden="true">
         {/* THE CARD — everything inside rotates so the current progress angle
             sits on the fixed lubber line (theta 0, screen-horizontal). */}

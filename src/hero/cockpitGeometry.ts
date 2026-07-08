@@ -49,17 +49,6 @@ function quad(p0: Pt, c: Pt, p1: Pt, n: number): Pt[] {
   return out;
 }
 
-/** Sample a circular arc (design space, y-down) centred (cx,cy), radius r,
- *  from angle a0 to a1 (radians, standard math convention on the y-down grid). */
-function arc(cx: number, cy: number, r: number, a0: number, a1: number, n: number): Pt[] {
-  const out: Pt[] = [];
-  for (let i = 0; i <= n; i++) {
-    const a = a0 + ((a1 - a0) * i) / n;
-    out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
-  }
-  return out;
-}
-
 const dist = (a: Pt, b: Pt): number => Math.hypot(b[0] - a[0], b[1] - a[1]);
 const toward = (from: Pt, to: Pt, t: number): Pt => [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
 
@@ -101,10 +90,9 @@ export function toPathD(pts: ReadonlyArray<Pt>, closed = false): string {
 // Round-5 layout, reduced to the reference's essentials: the MAIN FRAME (the
 // windshield beam with its Y-junction rakes, the sill beams off the pillar
 // feet) and the CONSOLE (dash rails rising into the plateau, the companion
-// splitting down the console sides, the inner echo lip), plus the right
-// instrument circle. Every member is a BEAM (two lines bounding a dark band)
-// and every line either exits the frame or flows out of a junction — no
-// floating ends, no decorative clutter.
+// splitting down the console sides, the inner echo lip). Every member is a
+// BEAM (two lines bounding a dark band) and every line either exits the frame
+// or flows out of a junction — no floating ends, no decorative clutter.
 
 const R_HEX = 34; // windshield hexagon corners
 
@@ -172,27 +160,6 @@ const canopyInnerRaw: RawPt[] = [
 export const CANOPY_OUTER: CockpitLine = { pts: resolveCorners(canopyOuterRaw, true), w: 0.72, px: 2.0, closed: true };
 export const CANOPY_INNER: CockpitLine = { pts: resolveCorners(canopyInnerRaw, true), w: 1, px: 2.2, closed: true };
 
-/** The right instrument circle's tick furniture: a fine radial dash ring just
- *  outside the main arc, plus three double-tick bracket markers riding it. */
-function instrumentTicks(cx: number, cy: number): CockpitLine[] {
-  const out: CockpitLine[] = [];
-  for (let i = 0; i < 29; i++) {
-    const a = ((136 + i * 3.15) * Math.PI) / 180;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
-    out.push({ pts: [[cx + 358 * c, cy + 358 * s], [cx + 370 * c, cy + 370 * s]], w: 0.6, px: 1.5 });
-  }
-  for (const deg of [151, 179, 207]) {
-    for (const off of [-1.9, 1.9]) {
-      const a = ((deg + off) * Math.PI) / 180;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      out.push({ pts: [[cx + 340 * c, cy + 340 * s], [cx + 374 * c, cy + 374 * s]], w: 0.7, px: 1.8 });
-    }
-  }
-  return out;
-}
-
 export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   CANOPY_OUTER,
   CANOPY_INNER,
@@ -223,12 +190,10 @@ export const COCKPIT_LINES: ReadonlyArray<CockpitLine> = [
   // Pedestal:
   { pts: resolveCorners([[620, 1090], [760, 911, 85], [1125, 911, 85], [1265, 1090]]), w: 0.85, px: 2.2 },
 
-  // Right instrument circle: main arc + inner echo + the radial tick ring
-  // (the left flank's half-circle gauge is the LIVE .hud-arc instrument;
-  // this is its silent structural twin).
-  { pts: arc(2150, 540, 344, (130 * Math.PI) / 180, (230 * Math.PI) / 180, 28), w: 0.6, px: 2.0 },
-  { pts: arc(2150, 540, 318, (138 * Math.PI) / 180, (222 * Math.PI) / 180, 24), w: 0.5, px: 1.7 },
-  ...instrumentTicks(2150, 540),
+  // (The right instrument circle — main arc, inner echo and radial tick ring —
+  // is GONE by the pilot's call: on screen its edge-clipped ticks read as
+  // brown dashes floating off the frame, not structure. The LIVE navigation
+  // gauge is the left flank's .hud-arc, now mounted in its own console screen.)
 ];
 
 // ─── The interior masses ─────────────────────────────────────────────────────

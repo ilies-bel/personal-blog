@@ -1986,12 +1986,57 @@ body.bh-diving .hud-frame-readout {
   }
 }
 
+/* NAV SCREEN (the heading gauge, left flank). Under power the half-circle
+   tick gauge stops floating on the glass and mounts in its own MFD: a tall
+   side-console screen off the left pillar, the dial face reading as a card
+   segment behind glass. The whole instrument (svg + hit buttons + label share
+   one coordinate space) is scaled as a unit, and the container's PADDING is
+   what insets the face — absolutely-positioned children resolve against the
+   padding edge, so the svg, the buttons and the label all shift together and
+   the click targets stay glued to their ticks. */
+@media (min-width: 60.0625rem) {
+  body.hud-active .hud-arc {
+    left: 1.4vw;
+    width: 282px;
+    height: auto;
+    padding: 2.5rem 0 1.1rem 0.5rem;
+    transform: translateY(-50%) scale(0.82);
+    transform-origin: left center;
+    background: var(--cockpit-screen-glass);
+    border: 1px solid var(--cockpit-screen-line);
+    border-radius: 0.5rem;
+    /* The shared skin plus a uniform deepening layer: this MFD is far larger
+       than the readout screens, and at this size the bare glass gradient reads
+       washed brown over the bright disk band — the extra inset floor keeps the
+       big face reading as dark powered glass. */
+    box-shadow:
+      var(--cockpit-screen-shadow),
+      inset 0 0 0 100rem rgba(6, 4, 3, 0.38);
+    animation: hud-decloak 1.4s steps(1, end);
+  }
+  body.hud-active .hud-arc-head {
+    display: block;
+    position: absolute;
+    top: 0.8rem;
+    left: 0.9rem;
+    right: 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: color-mix(in oklch, var(--highlight) 55%, var(--fg-faint));
+    border-bottom: 1px solid color-mix(in oklch, var(--highlight) 18%, transparent);
+    padding-bottom: 0.35rem;
+  }
+}
+
 /* Reduced motion: the decloak strobe is theatrics — the class flip alone (a
    plain fade through the existing opacity transitions) carries the power
    change for every console surface. */
 @media (prefers-reduced-motion: reduce) {
   body.hud-active .hud-frame,
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout),
+  body.hud-active .hud-arc,
   body.hud-active .bh-finale-ledger[data-visible='true'] {
     animation: none;
   }
@@ -2000,10 +2045,12 @@ body.bh-diving .hud-frame-readout {
 /* ──────────────────────────────────────────────────────────────────────────────
    HALF-CIRCLE TICK GAUGE — fixed-lubber heading card: the gold arrow is FIXED on
    the horizontal centreline and the tick quadrant ROTATES under it with scroll
-   (compass-card behaviour). Minimalist face: no arc stroke, no box — hairline
-   ticks only, fading with angular distance from the lubber (opacity is set
-   per-tick inline by the component). The old vertical rail markup still renders
-   for the compact layout; the swap is pure CSS (below).
+   (compass-card behaviour). Hairline ticks fade with angular distance from the
+   lubber down to a faint etched floor (opacity is set per-tick inline by the
+   component). Un-powered it floats bare on the glass (ghost); under power it
+   mounts in the NAV console screen (see the cockpit-console section) with the
+   current station always at the panel's vertical centre. The old vertical rail
+   markup still renders for the compact layout; the swap is pure CSS (below).
 
    TWO POWER STATES (the arc is the desktop instrument that answers the HUD
    power switch — see the boot FSM in BaseLayout):
@@ -2031,11 +2078,16 @@ body.bh-diving .hud-frame-readout {
   pointer-events: none;
 }
 .hud-arc[data-visible='true'] { opacity: 1; }
+/* The opening hold quiets the GHOST gauge only: once the ship is de-cloaked
+   (body.hud-active) the NAV screen is part of the console and stays lit on
+   every frame, the opening included. The loader still gates everything. */
 body:not(.scene-ready) .hud-arc,
-body.at-opening .hud-arc { opacity: 0; }
+body.at-opening:not(.hud-active) .hud-arc { opacity: 0; }
 .hud-arc[data-visible='false'] .hud-arc-btn,
-body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
+body.at-opening:not(.hud-active) .hud-arc .hud-arc-btn { pointer-events: none; }
 .hud-arc-svg { display: block; overflow: visible; }
+/* The NAV screen's header strip — only exists on the powered console skin. */
+.hud-arc-head { display: none; }
 .hud-arc-tick {
   stroke: color-mix(in oklch, var(--fg-faint) 45%, transparent);
   stroke-width: 1;
