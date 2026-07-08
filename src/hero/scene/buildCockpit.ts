@@ -1,49 +1,49 @@
-// Cockpit canopy rig — the TRUE-WebGL successor to the SVG overlay (which
-// remains only as the reduced-motion fallback; see CockpitFrame.tsx). The line
-// work and interior panels live INSIDE the scene render pass, drawn directly in
-// clip space (the shaders ignore the camera — see cockpit.glsl.ts), so:
-//   • bloom genuinely lights the hot spans nearest the star,
-//   • the lighting is computed per-pixel from the star's projected position in
-//     the star's own per-chapter colour (keyframed over the eased stage below),
+// Cockpit canopy rig — the TRUE-WebGL solid-metal canopy (the SVG overlay in
+// CockpitFrame.tsx is the reduced-motion fallback). The hull, glass, struts,
+// console and HUD are drawn INSIDE the scene render pass, directly in clip space
+// (the shaders ignore the camera — see cockpit.glsl.ts), so:
+//   • bloom lights the HUD + the hot metal spans nearest the star,
+//   • the metal is lit per-pixel from the star's projected position in the
+//     star's own per-chapter colour (the light fleshes out a neutral hull),
 //   • the power transition is a pure shader DECLOAK — no scale, no travel.
 //
-// Geometry comes from cockpitGeometry.ts (the single design-space source shared
-// with the SVG fallback): polylines are extruded here into indexed triangle
-// ribbons with mitred joints (aNorm carries the miter), rounded corners already
-// resolved upstream. The ribbon set draws TWICE — an additive glow pass (wide,
-// gaussian halo) under a normal-blended core pass (the member itself, white-hot
-// centre) — the glowing-piping look of the reference. Panels + the canopy strut
-// band triangulate via THREE.ShapeGeometry (earcut handles the concave outlines).
+// DESIGN — a SOLID FACETED cockpit (Star-Citizen grammar), not a glowing
+// wireframe. Geometry comes from cockpitGeometry.ts:
+//   • HULL: the full screen minus the glass panes (ShapeGeometry with holes) —
+//     the opaque metal surround. The mullions between panes ARE this fill.
+//   • GLASS: a faint tint mesh over each pane so the opening reads as glass.
+//   • STRUTS: beveled metal beams (extruded ribbons carrying a cross-strut
+//     coordinate) over the mullions — the dimensional relief.
+//   • CONSOLE: a solid raised dashboard mass + a recessed screen.
+//   • HUD: a white holographic instrument layer (reticle + ticks + compass).
 //
-// POWER CONTRACT: frame() receives hudActive (read through the SceneHooks seam,
-// so the scene never touches the DOM's class names itself) and tweens the
-// DECLOAK envelope — the Predator reveal: the ship never moves or zooms, it
-// simply STOPS BEING INVISIBLE. Cells of the hull flicker into existence over
-// ~1.8s on power-up (glinting electric before settling into the amber trim, a
-// heat-haze ripple on the members while the field fills) and dissolve back the
-// same way over ~0.8s on power-down. The envelope + flicker live entirely in
-// cockpit.glsl.ts (uDecloak / uTime); this file only drives the tween. All
-// three meshes stand down (`visible = false`) at decloak 0, so a powered-off
-// cockpit costs zero draws (the draw-audit convention).
+// POWER CONTRACT: frame() receives hudActive and tweens the DECLOAK envelope —
+// the Predator reveal (the ship stops being invisible). All meshes stand down
+// (`visible = false`) at decloak 0, so a powered-off cockpit costs zero draws.
 import * as THREE from 'three';
 import {
-  COCKPIT_LINES,
-  CANOPY_OUTER,
-  CANOPY_INNER,
-  PANEL_CEILING,
-  PANEL_DASH,
+  GLASS_PANES,
+  HULL_OUTER,
+  CONSOLE_FILL,
+  CONSOLE_SCREEN,
+  STRUTS,
   COCKPIT_W,
   COCKPIT_H,
-  type CockpitLine,
   type Pt,
+  type Strut,
 } from '../cockpitGeometry';
 import {
-  cockpitLineVertexShader,
-  cockpitLineFragmentShader,
-  cockpitGlowFragmentShader,
-  cockpitPanelVertexShader,
-  cockpitPanelFragmentShader,
+  cockpitHullVertexShader,
+  cockpitHullFragmentShader,
+  cockpitGlassFragmentShader,
+  cockpitStrutVertexShader,
+  cockpitStrutFragmentShader,
+  cockpitConsoleFragmentShader,
+  cockpitScreenFragmentShader,
+  cockpitHudVertexShader,
+  cockpitHudFragmentShader,
 } from '../shaders/cockpit.glsl';
+import { buildHudGeometry } from './cockpitHud';
 import type { Rig, Uniforms } from './types';
 
 export interface CockpitRig extends Rig {
@@ -52,71 +52,22 @@ export interface CockpitRig extends Rig {
   frame(ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean): void;
 }
 
-/** How much wider the glow pass's ribbon runs than its member. Kept TIGHT: the
- *  reference's halo hugs its edge lines — a wide halo bridges a beam's two
- *  edges and washes out the dark band that gives the member its width. */
-const GLOW_WIDTH_SCALE = 2.4;
-
-/** The authored piping body colour (linear); uAmber is derived from it per
- *  frame via the band's gold-shift key (STAR_KEYS.d). GOLD_BASE is the shift
- *  TARGET: graying the amber toward luma lifts its blue channel and the
- *  super-saturating nebula grade amplifies that into salmon-pink — the
- *  compensation must move along the amber→gold hue line (blue stays low),
- *  never toward neutral gray. */
-const AMBER_BASE = new THREE.Color(1.0, 0.47, 0.13).convertSRGBToLinear();
-const GOLD_BASE = new THREE.Color(1.0, 0.82, 0.4).convertSRGBToLinear();
-
 // ── Star-light keyframes over the eased stage ───────────────────────────────
-// The chapter's light colour + intensity, matched to what the canvas actually
-// shows: bone glare off the accretion disk, the supernova flash, ember red
-// giant, gold star, blue-white nebula core, then the pale dot. Linear-lerped
-// per frame; colours are sRGB-ish values tuned against screenshots, not
-// physical constants.
-//
-// `f` is the piping's HDR FLOOR GAIN — the self-luminous energy the trim emits
-// before any scene light lands on it. The cockpit renders INSIDE the graded
-// pipeline (exposure × Reinhard tone-map × per-chapter desaturation), so a
-// plain 0..1 colour arrives on screen as tan wireframe: to read as saturated
-// glowing amber the members must be authored HOT, roughly inverse to each
-// chapter's grade exposure (the pale dot grades at 0.46 exposure + 0.72 sat —
-// hence the biggest floor).
-// `d` is the band's GOLD SHIFT (1 = the authored red-leaning amber, <1 =
-// slid toward GOLD_BASE before the grade). The authored hue banks on the
-// grade desaturating (cfg.saturation 0.38 … dot 0.72); the nebula grade
-// instead SUPER-saturates (uSat 1.55), which drives the same amber to blood
-// red — so the nebula→dot run pre-shifts toward gold and lands on the same
-// calm gold the dot chapter shows.
-const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number; f: number; d?: number }> = [
-  // Black hole: the chapter's grade is the near-monochrome COLD-SILVER room
-  // (uSat ≈ 0.38 + the cool shadow cast) — at that saturation a BRIGHT line
-  // can only land tan, whatever its authored hue (desat pulls toward a high
-  // luma). The reference's spans are mostly DIM rich umber with sparse hot
-  // flares, and dim survives the desat with its relative saturation intact.
-  // The floor must also hold the member BODY under the bloom pass's 0.55
-  // threshold: this chapter runs the photon ring's wide strong bloom, and any
-  // span sitting over the threshold along its whole length staircases through
-  // the deep mips into blocky beads. Only the star kiss may cross — its
-  // envelope is spatially smooth, so it blooms smoothly.
-  { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.85, f: 1.35 }, // black hole: cold bone disk glare
-  { s: 0.5, c: [1.0, 1.0, 1.0], i: 1.35, f: 4 }, // supernova flash
-  { s: 1.6, c: [1.0, 0.6, 0.36], i: 1.05, f: 5.8 }, // red giant: ember (dim grade)
-  { s: 2.9, c: [1.0, 0.84, 0.52], i: 1.2, f: 6 }, // yellow star: gold (hot grade)
-  { s: 4.0, c: [0.78, 0.85, 1.0], i: 0.85, f: 13 }, // nebula core: blue-white
-  // The gas grade EASES into the dot endpoint across stage 4.3→4.5 (the
-  // pre-dot handoff in lifecycle.ts — bloom 0.38/0.75 → 0.05/0.16, sat 1.55 →
-  // 0.72, exposure 0.58 → 0.46). The floor rides it: held LOW while the wide
-  // gas bloom is live (bloom runs BEFORE the grade, so halo energy scales
-  // with the raw HDR floor — a big floor here fogs the whole sill band into
-  // red tubes), then climbing to the dot's dim-grade compensation only as the
-  // bloom lands near its 0.05 endpoint. `d` bridges the residual mid-band
-  // super-saturation so the recovery band (JUMP TO WORK) reads the same calm
-  // gold as the settled dot chapter.
-  { s: 4.35, c: [0.76, 0.83, 1.0], i: 0.7, f: 18, d: 0.7 },
-  { s: 4.45, c: [0.74, 0.82, 1.0], i: 0.72, f: 62, d: 0.95 },
-  { s: 4.5, c: [0.74, 0.82, 1.0], i: 0.72, f: 62 }, // the pale dot (0.46 exposure + the output decode)
+// The chapter's light COLOUR + INTENSITY, matched to what the canvas shows: bone
+// glare off the accretion disk, the supernova flash, ember red giant, gold star,
+// blue-white nebula core, then the pale dot. This is the ONLY colour source for
+// the neutral metal — the light fleshes it out. Linear-lerped per frame; colours
+// are sRGB-ish values tuned against screenshots.
+const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number }> = [
+  { s: 0.0, c: [0.82, 0.86, 0.96], i: 0.9 }, // black hole: cold bone/blue disk glare
+  { s: 0.5, c: [1.0, 1.0, 1.0], i: 1.5 }, // supernova flash
+  { s: 1.6, c: [1.0, 0.62, 0.4], i: 1.15 }, // red giant: warm ember
+  { s: 2.9, c: [1.0, 0.86, 0.6], i: 1.25 }, // yellow star: gold
+  { s: 4.0, c: [0.7, 0.82, 1.0], i: 1.0 }, // nebula core: blue-white
+  { s: 4.5, c: [0.78, 0.85, 1.0], i: 0.95 }, // the pale dot
 ];
 
-function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: number; d: number } {
+function starLightAt(stage: number, outColor: THREE.Color): number {
   let a = STAR_KEYS[0];
   let b = STAR_KEYS[STAR_KEYS.length - 1];
   for (let i = 0; i < STAR_KEYS.length - 1; i++) {
@@ -129,39 +80,63 @@ function starLightAt(stage: number, outColor: THREE.Color): { i: number; f: numb
   const span = Math.max(1e-5, b.s - a.s);
   const k = Math.min(1, Math.max(0, (stage - a.s) / span));
   outColor.setRGB(a.c[0] + (b.c[0] - a.c[0]) * k, a.c[1] + (b.c[1] - a.c[1]) * k, a.c[2] + (b.c[2] - a.c[2]) * k);
-  outColor.convertSRGBToLinear(); // keys are authored in sRGB (see palette note)
-  const da = a.d ?? 1;
-  const db = b.d ?? 1;
-  return { i: a.i + (b.i - a.i) * k, f: a.f + (b.f - a.f) * k, d: da + (db - da) * k };
+  outColor.convertSRGBToLinear();
+  return a.i + (b.i - a.i) * k;
 }
 
-// ── Ribbon extrusion ─────────────────────────────────────────────────────────
+// ── Geometry helpers ─────────────────────────────────────────────────────────
 
-/** Extrude every cockpit polyline into one indexed ribbon geometry. Two
- *  vertices per point (±aSide); aNorm is the vertex's miter normal (average of
- *  adjoining segment normals, scaled 1/cos(half-angle), clamped — corners are
- *  pre-rounded upstream so miters stay shallow). aWidth carries the member's
- *  authored CSS-px width. Closed rings wrap and repeat their first point so
- *  the loop seals without a seam. */
-function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
+function shapeFromPts(pts: ReadonlyArray<Pt>): THREE.Shape {
+  const s = new THREE.Shape();
+  s.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  s.closePath();
+  return s;
+}
+
+function pathFromPts(pts: ReadonlyArray<Pt>): THREE.Path {
+  const p = new THREE.Path();
+  p.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) p.lineTo(pts[i][0], pts[i][1]);
+  p.closePath();
+  return p;
+}
+
+/** The hull: the full screen with every glass pane subtracted as a hole. */
+function buildHullGeometry(): THREE.BufferGeometry {
+  const shape = shapeFromPts(HULL_OUTER);
+  for (const pane of GLASS_PANES) shape.holes.push(pathFromPts(pane));
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(COCKPIT_W / 2, COCKPIT_H / 2, 0), 4000);
+  return geo;
+}
+
+/** Faint glass fill over each pane (so the opening reads as glass). */
+function buildGlassGeometry(): THREE.BufferGeometry {
+  const geo = new THREE.ShapeGeometry(GLASS_PANES.map((p) => shapeFromPts(p)));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(COCKPIT_W / 2, COCKPIT_H / 2, 0), 4000);
+  return geo;
+}
+
+/** Extrude the struts into wide filled ribbons carrying aSide (∈[-1,1] across
+ *  the beam, for the bevel) and aHalf (the beam's half-width). Mitred joints via
+ *  the averaged tangent normal. */
+function buildStrutGeometry(struts: ReadonlyArray<Strut>): THREE.BufferGeometry {
   const pos: number[] = [];
   const norm: number[] = [];
   const side: number[] = [];
-  const weight: number[] = [];
-  const width: number[] = [];
+  const half: number[] = [];
   const idx: number[] = [];
 
-  for (const line of lines) {
-    const pts = line.closed ? [...line.pts, line.pts[0]] : [...line.pts];
+  for (const strut of struts) {
+    const pts = strut.closed ? [...strut.pts, strut.pts[0]] : [...strut.pts];
     const n = pts.length;
     if (n < 2) continue;
     const first = pos.length / 2;
     for (let i = 0; i < n; i++) {
       const p = pts[i];
-      // Wrap neighbours for closed rings (pts already repeats the seam point,
-      // so wrap indices skip the duplicate); clamp at open ends.
-      const prev: Pt = i > 0 ? pts[i - 1] : line.closed ? pts[n - 2] : pts[0];
-      const next: Pt = i < n - 1 ? pts[i + 1] : line.closed ? pts[1] : pts[n - 1];
+      const prev: Pt = i > 0 ? pts[i - 1] : strut.closed ? pts[n - 2] : pts[0];
+      const next: Pt = i < n - 1 ? pts[i + 1] : strut.closed ? pts[1] : pts[n - 1];
       let d1x = p[0] - prev[0];
       let d1y = p[1] - prev[1];
       let d2x = next[0] - p[0];
@@ -177,19 +152,14 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
       const tl = Math.hypot(tx, ty) || 1;
       tx /= tl;
       ty /= tl;
-      // Perpendicular of the averaged tangent, miter-scaled against segment 1.
       const nx = -ty;
       const ny = tx;
-      const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
-      // NO perspective taper: each member keeps its authored width for its
-      // whole run (the pilot's call — a line that thins as it climbs reads as
-      // an inconsistent stroke, not depth; luminance carries the perspective).
+      const miter = 1 / Math.max(0.4, nx * -d1y + ny * d1x);
       for (const s of [-1, 1]) {
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
         side.push(s);
-        weight.push(line.w);
-        width.push(line.px);
+        half.push(strut.hw);
       }
     }
     for (let i = 0; i < n - 1; i++) {
@@ -202,121 +172,102 @@ function buildRibbons(lines: ReadonlyArray<CockpitLine>): THREE.BufferGeometry {
   geo.setAttribute('aPos', new THREE.BufferAttribute(new Float32Array(pos), 2));
   geo.setAttribute('aNorm', new THREE.BufferAttribute(new Float32Array(norm), 2));
   geo.setAttribute('aSide', new THREE.BufferAttribute(new Float32Array(side), 1));
-  geo.setAttribute('aW', new THREE.BufferAttribute(new Float32Array(weight), 1));
-  geo.setAttribute('aWidth', new THREE.BufferAttribute(new Float32Array(width), 1));
-  // three requires a `position` attribute for draw-range bookkeeping even when
-  // the vertex shader never reads it — alias the 2D data (itemSize 2 is fine).
+  geo.setAttribute('aHalf', new THREE.BufferAttribute(new Float32Array(half), 1));
   geo.setAttribute('position', geo.getAttribute('aPos'));
   geo.setIndex(idx);
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(COCKPIT_W / 2, COCKPIT_H / 2, 0), 4000);
   return geo;
 }
 
-function shapeFromPts(pts: ReadonlyArray<Pt>): THREE.Shape {
-  const s = new THREE.Shape();
-  s.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
-  s.closePath();
-  return s;
-}
-
 export function buildCockpit(scene: THREE.Scene): CockpitRig {
-  // Panels: ceiling + dashboard masses, plus the strut band between the
-  // windshield's edge pair (outer ring with the inner ring as a hole).
-  const band = shapeFromPts(CANOPY_OUTER.pts);
-  const bandHole = new THREE.Path();
-  bandHole.moveTo(CANOPY_INNER.pts[0][0], CANOPY_INNER.pts[0][1]);
-  for (let i = 1; i < CANOPY_INNER.pts.length; i++) bandHole.lineTo(CANOPY_INNER.pts[i][0], CANOPY_INNER.pts[i][1]);
-  bandHole.closePath();
-  band.holes.push(bandHole);
-  const panelGeo = new THREE.ShapeGeometry([shapeFromPts(PANEL_CEILING), shapeFromPts(PANEL_DASH), band]);
+  // ── Shared uniforms ─────────────────────────────────────────────────────────
+  // The metal is a SIMPLE neutral tone; the light fleshes it out. Authored in
+  // sRGB → linear. Two beam tones (hull slightly darker than the struts) give
+  // the mullions a hair of relief over the fill even before the bevel.
+  const HULL_METAL = new THREE.Color(0.055, 0.06, 0.075).convertSRGBToLinear();
+  const STRUT_METAL = new THREE.Color(0.1, 0.11, 0.13).convertSRGBToLinear();
+  const HUD_WHITE = new THREE.Color(0.92, 0.95, 1.0).convertSRGBToLinear();
 
   const shared = {
     uDecloak: { value: 0 },
     uTime: { value: 0 },
-    uLight: { value: new THREE.Vector2(COCKPIT_W / 2, COCKPIT_H * 0.43) },
-    uStarColor: { value: new THREE.Color(0.88, 0.86, 0.8) },
-    uStarIntensity: { value: 0.65 },
-    uFloor: { value: 9 }, // HDR self-luminous gain, keyframed (STAR_KEYS.f)
+    uLight: { value: new THREE.Vector2(COCKPIT_W / 2, COCKPIT_H * 0.42) },
+    uStarColor: { value: new THREE.Color(0.82, 0.86, 0.96) },
+    uStarIntensity: { value: 0.9 },
     uAlpha: { value: 0 },
-    uHalfW: { value: 0.55 }, // design units per CSS half-px; written per frame
-    // The piping palette: amber body, white-hot core (the reference trim).
-    // Authored in sRGB, converted to linear, then driven HOT by uFloor — the
-    // hue is deliberately redder than the on-screen target because the grade's
-    // Reinhard + desaturation pull HDR orange toward yellow-tan; this lands on
-    // the reference's saturated amber after the pipeline has its way. The
-    // frame loop rewrites this from AMBER_BASE each tick (STAR_KEYS.d).
-    uAmber: { value: AMBER_BASE.clone() },
-    uCoreTint: { value: new THREE.Color(1.0, 0.93, 0.76).convertSRGBToLinear() },
   };
 
-  const panelUniforms: Uniforms = {
-    ...shared,
-    uFill: { value: 0.9 },
-  };
-  const panelMat = new THREE.ShaderMaterial({
-    uniforms: panelUniforms,
-    vertexShader: cockpitPanelVertexShader,
-    fragmentShader: cockpitPanelFragmentShader,
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    side: THREE.DoubleSide,
-  });
-  const panels = new THREE.Mesh(panelGeo, panelMat);
-  panels.frustumCulled = false;
-  panels.renderOrder = 40; // after every scene rig (particle composite sits at -1)
-  panels.visible = false;
-  scene.add(panels);
+  const meshes: THREE.Mesh[] = [];
+  const materials: THREE.ShaderMaterial[] = [];
+  const geometries: THREE.BufferGeometry[] = [];
 
-  const lineGeo = buildRibbons(COCKPIT_LINES);
-
-  // Glow pass first: the additive halo the members sit in.
-  const glowUniforms: Uniforms = {
-    ...shared,
-    uWidthScale: { value: GLOW_WIDTH_SCALE },
+  const addMesh = (
+    geo: THREE.BufferGeometry,
+    vertexShader: string,
+    fragmentShader: string,
+    uniforms: Uniforms,
+    renderOrder: number,
+    additive = false,
+  ): THREE.Mesh => {
+    const mat = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+      // NormalBlending is the ShaderMaterial default; only the glass + HUD go
+      // additive (they lay light over the scene rather than occluding it).
+      ...(additive ? { blending: THREE.AdditiveBlending } : {}),
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = renderOrder;
+    mesh.visible = false;
+    scene.add(mesh);
+    meshes.push(mesh);
+    materials.push(mat);
+    geometries.push(geo);
+    return mesh;
   };
-  const glowMat = new THREE.ShaderMaterial({
-    uniforms: glowUniforms,
-    vertexShader: cockpitLineVertexShader,
-    fragmentShader: cockpitGlowFragmentShader,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false,
-    side: THREE.DoubleSide,
-  });
-  const glow = new THREE.Mesh(lineGeo, glowMat);
-  glow.frustumCulled = false;
-  glow.renderOrder = 41; // halo under the members, over the panels
-  glow.visible = false;
-  scene.add(glow);
 
-  // Core pass: the members themselves.
-  const lineUniforms: Uniforms = {
-    ...shared,
-    uWidthScale: { value: 1 },
-  };
-  const lineMat = new THREE.ShaderMaterial({
-    uniforms: lineUniforms,
-    vertexShader: cockpitLineVertexShader,
-    fragmentShader: cockpitLineFragmentShader,
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    side: THREE.DoubleSide,
-  });
-  const lines = new THREE.Mesh(lineGeo, lineMat);
-  lines.frustumCulled = false;
-  lines.renderOrder = 42; // members etch over their own halo
-  lines.visible = false;
-  scene.add(lines);
+  // ── Meshes, back to front ───────────────────────────────────────────────────
+  // Render order after every scene rig (particle composite sits at -1).
+  // GLASS first (behind everything — a tint over the visible scene), then HULL
+  // (the opaque surround), CONSOLE, SCREEN, STRUTS (relief over the hull), HUD.
+  const glassGeo = buildGlassGeometry();
+  addMesh(glassGeo, cockpitHullVertexShader, cockpitGlassFragmentShader, { ...shared }, 39, true);
+
+  const hullGeo = buildHullGeometry();
+  addMesh(hullGeo, cockpitHullVertexShader, cockpitHullFragmentShader, { ...shared, uMetal: { value: HULL_METAL } }, 40);
+
+  const consoleGeo = new THREE.ShapeGeometry(shapeFromPts(CONSOLE_FILL));
+  consoleGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(COCKPIT_W / 2, COCKPIT_H / 2, 0), 4000);
+  addMesh(consoleGeo, cockpitHullVertexShader, cockpitConsoleFragmentShader, { ...shared, uMetal: { value: STRUT_METAL } }, 41);
+
+  const screenGeo = new THREE.ShapeGeometry(shapeFromPts(CONSOLE_SCREEN));
+  screenGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(COCKPIT_W / 2, COCKPIT_H / 2, 0), 4000);
+  addMesh(screenGeo, cockpitHullVertexShader, cockpitScreenFragmentShader, { ...shared, uHud: { value: HUD_WHITE } }, 42);
+
+  const strutGeo = buildStrutGeometry(STRUTS);
+  addMesh(strutGeo, cockpitStrutVertexShader, cockpitStrutFragmentShader, { ...shared, uMetal: { value: STRUT_METAL } }, 43);
+
+  const hudGeo = buildHudGeometry();
+  addMesh(
+    hudGeo,
+    cockpitHudVertexShader,
+    cockpitHudFragmentShader,
+    { ...shared, uHud: { value: HUD_WHITE }, uHudFloor: { value: 2.4 } },
+    44,
+    true,
+  );
 
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
   let animFrom = 0;
   let animStart = -1;
-  let target: boolean | null = null; // null until the first frame samples power
+  let target: boolean | null = null;
   const scratchColor = new THREE.Color();
 
   const frame = (ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean): void => {
@@ -325,22 +276,15 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
       animFrom = decloak;
       animStart = t;
     }
-    // Power-up: a near-LINEAR fill (the cell field reads as steadily
-    // materialising patches — an eased envelope just makes the flicker stall).
-    // Power-down: quad-in, the cloak snapping back over the hull.
     const dur = target ? 1.8 : 0.8;
     const raw = Math.min(1, Math.max(0, (t - animStart) / dur));
     const e = target ? raw * (0.85 + 0.15 * raw) : raw * raw;
     decloak = animFrom + ((target ? 1 : 0) - animFrom) * e;
 
     const on = decloak > 0.001;
-    panels.visible = on;
-    glow.visible = on;
-    lines.visible = on;
+    for (const m of meshes) m.visible = on;
     if (!on) return;
 
-    // The decloak owns visibility per pixel (cloakMask in the shaders); the
-    // master alpha stays at 1 so the reveal is materialisation, never a fade.
     shared.uDecloak.value = decloak;
     shared.uTime.value = t;
     shared.uAlpha.value = 1;
@@ -351,33 +295,15 @@ export function buildCockpit(scene: THREE.Scene): CockpitRig {
     const lx = Math.max(-200, Math.min(COCKPIT_W + 200, (ndcX * 0.5 + 0.5) * COCKPIT_W));
     const ly = Math.max(-200, Math.min(COCKPIT_H + 200, (1 - (ndcY * 0.5 + 0.5)) * COCKPIT_H));
     (shared.uLight.value as THREE.Vector2).set(lx, ly);
-    const light = starLightAt(stage, scratchColor);
-    shared.uStarIntensity.value = light.i;
-    shared.uFloor.value = light.f;
+    const intensity = starLightAt(stage, scratchColor);
+    shared.uStarIntensity.value = intensity;
     (shared.uStarColor.value as THREE.Color).copy(scratchColor);
-    // Amber gold-shift (STAR_KEYS.d): slide the authored red-leaning amber
-    // along the amber→gold hue line where the live grade super-saturates
-    // instead of muting (d = 1 authored, d = 0 full gold).
-    (shared.uAmber.value as THREE.Color).setRGB(
-      GOLD_BASE.r + (AMBER_BASE.r - GOLD_BASE.r) * light.d,
-      GOLD_BASE.g + (AMBER_BASE.g - GOLD_BASE.g) * light.d,
-      GOLD_BASE.b + (AMBER_BASE.b - GOLD_BASE.b) * light.d,
-    );
-
-    // Design units per CSS half-px, tracking the live viewport height (the
-    // non-scaling-stroke contract; per-member widths ride aWidth).
-    shared.uHalfW.value = 0.5 * (COCKPIT_H / window.innerHeight);
   };
 
   const dispose = (): void => {
-    scene.remove(lines);
-    scene.remove(glow);
-    scene.remove(panels);
-    lineGeo.dispose();
-    panelGeo.dispose();
-    lineMat.dispose();
-    glowMat.dispose();
-    panelMat.dispose();
+    for (const m of meshes) scene.remove(m);
+    for (const g of geometries) g.dispose();
+    for (const mat of materials) mat.dispose();
   };
 
   return { frame, dispose };
