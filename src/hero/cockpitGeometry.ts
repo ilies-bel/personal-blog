@@ -26,10 +26,14 @@
 // ring band itself carries the merge: thin (14) across the top, ~17 down the
 // chamfers, swelling to ~44 through the waist fillet, tapering to ~35 at the
 // pillar foot, and back to 14 around the sill corners.
-// THE INTEGRATION below the waist is unchanged: the deck wraps sweep down
-// from the sill corners toward the screen edges, the mid laminations merge
-// into the screen housing, and every groove ends inside another member's
-// band. No floating parallels.
+// THE INTEGRATION below the waist is the sill-corner FAN (measured with the
+// dense blueprint-scan --rows/--cols ridge scans): the wrap crease rises
+// (10,990)→(453,835) and hands off through the fillet's outer edge to the
+// ring's own sill hairline (which runs DIM between the corners), the
+// undersill crease passes beneath the corner into the console housing, and
+// the pillar flare peels off the band at the fillet start and sweeps
+// down-left. Nothing terminates in the open; every groove ends inside
+// another member's band.
 
 /** An authored vertex: x, y, and an optional corner-rounding length (design
  *  units). r > 0 replaces the corner with a quadratic fillet; endpoints and
@@ -155,12 +159,25 @@ function canopyDW(_x: number, y: number): number {
   return stops[stops.length - 1][1];
 }
 
+/** The sill's hull-side hairline is the DIM one in the reference (≈0.3× the
+ *  window side) between the corners — the strong line at each corner belongs
+ *  to the wrap crease handing off through the fillet. The ramps keep the
+ *  fillet curves themselves at full strength; the ring winds clockwise, so
+ *  the −normal side is the hull side everywhere. */
+function canopyOuterW(x: number, y: number): number {
+  if (y < 795) return 1;
+  const c01 = (v: number) => Math.min(1, Math.max(0, v));
+  const t = c01((x - 500) / 45) * c01((1420 - x) / 45) * c01((y - 795) / 20);
+  return 1 - 1.28 * t;
+}
+
 export const CANOPY_BEAM: CockpitBeam = {
   pts: resolveCorners(RING_RAW, true),
   dw: 26,
   w: 1,
   closed: true,
   dwAt: canopyDW,
+  wMinusAt: canopyOuterW,
 };
 
 // ─── The side arms (the Y-merge) ─────────────────────────────────────────────
@@ -177,14 +194,11 @@ export const CANOPY_BEAM: CockpitBeam = {
 // to the buried tip. The joins are invisible because nothing visible ever
 // bends: every deviation happens under the band drawn later.
 
-// JOIN GRAMMAR: an open member never shows its ribbon cap. Each terminating
-// end runs INTO the receiving band's interior and TAPERS to a sliver over its
-// last stretch (a chisel merge, like the reference's flowing junctions) — the
-// intermediate point pins the taper local so the run keeps constant width.
-const taperTo = (ex: number, ey: number, wEnd: number, wFull: number, reach: number) => {
-  return (x: number, y: number): number =>
-    wEnd + (wFull - wEnd) * Math.min(1, Math.hypot(x - ex, y - ey) / reach);
-};
+// JOIN GRAMMAR: an open member never shows its ribbon cap and never crosses
+// another lit hairline. A terminating hairline either merges tangentially
+// under overlapping glow or FADES OUT before contact (per-side weights), and
+// the fill tip ends buried inside a band painted LATER, which erases it.
+// Width changes happen only where both hairlines are already dark.
 
 function buildArm(mirrored: boolean): CockpitBeam {
   // Bisector centreline of the two measured edge lines, arc-parameterised
@@ -238,53 +252,135 @@ export const ARM_R: CockpitBeam = buildArm(true);
 
 const ARM_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_L, ARM_R];
 
-// ─── The deck wrap ───────────────────────────────────────────────────────────
-// THE integration move: the sill does not stop at its corners — the deck's
-// top edge continues past them and sweeps DOWN the flanks toward the screen
-// edges (measured: (480,822)→(220,878)→(30,922)), and a second lamination
-// converges beneath it into the screen housing. This perspective wrap is what
-// reads as one hull instead of stacked stripes.
+// ─── The deck wrap (the sill-corner fan) ─────────────────────────────────────
+// Re-measured off reference-v3 with the dense ridge scans. Each lower corner
+// is a FAN of three creases, and NOTHING terminates in the open:
+//   1. THE WRAP: a 15px band whose STRONG upper hairline IS the hull crease
+//      rising (10,990)→(453,835); it flows tangentially into the sill
+//      fillet's outer edge and hands off to the ring's own outer hairline
+//      (which carries the line on along the sill). Its dim lower hairline is
+//      the measured partner line that vanishes near x≈300.
+//   2. THE UNDERSILL CREASE: a single lit line fading in past the dash
+//      plates, passing UNDER the corner ((250,954)→(440,929)→(620,916)) and
+//      dying into the console housing — what makes the corner read as
+//      overlapping hull plates.
+//   3. THE PILLAR FLARE: the pillar's hull-side hairline peels off the band
+//      at the fillet start (≈(436,792)) and sweeps down-left as a 11px band,
+//      dim hairline over strong ((380,795)→(170,834)→(20,868)).
 
-/** Flank wraps of the sill line. Each end runs INTO the ring's sill-corner
- *  fillet (the r90 curve pulls the centreline ~27px inside the vertex, so the
- *  old vertex-end left the cap exposed on the hull) and chisel-tapers there. */
-const WRAP_L_RAW: RawPt[] = [
-  [-10, 928],
-  [100, 906, 60],
-  [220, 878, 120],
-  [340, 844, 160],
-  [468, 828],
-];
-const WRAP_R_RAW: RawPt[] = [
-  [1452, 828],
-  [1580, 844, 160],
-  [1700, 878, 120],
-  [1820, 906, 60],
-  [1930, 928],
-];
-/** Mid lamination: screen edge down-left/right, chisel-merging into the
- *  housing band's interior. */
-const MID_L_RAW: RawPt[] = [
-  [-10, 1012],
-  [100, 986, 80],
-  [180, 960, 100],
-  [300, 934, 120],
-  [610, 931],
-  [668, 930],
-];
-const MID_R_RAW: RawPt[] = [
-  [1252, 930],
-  [1310, 931],
-  [1620, 934, 120],
-  [1740, 960, 100],
-  [1820, 986, 80],
-  [1930, 1012],
-];
+/** Centreline for a band hung on a measured ridge: offset every vertex half a
+ *  width along the averaged segment normal so ONE hairline edge sits exactly
+ *  on the reference crease. sign +1 hangs the band on the +normal side
+ *  (below-right for a left-to-right rising run), −1 on the −normal side. */
+function bandOnRidge(ridge: ReadonlyArray<Pt>, dw: number, sign: 1 | -1): Pt[] {
+  return ridge.map(([x, y], i) => {
+    const [x0, y0] = ridge[Math.max(0, i - 1)];
+    const [x1, y1] = ridge[Math.min(ridge.length - 1, i + 1)];
+    const l = Math.hypot(x1 - x0, y1 - y0) || 1;
+    return [x + (-(y1 - y0) / l) * sign * (dw / 2), y + ((x1 - x0) / l) * sign * (dw / 2)];
+  });
+}
+
+const mirrorPts = (pts: ReadonlyArray<Pt>): Pt[] => pts.map(([x, y]) => [1920 - x, y]);
+
+/** Linear weight ramp keyed on the UNMIRRORED design x — every fade below is
+ *  authored once and mirrors for free. */
+const rampW = (x0: number, x1: number, w0: number, w1: number, mirrored: boolean) => {
+  return (x: number, _y: number): number => {
+    const px = mirrored ? 1920 - x : x;
+    return w0 + (w1 - w0) * Math.min(1, Math.max(0, (px - x0) / (x1 - x0)));
+  };
+};
+
+function buildWrap(mirrored: boolean): CockpitBeam {
+  // The measured crease ridge. The tail past the kiss (x≈453) rides flat at
+  // y≈835 while the ring band's outer edge dives to ≈846, so the whole tip
+  // sits INSIDE the band footprint and the ring (painted last) erases it.
+  const RIDGE: Pt[] = [
+    [-10, 999], [79, 960], [156, 930], [242, 900], [320, 875],
+    [380, 855], [415, 845], [437, 840], [453, 835], [470, 835], [505, 835],
+  ];
+  const DW = 15;
+  const pts = bandOnRidge(RIDGE, DW, 1); // band hangs below the crease
+  // The crease stays full-strength to the fillet kiss, then dies while its
+  // glow overlaps the ring's outer hairline — the handoff reads continuous.
+  const upperW = rampW(440, 472, 0.7, -0.8, mirrored);
+  // The dim partner line vanishes near x≈300, exactly as measured.
+  const lowerW = rampW(262, 304, -0.3, -1.0, mirrored);
+  // The fill collapses onto the ridge well BEFORE the fillet kiss — through
+  // the corner there is no room for any band skirt below the crease (the
+  // reference's crease and fillet edge coincide), and the lower hairline is
+  // already dark past x≈304, so the width change is invisible.
+  const lowerDW = (x: number, _y: number): number => {
+    const px = mirrored ? 1920 - x : x;
+    return px < 400 ? DW : DW - 14 * Math.min(1, (px - 400) / 50);
+  };
+  return {
+    pts: mirrored ? mirrorPts(pts) : pts,
+    dw: DW,
+    w: 0.7,
+    // The left build runs left→right, so +normal points BELOW the ridge; the
+    // mirrored build runs right→left, which swaps the sides.
+    dwPlusAt: mirrored ? undefined : lowerDW,
+    dwMinusAt: mirrored ? lowerDW : undefined,
+    wPlusAt: mirrored ? upperW : lowerW,
+    wMinusAt: mirrored ? lowerW : upperW,
+  };
+}
+
+function buildCrease(mirrored: boolean): CockpitBeam {
+  // Single lit line passing UNDER the sill corner; both ends die dark — the
+  // left tail fades in past the dash plates, the right tip fades before it
+  // buries inside the housing band.
+  const RIDGE: Pt[] = [
+    [140, 984], [170, 975], [250, 954], [340, 939], [440, 929],
+    [520, 921], [620, 916], [660, 914], [690, 914],
+  ];
+  const pts = bandOnRidge(RIDGE, 6, 1);
+  const litW = (x: number, _y: number): number => {
+    const px = mirrored ? 1920 - x : x;
+    const on = Math.min(1, Math.max(0, (px - 125) / 60));
+    const off = Math.min(1, Math.max(0, (px - 648) / 38));
+    return -1 + 1.55 * on * (1 - off);
+  };
+  const dark = (_x: number, _y: number): number => -1;
+  return {
+    pts: mirrored ? mirrorPts(pts) : pts,
+    dw: 6,
+    w: 0.55,
+    wPlusAt: mirrored ? litW : dark,
+    wMinusAt: mirrored ? dark : litW,
+  };
+}
+
+function buildFlare(mirrored: boolean): CockpitBeam {
+  // The pillar's hull-side hairline leaves the band at the fillet start and
+  // sweeps down-left: STRONG lower hairline on the measured ridge, dim upper
+  // partner 11px above. The tip fades before the ring's outer hairline and
+  // buries inside the band at the fillet start.
+  const RIDGE: Pt[] = [
+    [-10, 875], [20, 868], [90, 852], [170, 834], [250, 818],
+    [340, 802], [380, 795], [400, 792], [434, 792],
+  ];
+  const pts = bandOnRidge(RIDGE, 11, -1); // band sits ABOVE the strong ridge
+  const strongW = rampW(400, 430, 0.15, -0.8, mirrored);
+  const dimW = rampW(400, 430, -0.33, -0.9, mirrored);
+  return {
+    pts: mirrored ? mirrorPts(pts) : pts,
+    dw: 11,
+    w: 0.3,
+    wPlusAt: mirrored ? dimW : strongW,
+    wMinusAt: mirrored ? strongW : dimW,
+  };
+}
+
 export const WRAP_BEAMS: ReadonlyArray<CockpitBeam> = [
-  { pts: resolveCorners(WRAP_L_RAW), dw: 14, w: 0.75, dwAt: taperTo(468, 828, 6, 14, 70) },
-  { pts: resolveCorners(WRAP_R_RAW), dw: 14, w: 0.75, dwAt: taperTo(1452, 828, 6, 14, 70) },
-  { pts: resolveCorners(MID_L_RAW), dw: 10, w: 0.6, dwAt: taperTo(668, 930, 6, 10, 50) },
-  { pts: resolveCorners(MID_R_RAW), dw: 10, w: 0.6, dwAt: taperTo(1252, 930, 6, 10, 50) },
+  buildWrap(false),
+  buildWrap(true),
+  buildCrease(false),
+  buildCrease(true),
+  buildFlare(false),
+  buildFlare(true),
 ];
 
 // ─── The console ─────────────────────────────────────────────────────────────

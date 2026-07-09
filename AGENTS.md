@@ -123,6 +123,18 @@ partial that owns the concern; only `tokens.css` defines `:root` variables.
   `live-*.png`, etc.) for reviewing each state. `scratchpad/` is a workspace for probes/
   screenshots, not shipped code.
 
+- **Cockpit trim battery** — before committing hero/cockpit geometry, run the join
+  inspector on a fresh full-quality shot: `node scripts/shoot-cockpit.mjs 0 shot.png <port>`
+  then `node scripts/inspect-joins.mjs shot.png`. It imports `cockpitGeometry.ts` directly
+  (native-TS import, so it can never drift from the authored geometry) and walks every
+  hairline edge with the extruder's own per-side math, flagging HOT (bloom dash), GAP
+  (dead hairline), TIP (naked open end) and NEAR (bloom-bridge proximity, advisory),
+  and drops an 8x crosshaired crop per joint and per flag into `inspect/`. Exit 1 =
+  hard flags. Eyeballing full-frame screenshots misses these (the arm-crotch dash, the
+  wrap-sill wedge, and the open-end miter flare all shipped that way) — trust the
+  scanner, then judge its crops. To MEASURE a reference joint before authoring, densify
+  the ridge scan: `node scripts/blueprint-scan.mjs <ref> --rows a,b,c --cols d,e,f`.
+
 ## Commands
 
 - `npm run dev` — Astro dev server.

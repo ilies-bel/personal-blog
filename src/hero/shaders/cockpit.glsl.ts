@@ -182,7 +182,9 @@ void main() {
   // no specular pooling, no gradient along the run.
   float ew = 1.2 * pxT;
   float edgeLine = smoothstep(1.0 - 2.0 * ew, 1.0 - 0.7 * ew, t);
-  float energy = (0.45 + 0.55 * vW) * (0.5 + 0.5 * min(lit, 1.0));
+  // max(): w below -0.818 means "faded out entirely" — emission must floor
+  // at zero, never go subtractive (a negative energy draws a DARK stroke).
+  float energy = max(0.45 + 0.55 * vW, 0.0) * (0.5 + 0.5 * min(lit, 1.0));
   vec3 col = fill + uAmber * edgeLine * energy;
 
   col = novaWash(col);

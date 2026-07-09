@@ -129,6 +129,17 @@ function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeomet
       d1y /= l1;
       d2x /= l2;
       d2y /= l2;
+      // Open-beam endpoints have one zero-length neighbour; mirror the real
+      // segment so the miter is exactly 1 there — otherwise the 0.35 clamp
+      // below flares every open end to ~2.9x its width (a wedge cap).
+      if (d1x === 0 && d1y === 0) {
+        d1x = d2x;
+        d1y = d2y;
+      }
+      if (d2x === 0 && d2y === 0) {
+        d2x = d1x;
+        d2y = d1y;
+      }
       let tx = d1x + d2x;
       let ty = d1y + d2y;
       const tl = Math.hypot(tx, ty) || 1;

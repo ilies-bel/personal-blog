@@ -3,11 +3,20 @@
 // weighted by luminance, which ignores the white disk/reticle and the black
 // hull; peaks are local maxima merged within 5px. Output feeds the authored
 // geometry in cockpitGeometry.ts — measured, not eyeballed.
-//   node scripts/blueprint-scan.mjs [ref=reference-v2.png]
+//   node scripts/blueprint-scan.mjs [ref=reference-v2.png] [--rows a,b,c] [--cols d,e,f]
+//   --rows/--cols replace the preset scan lines — densify around a joint to
+//   measure it before authoring.
 import { chromium } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-const ref = process.argv[2] ?? 'reference-v2.png';
+const args = process.argv.slice(2);
+const opt = (name) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1].split(',').map(Number) : null;
+};
+const ROWS = opt('--rows');
+const COLS = opt('--cols');
+const ref = args.find((a) => !a.startsWith('--') && !/^[\d,]+$/.test(a)) ?? 'reference-v2.png';
 const b64 = readFileSync(ref).toString('base64');
 
 const browser = await chromium.launch();
@@ -20,7 +29,7 @@ await page.setContent(`<canvas id="c" width="1920" height="1080"></canvas>
 </script>`);
 await page.waitForFunction(() => document.title === 'done');
 
-const result = await page.evaluate(() => {
+const result = await page.evaluate(({ ROWS, COLS }) => {
   const ctx = document.getElementById('c').getContext('2d');
   const { data } = ctx.getImageData(0, 0, 1920, 1080);
   const amber = (x, y) => {
@@ -43,15 +52,15 @@ const result = await page.evaluate(() => {
     return out.map((o) => o.p + ':' + Math.round(o.v));
   };
   const rows = {};
-  for (const y of [40, 60, 80, 100, 130, 160, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 730, 760, 790, 820, 850, 880, 910, 940, 970, 1000, 1040, 1070]) {
+  for (const y of ROWS ?? [40, 60, 80, 100, 130, 160, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 730, 760, 790, 820, 850, 880, 910, 940, 970, 1000, 1040, 1070]) {
     rows['y' + y] = peaks(Array.from({ length: 1920 }, (_, x) => amber(x, y)));
   }
   const cols = {};
-  for (const x of [30, 60, 100, 140, 180, 220, 260, 300, 360, 420, 480, 540, 640, 760, 960, 1160, 1280, 1380, 1440, 1500, 1560, 1620, 1700, 1740, 1780, 1820, 1860, 1890]) {
+  for (const x of COLS ?? [30, 60, 100, 140, 180, 220, 260, 300, 360, 420, 480, 540, 640, 760, 960, 1160, 1280, 1380, 1440, 1500, 1560, 1620, 1700, 1740, 1780, 1820, 1860, 1890]) {
     cols['x' + x] = peaks(Array.from({ length: 1080 }, (_, y) => amber(x, y)));
   }
   return { rows, cols };
-});
+}, { ROWS, COLS });
 
 for (const [k, v] of Object.entries(result.rows)) console.log(k.padEnd(6), v.join(' '));
 console.log('---');
