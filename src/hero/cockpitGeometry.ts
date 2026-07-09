@@ -54,6 +54,18 @@ export interface CockpitBeam {
   /** Optional per-point width override (design px) — the reference canopy is
    *  THIN at the top beam and fattens through the chamfers to the sides. */
   dwAt?: (x: number, y: number) => number;
+  /** Optional PER-SIDE widths for asymmetric members (the Y-merge arms): the
+   *  extruder offsets each side by half of its own function — dwPlusAt for
+   *  the +normal side, dwMinusAt for −normal, where normal = (−dy, dx) of
+   *  the local direction. Both default to dwAt/dw (symmetric). */
+  dwPlusAt?: (x: number, y: number) => number;
+  dwMinusAt?: (x: number, y: number) => number;
+  /** Optional PER-SIDE facing weight (same sides as dwPlusAt/dwMinusAt).
+   *  The beam shader maps w linearly to edge energy (0.45 + 0.55w), so a
+   *  NEGATIVE weight fades a hairline out entirely — how an arm edge dies
+   *  into a junction without a bloom bridge. Defaults to w. */
+  wPlusAt?: (x: number, y: number) => number;
+  wMinusAt?: (x: number, y: number) => number;
 }
 
 // ─── Builders ────────────────────────────────────────────────────────────────
@@ -153,11 +165,17 @@ export const CANOPY_BEAM: CockpitBeam = {
 
 // ─── The side arms (the Y-merge) ─────────────────────────────────────────────
 // Per side, ONE wide arm from the screen edge into the ring's waist fillet —
-// the members the reference merges "into one shape". Measured centreline
-// (left): (0,140)→(140,263.5), slope 0.88 dy/dx, band ~64px perpendicular.
-// The tip runs INSIDE the swollen waist band (drawn later, so the ring's
-// hairlines stay unbroken) and chisel-tapers over its last ~130px; the arm's
-// lower edge then reads as flowing into the pillar's outer edge.
+// the members the reference merges "into one shape". Built from the two
+// MEASURED edge lines, not a centreline+width: upper edge through
+// (30,124)/(140,225)/the crotch (176,255); lower edge through
+// (30,209)/(140,302). They converge toward a far apex (≈1385px away) — the
+// reference's imperceptible full-length wedge (~1° per edge), so NO width
+// change ever kinks a hairline in the open. The LOWER edge runs dead
+// straight until the ring band's outer hairline covers it; the UPPER edge
+// runs dead straight through the crotch, then an asymmetric chisel — hidden
+// entirely inside the ring band's footprint, which paints over it — drops it
+// to the buried tip. The joins are invisible because nothing visible ever
+// bends: every deviation happens under the band drawn later.
 
 // JOIN GRAMMAR: an open member never shows its ribbon cap. Each terminating
 // end runs INTO the receiving band's interior and TAPERS to a sliver over its
@@ -168,21 +186,55 @@ const taperTo = (ex: number, ey: number, wEnd: number, wFull: number, reach: num
     wEnd + (wFull - wEnd) * Math.min(1, Math.hypot(x - ex, y - ey) / reach);
 };
 
-export const ARM_L: CockpitBeam = {
-  // Full width until 55px from the tip: the upper hairline must reach the
-  // crotch at (176,255) — the ref's V where it meets the chamfer's outer
-  // edge — BEFORE the chisel pulls it down. The tip hides in the waist band.
-  pts: [[-40, 105], [155, 277], [208, 323]] as Pt[],
-  dw: 64,
-  w: 0.7,
-  dwAt: taperTo(208, 323, 26, 64, 70),
-};
-export const ARM_R: CockpitBeam = {
-  pts: [[1960, 105], [1765, 277], [1712, 323]] as Pt[],
-  dw: 64,
-  w: 0.7,
-  dwAt: taperTo(1712, 323, 26, 64, 70),
-};
+function buildArm(mirrored: boolean): CockpitBeam {
+  // Bisector centreline of the two measured edge lines, arc-parameterised
+  // from the screen-edge start.
+  const DIR: Pt = [0.75, 0.6612];
+  const S: Pt = [-40, 105];
+  const FADE_S = 228; // upper hairline starts dying here …
+  const CHISEL_S = 273.2; // … and its chisel starts here (past the crotch)
+  const END_S = 330; // buried tip — its whole cap sits inside the ring band
+  const sAt = (x: number, y: number): number => {
+    const px = mirrored ? 1920 - x : x;
+    return (px - S[0]) * DIR[0] + (y - S[1]) * DIR[1];
+  };
+  // Half-width of the wedge: 28.42 at the crotch's arc, shrinking 0.0205/px.
+  const wedge = (s: number): number => 28.42 - 0.0205 * (s - 261.2);
+  const upper = (x: number, y: number): number => {
+    const s = sAt(x, y);
+    const chisel = s > CHISEL_S ? 28.2 - 0.426 * (s - CHISEL_S) : Infinity;
+    return 2 * Math.max(3.5, Math.min(wedge(s), chisel));
+  };
+  const lower = (x: number, y: number): number => 2 * wedge(sAt(x, y));
+  // The upper hairline FADES over its last ~45px: it converges with the ring
+  // band's outer hairline at a shallow angle, and two full-brightness lines
+  // that close slowly bridge under bloom into a fat dash. The ref's crotch is
+  // soft for the same reason. (Negative w = full fade; the fill stays.)
+  const upperW = (x: number, y: number): number => {
+    const s = sAt(x, y);
+    return 0.7 - 1.35 * Math.min(1, Math.max(0, (s - FADE_S) / (CHISEL_S - FADE_S)));
+  };
+  const P = (s: number): Pt => {
+    const x = S[0] + DIR[0] * s;
+    return [mirrored ? 1920 - x : x, S[1] + DIR[1] * s];
+  };
+  return {
+    // Vertices at every profile break — aDW/aW interpolate linearly between
+    // authored points, and all side profiles are piecewise-linear in arc.
+    pts: [P(0), P(FADE_S), P(CHISEL_S), P(END_S)],
+    dw: 57,
+    w: 0.7,
+    // +normal = (−dy,dx) points to the lower edge on the left arm and to the
+    // upper edge on the mirrored right arm.
+    dwPlusAt: mirrored ? upper : lower,
+    dwMinusAt: mirrored ? lower : upper,
+    wPlusAt: mirrored ? upperW : undefined,
+    wMinusAt: mirrored ? undefined : upperW,
+  };
+}
+
+export const ARM_L: CockpitBeam = buildArm(false);
+export const ARM_R: CockpitBeam = buildArm(true);
 
 const ARM_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_L, ARM_R];
 

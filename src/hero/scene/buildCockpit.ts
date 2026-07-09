@@ -141,8 +141,11 @@ function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeomet
         pos.push(p[0], p[1]);
         norm.push(nx * miter, ny * miter);
         side.push(s);
-        weight.push(beam.w);
-        dw.push(beam.dwAt ? beam.dwAt(p[0], p[1]) : beam.dw);
+        // Per-side width/weight when the member is asymmetric (the arms).
+        const wf = s > 0 ? beam.wPlusAt : beam.wMinusAt;
+        weight.push(wf ? wf(p[0], p[1]) : beam.w);
+        const fn = (s > 0 ? beam.dwPlusAt : beam.dwMinusAt) ?? beam.dwAt;
+        dw.push(fn ? fn(p[0], p[1]) : beam.dw);
       }
     }
     for (let i = 0; i < n - 1; i++) {
