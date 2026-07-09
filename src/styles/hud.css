@@ -521,13 +521,11 @@ body.hud-active .hud-nav-button[data-discovered='true'] .hud-nav-copy {
 /* The compass is the page's single bottom-centre scroll-state instrument, visible
    throughout the cinematic scroll. Hidden ONLY until the scene's first frame paints
    (body.scene-ready, added by index.astro's loader script) so it never flashes over
-   the loader, and during the black-hole power-on boot window. Mobile hides it via
-   display:none further down. The BOOT readout (.hud-compass--boot) is the exception:
-   it OWNS the slot during loading (it IS the loader's status line), so it must stay
-   lit while body:not(.scene-ready) — :not(.hud-compass--boot) exempts it here. */
-body:not(.scene-ready) .hud-compass:not(.hud-compass--boot):not(.warp-readout),
-body.hud-booting .hud-compass:not(.warp-readout),
-body.hud-shutting-down .hud-compass:not(.warp-readout) { opacity: 0; transition-delay: 0s; }
+   the loader. Mobile hides it via display:none further down. The BOOT readout
+   (.hud-compass--boot) is the exception: it OWNS the slot during loading (it IS the
+   loader's status line), so it must stay lit while body:not(.scene-ready) —
+   :not(.hud-compass--boot) exempts it here. */
+body:not(.scene-ready) .hud-compass:not(.hud-compass--boot):not(.warp-readout) { opacity: 0; transition-delay: 0s; }
 .hud-compass[data-visible='false']:not(.warp-readout) { opacity: 0; transition-delay: 0s; }
 
 /* --- Boot-to-HUD intro readout ---------------------------------------------
@@ -999,349 +997,31 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
 }
 
 /* ---------------------------------------------------------------------------
-   HUD power sequence (#2/#3/#7) — the ~3.6s loader that plays when the HUD powers
-   up OR down. The FSM in BaseLayout adds body.hud-booting for a power-ON window
-   (rail/compass/menu stay DARK), then swaps it for body.hud-active once the start-up
-   self-check finishes. Powering OFF adds body.hud-shutting-down for the SAME window
-   and every layer here plays IN REVERSE (animation-direction: reverse), then the FSM
-   lands in idle — so the sequence is symmetric, the animation runs both ways.
-
-   Everything here is CSS-only off body.hud-booting / body.hud-shutting-down:
-     • .hud-boot          — the status readout + a STUTTERING progress bar (fills on
-                            boot, drains on shutdown).
-     • .hud-boot-flicker  — a full-viewport power-surge light (hard flashes early,
-                            settling late; reversed = settling early, surges late).
-     • the VHS SIGNAL KIT — tape static field + head-switching band + canvas
-                            tracking slips (see its own block below).
-   It reads like a machine starting up (or shutting down), not a flat bar. The
-   duration lives in one var, --hud-boot-dur, which the FSM also writes from
-   HUD_BOOT_DURATION_MS so the CSS animation length can never drift from the JS
-   timer — and the shutdown reuses that same window reversed. The reverse-direction
-   rule is factored once (see `.reverse both directions` selectors below) so a new
-   boot layer only needs its hud-booting rule + a listing in that shared selector.
+   HUD power transition — THE DECLOAK. The old boot/shutdown theater (VHS
+   static, tracking slips, edge seams, the stuttering LOADING bar and its 3.6s
+   window) is gone: powering the HUD on no longer "boots a machine", it
+   DE-CLOAKS the ship. The FSM (BaseLayout) flips body.hud-active instantly;
+   the WebGL cockpit materialises in-scene off that bit (buildCockpit's
+   uDecloak envelope — Predator cells, electric glints, heat-haze), and the
+   DOM console chrome (screens, button banks, plates) flicker-materialises off
+   the same class with this shared keyframe — a brief unstable strobe that
+   settles solid, like instruments whose feed just de-cloaked with the hull.
+   Applied by the cockpit-console block below; reduced motion drops it (the
+   class flip alone is the transition there).
    --------------------------------------------------------------------------- */
-:root {
-  --hud-boot-dur: 3600ms;        /* must match BOOT_MS / HUD_BOOT_DURATION_MS — the
-                                    FSM also sets this inline so the two stay synced */
-}
-
-/* The status readout, bottom-centre. Hidden until booting, then fades in over the
-   stuttering progress bar; the LABEL text is cycled by the FSM (LOADING →
-   CALIBRATING → ALIGNING ARRAY → SYSTEMS NOMINAL). */
-.hud-boot {
-  position: fixed;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 2.4rem);
-  transform: translateX(-50%);
-  z-index: 25;
-  display: grid;
-  justify-items: center;
-  gap: 0.55rem;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
-}
-.hud-boot-label {
-  /* min-width so the readout box doesn't jump as the status text changes length. */
-  min-width: 11rem;
-  text-align: center;
-  font-size: var(--text-micro);
-  letter-spacing: 0.42em;
-  /* optical: the big tracking pushes the text right; nudge it back to centre. */
-  padding-left: 0.42em;
-  color: var(--fg-dim);
-  text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
-}
-.hud-boot-bar {
-  position: relative;
-  display: block;
-  width: 9rem;
-  height: 1px;
-  background: var(--hud-line-dim);
-  overflow: hidden;
-}
-.hud-boot-bar::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 0;
-  background: var(--accent-strong);
-  box-shadow: 0 0 8px color-mix(in oklch, var(--highlight) 60%, transparent);
-}
-body.hud-booting .hud-boot,
-body.hud-shutting-down .hud-boot {
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 0.2s ease, visibility 0s;
-}
-/* STUTTERING fill — multi-stop keyframes so the bar SURGES, holds, surges again
-   (a system check), instead of a smooth linear sweep. The flats between surges are
-   the "pauses"; linear timing lets each surge read as a discrete jump. On shutdown
-   the shared reverse rule drains it 100% → 0% (the same surges, unwound). */
-body.hud-booting .hud-boot-bar::after,
-body.hud-shutting-down .hud-boot-bar::after {
-  animation: hud-boot-fill var(--hud-boot-dur) linear forwards;
-}
-@keyframes hud-boot-fill {
-  0%   { width: 0; }
-  8%   { width: 18%; }   /* first surge */
-  18%  { width: 18%; }   /* pause */
-  30%  { width: 46%; }   /* second surge */
-  44%  { width: 46%; }   /* pause */
-  58%  { width: 62%; }   /* third surge */
-  70%  { width: 62%; }   /* pause */
-  86%  { width: 100%; opacity: 1; }  /* final surge to full */
-  100% { width: 100%; opacity: 0.5; }
-}
-
-/* Full-viewport light surge — a few HARD flashes early (power coming online) that
-   settle to a dim shimmer late. SUBTLE radial wash (not a strobe). Sits above the
-   scene but below the HUD/controls. pointer-events:none. */
-.hud-boot-flicker {
-  position: fixed;
-  inset: 0;
-  z-index: 17;                 /* above the canvas, below the HUD rail (18) */
-  pointer-events: none;
-  opacity: 0;
-  background: radial-gradient(
-    120% 120% at 50% 50%,
-    color-mix(in oklch, var(--fg) 18%, transparent) 0%,
-    transparent 70%
-  );
-}
-body.hud-booting .hud-boot-flicker,
-body.hud-shutting-down .hud-boot-flicker {
-  animation: hud-boot-flicker var(--hud-boot-dur) steps(1, end) 1;
-}
-/* Re-timed over 3.6s with a clear power-surge feel: hard flashes in the first
-   third (system coming online), then it settles to faint pulses before going dark
-   for ignition. */
-@keyframes hud-boot-flicker {
+@keyframes hud-decloak {
   0%   { opacity: 0; }
-  3%   { opacity: 0.6; }
-  6%   { opacity: 0.1; }
-  10%  { opacity: 0.62; }
-  14%  { opacity: 0.06; }
-  20%  { opacity: 0.5; }
-  26%  { opacity: 0.08; }
-  34%  { opacity: 0.34; }
-  44%  { opacity: 0.06; }
-  58%  { opacity: 0.18; }
-  72%  { opacity: 0.05; }
-  100% { opacity: 0; }
+  9%   { opacity: 0.55; }
+  17%  { opacity: 0.08; }
+  29%  { opacity: 0.75; }
+  39%  { opacity: 0.22; }
+  53%  { opacity: 0.92; }
+  65%  { opacity: 0.48; }
+  79%  { opacity: 1; }
+  100% { opacity: 1; }
 }
 
-/* VHS SIGNAL KIT — the boot reads like a tape deck acquiring signal, not a CRT
-   sweep. Two layers, both gray/white (no gold — the bezel owns the gold), both
-   loudest EARLY (signal acquiring) and dead by ignition, all timing off
-   --hud-boot-dur:
-     • TAPE STATIC FIELD (.hud-boot-static) — faint grayscale grain over the
-       whole frame, shuffling position in coarse steps (an inline SVG
-       feTurbulence tile, desaturated).
-     • TRACKING SLIPS (no element) — the scene CANVAS itself jumps sideways with
-       a slight skew tear in three stepped bursts, like the deck hunting for
-       tracking. steps(1, end) holds each pose discretely — raw jumps, no easing.
-   (A head-switching noise band along the bottom edge was tried and cut — too
-   much furniture at the readout's edge of the frame.) */
-.hud-boot-static {
-  position: fixed;
-  inset: 0;
-  z-index: 17;                 /* with the flicker wash, below the HUD rail */
-  pointer-events: none;
-  opacity: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
-}
-body.hud-booting .hud-boot-static,
-body.hud-shutting-down .hud-boot-static {
-  animation:
-    vhs-static-shuffle 0.5s steps(5) infinite,
-    vhs-static-window var(--hud-boot-dur) linear 1 both;
-}
-/* Coarse discrete grain shuffles — offsets chosen off the 160px tile grid so no
-   two consecutive steps land on aligned texture. */
-@keyframes vhs-static-shuffle {
-  from { background-position: 0 0; }
-  to   { background-position: 137px -93px; }
-}
-/* Loud while acquiring, a small resurge mid-window, gone before ignition. */
-@keyframes vhs-static-window {
-  0%   { opacity: 0; }
-  4%   { opacity: 0.17; }
-  22%  { opacity: 0.10; }
-  42%  { opacity: 0.14; }
-  60%  { opacity: 0.07; }
-  88%  { opacity: 0.04; }
-  100% { opacity: 0; }
-}
-/* TRACKING SLIPS — the picture itself (the WebGL canvas, never the HUD chrome:
-   the instruments are fine, the SIGNAL is bad) jumps sideways in three bursts.
-   Safe to transform the canvas directly; transforming a wrapper would turn it
-   into the containing block for the fixed scene layers. */
-body.hud-booting .bh-stage canvas,
-body.hud-shutting-down .bh-stage canvas {
-  animation: vhs-tracking-slip var(--hud-boot-dur) steps(1, end) 1;
-}
-@keyframes vhs-tracking-slip {
-  0%, 100% { transform: none; }
-  12%   { transform: translateX(7px) skewX(0.4deg); }
-  12.8% { transform: translateX(-5px); }
-  13.6% { transform: translateX(2px) skewX(-0.3deg); }
-  14.4% { transform: none; }
-  40%   { transform: translateX(-9px) skewX(-0.5deg); }
-  40.9% { transform: translateX(4px); }
-  41.8% { transform: none; }
-  64%   { transform: translateX(5px) skewX(0.3deg); }
-  64.7% { transform: translateX(-3px); }
-  65.4% { transform: none; }
-}
-
-/* COCKPIT BEZEL — "the whole site is screen panels": during the boot window a
-   gold hairline traces the viewport perimeter CLOCKWISE from the top-left (top →
-   right → bottom → left), etching in the canopy frame around the visitor; a small
-   corner JOINT welds lit as the trace passes each corner. When booting ends the
-   whole bezel cross-fades out (container transition) exactly as the instruments
-   ignite — the frame dissolves into the four .hud-frame corner ticks the powered
-   HUD keeps.
-
-   Draw mechanics: the CHILDREN's resting state is the COMPLETED bezel (seams at
-   full scale, joints lit) and only the body.hud-booting animations start them
-   from nothing (fill-mode both + per-element delay = the clockwise sequencing).
-   This is deliberate: when hud-booting drops, the animations are removed and the
-   children SNAP to their completed resting state — invisible under the
-   container's opacity fade — instead of snapping to zero-length seams mid-fade.
-   All timing derives from --hud-boot-dur so the trace can never drift from the
-   FSM's window. Children are position:absolute inside the one fixed container. */
-.hud-boot-panels {
-  position: fixed;
-  inset: 0;
-  z-index: 17;                 /* with the flicker/scan wash, below the HUD rail */
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.55s ease;
-}
-body.hud-booting .hud-boot-panels,
-body.hud-shutting-down .hud-boot-panels {
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-.hud-boot-seam {
-  position: absolute;
-  background: color-mix(in oklch, var(--highlight) 55%, transparent);
-  box-shadow: 0 0 6px color-mix(in oklch, var(--highlight) 35%, transparent);
-}
-/* Edge geometry + the DRAW ORIGIN each edge grows from (clockwise trace). */
-.hud-boot-seam[data-edge='top']    { top: 10px; left: 10px; right: 10px; height: 1px; transform-origin: left center; }
-.hud-boot-seam[data-edge='right']  { top: 10px; bottom: 10px; right: 10px; width: 1px; transform-origin: center top; }
-.hud-boot-seam[data-edge='bottom'] { bottom: 10px; left: 10px; right: 10px; height: 1px; transform-origin: right center; }
-.hud-boot-seam[data-edge='left']   { top: 10px; bottom: 10px; left: 10px; width: 1px; transform-origin: center bottom; }
-/* The clockwise trace: each seam draws over ~22% of the boot window, starting as
-   the previous edge finishes (4% → 24% → 44% → 64%), so the current runs the full
-   perimeter and closes the frame just before SYSTEMS NOMINAL. */
-body.hud-booting .hud-boot-seam[data-edge='top'],
-body.hud-booting .hud-boot-seam[data-edge='bottom'],
-body.hud-shutting-down .hud-boot-seam[data-edge='top'],
-body.hud-shutting-down .hud-boot-seam[data-edge='bottom'] {
-  animation: hud-boot-seam-x calc(var(--hud-boot-dur) * 0.22) var(--ease-out-quint) both;
-}
-body.hud-booting .hud-boot-seam[data-edge='right'],
-body.hud-booting .hud-boot-seam[data-edge='left'],
-body.hud-shutting-down .hud-boot-seam[data-edge='right'],
-body.hud-shutting-down .hud-boot-seam[data-edge='left'] {
-  animation: hud-boot-seam-y calc(var(--hud-boot-dur) * 0.22) var(--ease-out-quint) both;
-}
-/* Per-edge stagger — shared by both directions (the shared reverse rule below only
-   flips each seam's own timeline, not the stagger order, so the frame un-draws in
-   place; a truer counter-clockwise unwind isn't worth reversing every delay for). */
-body.hud-booting .hud-boot-seam[data-edge='top'],
-body.hud-shutting-down .hud-boot-seam[data-edge='top']    { animation-delay: calc(var(--hud-boot-dur) * 0.04); }
-body.hud-booting .hud-boot-seam[data-edge='right'],
-body.hud-shutting-down .hud-boot-seam[data-edge='right']  { animation-delay: calc(var(--hud-boot-dur) * 0.24); }
-body.hud-booting .hud-boot-seam[data-edge='bottom'],
-body.hud-shutting-down .hud-boot-seam[data-edge='bottom'] { animation-delay: calc(var(--hud-boot-dur) * 0.44); }
-body.hud-booting .hud-boot-seam[data-edge='left'],
-body.hud-shutting-down .hud-boot-seam[data-edge='left']   { animation-delay: calc(var(--hud-boot-dur) * 0.64); }
-@keyframes hud-boot-seam-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-@keyframes hud-boot-seam-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-/* Corner joints: 3px gold studs a hair outside the seam crossings. Each one BLIPS
-   bright the moment the trace reaches its corner (same delays as the seams above)
-   then settles to a quiet hold — panels bolting on, one corner at a time. */
-.hud-boot-joint {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  background: var(--highlight);
-  opacity: 0.55;
-}
-.hud-boot-joint[data-corner='tl'] { top: 9px; left: 9px; }
-.hud-boot-joint[data-corner='tr'] { top: 9px; right: 9px; }
-.hud-boot-joint[data-corner='br'] { bottom: 9px; right: 9px; }
-.hud-boot-joint[data-corner='bl'] { bottom: 9px; left: 9px; }
-body.hud-booting .hud-boot-joint,
-body.hud-shutting-down .hud-boot-joint {
-  animation: hud-boot-joint-weld calc(var(--hud-boot-dur) * 0.18) ease-out both;
-}
-body.hud-booting .hud-boot-joint[data-corner='tl'],
-body.hud-shutting-down .hud-boot-joint[data-corner='tl'] { animation-delay: calc(var(--hud-boot-dur) * 0.04); }
-body.hud-booting .hud-boot-joint[data-corner='tr'],
-body.hud-shutting-down .hud-boot-joint[data-corner='tr'] { animation-delay: calc(var(--hud-boot-dur) * 0.26); }
-body.hud-booting .hud-boot-joint[data-corner='br'],
-body.hud-shutting-down .hud-boot-joint[data-corner='br'] { animation-delay: calc(var(--hud-boot-dur) * 0.46); }
-body.hud-booting .hud-boot-joint[data-corner='bl'],
-body.hud-shutting-down .hud-boot-joint[data-corner='bl'] { animation-delay: calc(var(--hud-boot-dur) * 0.66); }
-@keyframes hud-boot-joint-weld {
-  0%   { opacity: 0; box-shadow: none; }
-  35%  { opacity: 1; box-shadow: 0 0 10px 2px color-mix(in oklch, var(--highlight) 80%, transparent); }
-  100% { opacity: 0.55; box-shadow: 0 0 4px 0 color-mix(in oklch, var(--highlight) 30%, transparent); }
-}
-
-/* THE POWER-OFF REVERSAL — the one rule that turns every boot layer above into its
-   shutdown. Each layer's animation is DEFINED once (shared hud-booting /
-   hud-shutting-down selectors above); this flips its playback direction under
-   body.hud-shutting-down so the SAME keyframes run backward — the bar drains, the
-   flicker settles-then-surges, the static fades up from silence, the bezel retracts.
-   Reversal happens here and ONLY here, so a new boot layer needs just its hud-booting
-   rule + a mention in that shared selector — never a bespoke shutdown keyframe. */
-body.hud-shutting-down .hud-boot-bar::after,
-body.hud-shutting-down .hud-boot-flicker,
-body.hud-shutting-down .hud-boot-static,
-body.hud-shutting-down .bh-stage canvas,
-body.hud-shutting-down .hud-boot-seam,
-body.hud-shutting-down .hud-boot-joint {
-  animation-direction: reverse;
-}
-
-/* Reduced motion: skip the flicker, scan and bar STUTTER entirely. The readout
-   still shows briefly (its opacity transition is allowed) and the bar fills/drains
-   CALMLY so the power change is felt, just without the machine-startup theatrics. */
 @media (prefers-reduced-motion: reduce) {
-  body.hud-booting .hud-boot-flicker,
-  body.hud-shutting-down .hud-boot-flicker { animation: none; opacity: 0; }
-  /* The whole VHS kit is theatrics — static and the canvas tracking slips both
-     stand down; the calm readout carries the power change (up or down). */
-  body.hud-booting .hud-boot-static,
-  body.hud-shutting-down .hud-boot-static { animation: none; opacity: 0; }
-  body.hud-booting .bh-stage canvas,
-  body.hud-shutting-down .bh-stage canvas { animation: none; }
-  /* The bezel trace is pure theatrics too — the calm readout carries it. */
-  body.hud-booting .hud-boot-panels,
-  body.hud-shutting-down .hud-boot-panels { opacity: 0; }
-  body.hud-booting .hud-boot-seam,
-  body.hud-booting .hud-boot-joint,
-  body.hud-shutting-down .hud-boot-seam,
-  body.hud-shutting-down .hud-boot-joint { animation: none; }
-  /* The calm bar fills on boot; the shared reverse rule drains it on shutdown. */
-  body.hud-booting .hud-boot-bar::after,
-  body.hud-shutting-down .hud-boot-bar::after {
-    animation: hud-boot-fill-calm var(--hud-boot-dur) ease-out forwards;
-  }
-  @keyframes hud-boot-fill-calm {
-    0% { width: 0; opacity: 1; }
-    100% { width: 100%; opacity: 0.6; }
-  }
   /* The compass readout still lights gold on lock (colour is fine), but drop the
      fade so the activation is instant rather than animated. */
   .hud-compass-read,
@@ -2163,47 +1843,66 @@ body.hud-active .star-marker[data-reduced='true'][data-visible='true'][data-stat
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   HUD INSTRUMENT FRAME — SECTION MOCK (black-hole chapter only).
-   The direction under evaluation: the HUD's mono labels get instrument GEOMETRY —
-   four hairline corner ticks framing the viewport plus a live STAGE readout,
-   bottom-left, in the compass's mono register. Mounted by HudNavigation only while
-   the walker's stage is inside the black-hole chapter (≤ 1.05); CSS reveals it only
-   once the HUD is armed (body.hud-active) so it participates in the same power-on
-   choreography as the rail. If the direction lands, this kit spreads to every
-   chapter (per-scene readout values) — if not, it deletes in one block.
+   COCKPIT CONSOLE SCREENS — the interface lives IN the ship.
+   The WebGL cockpit authors its console in a fixed 1920×1080 design space
+   stretched to the viewport (cockpitGeometry.ts), so viewport percentages map
+   1:1 onto design coordinates: the dash face tops out at y≈865 (≈80vh), the
+   centre pedestal spans x 760–1125 (≈40–58.6vw) from y≈911 (≈84.4vh) down.
+   The DOM instruments are parked INTO those masses and skinned as powered
+   MFD glass — dark phosphor panel, amber hairline bezel, scanlines — so every
+   readout reads as a screen IN the main console, not chrome floating over it.
+
+   --cockpit-screen-* are the shared skin tokens; each screen block below
+   composes them. All of it desktop-only (the ≤60rem compact layouts keep
+   their own strips) and gated on body.hud-active (no cockpit → no screens:
+   the observation deck keeps the quiet floating readouts).
    ────────────────────────────────────────────────────────────────────────────── */
+:root {
+  --cockpit-screen-line: color-mix(in oklch, var(--highlight) 32%, transparent);
+  --cockpit-screen-glass:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 200, 140, 0.024) 0 1px,
+      transparent 1px 3px
+    ),
+    linear-gradient(180deg, rgba(255, 178, 102, 0.05), rgba(255, 178, 102, 0) 34%),
+    radial-gradient(130% 100% at 50% 0%, rgba(24, 16, 9, 0.93), rgba(9, 6, 4, 0.97));
+  --cockpit-screen-shadow:
+    inset 0 0 1.1rem rgba(255, 170, 80, 0.05),
+    inset 0 0 2px rgba(255, 190, 110, 0.16),
+    0 0 18px rgba(0, 0, 0, 0.6);
+}
+
+/* TELEMETRY READOUT (bottom-left, etched on the dash hull). The reference's
+   grammar exactly: ONE bare line of mono — the lifecycle time bright, the
+   station dim — printed straight on the console mass. No card, no bezel: the
+   hull behind it IS the panel (compare "+9 MYR  THE BEGINNING" in
+   reference.png's bottom-left corner). */
 .hud-frame {
   position: fixed;
   inset: 0;
   z-index: 14;               /* under the rail/compass (≥15), over the canvas */
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.6s var(--ease-out-quint) 0.15s;
+  transition: opacity 0.45s var(--ease-out-quint);
 }
 body.hud-active .hud-frame {
   opacity: 1;
+  /* Materialise WITH the hull: the same unstable strobe the ship's decloak
+     plays, settling solid as the cells fill (see @keyframes hud-decloak). */
+  animation: hud-decloak 1.4s steps(1, end) both;
 }
-/* Four corner ticks — thin L brackets a hair inside the viewport edge, in the
-   HUD's dim gold. They frame the whole scene as one instrument face. */
-.hud-frame-tick {
-  position: fixed;
-  width: 1.3rem;
-  height: 1.3rem;
-  border: 0 solid color-mix(in oklch, var(--highlight) 60%, transparent);
-  opacity: 0.55;
-}
-.hud-frame-tick[data-corner='tl'] { top: 0.8rem; left: 0.8rem; border-top-width: 1px; border-left-width: 1px; }
-.hud-frame-tick[data-corner='tr'] { top: 0.8rem; right: 0.8rem; border-top-width: 1px; border-right-width: 1px; }
-.hud-frame-tick[data-corner='bl'] { bottom: 0.8rem; left: 0.8rem; border-bottom-width: 1px; border-left-width: 1px; }
-.hud-frame-tick[data-corner='br'] { bottom: 0.8rem; right: 0.8rem; border-bottom-width: 1px; border-right-width: 1px; }
-/* Live stage readout — bottom-left, mono micro, tabular digits so the number
-   ticks over without jitter. Sits below the manifesto block's bottom offset. */
 .hud-frame-readout {
   position: fixed;
-  left: 2rem;
-  bottom: 0.95rem;
+  /* BARE text seated INSIDE the hull's bottom-left dash plate (the WebGL
+     draws the plate etch at design (115-460, 955-1048) — the reference
+     carves the instrument into the hull; the DOM contributes only type). */
+  left: 7.2vw;
+  bottom: 5.6vh;
   display: flex;
-  gap: 0.9rem;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 1.2em;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: 0.14em;
@@ -2212,29 +1911,163 @@ body.hud-active .hud-frame {
   opacity: 1;
   transition: opacity 0.35s var(--ease-out-quint);
 }
-/* Diving into a marker: the bottom-left readout would just clutter the plunge, so it
-   fades out for the duration of the dive (body.bh-diving, set by HeroIsland.beginDive).
-   The corner ticks stay — only the text goes. */
+/* Diving into a marker: the telemetry readout would just clutter the plunge, so
+   it fades out for the duration of the dive (body.bh-diving, set by
+   HeroIsland.beginDive). */
 body.bh-diving .hud-frame-readout {
   opacity: 0;
 }
+/* The header collapses into the line itself: the readout is self-evident as an
+   instrument (time + station), the reference prints no label. */
+.hud-frame-readout-head {
+  display: none;
+}
 .hud-frame-readout-stage {
-  color: color-mix(in oklch, var(--highlight) 80%, var(--fg-faint));
+  color: color-mix(in oklch, var(--highlight) 88%, var(--fg-faint));
   font-variant-numeric: tabular-nums;
 }
-/* Compact layouts: the frame is a desktop instrument (corners collide with the
-   mobile chrome; the readout would fight the mobile scene-name line). */
+/* COMPASS NUMERALS — DOM type over the WebGL tick strip (the canvas draws the
+   ticks; text lives up here). Positions are design-space percentages: the
+   strip's long ticks sit at design x 810/960/1110 = 42.19/50/57.81vw. The
+   caret parks under the strip's centre, pointing up at 000. */
+.hud-frame-compass-num {
+  position: fixed;
+  /* Measured off the reference: numerals ride at design y≈158-172, the WebGL
+     tick strip below at y≈182-198, the caret under the strip. */
+  top: 14.6vh;
+  translate: -50% 0;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  color: rgb(235 240 250 / 0.62);
+}
+.hud-frame-compass-caret {
+  position: fixed;
+  top: 18.8vh;
+  translate: -50% 0;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid rgb(235 240 250 / 0.75);
+}
+
+/* SITE NAV BEZEL — the top-right section links sit in the same etched recess
+   as the nameplate (reference grammar), with a dot terminal on the left. */
+@media (min-width: 60.0625rem) {
+  body.hud-active .overlay-blog-links {
+    position: relative;
+    padding: 0.4rem 1rem;
+    border: 1px solid oklch(0.74 0.15 62 / 0.5);
+    border-radius: 2px;
+  }
+  body.hud-active .overlay-blog-links::before {
+    content: '';
+    position: absolute;
+    left: -2.5px;
+    top: 50%;
+    translate: 0 -50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: oklch(0.78 0.155 64 / 0.9);
+  }
+}
+
+/* Compact layouts: the console screens are desktop instruments (the compact
+   HUD keeps its own bottom strip; the readout would fight the scene-name line). */
 @media (max-width: 60rem) {
   .hud-frame { display: none; }
+}
+
+/* PEDESTAL READOUT (bottom centre). Under power the compass/CTA parks INTO
+   the pedestal mass — the WebGL console draws the pedestal AND its inner
+   screen-recess lip dead centre — as BARE amber mono, exactly the reference's
+   "[ JUMP TO WORK ]" floating inside the pedestal band. The structure is the
+   WebGL's job; the DOM contributes only the type. Excludes the loader's boot
+   readout and the warp readout — those own the slot on their own terms — and
+   leaves the un-powered (observation deck) compass exactly as it was. */
+@media (min-width: 60.0625rem) {
+  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) {
+    /* The measured screen recess spans design y 898-1030 with the CTA row at
+       y≈940 — the readout parks mid-screen, not at the frame edge. */
+    bottom: 7.4vh;
+    width: clamp(17rem, 19vw, 24rem);
+    padding: 1.1vh 1rem 1.3vh;
+    /* Materialise with the hull on power-on. No fill mode: once the strobe
+       ends the declared opacity rules (scene-ready / data-visible gating)
+       take back over, so the flicker can never pin a hidden compass visible. */
+    animation: hud-decloak 1.4s steps(1, end);
+  }
+  /* The radial text scrim is the FLOATING readout's legibility pool — inside
+     the pedestal the console mass is the dark behind the type. */
+  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout)::before {
+    display: none;
+  }
+  /* The STANDING CUE readout (the boot slot's final phase, landed in the
+     bottom slot: data-boot='cue' + glided) is the same instrument the live
+     compass takes over — same bare pedestal seat, so the cue → live hand-off
+     swaps content, never chrome. (The loading/ready phases and the glide
+     itself stay bare — those live in/over the loader.) */
+  body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] {
+    bottom: 7.4vh;
+    width: clamp(17rem, 19vw, 24rem);
+    padding: 1.1vh 1rem 1.3vh;
+  }
+  /* Inside the pedestal the readout drops from the floating --text-hud display
+     size to the instrument register (--text-label): an MFD line, not a
+     billboard — and the longest labels (REVERSE COLLAPSE, SCROLL TO EXPLORE)
+     hold one line inside the recess. Applies to the live compass AND the
+     standing cue (same slot, same seat). */
+  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) .hud-compass-read,
+  body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] .hud-compass-read {
+    font-size: var(--text-hud);
+  }
+  /* Console hardware speaks AMBER (the reference's "[ JUMP TO WORK ]"): the
+     pedestal CTA is powered trim, not a glass hologram — white stays the
+     holography's colour (markers, scanner ring, dial labels). */
+  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) .hud-compass-label,
+  body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] .hud-compass-label {
+    color: color-mix(in oklch, var(--highlight) 80%, var(--fg));
+  }
+}
+
+/* NAV DIAL (the heading gauge, left flank). Under power the half-circle tick
+   gauge is a HOLOGRAPHIC dial projected straight on the glass — the
+   reference's left-flank instrument exactly: radial ticks, station text and
+   the lubber chevron floating bare over the scene, the amber piping passing
+   behind them. No card, no bezel — brightness is the hierarchy. It keeps the
+   ghost gauge's geometry (same face, same coordinates for the click targets)
+   and simply ARMS: stations light, buttons wake, and the decloak strobe plays
+   it in with the hull. */
+@media (min-width: 60.0625rem) {
+  body.hud-active .hud-arc {
+    left: 1.6vw;
+    animation: hud-decloak 1.4s steps(1, end);
+  }
+}
+
+/* Reduced motion: the decloak strobe is theatrics — the class flip alone (a
+   plain fade through the existing opacity transitions) carries the power
+   change for every console surface. */
+@media (prefers-reduced-motion: reduce) {
+  body.hud-active .hud-frame,
+  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout),
+  body.hud-active .hud-arc,
+  body.hud-active .bh-finale-ledger[data-visible='true'] {
+    animation: none;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
    HALF-CIRCLE TICK GAUGE — fixed-lubber heading card: the gold arrow is FIXED on
    the horizontal centreline and the tick quadrant ROTATES under it with scroll
-   (compass-card behaviour). Minimalist face: no arc stroke, no box — hairline
-   ticks only, fading with angular distance from the lubber (opacity is set
-   per-tick inline by the component). The old vertical rail markup still renders
-   for the compact layout; the swap is pure CSS (below).
+   (compass-card behaviour). Hairline ticks fade with angular distance from the
+   lubber down to a faint etched floor (opacity is set per-tick inline by the
+   component). Un-powered it floats bare on the glass (ghost); under power it
+   mounts in the NAV console screen (see the cockpit-console section) with the
+   current station always at the panel's vertical centre. The old vertical rail
+   markup still renders for the compact layout; the swap is pure CSS (below).
 
    TWO POWER STATES (the arc is the desktop instrument that answers the HUD
    power switch — see the boot FSM in BaseLayout):
@@ -2262,11 +2095,16 @@ body.bh-diving .hud-frame-readout {
   pointer-events: none;
 }
 .hud-arc[data-visible='true'] { opacity: 1; }
+/* The opening hold quiets the GHOST gauge only: once the ship is de-cloaked
+   (body.hud-active) the NAV screen is part of the console and stays lit on
+   every frame, the opening included. The loader still gates everything. */
 body:not(.scene-ready) .hud-arc,
-body.at-opening .hud-arc { opacity: 0; }
+body.at-opening:not(.hud-active) .hud-arc { opacity: 0; }
 .hud-arc[data-visible='false'] .hud-arc-btn,
-body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
+body.at-opening:not(.hud-active) .hud-arc .hud-arc-btn { pointer-events: none; }
 .hud-arc-svg { display: block; overflow: visible; }
+/* The NAV screen's header strip — only exists on the powered console skin. */
+.hud-arc-head { display: none; }
 .hud-arc-tick {
   stroke: color-mix(in oklch, var(--fg-faint) 45%, transparent);
   stroke-width: 1;
@@ -2283,8 +2121,8 @@ body.at-opening .hud-arc .hud-arc-btn { pointer-events: none; }
      stations read reliably; the decorative minor ticks keep their faint mix. */
   fill: var(--fg-hud-interactive);
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  letter-spacing: 0.14em;
   transition: fill 0.24s ease, opacity 0.45s var(--ease-out-quint);
 }
 .hud-arc-station[data-current='true'] line { stroke: var(--highlight); }
@@ -2351,6 +2189,19 @@ body:not(.hud-active) .hud-arc-tick {
 }
 body:not(.hud-active) .hud-arc-lubber { opacity: 0.55; }
 .hud-arc-lubber { transition: opacity 0.5s ease; }
+/* POWERED dial: the tick face ARMS in the trim's own amber — the reference's
+   left-flank instrument is an amber holograph, not a gray ghost. Station
+   digits go amber too (reference: 01 bright at the chevron, 02/03 dim), the
+   current station keeps its full-highlight override below. */
+body.hud-active .hud-arc-tick {
+  stroke: color-mix(in oklch, var(--highlight) 60%, transparent);
+}
+body.hud-active .hud-arc-station line {
+  stroke: color-mix(in oklch, var(--highlight) 55%, var(--fg-dim));
+}
+body.hud-active .hud-arc-station:not([data-current='true']) text {
+  fill: color-mix(in oklch, var(--highlight) 52%, var(--fg-faint));
+}
 
 /* ── COCKPIT IGNITION — when hud-active lands (boot finished), the stations
    cascade in top→bottom, each digit writing in a beat after its tick mark; the
@@ -2485,13 +2336,22 @@ body.scene-ready.hud-active .bh-cockpit {
   stroke-linecap: round;
   transition: stroke 0.5s ease; /* per-scene temperature swaps ease, never pop */
 }
-.bh-cockpit-base path { stroke: var(--ckpt-dim); }
-.bh-cockpit-lit path { stroke: var(--ckpt-lit); }
-/* The canopy strut band — solid structure between the frame's edge pair, so the
-   scene reads as sitting BEHIND the member, not between two floating lines. */
-.bh-cockpit path.bh-cockpit-band {
-  fill: rgb(3 3 4 / 0.7);
-  stroke: none;
+/* Structural BEAMS (the reference's milled-metal members): a wide amber stroke
+   UNDER a slightly narrower dark-metal stroke — the exposed sliver each side is
+   the edge-lit hairline pair; grooves (narrow beams) read as seams for free.
+   Widths are DESIGN units (the band scales with the frame), so these override
+   the non-scaling default above. */
+.bh-cockpit-beam-base path {
+  vector-effect: none;
+  stroke: var(--ckpt-dim);
+}
+.bh-cockpit-beam-lit path {
+  vector-effect: none;
+  stroke: var(--ckpt-lit);
+}
+.bh-cockpit path.bh-cockpit-beam-metal {
+  vector-effect: none;
+  stroke: rgb(13 13 16 / 0.97);
 }
 /* The opaque interior masses (ceiling / dashboard). Heavy but not pure black:
    the scene's brightest beats still ghost through at ~1/5 strength, reading as

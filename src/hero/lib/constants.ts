@@ -15,19 +15,12 @@ export const SCROLLED_BODY_CLASS = 'is-scrolled';
  *  the boot readout uses to hand the bottom-centre slot to the live compass, so
  *  "the visitor has moved" is one consistent boundary. Spelled here once. */
 export const AT_OPENING_BODY_CLASS = 'at-opening';
-/** Toggled on <body> once the HUD is powered (the boot FSM's `ready` state).
- *  Drives the cockpit chrome: the name grows, the top-right section labels
- *  brighten and lift, the corner frame ticks appear. Powered EITHER by scroll
- *  reaching the lifecycle's ending (auto-boot, first-visit story beat) or by the
- *  corner power button — one power bit, owned solely by the FSM in BaseLayout. */
+/** Toggled on <body> once the HUD is powered (the power FSM's `ready` state).
+ *  The single power bit, owned solely by the FSM in BaseLayout and applied
+ *  INSTANTLY (the old boot window is gone): the WebGL cockpit reads it at frame
+ *  cadence and plays the DECLOAK (buildCockpit.ts), and the DOM console chrome
+ *  flicker-materialises off the same class (hud.css). */
 export const HUD_ACTIVE_BODY_CLASS = 'hud-active';
-/** Toggled on <body> while the HUD power-on sequence is playing — the loader /
- *  flicker / scan-sweep beat that sits BETWEEN idle and a fully-lit HUD. Owned by
- *  the boot FSM (BaseLayout's inline script). The rail / compass / menu stay DARK
- *  while it is present and only ignite once it is removed and HUD_ACTIVE_BODY_CLASS
- *  goes on. Centralized here so the class string is never spelled inline — it is
- *  referenced from the inline FSM AND from hud.css / scene.css. */
-export const HUD_BOOTING_BODY_CLASS = 'hud-booting';
 /** Toggled on <body> for the duration of a cinematic dive (a marker plunge into a
  *  star). Set by HeroIsland.beginDive the moment the dive is armed and cleared when
  *  the island unmounts (the SPA navigation the dive triggers). While present, the HUD
@@ -118,25 +111,18 @@ export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
  *  separate and always shows on the click. Access wrapped in try/catch (private mode
  *  / disabled storage must never throw). */
 export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
-/** localStorage key persisting the HUD power state across reloads. The boot FSM
+/** localStorage key persisting the HUD power state across reloads. The power FSM
  *  writes a small JSON blob `{ powered: boolean }` here on every transition and
  *  restores it on init, so a returning visitor finds the HUD lit (or dark) exactly
- *  as they left it — without replaying the ~3.6s sequence either way. The HUD is OFF
- *  BY DEFAULT: absence of a stored blob (a first-time visitor, or a private-mode
- *  visitor whose read throws) is read as un-powered, so only an explicit stored
- *  `{ powered: true }` lights the HUD on load. Legacy blobs carried extra flags
- *  (`forced` / `userChosen` from the old scroll auto-boot); they are simply ignored
- *  — only `powered` is read. All access is wrapped in try/catch (private mode /
- *  disabled storage must never throw). */
+ *  as they left it. The HUD is OFF BY DEFAULT: absence of a stored blob (a
+ *  first-time visitor, or a private-mode visitor whose read throws) is read as
+ *  un-powered, so only an explicit stored `{ powered: true }` lights the HUD on
+ *  load — the visitor meets the bare spectacle and the first power press plays
+ *  the decloak. Legacy blobs carried extra flags (`forced` / `userChosen` from
+ *  the old scroll auto-boot); they are simply ignored — only `powered` is read.
+ *  All access is wrapped in try/catch (private mode / disabled storage must
+ *  never throw). */
 export const HUD_STATE_STORAGE_KEY = 'hud-state';
-
-/** The HUD power sequence duration, in milliseconds. The single source of truth for
- *  "how long does powering up (or down) take" — referenced by the FSM's sequence
- *  timer AND by hud.css's --hud-boot-dur (which MUST be kept in sync: the FSM also
- *  pushes this value into the CSS var on init so the two can never drift). The
- *  power-OFF sequence reuses this same window, played in reverse. ~3.6s: long enough
- *  to read like a machine running its start-up self-check. */
-export const HUD_BOOT_DURATION_MS = 3600;
 
 // --- cross-layer events ----------------------------------------------------
 /** The window CustomEvent the scene dispatches ONCE, after its first frame has

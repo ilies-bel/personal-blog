@@ -192,10 +192,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Whether scroll is still in the opening hold (progress <= SCROLL_HINT_DISMISS_AT).
   // Ref-tracked so the body class only flips on an actual transition, not every sample.
   const atOpeningRef = useRef(true);
-  // NOTE: scroll no longer drives HUD power. The HUD is ON BY DEFAULT (the boot FSM in
-  // BaseLayout lands a first-time visitor straight in `ready`) and only the corner
-  // power button toggles it off/on — so this island dispatches no HUD_POWER_EVENT and
-  // keeps no at-end / pending-power-on refs.
+  // NOTE: scroll no longer drives HUD power. The HUD is OFF BY DEFAULT (the power FSM
+  // in BaseLayout lands a first-time visitor in `idle` — the bare spectacle) and only
+  // the corner power button toggles it on/off — so this island dispatches no
+  // HUD_POWER_EVENT and keeps no at-end / pending-power-on refs.
 
   useEffect(() => {
     const host = hostRef.current;
@@ -709,9 +709,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             ))}
           </>
         )}
-        {/* The cockpit canopy the HUD power-on unzooms into. On the LIVE path it
+        {/* The cockpit canopy the HUD power-on DE-CLOAKS. On the LIVE path it
             is a WebGL rig inside the scene itself (buildCockpit — per-pixel star
-            lighting, bloom-lit, clip-space unzoom), so no DOM layer mounts here.
+            lighting, bloom-lit, the Predator materialisation), so no DOM layer
+            mounts here.
             The SVG fallback below serves ONLY the reduced-motion poster path,
             where there is no scene to light it (static frame, CSS crossfade). */}
         {reduced && <CockpitFrame />}

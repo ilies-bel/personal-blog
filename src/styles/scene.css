@@ -32,11 +32,8 @@ body.bare::after {
   );
   transition: --vignette-edge 0.6s var(--ease-out-quint);
 }
-/* Deepen when the HUD takes over (or is powering up / down) so the chrome stands
-   out — held through the shutdown so the vignette eases back only once it lands idle. */
-body.bare.hud-active::after,
-body.bare.hud-booting::after,
-body.bare.hud-shutting-down::after {
+/* Deepen when the HUD takes over so the chrome stands out. */
+body.bare.hud-active::after {
   --vignette-edge: 0.72;
 }
 /* --vignette-edge is not an animatable property in browsers without @property, so
@@ -240,7 +237,7 @@ body.scene-ready .scene-loader::before {
    lift + the ignite flicker — all paint/transform only, so standby → powered
    causes zero layout shift. A restored-power visitor (hud-active persisted) at
    the top simply doesn't match this rule and lands on the full lit treatment. */
-body.at-opening:not(.hud-active):not(.hud-booting) .overlay-blog {
+body.at-opening:not(.hud-active) .overlay-blog {
   opacity: 0.86;
 }
 
@@ -322,26 +319,55 @@ body.bare.hud-active .overlay-blog-link { color: var(--fg); }
 body.bare.hud-active .overlay-blog-links .overlay-blog-link {
   transform: translateY(-2px);
 }
-/* IGNITION HANDSHAKE: when hud-active lands, the section labels flicker alive one
-   after another left→right — instruments answering the power bus, in the same
-   stutter language as the warp flicker. A one-shot ANIMATION (not a
-   transition-delay) so hover/focus transitions stay instant afterwards;
-   `backwards` holds each label dim through its stagger slot. Replays on
-   ClientRouter swaps (the fresh body re-gains hud-active) — that re-handshake is
-   deliberate, it reads as the chrome re-syncing after a jump. */
-body.bare.hud-active .overlay-blog-links .overlay-blog-link {
-  animation: overlay-link-ignite 0.42s ease-out backwards;
+/* DECLOAK HANDSHAKE: when hud-active lands, the whole button bank
+   flicker-materialises with the hull — the same hud-decloak strobe (hud.css)
+   the console screens play, one strobe for the bank so it reads as a panel
+   de-cloaking, not five separate lamps. (The old per-label left→right ignite
+   cascade is gone with the boot theater.) Replays on ClientRouter swaps (the
+   fresh body re-gains hud-active) — that re-handshake is deliberate, it reads
+   as the chrome re-syncing after a jump. */
+body.bare.hud-active .overlay-blog {
+  animation: hud-decloak 1.4s steps(1, end);
 }
-body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(1) { animation-delay: 0.05s; }
-body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(2) { animation-delay: 0.13s; }
-body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(3) { animation-delay: 0.21s; }
-body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(4) { animation-delay: 0.29s; }
-body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(5) { animation-delay: 0.37s; }
-@keyframes overlay-link-ignite {
-  0%   { opacity: 0.25; }
-  45%  { opacity: 0.95; }
-  60%  { opacity: 0.55; }  /* one settle stutter, then steady */
-  100% { opacity: 1; }
+
+/* COCKPIT BUTTON BANK — with the ship de-cloaked (body.hud-active) the corner
+   nav stops floating over the glass and reads as a bank of physical button
+   caps mounted on the cockpit's ceiling panel: machined dark caps with an
+   amber hairline bezel, an inner top highlight and a pressed-in shadow, hover
+   waking the bezel gold. Desktop-only (the compact chrome keeps its quiet
+   labels) and scoped to the powered state — the observation deck (HUD off)
+   keeps the bare standby labels. */
+@media (min-width: 60.0625rem) {
+  /* SECTION LINKS go BARE under power: they live inside the etched nav bezel
+     (hud.css .overlay-blog-links) — reference grammar is amber mono text in
+     one plate, not per-word button caps. Only the icon CONTROLS keep the
+     machined cap footprint. */
+  body.bare.hud-active .overlay-blog .overlay-blog-section .overlay-blog-label {
+    color: color-mix(in oklch, var(--highlight) 40%, var(--fg));
+  }
+  body.bare.hud-active .overlay-blog .overlay-blog-social {
+    padding: 0.3rem 0.4rem;
+    border: 1px solid color-mix(in oklch, var(--highlight) 28%, transparent);
+    background: linear-gradient(180deg, rgba(30, 21, 12, 0.82), rgba(12, 9, 6, 0.92));
+    border-radius: 0.35rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 200, 140, 0.08),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.4),
+      0 2px 7px rgba(0, 0, 0, 0.5);
+  }
+  body.bare.hud-active .overlay-blog .overlay-blog-social:hover,
+  body.bare.hud-active .overlay-blog .overlay-blog-social:focus-visible {
+    border-color: color-mix(in oklch, var(--highlight) 55%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 200, 140, 0.1),
+      inset 0 -3px 6px rgba(0, 0, 0, 0.35),
+      0 0 10px color-mix(in oklch, var(--highlight) 28%, transparent);
+  }
+  /* The power/motion circles are already machined buttons — under power they
+     just pick up the bank's darker cap fill so the bank reads as one row. */
+  body.bare.hud-active .overlay-blog .overlay-blog-power {
+    background: linear-gradient(180deg, rgba(30, 21, 12, 0.82), rgba(12, 9, 6, 0.92));
+  }
 }
 /* Functional control glyphs only — the GitHub/X brand-logo SVGs in the social
    icon links, the Power button SVG, and the ReducedMotionToggle SVG all carry
@@ -407,7 +433,9 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(5) { anima
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-icon,
   .overlay-blog-link { transition: none; }
-  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; animation: none; }
+  body.bare.hud-active .overlay-blog { animation: none; }
+  body.bare.hud-active .bh-identity { animation: none; }
+  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
   /* Drop the social-logo lift/scale; the gold glow still confirms hover. */
   .overlay-blog-social:hover .overlay-blog-icon,
   .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }
@@ -456,62 +484,29 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link:nth-child(5) { anima
   outline-offset: 3px;
   border-radius: 999px;
 }
-/* LIT / ON look. The HUD can power on from SCROLL too (the first-visit auto-boot),
-   so the button reads as ON whenever the HUD is active OR booting — keyed off the
-   body classes. aria-pressed now mirrors the same machine state (the FSM stamps it
-   in transition()), so the [aria-pressed='true'] selector is redundant with the
-   body classes but kept as a belt-and-braces hook: the lit look survives even if a
-   body class is momentarily out of step (e.g. mid ClientRouter swap). Gold frame +
-   glyph, soft outer glow, faint gold fill tint. */
+/* LIT / ON look — keyed off body.hud-active. aria-pressed mirrors the same
+   machine state (the FSM stamps it in transition()), so the [aria-pressed='true']
+   selector is redundant with the body class but kept as a belt-and-braces hook:
+   the lit look survives even if the class is momentarily out of step (e.g. mid
+   ClientRouter swap). Gold frame + glyph, soft outer glow, faint gold fill tint. */
 .overlay-blog-power[aria-pressed='true'],
-body.hud-active .overlay-blog-power:not(.overlay-blog-motion),
-body.hud-booting .overlay-blog-power:not(.overlay-blog-motion) {
+body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
   color: var(--accent-strong);
   border-color: var(--accent-strong);
   background: color-mix(in oklch, var(--highlight) 12%, color-mix(in oklch, var(--bg) 55%, transparent));
   box-shadow: 0 0 12px color-mix(in oklch, var(--highlight) 45%, transparent);
 }
 
-/* CHARGING look while the HUD is powering up OR down (#4). The whole button PULSES
-   — a gold glow that swells and fades in place — so it reads as the corner control
-   drawing (or draining) power for the whole in-flight sequence. During shutdown the
-   button also reverts to its dim resting tint (aria-pressed → false, hud-active
-   dropped), so the pulse plays over a darkening glyph — power draining out. (No
-   rotating ring: the pulse alone is the charge cue.) position: relative is kept
-   harmlessly in case any future ::overlay wants a positioning context; it costs
-   nothing without a ::before to host. */
+/* (The old boot-window "charging" pulse is gone with the boot theater — the
+   power flip is instant and the ship's decloak carries the transition.)
+   position: relative is kept harmlessly in case any future ::overlay wants a
+   positioning context; it costs nothing without a ::before to host. */
 .overlay-blog-power {
   position: relative;
-}
-body.hud-booting .overlay-blog-power:not(.overlay-blog-motion),
-body.hud-shutting-down .overlay-blog-power:not(.overlay-blog-motion) {
-  animation: overlay-power-charge 0.9s ease-in-out infinite;
-}
-/* The pulse: a gold (var(--highlight)/var(--accent-strong)) glow that breathes from
-   a calm rest to an unmistakable bright peak at 50%, with the border + glyph colour
-   nudged toward full gold on the upswing so the whole button feels like it's lighting
-   up. Returns to a soft floor each cycle so the rhythm reads as "charging". */
-@keyframes overlay-power-charge {
-  0%, 100% {
-    border-color: var(--accent-strong);
-    color: var(--accent-strong);
-    box-shadow: 0 0 8px color-mix(in oklch, var(--highlight) 32%, transparent);
-  }
-  50% {
-    border-color: var(--highlight);
-    color: var(--highlight);
-    box-shadow:
-      0 0 22px color-mix(in oklch, var(--highlight) 75%, transparent),
-      0 0 6px color-mix(in oklch, var(--highlight) 90%, transparent);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .overlay-blog-power { transition: none; }
-  /* Drop the charge pulse (both power-up and power-down); the static lit/charging
-     tint above still reads. */
-  body.hud-booting .overlay-blog-power,
-  body.hud-shutting-down .overlay-blog-power { animation: none; }
 }
 
 /* Reduced-motion toggle — a sibling glyph button to the corner power control. The

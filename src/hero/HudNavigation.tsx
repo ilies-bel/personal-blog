@@ -686,15 +686,17 @@ export default function HudNavigation({
   // guard the lookup and render the readout only once there is a scene to name.
   const mobileReadout = effectiveCurrentId ? HUD_NAV_BY_ID[effectiveCurrentId] : null;
 
-  // INSTRUMENT FRAME — sitewide on the hero (the black-hole section mock was
-  // approved). Four hairline corner ticks framing the viewport + a live readout
-  // bottom-left: the star's AGE on the lifecycle clock (billions of years —
-  // falling as you scroll, since the story plays in reverse) and the nearest
-  // station. CSS shows it only while the HUD is armed (body.hud-active) and
-  // hides it on compact layouts. `stage` is the presentation clock's eased shader
-  // stage — the exact value the canvas is rendering — so the readout names the
-  // body actually on screen (re-deriving from progress would diverge from the
-  // morph, which eases the stage as its own scalar across the band-7→8 jump).
+  // TELEMETRY SCREEN — the metadata readout, mounted IN the cockpit: a small
+  // MFD on the left dash face (hud.css positions + skins it into the console
+  // under body.hud-active): the star's AGE on the lifecycle clock (billions of
+  // years — falling as you scroll, since the story plays in reverse) and the
+  // nearest station, under a TELEMETRY header. The old floating corner ticks
+  // are gone — the cockpit itself is the frame now. CSS shows the screen only
+  // while the HUD is armed (body.hud-active) and hides it on compact layouts.
+  // `stage` is the presentation clock's eased shader stage — the exact value
+  // the canvas is rendering — so the readout names the body actually on screen
+  // (re-deriving from progress would diverge from the morph, which eases the
+  // stage as its own scalar across the band-7→8 jump).
   const frameStation = stationForStage(stage);
   const frameTime = formatLifecycleTime(lifecycleTimeGyr(stage));
 
@@ -724,12 +726,15 @@ export default function HudNavigation({
   });
   // The card's rotation: bring the CURRENT progress angle onto the lubber line.
   const caretDeg = fx(thetaOf(Math.min(1, Math.max(0, progress))));
-  // Angular fade around the lubber line — full presence within ~10°, gone past
-  // ~65°. Ticks are static geometry inside the rotating group; only this opacity
-  // (and the group rotation) changes per frame.
+  // Angular fade around the lubber line — full presence within ~10°, easing off
+  // with distance. FLOORED at 0.14 (it used to reach 0): the gauge lives in a
+  // console screen now, and an MFD shows its WHOLE scale — the far ticks and
+  // stations hold as a faint etched dial, the active region reads bright. Ticks
+  // are static geometry inside the rotating group; only this opacity (and the
+  // group rotation) changes per frame.
   const arcFade = (deg: number): number => {
     const d = Math.abs(deg - caretDeg);
-    return fx(Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6));
+    return fx(Math.max(0.14, Math.pow(Math.max(0, Math.min(1, 1.18 - d / 55)), 1.6)));
   };
   const ARC_MINOR_TICKS = 44;
   // Station angles at each scene's canonical RAW-scroll ANCHOR (settled-hold
@@ -756,19 +761,28 @@ export default function HudNavigation({
         frame, and .hud-system's transform would trap position:fixed). Gated by
         body.hud-active in CSS. */}
     <div className="hud-frame" aria-hidden="true">
-      <span className="hud-frame-tick" data-corner="tl" />
-      <span className="hud-frame-tick" data-corner="tr" />
-      <span className="hud-frame-tick" data-corner="bl" />
-      <span className="hud-frame-tick" data-corner="br" />
       <span className="hud-frame-readout">
+        <span className="hud-frame-readout-head">TELEMETRY</span>
         <span className="hud-frame-readout-stage">{frameTime}</span>
         <span className="hud-frame-readout-station">{frameStation.label}</span>
       </span>
+      {/* Compass numerals over the WebGL tick strip (the canvas draws the
+          ticks; the type lives up here in the DOM). Static headings — the
+          strip is set dressing; the caret marks 000 dead centre. */}
+      <span className="hud-frame-compass-num" style={{ left: '42.19vw' }}>330</span>
+      <span className="hud-frame-compass-num" style={{ left: '50vw' }}>000</span>
+      <span className="hud-frame-compass-num" style={{ left: '57.81vw' }}>030</span>
+      <span className="hud-frame-compass-caret" style={{ left: '50vw' }} />
     </div>
     {/* The arc gauge — also a sibling (position:fixed vs .hud-system's transform).
         Mirrors the rail's data-visible gating; buttons drive the SAME beginTravel
         click-jump + pointedId aiming the rail rows used. */}
     <div className="hud-arc" data-visible={visible} aria-hidden={!visible}>
+      {/* The console skin's header strip (hud.css shows it only on the powered
+          NAV-screen layout; the un-powered ghost gauge hides it). */}
+      <span className="hud-arc-head" aria-hidden="true">
+        NAVIGATION
+      </span>
       <svg className="hud-arc-svg" viewBox="0 -300 190 600" width="190" height="600" aria-hidden="true">
         {/* THE CARD — everything inside rotates so the current progress angle
             sits on the fixed lubber line (theta 0, screen-horizontal). */}
@@ -859,7 +873,11 @@ export default function HudNavigation({
       {arcShownItem && (
         <span
           className="hud-arc-label"
-          style={{ left: `${ARC_LABEL_X}px`, top: '300px' }}
+          /* On the hull flank between the edge seam and the canopy side (the
+             reference prints the station name at design (195-300, 505-560)).
+             vw so it tracks the design space at every viewport width; the px
+             fallback keeps it clear of the dial on narrow desktops. */
+          style={{ left: `max(${ARC_LABEL_X}px, 9.6vw)`, top: '300px' }}
         >
           <span className="hud-arc-label-title">{arcShownItem.label}</span>
           <span className="hud-arc-label-dest">{arcShownItem.destination}</span>
