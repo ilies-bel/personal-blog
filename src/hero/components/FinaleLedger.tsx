@@ -15,7 +15,19 @@
 // it. Hrefs resolve through the same base-path seam the star markers use
 // (resolveHref + SceneStateContext's base) — never a hardcoded site prefix.
 import { resolveHref } from '../lib/url';
+import { graveyardNote, projectsNote } from '../../lib/contentFormat';
 import { useSceneState } from './SceneStateContext';
+
+/** Collection-derived counts for the ledger notes. Computed server-side by
+ *  getCounts() (src/lib/contentStats.ts) in index.astro and serialized down
+ *  through the island props (BlackHole → HeroIsland → ManifestoOverlay → here),
+ *  so the numbers can never drift from the actual /projects and /graveyard
+ *  content — the old hand-synced literals ('2 shipped', '2 dead, both honest')
+ *  are gone. */
+export interface LedgerCounts {
+  shipped: number;
+  dead: number;
+}
 
 interface LedgerRow {
   /** Mono-caps row label — the destination's name (uppercased by CSS-free
@@ -28,12 +40,9 @@ interface LedgerRow {
   href: string;
 }
 
-// Counts are REAL: projects.astro ships two entries (fleet, mars); the
-// graveyard ledger holds two specimens (KeywordLens, HeyDaniel). If either
-// page gains an entry, update the note here.
-const ROWS: readonly LedgerRow[] = [
-  { label: 'PROJECTS', note: '2 shipped', href: 'projects' },
-  { label: 'GRAVEYARD', note: '2 dead, both honest', href: 'graveyard' },
+const buildRows = (counts: LedgerCounts): readonly LedgerRow[] => [
+  { label: 'PROJECTS', note: projectsNote(counts.shipped), href: 'projects' },
+  { label: 'GRAVEYARD', note: graveyardNote(counts.dead), href: 'graveyard' },
   { label: 'WRITING', note: 'notes & essays', href: 'writing' },
   { label: 'BEHIND THE BUILD', note: 'how this site is built', href: 'behind-the-build' },
   { label: 'ABOUT', note: 'who I am', href: 'about' },
@@ -44,10 +53,12 @@ interface FinaleLedgerProps {
   /** The finale beat's own visibility (ManifestoOverlay's band result) — drives
    *  the visibility/pointer-events gate so ledger and copy flip together. */
   visible: boolean;
+  counts: LedgerCounts;
 }
 
-export default function FinaleLedger({ visible }: FinaleLedgerProps) {
+export default function FinaleLedger({ visible, counts }: FinaleLedgerProps) {
   const { base } = useSceneState();
+  const rows = buildRows(counts);
   return (
     <nav className="bh-finale-ledger" aria-label="Site index" data-visible={visible}>
       {/* The console skin's header strip (hero.css shows it only on the powered
@@ -55,7 +66,7 @@ export default function FinaleLedger({ visible }: FinaleLedgerProps) {
       <span className="bh-finale-ledger-head" aria-hidden="true">
         DIRECTORY
       </span>
-      {ROWS.map((row) => (
+      {rows.map((row) => (
         <a
           key={row.href}
           className="bh-finale-ledger-row"

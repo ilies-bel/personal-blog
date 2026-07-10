@@ -11,6 +11,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 import { SITE_TITLE } from '../consts';
+import { getCounts } from '../lib/contentStats';
+import { numberToWord } from '../lib/contentFormat';
+
+// Derived shader count (P6) — from the same catalog behind-the-build renders
+// as its gallery (see src/lib/shaderCatalog.ts), so the teaser line below can
+// never drift from the case study it links to.
+const { shaders } = await getCounts();
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
@@ -34,11 +41,6 @@ const fmt = (d: Date) =>
 // Reading time: ~220 wpm over the raw MDX body — cheap, static, close enough.
 const readMinutes = (body: string | undefined) =>
   Math.max(1, Math.round((body ?? '').trim().split(/\s+/).length / 220));
-
-// Provenance notes for pieces that first ran elsewhere, keyed by post id.
-const origins: Record<string, string> = {
-  'memory-leak-search-and-destroy': 'First published on Medium, in French',
-};
 ---
 
 <BaseLayout
@@ -75,7 +77,9 @@ const origins: Record<string, string> = {
                 so the clicked title physically travels into the headline. */}
             <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
             <span class="writing-row-description">{post.data.description}</span>
-            {origins[post.id] && <span class="writing-row-origin">{origins[post.id]}</span>}
+            {/* Provenance comes from the post's own frontmatter (P6) — the old
+                hardcoded per-id origins map is gone. */}
+            {post.data.provenance && <span class="writing-row-origin">{post.data.provenance.note}</span>}
           </span>
         </a>
       ))}
@@ -123,7 +127,7 @@ const origins: Record<string, string> = {
           <span class="writing-row-title" data-decode>Behind the build</span>
           <span class="writing-row-description">
             How the scroll-scrubbed stellar lifecycle actually works: one engine,
-            nine shaders, and the budgets that keep it fast.
+            {numberToWord(shaders)} shaders, and the budgets that keep it fast.
           </span>
         </span>
       </a>

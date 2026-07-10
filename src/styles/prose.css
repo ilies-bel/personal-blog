@@ -118,6 +118,22 @@
   letter-spacing: 0.08em;
   color: var(--fg-faint);
 }
+/* Byline + provenance (P6, both .article-meta) read as ONE record block when
+   stacked — collapse the inter-line gap so they don't float apart. */
+.article-header .article-byline + .article-provenance {
+  margin-top: 0.35rem;
+}
+/* The provenance link stays in the meta line's quiet register (the sitewide
+   .prose a weight is for running-copy links, too loud for an instrument row). */
+.article-header .article-provenance a {
+  color: var(--fg-faint);
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.article-header .article-provenance a:hover {
+  color: var(--fg-dim);
+}
 /* Long unbroken tokens (fully-qualified class names, JVM flags) also appear in
    running prose as <em>/plain text, not only <code>. overflow-wrap is inherited,
    so one declaration lets ANY descendant break an oversized token instead of

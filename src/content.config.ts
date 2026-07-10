@@ -1,5 +1,7 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
+import { projectSchema, graveyardSchema } from './lib/contentSchemas';
+import { AUTHOR_NAME } from './consts';
 
 // Blog posts live in src/content/posts/*.mdx
 // The frontmatter schema below is validated at build time AND feeds the SEO
@@ -15,6 +17,18 @@ const posts = defineCollection({
     ogImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
+    // FORMALIZED CO-AUTHORSHIP (P6): every author of the piece, site owner
+    // included. Flows into the BlogPosting JSON-LD author array (BaseHead) and
+    // the visible byline on the article page when there is more than one name.
+    authors: z.array(z.string()).min(1).default([AUTHOR_NAME]),
+    // Where the piece first ran, when that was elsewhere. Replaces the old
+    // hardcoded `origins` map in writing.astro — one source of truth, in data.
+    provenance: z
+      .object({
+        note: z.string(),
+        url: z.string().url().optional(),
+      })
+      .optional(),
     // Optional per-post backdrop override. When set, the post layout swaps the
     // default dimmed live <BlackHole backdrop> photon-ring scene for a bespoke
     // backdrop layer. 'tesseract' = the Interstellar bookcase-corridor image
@@ -45,4 +59,26 @@ const posts = defineCollection({
   }),
 });
 
-export const collections = { posts };
+// Shipped / delivered work — src/content/projects/*.mdx. The schema (see
+// src/lib/contentSchemas.ts) ENFORCES the evidence contract at build time:
+// any factual claim with evidence.type 'none' while draftEvidence is false
+// fails the build naming the claim, and a shipped project must list at least
+// one limitation. The MDX body carries the entry's running copy; the figure
+// (screenshot filename or diagram name) is declared in frontmatter `media`.
+// (Screenshots are validated filenames, NOT the image() helper — see the
+// dist-weight rationale at the top of contentSchemas.ts.)
+const projects = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/projects' }),
+  schema: projectSchema,
+});
+
+// Dead projects — src/content/graveyard/*.mdx. MDX (not yaml/json) on purpose:
+// the specimens' prose is long-form and will grow richer in P13; the loader and
+// body handling stay consistent with `posts`. Frontmatter carries the specimen
+// record (interred/cause/lesson/…); the body carries the story paragraphs.
+const graveyard = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/graveyard' }),
+  schema: graveyardSchema,
+});
+
+export const collections = { posts, projects, graveyard };

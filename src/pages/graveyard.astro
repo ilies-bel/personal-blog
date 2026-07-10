@@ -1,11 +1,24 @@
 ---
 import type { ImageMetadata } from 'astro';
+import { getCollection, render } from 'astro:content';
 import { Picture } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ArticleScene from '../hero/components/ArticleScene.tsx';
 import { SITE_TITLE } from '../consts';
-import heydanielShot from '../assets/graveyard/heydaniel.png';
-import keywordlensShot from '../assets/graveyard/keywordlens.png';
+
+// SPECIMEN LEDGER — P6: the specimens are a CONTENT COLLECTION
+// (src/content/graveyard/*.mdx, schema in src/lib/contentSchemas.ts). The
+// drawer record (interred/cause/lesson/…) is frontmatter; the story paragraphs
+// are the MDX body. Order is the visual order of the cabinet drawers — oldest
+// interment first, so the descent through the list IS the descent through the
+// stellar-lifecycle journey [2.05 (red giant) → 0 (black hole)] driven by
+// ArticleScene.
+const specimens = (await getCollection('graveyard')).sort(
+  (a, b) => a.data.interred.localeCompare(b.data.interred) || a.id.localeCompare(b.id),
+);
+const rendered = await Promise.all(
+  specimens.map(async (s) => ({ s, Content: (await render(s)).Content })),
+);
 
 // SCREENSHOT DELIVERY — the specimen screenshots ship through astro:assets
 // (P5): AVIF/WebP sources + WebP fallback, sized for the figure column. The
@@ -22,61 +35,28 @@ const SCREENSHOT_WIDTHS = [432, 864, 1152];
 const SCREENSHOT_FALLBACK_WIDTH = 1152;
 const SCREENSHOT_SIZES = '(max-width: 58rem) min(100vw - 2rem, 36rem), 26rem';
 
-// SPECIMEN LEDGER — the source of truth for the page. The entries render the
-// list and the templating below stays flat. Order is the visual order of the
-// cabinet drawers; the descent through the list IS the descent through the
-// stellar-lifecycle journey [2.05 (red giant) → 0 (black hole)] driven by
-// ArticleScene.
-interface Specimen {
-  id: string;
-  name: string;          // mono-caps display name (HUD readout + entry header)
-  link: { href: string; label: string };
-  image: { src: ImageMetadata; alt: string; caption: string };
-  interred: string;      // year of death / abandonment (mono caps)
-  cause: string;         // short mono-caps cause-of-death tag
-  body: readonly string[];   // ordered paragraphs of running copy
-  lesson: string;        // the one-line "what it taught me" — rendered last
-}
-
-const specimens: readonly Specimen[] = [
-  {
-    id: 'keywordlens',
-    name: 'KeywordLens',
-    link: { href: 'https://getkeywordlens.com/', label: 'getkeywordlens.com' },
-    image: {
-      src: keywordlensShot,
-      alt: 'KeywordLens interface showing keyword demand analysis for stock media platforms',
-      caption: 'KeywordLens: stock media keyword demand tool',
-    },
-    interred: '2023',
-    cause: 'Market collapsed',
-    body: [
-      'A SEMrush for stock media. It analyzed searches across the major stock platforms to surface high-demand, low-competition niches, so photographers could shoot what actually sells instead of guessing.',
-      "It died the month generative AI went mainstream. The whole premise was helping people find the right photo to shoot. When anyone could generate the exact image they needed on demand, the market I was optimizing for stopped existing. Not a pivot. The ground moved.",
-    ],
-    lesson:
-      "you can execute well and still be on the wrong side of a shift you didn't see coming. Timing isn't a detail. It's the whole bet.",
-  },
-  {
-    id: 'heydaniel',
-    name: 'HeyDaniel',
-    link: { href: 'https://heydaniel.app/', label: 'heydaniel.app' },
-    image: {
-      src: heydanielShot,
-      alt: 'HeyDaniel app interface showing context-aware reminders and task capture',
-      caption: 'HeyDaniel: context-aware reminder assistant',
-    },
-    interred: '2024',
-    cause: 'No market validation',
-    body: [
-      "A context-aware reminder assistant. You'd send it a task by Telegram, a screenshot, or a note, and it would surface the right one based on where you were and what your day looked like. Walk into a shop, your list appears. Capturing cost nothing, remembering cost nothing.",
-      "It worked. For me. Generalizing it for other people would have meant a lot more engineering, and I never got any market validation to justify the work. So I stopped building it as a product. I still use it every day.",
-    ],
-    lesson:
-      "I'll happily pour engineering into a problem before checking whether anyone else has it. Validation first, build second. (Also: a tool that only serves you isn't a failure. It just isn't a business.)",
-  },
-];
-
+// SCREENSHOT RESOLUTION — frontmatter declares a validated FILENAME (schema:
+// assetFilename), resolved here against src/assets/graveyard/ via
+// import.meta.glob. NOT the content-collection image() helper: that route
+// statically imports every original through .astro/content-assets.mjs and
+// ships the raw pngs into dist (P5 gate violation) — this glob + <Picture>
+// path emits only the transformed rungs, exactly like the pre-P6 direct
+// import did. A filename that misses the glob throws HERE, at prerender, so a
+// bad reference still fails the build with a named error.
+const specimenShots = import.meta.glob<{ default: ImageMetadata }>(
+  '../assets/graveyard/*.{png,jpg,jpeg,webp,avif}',
+  { eager: true },
+);
+const resolveShot = (filename: string): ImageMetadata => {
+  const mod = specimenShots[`../assets/graveyard/${filename}`];
+  if (!mod) {
+    throw new Error(
+      `graveyard specimen image "${filename}" not found in src/assets/graveyard/ ` +
+        `(known: ${Object.keys(specimenShots).join(', ')})`,
+    );
+  }
+  return mod.default;
+};
 ---
 
 <BaseLayout
@@ -102,23 +82,23 @@ const specimens: readonly Specimen[] = [
 
   {/* role="group" legitimizes the aria-label (a bare div can't carry one). */}
   <div class="graveyard-list" role="group" aria-label="Failed and abandoned projects">
-    {specimens.map((s) => (
+    {rendered.map(({ s, Content }) => (
       <article class="graveyard-entry" id={s.id}>
         {/* SPECIMEN DRAWER LABEL — the mono-caps record row above the headline,
             reading like the label slot on a cabinet drawer. Carries the real
             record (year of death, cause) — content, not a page counter. */}
         <p class="graveyard-entry-specimen">
           <span class="sr-only">Specimen record: </span>
-          <span>INTERRED {s.interred}</span>
+          <span>INTERRED {s.data.interred}</span>
           <span class="graveyard-entry-specimen-sep" aria-hidden="true">·</span>
-          <span>CAUSE: {s.cause}</span>
+          <span>CAUSE: {s.data.cause}</span>
         </p>
 
         <header class="graveyard-entry-header">
-          <h2 class="graveyard-entry-name"><span data-decode>{s.name}</span></h2>
+          <h2 class="graveyard-entry-name"><span data-decode>{s.data.name}</span></h2>
           <div class="graveyard-entry-links">
-            <a href={s.link.href} class="graveyard-link" target="_blank" rel="noopener noreferrer">
-              {s.link.label}
+            <a href={s.data.link.href} class="graveyard-link" target="_blank" rel="noopener noreferrer">
+              {s.data.link.label}
             </a>
           </div>
         </header>
@@ -126,8 +106,8 @@ const specimens: readonly Specimen[] = [
         <div class="graveyard-entry-body">
           <figure class="graveyard-figure">
             <Picture
-              src={s.image.src}
-              alt={s.image.alt}
+              src={resolveShot(s.data.image.src)}
+              alt={s.data.image.alt}
               class="graveyard-screenshot"
               width={SCREENSHOT_FALLBACK_WIDTH}
               widths={SCREENSHOT_WIDTHS}
@@ -138,14 +118,14 @@ const specimens: readonly Specimen[] = [
               loading="lazy"
               decoding="async"
             />
-            <figcaption>{s.image.caption}</figcaption>
+            <figcaption>{s.data.image.caption}</figcaption>
           </figure>
 
           <div class="graveyard-copy">
-            {s.body.map((paragraph) => <p>{paragraph}</p>)}
+            <Content />
             <p class="graveyard-lesson">
               <span class="graveyard-lesson-label">What it taught me:</span>
-              {' '}{s.lesson}
+              {' '}{s.data.lesson}
             </p>
           </div>
         </div>
@@ -344,7 +324,11 @@ const specimens: readonly Specimen[] = [
     gap: 0;
   }
 
-  .graveyard-copy p {
+  /* The story paragraphs are MDX body content (rendered <Content/>), so they
+     carry no Astro scope attribute — matched via :global from the scoped
+     .graveyard-copy wrapper. Same rendered CSS as the old inline markup; the
+     page-rendered lesson <p> below is matched identically too. */
+  .graveyard-copy :global(p) {
     margin: 0 0 1.15rem;
     color: var(--fg-dim);
     font-size: 1.04rem;
@@ -352,7 +336,7 @@ const specimens: readonly Specimen[] = [
     text-wrap: pretty;
   }
 
-  .graveyard-copy p:last-child {
+  .graveyard-copy :global(p:last-child) {
     margin-bottom: 0;
   }
 

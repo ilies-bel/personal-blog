@@ -4,10 +4,16 @@
 import { BEATS } from '../sceneTable';
 import { band } from '../scroll';
 import { lifecycleProgress } from '../timeline';
-import FinaleLedger from './FinaleLedger';
+import FinaleLedger, { type LedgerCounts } from './FinaleLedger';
 import { useSceneState } from './SceneStateContext';
 
-export default function ManifestoOverlay() {
+interface ManifestoOverlayProps {
+  /** Collection-derived counts for the finale ledger notes — serialized from
+   *  index.astro's getCounts() through the island props (see FinaleLedger). */
+  counts: LedgerCounts;
+}
+
+export default function ManifestoOverlay({ counts }: ManifestoOverlayProps) {
   const { progress, reduced, explorationMode } = useSceneState();
 
   return (
@@ -82,7 +88,7 @@ export default function ManifestoOverlay() {
                 hard-cut AND the reduced-motion gapless regime) via `visible`;
                 the ledger gates its own visibility/pointer-events on it so the
                 links are inert whenever the copy is off screen. */}
-            {isFinale ? <FinaleLedger visible={visible} /> : null}
+            {isFinale ? <FinaleLedger visible={visible} counts={counts} /> : null}
           </div>
         );
       })}
