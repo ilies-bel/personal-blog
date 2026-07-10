@@ -204,7 +204,10 @@
   /* Reduced motion: keep the cursor fully functional but skip the scale/opacity
      animation — the hexagon snaps in/out instead of easing. The comet tail is
      also suppressed (the script never starts the draw loop under reduced motion,
-     and this hides the canvas belt-and-braces). */
+     and this hides the canvas belt-and-braces).
+     Two signals: the OS media query handles the pure CSS case; the root attribute
+     set by the motion-preference service (src/lib/motionPreference.ts) covers the
+     manual override so the CSS stays in sync with the JS toggle. */
   @media (prefers-reduced-motion: reduce) {
     .cursor__hex {
       transition: none;
@@ -212,6 +215,12 @@
     .cursor-trail {
       display: none;
     }
+  }
+  html[data-reduced-motion='true'] .cursor__hex {
+    transition: none;
+  }
+  html[data-reduced-motion='true'] .cursor-trail {
+    display: none;
   }
 
   /* Coarse / no-fine-pointer devices: never render the custom cursor at all.
@@ -226,6 +235,11 @@
 </style>
 
 <script>
+  import {
+    resolveMotionPreference,
+    MOTION_CHANGE_EVENT,
+  } from '../lib/motionPreference';
+
   // Custom-cursor controller. Runs once per page load (plain MPA Astro — each
   // navigation is a fresh document), guarded against double-init.
   //
@@ -291,7 +305,9 @@
 
     // Honour reduced-motion: with it on, the ball still tracks the pointer exactly
     // (written directly in onMove) but the comet tail / draw loop never runs.
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // `reduceMotion` is a `let` so the motion-preference-change event can update
+    // it live — OS preference changes and manual overrides propagate without reload.
+    let reduceMotion = resolveMotionPreference();
 
     // --- inlined house helpers (mirror src/hero, kept here so the IIFE stays
     //     self-contained — see lifecycle.ts easeOut + config.ts tuneRenderPixelRatio) ---
@@ -871,6 +887,25 @@
 
     resizeCanvas();
 
+    // Live motion-preference updates: OS changes and manual overrides both
+    // reach here via the centralized service event. We update `reduceMotion` and,
+    // if switching to reduced, immediately kill the active tail so there is no
+    // stale streak left on the canvas.
+    const onMotionChange = (e: Event): void => {
+      const reduced = (e as CustomEvent<{ reduced: boolean }>).detail.reduced;
+      reduceMotion = reduced;
+      if (reduced) {
+        // Tear down the comet trail immediately — the rAF loop is keyed off
+        // `reduceMotion` so it won't restart, but clear the ring and canvas so
+        // there is no stale frame left visible.
+        head = 0;
+        count = 0;
+        if (ctx) ctx.clearRect(0, 0, viewW, viewH);
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      }
+    };
+    window.addEventListener(MOTION_CHANGE_EVENT, onMotionChange);
+
     document.addEventListener('mousemove', onMove, { passive: true });
     document.addEventListener('mouseleave', onLeave);
     document.addEventListener('mouseenter', onEnter);
@@ -893,6 +928,7 @@
         document.removeEventListener('mouseenter', onEnter);
         document.removeEventListener('visibilitychange', onVisibility);
         window.removeEventListener('resize', onResize);
+        window.removeEventListener(MOTION_CHANGE_EVENT, onMotionChange);
       },
       { once: true },
     );

@@ -161,6 +161,7 @@ const specimens = (await getCollection('graveyard')).sort(
     the transition off so the swap is instant). Re-runs on ClientRouter swaps so
     a back-nav into /graveyard re-arms the observer on the fresh DOM. */}
 <script>
+  import { resolveMotionPreference } from '../lib/motionPreference';
   function initGraveyardReveal() {
     if (!document.body.classList.contains('graveyard-page')) return;
     const entries = Array.from(
@@ -168,9 +169,9 @@ const specimens = (await getCollection('graveyard')).sort(
     );
     if (entries.length === 0) return;
 
-    const reduceMotion =
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // resolveMotionPreference() honours both the OS preference AND the manual
+    // override (manualOverride ?? osPreference) via the centralized service.
+    const reduceMotion = resolveMotionPreference();
     if (reduceMotion || typeof IntersectionObserver === 'undefined') {
       // Reduced motion or no observer support: ship them all in instantly.
       entries.forEach((el) => el.setAttribute('data-revealed', 'true'));

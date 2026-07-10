@@ -23,6 +23,7 @@
 // Reduced motion: the whole streak animation is skipped. The click just navigates
 // (BaseLayout's resurface handler no-ops the deceleration too), so a reduced-motion
 // visitor gets a plain, instant swap with no light show.
+import { resolveMotionPreference } from '../lib/motionPreference';
 
 const WARP_FLAG = 'bh:warp';
 
@@ -476,12 +477,10 @@ function navigateNow(href: string): void {
 }
 
 // --- Reduced motion --------------------------------------------------------
-function prefersReduced(): boolean {
-  return (
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
+// Delegate to the centralized service so manual overrides and live OS changes
+// are both honoured. The service's resolveMotionPreference() is the single source
+// of truth (manualOverride ?? osPreference).
+const prefersReduced = resolveMotionPreference;
 
 // --- Click interception ----------------------------------------------------
 // Capture-phase so we run before any other click handler / the router's own link

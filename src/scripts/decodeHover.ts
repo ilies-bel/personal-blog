@@ -20,6 +20,7 @@
 // Elements must contain plain text only (no element children); every current
 // consumer (nav labels, footer labels, back-links, contact links, HUD rail
 // titles) satisfies this.
+import { resolveMotionPreference } from '../lib/motionPreference';
 
 const GLYPHS = '#/\\|<>[]{}=+*%$@!?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const DURATION_MS = 300;
@@ -38,9 +39,6 @@ function poolFor(original: string): string {
  *  can cancel. WeakMap: nodes swapped out by ClientRouter just fall away. */
 const running = new WeakMap<HTMLElement, number>();
 
-const prefersReducedMotion = (): boolean =>
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function stop(el: HTMLElement): void {
   const raf = running.get(el);
@@ -54,7 +52,7 @@ function stop(el: HTMLElement): void {
 }
 
 function start(el: HTMLElement): void {
-  if (prefersReducedMotion()) return;
+  if (resolveMotionPreference()) return;
   if (running.has(el)) return; // already decoding — let it finish
   // Capture the true label PER RUN (not once): dynamic readouts (the graveyard
   // HUD name, scroll-spied titles) change their text between hovers, and a

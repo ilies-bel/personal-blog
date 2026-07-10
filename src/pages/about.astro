@@ -118,13 +118,16 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     as a broken box in the corner. Keyboard users reach the nav via the skip
     link / first Tab as on every other page. */}
 <script>
+  import { resolveMotionPreference } from '../lib/motionPreference';
   // The personal moment: tag <body> with .has-signature-anim so the signature
   // starts hidden (clip-path collapsed, flourish stroke offset), then drop the
   // .is-drawn class on the signature when it enters the viewport. Under
   // prefers-reduced-motion we skip the whole branch — the static state in CSS is
   // the reduced-motion equivalent (signature visible from frame one). No-JS gets
   // the same static state for free, since the tag is what *hides* the signature.
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // resolveMotionPreference() honours both the OS preference AND the manual
+  // override (manualOverride ?? osPreference) via the centralized service.
+  const reduceMotion = resolveMotionPreference();
   if (!reduceMotion) {
     document.body.classList.add('has-signature-anim');
     const sig = document.querySelector('.about-signature');
