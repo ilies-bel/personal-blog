@@ -47,31 +47,36 @@ uniform float uTime;    // seconds; drives the flicker re-hash
 float ckHash(vec2 q) {
   return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453123);
 }
+float cloakField(vec2 p) {
+  // Power propagates from the centre console through the deck and up the
+  // canopy. Small static cells break the edge without punching large square
+  // holes through already-materialised surfaces.
+  vec2 q = (p - vec2(960.0, 1015.0)) / vec2(1180.0, 1110.0);
+  float travel = length(q);
+  float grain = ckHash(floor(p / 17.0)) - 0.5;
+  float tick = floor(uTime * 18.0);
+  float shimmer = ckHash(floor(p / 8.0) + vec2(tick * 0.73, tick * 0.31)) - 0.5;
+  return travel + grain * 0.10 + shimmer * 0.025 * (1.0 - uDecloak);
+}
 float cloakMask(vec2 p) {
   if (uDecloak >= 0.999) return 1.0;
   if (uDecloak <= 0.001) return 0.0;
-  // Coarse materialisation cells (~46 design px), re-hashed ~12×/s so the
-  // field shimmers while it fills. cover > 1 at the top guarantees every cell
-  // is in before the envelope ends.
-  float tick = floor(uTime * 12.0);
-  float cell = ckHash(floor(p / 46.0) + vec2(tick * 0.731, tick * 0.377));
-  float cover = uDecloak * 1.12;
-  float m = 1.0 - smoothstep(cover - 0.10, cover + 0.04, cell);
-  // Fine sparkle: fresh patches strobe (high-freq hash) until the field settles.
-  float fine = ckHash(floor(p / 9.0) + vec2(tick * 1.917, tick * 0.113));
-  float settled = smoothstep(0.72, 1.0, uDecloak);
-  return m * mix(0.45 + 0.55 * fine, 1.0, settled);
+  float field = cloakField(p);
+  float front = uDecloak * 1.42;
+  float present = 1.0 - smoothstep(front - 0.045, front + 0.055, field);
+  float wave = 1.0 - smoothstep(0.035, 0.14, abs(field - front));
+  float fine = ckHash(floor(p / 6.0) + floor(uTime * 20.0));
+  return present * mix(1.0, 0.72 + 0.28 * fine, wave * (1.0 - uDecloak));
 }
 vec3 cloakTint(vec3 col, vec2 p) {
-  float settle = smoothstep(0.4, 0.95, uDecloak);
-  if (settle >= 1.0) return col;
-  // Electric arcs on materialising spans: sparse cells flash blue-silver at
-  // the member's own energy so the structure keeps its shape while glinting.
-  float tick = floor(uTime * 16.0);
-  float arc = ckHash(floor(p / 30.0) + vec2(tick * 1.313, 9.21));
+  if (uDecloak >= 0.999) return col;
+  // Only the moving materialisation front carries heat. Settled surfaces keep
+  // their authored material colour instead of flickering wholesale.
+  float wave = 1.0 - smoothstep(0.025, 0.13, abs(cloakField(p) - uDecloak * 1.42));
+  float pulse = 0.72 + 0.28 * sin(uTime * 24.0 + p.x * 0.035 + p.y * 0.021);
   float lum = max(col.r, max(col.g, col.b));
-  vec3 electric = vec3(0.42, 0.78, 1.05) * lum * (0.9 + 1.6 * step(0.78, arc));
-  return mix(electric, col, settle);
+  vec3 heat = mix(vec3(0.42, 0.68, 0.86), vec3(1.0, 0.62, 0.24), smoothstep(0.30, 0.82, uDecloak));
+  return col + heat * lum * wave * pulse * 0.9;
 }
 `;
 
@@ -138,6 +143,7 @@ varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vDW;
+varying vec2 vN;
 void main() {
   vec2 p = aPos + aNorm * (aSide * aDW * 0.5);
   // Decloak heat-haze: the member ripples along its normal while
@@ -152,6 +158,7 @@ void main() {
   vSide = aSide;
   vW = aW;
   vDW = aDW;
+  vN = normalize(aNorm);
   gl_Position = clipFromDesign(p);
 }
 `;
@@ -167,15 +174,25 @@ varying vec2 vPos;
 varying float vSide;
 varying float vW;
 varying float vDW;
+varying vec2 vN;
 void main() {
   float t = abs(vSide);
   float lit = litAt(vPos, 1.0);
+  float diffuse = grazeDiff(vPos, normalize(vN)) * min(lit, 1.6);
+  float specular = grazeSpec(vPos, normalize(vN)) * min(lit, 1.8);
   float half_ = vDW * 0.5;                 // design px per t-unit
   float pxT = (2.0 * uHalfW) / half_;      // t-units per CSS px
 
-  // Flat graphite band — a single value, a whisper above the hull so the
-  // member reads as a surface, not a void.
-  vec3 fill = vec3(0.040, 0.037, 0.034) + uAmber * 0.014;
+  // A restrained machined cross-section: graphite centre, a shallow bevel and
+  // a narrow scene-coloured kiss. This is material response, not another glow
+  // line; the values stay below the post-chain bloom threshold.
+  float crown = pow(max(0.0, 1.0 - t), 2.2);
+  float bevel = smoothstep(0.42, 0.76, t) * (1.0 - smoothstep(0.80, 0.96, t));
+  vec3 fill = vec3(0.030, 0.029, 0.028)
+            + vec3(0.026, 0.025, 0.023) * crown
+            + uAmber * (0.005 + 0.006 * bevel)
+            + uStarColor * (0.030 * diffuse * (0.35 + 0.65 * crown)
+                          + 0.045 * specular * bevel);
 
   // One crisp hairline per edge (~1.2 CSS px). Structural members carry it
   // brighter than grooves (vW), and the star's radial reach breathes it up —
@@ -209,17 +226,24 @@ attribute float aSide;
 attribute float aHalf;    // CSS half-px width
 attribute float aFollow;  // 1 = star-anchored, 0 = fixed
 uniform vec2 uLight;
+uniform float uHudDeploy;
 uniform float uHalfW;     // design units per CSS half-px
 ${designToClip}
 varying float vAcross;
 varying vec2 vPos;
 varying float vCover;
+varying float vDeploy;
 void main() {
   float drawnHalf = max(aHalf, 0.85);
   vCover = aHalf / drawnHalf;
-  vec2 p = aPos + uLight * aFollow + aNorm * (aSide * uHalfW * 2.0 * drawnHalf);
+  float deploy = smoothstep(0.0, 1.0, uHudDeploy);
+  vec2 target = aPos + uLight * aFollow;
+  vec2 mount = mix(vec2(960.0, 182.0), uLight, aFollow);
+  vec2 p = mix(mount, target, deploy)
+         + aNorm * (aSide * uHalfW * 2.0 * drawnHalf);
   vPos = p;
   vAcross = aSide;
+  vDeploy = deploy;
   gl_Position = clipFromDesign(p);
 }
 `;
@@ -235,9 +259,11 @@ uniform float uAlpha;
 varying float vAcross;
 varying vec2 vPos;
 varying float vCover;
+varying float vDeploy;
 void main() {
   float edge = 1.0 - smoothstep(0.35, 1.0, abs(vAcross));
-  gl_FragColor = vec4(uHud, uAlpha * edge * vCover * 0.78 * cloakMask(vPos));
+  float powered = smoothstep(0.08, 0.46, vDeploy);
+  gl_FragColor = vec4(uHud, uAlpha * edge * vCover * 0.78 * powered * cloakMask(vPos));
 }
 `;
 
@@ -272,14 +298,48 @@ void main() {
   float toGlass = 1.0 - smoothstep(0.02, 0.40, abs(q.y));   // near the opening
   float toCentre = 1.0 - smoothstep(0.10, 0.62, abs(q.x));  // away from edges
   float edgeGlow = toGlass * (0.35 + 0.65 * toCentre);
-  vec3 shell = vec3(0.027, 0.025, 0.023) * (0.8 + 0.6 * edgeGlow)
-             + vec3(0.028, 0.024, 0.020) * edgeGlow;
-  vec3 col = shell + uAmber * (0.008 + 0.026 * edgeGlow) + uStarColor * lit * 0.012;
+  // Large, low-frequency facets give the shell a physical normal change without
+  // drawing decorative seams. The external body supplies the only moving key.
+  vec2 L = normalize(uLight - vPos);
+  float sideFace = smoothstep(0.18, 0.62, abs(q.x));
+  float deckFace = smoothstep(0.20, 0.48, abs(q.y));
+  float faceKey = mix(abs(L.y), abs(L.x), sideFace);
+  float broad = min(lit, 1.7) * (0.35 + 0.65 * faceKey);
+  float brushed = 0.5 + 0.5 * sin(vPos.y * 0.34 + ckHash(floor(vPos / 22.0)) * 6.2831);
+  vec3 shell = vec3(0.029, 0.030, 0.033) * (0.92 + 0.52 * edgeGlow)
+             + vec3(0.022, 0.016, 0.012) * edgeGlow
+             + vec3(0.006) * brushed * (0.25 + 0.75 * deckFace);
+  vec3 col = shell
+           + uAmber * (0.004 + 0.014 * edgeGlow)
+           + uStarColor * (0.120 * broad + 0.060 * broad * broad);
   col *= vigMul(vPos);
-  col += (ckHash(vPos * 0.41) - 0.5) * 0.006; // 8-bit dither against banding
+  col += (ckHash(vPos * 0.41) - 0.5) * 0.004; // 8-bit dither against banding
   col = novaWash(col);
   // The interior masses de-cloak on the same cell field as the trim.
   gl_FragColor = vec4(col, uFill * uAlpha * cloakMask(vPos));
+}
+`;
+
+/** The windshield is a real surface over the graded scene: a very light
+ *  smoke-blue absorption, edge density and a broad reflection of the current
+ *  stellar light. It is intentionally quiet so the lifecycle remains primary. */
+export const cockpitGlassFragmentShader = /* glsl */ `
+precision highp float;
+${starLight}
+${cloak}
+uniform float uAlpha;
+varying vec2 vPos;
+void main() {
+  vec2 q = vec2(vPos.x / 1920.0 - 0.5, vPos.y / 1080.0 - 0.5);
+  float edge = smoothstep(0.24, 0.66, length(q * vec2(1.0, 1.35)));
+  float lit = min(litAt(vPos, 1.0), 1.5);
+  float horizon = exp(-abs(vPos.y - uLight.y) / 150.0) * exp(-abs(vPos.x - uLight.x) / 850.0);
+  float dust = step(0.995, ckHash(floor(vPos / 5.0))) * (0.15 + 0.35 * edge);
+  vec3 col = vec3(0.025, 0.045, 0.070)
+           + uStarColor * (0.08 * lit + 0.10 * horizon)
+           + vec3(dust);
+  float alpha = (0.022 + 0.038 * edge + 0.016 * lit) * cloakMask(vPos);
+  gl_FragColor = vec4(novaWash(col), uAlpha * alpha);
 }
 `;
 

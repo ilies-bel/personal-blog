@@ -396,7 +396,7 @@ body.at-opening:not(.hud-active) .overlay-blog {
    scoped to the section-link <a>s inside .overlay-blog-links. */
 body.bare.hud-active .overlay-blog-link { color: var(--fg); }
 body.bare.hud-active .overlay-blog-links .overlay-blog-link {
-  transform: translateY(-2px);
+  transform: none;
 }
 /* DECLOAK HANDSHAKE: when hud-active lands, the whole button bank
    flicker-materialises with the hull — the same hud-decloak strobe (hud.css)
@@ -406,7 +406,7 @@ body.bare.hud-active .overlay-blog-links .overlay-blog-link {
    fresh body re-gains hud-active) — that re-handshake is deliberate, it reads
    as the chrome re-syncing after a jump. */
 body.bare.hud-active .overlay-blog {
-  animation: hud-decloak 1.4s steps(1, end);
+  animation: none;
 }
 
 /* COCKPIT BUTTON BANK — with the ship de-cloaked (body.hud-active) the corner
@@ -417,6 +417,18 @@ body.bare.hud-active .overlay-blog {
    labels) and scoped to the powered state — the observation deck (HUD off)
    keeps the bare standby labels. */
 @media (min-width: 60.0625rem) {
+  body.bare .overlay-blog .overlay-blog-social {
+    padding: 0.3rem 0.4rem;
+    border: 1px solid transparent;
+    background: linear-gradient(180deg, rgba(30, 21, 12, 0), rgba(12, 9, 6, 0));
+    border-radius: 0.35rem;
+    box-shadow: none;
+    transition:
+      color 0.16s ease,
+      border-color 0.4s var(--ease-out-quint),
+      background 0.4s var(--ease-out-quint),
+      box-shadow 0.4s var(--ease-out-quint);
+  }
   /* SECTION LINKS go BARE under power: they live inside the etched nav bezel
      (hud.css .overlay-blog-links) — reference grammar is amber mono text in
      one plate, not per-word button caps. Only the icon CONTROLS keep the
@@ -425,18 +437,20 @@ body.bare.hud-active .overlay-blog {
     color: color-mix(in oklch, var(--highlight) 40%, var(--fg));
   }
   body.bare.hud-active .overlay-blog .overlay-blog-social {
-    padding: 0.3rem 0.4rem;
     border: 1px solid color-mix(in oklch, var(--highlight) 28%, transparent);
     background: linear-gradient(180deg, rgba(30, 21, 12, 0.82), rgba(12, 9, 6, 0.92));
-    border-radius: 0.35rem;
     box-shadow:
       inset 0 1px 0 rgba(255, 200, 140, 0.08),
       inset 0 -3px 6px rgba(0, 0, 0, 0.4),
       0 2px 7px rgba(0, 0, 0, 0.5);
+    transition-delay: 0.95s;
   }
   body.bare.hud-active .overlay-blog .overlay-blog-social:hover,
   body.bare.hud-active .overlay-blog .overlay-blog-social:focus-visible {
     border-color: color-mix(in oklch, var(--highlight) 55%, transparent);
+    /* The powered-state delay belongs only to the initial cockpit paint. Once
+       a control is engaged, its interactive response must be immediate. */
+    transition-delay: 0s;
     box-shadow:
       inset 0 1px 0 rgba(255, 200, 140, 0.1),
       inset 0 -3px 6px rgba(0, 0, 0, 0.35),

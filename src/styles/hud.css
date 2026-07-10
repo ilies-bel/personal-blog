@@ -708,6 +708,7 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot):not(.warp-readout) {
   line-height: 1.2;
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.9);
 }
+.hud-compass-read { white-space: nowrap; }
 .hud-compass-read {
   font-size: var(--text-hud);
   letter-spacing: 0.12em;
@@ -1018,6 +1019,28 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   65%  { opacity: 0.48; }
   79%  { opacity: 1; }
   100% { opacity: 1; }
+}
+
+/* Cockpit electronics wait for the shell to establish, then resolve into
+   stable linework. Unlike the hull decloak this never strobes whole controls
+   out of the layout. */
+@keyframes cockpit-instrument-online {
+  0%, 46% {
+    opacity: 0;
+  }
+  58% {
+    opacity: 0.22;
+  }
+  76% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes cockpit-control-arm {
+  from, to { pointer-events: none; }
 }
 
 /* The compass readout still lights gold on lock (colour is fine), but drop the
@@ -1885,9 +1908,8 @@ body.hud-active .star-marker[data-reduced='true'][data-visible='true'][data-stat
 }
 body.hud-active .hud-frame {
   opacity: 1;
-  /* Materialise WITH the hull: the same unstable strobe the ship's decloak
-     plays, settling solid as the cells fill (see @keyframes hud-decloak). */
-  animation: hud-decloak 1.4s steps(1, end) both;
+  /* The physical shell arrives first; its projected readouts resolve after it. */
+  animation: cockpit-instrument-online 1.8s var(--ease-out-quint) both;
 }
 .hud-frame-readout {
   position: fixed;
@@ -1952,13 +1974,17 @@ body.bh-diving .hud-frame-readout {
 /* SITE NAV BEZEL — the top-right section links sit in the same etched recess
    as the nameplate (reference grammar), with a dot terminal on the left. */
 @media (min-width: 60.0625rem) {
-  body.hud-active .overlay-blog-links {
+  .overlay-blog-links {
     position: relative;
     padding: 0.4rem 1rem;
-    border: 1px solid oklch(0.74 0.15 62 / 0.5);
+    border: 1px solid transparent;
     border-radius: 2px;
+    background: rgb(8 6 4 / 0);
+    transition:
+      border-color 0.45s var(--ease-out-quint),
+      background-color 0.45s var(--ease-out-quint);
   }
-  body.hud-active .overlay-blog-links::before {
+  .overlay-blog-links::before {
     content: '';
     position: absolute;
     left: -2.5px;
@@ -1968,6 +1994,17 @@ body.bh-diving .hud-frame-readout {
     height: 4px;
     border-radius: 50%;
     background: oklch(0.78 0.155 64 / 0.9);
+    opacity: 0;
+    transition: opacity 0.3s var(--ease-out-quint);
+  }
+  body.hud-active .overlay-blog-links {
+    border-color: oklch(0.74 0.15 62 / 0.5);
+    background: rgb(8 6 4 / 0.28);
+    transition-delay: 0.95s, 0.95s;
+  }
+  body.hud-active .overlay-blog-links::before {
+    opacity: 1;
+    transition-delay: 0.75s;
   }
 }
 
@@ -1985,16 +2022,28 @@ body.bh-diving .hud-frame-readout {
    readout and the warp readout — those own the slot on their own terms — and
    leaves the un-powered (observation deck) compass exactly as it was. */
 @media (min-width: 60.0625rem) {
+  .hud-compass:not(.hud-compass--boot):not(.warp-readout),
+  .hud-compass--boot[data-boot='cue'][data-glide='true'] {
+    /* Reserve the pedestal seat in both power states. Power changes paint,
+       never the readout's measured position or box metrics. */
+    bottom: 7.4vh;
+    width: clamp(17rem, 19vw, 24rem);
+    min-height: 4.4rem;
+    padding: 1.1vh 1rem 1.3vh;
+    box-sizing: border-box;
+    align-content: center;
+  }
   body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout) {
     /* The measured screen recess spans design y 898-1030 with the CTA row at
        y≈940 — the readout parks mid-screen, not at the frame edge. */
-    bottom: 7.4vh;
-    width: clamp(17rem, 19vw, 24rem);
-    padding: 1.1vh 1rem 1.3vh;
-    /* Materialise with the hull on power-on. No fill mode: once the strobe
-       ends the declared opacity rules (scene-ready / data-visible gating)
-       take back over, so the flicker can never pin a hidden compass visible. */
-    animation: hud-decloak 1.4s steps(1, end);
+    animation: cockpit-instrument-online 1.8s var(--ease-out-quint);
+  }
+  /* The boot cue and live compass share one physical screen. While the boot
+     phase owns it, never let the live instrument's power animation override
+     the handoff gate and paint a duplicate readout. */
+  body.hud-active .hud-compass[data-booting='true']:not(.hud-compass--boot):not(.warp-readout) {
+    animation: none;
+    opacity: 0;
   }
   /* The radial text scrim is the FLOATING readout's legibility pool — inside
      the pedestal the console mass is the dark behind the type. */
@@ -2007,9 +2056,7 @@ body.bh-diving .hud-frame-readout {
      swaps content, never chrome. (The loading/ready phases and the glide
      itself stay bare — those live in/over the loader.) */
   body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'] {
-    bottom: 7.4vh;
-    width: clamp(17rem, 19vw, 24rem);
-    padding: 1.1vh 1rem 1.3vh;
+    animation: cockpit-instrument-online 1.8s var(--ease-out-quint);
   }
   /* Inside the pedestal the readout drops from the floating --text-hud display
      size to the instrument register (--text-label): an MFD line, not a
@@ -2039,9 +2086,20 @@ body.bh-diving .hud-frame-readout {
    it in with the hull. */
 @media (min-width: 60.0625rem) {
   body.hud-active .hud-arc {
-    left: 1.6vw;
-    animation: hud-decloak 1.4s steps(1, end);
+    animation: cockpit-instrument-online 1.8s var(--ease-out-quint);
   }
+  body.hud-active .hud-arc .hud-arc-btn {
+    animation: cockpit-control-arm 1.15s step-end;
+  }
+}
+
+/* Warp owns the powered instrument bank while a jump is in flight. This late
+   combined state beats the one-shot power-on declarations above without
+   coupling either animation to the other. */
+body.warp-active.hud-active .hud-frame,
+body.warp-active.hud-active .hud-arc,
+body.warp-active.hud-active .hud-compass:not(.warp-readout) {
+  animation: warp-hud-flicker 0.28s steps(2, end) infinite;
 }
 
 /* Reduced motion: the decloak strobe is theatrics — the class flip alone (a
@@ -2049,8 +2107,13 @@ body.bh-diving .hud-frame-readout {
    change for every console surface. */
 :where(html[data-motion='reduced']) body.hud-active .hud-frame,
 :where(html[data-motion='reduced']) body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout),
+:where(html[data-motion='reduced']) body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'],
 :where(html[data-motion='reduced']) body.hud-active .hud-arc,
-:where(html[data-motion='reduced']) body.hud-active .bh-finale-ledger[data-visible='true'] {
+:where(html[data-motion='reduced']) body.hud-active .bh-finale-ledger[data-visible='true'],
+:where(html[data-motion='reduced']) body.hud-active .hud-arc .hud-arc-btn,
+:where(html[data-motion='reduced']) body.warp-active.hud-active .hud-frame,
+:where(html[data-motion='reduced']) body.warp-active.hud-active .hud-arc,
+:where(html[data-motion='reduced']) body.warp-active.hud-active .hud-compass:not(.warp-readout) {
   animation: none;
 }
 
@@ -2079,7 +2142,7 @@ body.bh-diving .hud-frame-readout {
    ────────────────────────────────────────────────────────────────────────────── */
 .hud-arc {
   position: fixed;
-  left: 0;
+  left: 1.6vw;
   top: 50%;
   transform: translateY(-50%);
   width: 190px;
@@ -2204,17 +2267,17 @@ body.hud-active .hud-arc-station:not([data-current='true']) text {
    collapses quickly with no sluggish reverse (same convention as the old rail
    cascade). Station <g>s are the only g children of .hud-arc-rot, so
    nth-of-type counts exactly the five stations. */
-body.hud-active .hud-arc-station:nth-of-type(1) line { transition-delay: 0.15s; }
-body.hud-active .hud-arc-station:nth-of-type(2) line { transition-delay: 0.27s; }
-body.hud-active .hud-arc-station:nth-of-type(3) line { transition-delay: 0.39s; }
-body.hud-active .hud-arc-station:nth-of-type(4) line { transition-delay: 0.51s; }
-body.hud-active .hud-arc-station:nth-of-type(5) line { transition-delay: 0.63s; }
-body.hud-active .hud-arc-station:nth-of-type(1) text { transition-delay: 0.23s; }
-body.hud-active .hud-arc-station:nth-of-type(2) text { transition-delay: 0.35s; }
-body.hud-active .hud-arc-station:nth-of-type(3) text { transition-delay: 0.47s; }
-body.hud-active .hud-arc-station:nth-of-type(4) text { transition-delay: 0.59s; }
-body.hud-active .hud-arc-station:nth-of-type(5) text { transition-delay: 0.71s; }
-body.hud-active .hud-arc-label { transition-delay: 0.85s; }
+body.hud-active .hud-arc-station:nth-of-type(1) line { transition-delay: 0.86s; }
+body.hud-active .hud-arc-station:nth-of-type(2) line { transition-delay: 0.96s; }
+body.hud-active .hud-arc-station:nth-of-type(3) line { transition-delay: 1.06s; }
+body.hud-active .hud-arc-station:nth-of-type(4) line { transition-delay: 1.16s; }
+body.hud-active .hud-arc-station:nth-of-type(5) line { transition-delay: 1.26s; }
+body.hud-active .hud-arc-station:nth-of-type(1) text { transition-delay: 0.94s; }
+body.hud-active .hud-arc-station:nth-of-type(2) text { transition-delay: 1.04s; }
+body.hud-active .hud-arc-station:nth-of-type(3) text { transition-delay: 1.14s; }
+body.hud-active .hud-arc-station:nth-of-type(4) text { transition-delay: 1.24s; }
+body.hud-active .hud-arc-station:nth-of-type(5) text { transition-delay: 1.34s; }
+body.hud-active .hud-arc-label { transition-delay: 1.42s; }
 /* No cascade: everything snaps to the powered state together. */
 :where(html[data-motion='reduced']) body.hud-active .hud-arc-station:nth-of-type(n) line,
 :where(html[data-motion='reduced']) body.hud-active .hud-arc-station:nth-of-type(n) text,

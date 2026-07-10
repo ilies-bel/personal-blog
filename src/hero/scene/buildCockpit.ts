@@ -28,6 +28,7 @@ import {
   COCKPIT_BEAMS,
   HULL_OUTER,
   HULL_HOLES,
+  HULL_HOLE,
   PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
@@ -39,6 +40,7 @@ import {
   cockpitBeamFragmentShader,
   cockpitPanelVertexShader,
   cockpitPanelFragmentShader,
+  cockpitGlassFragmentShader,
   cockpitScreenFragmentShader,
   cockpitHudVertexShader,
   cockpitHudFragmentShader,
@@ -199,6 +201,7 @@ export function buildCockpit(): CockpitRig {
 
   const shared = {
     uDecloak: { value: 0 },
+    uHudDeploy: { value: 0 },
     uTime: { value: 0 },
     uLight: { value: new THREE.Vector2(COCKPIT_W / 2, COCKPIT_H * 0.43) },
     uStarColor: { value: new THREE.Color(0.88, 0.86, 0.8) },
@@ -231,6 +234,22 @@ export function buildCockpit(): CockpitRig {
   panels.renderOrder = 40;
   panels.visible = false;
   overlay.add(panels);
+
+  // The central canopy is not empty air: a restrained smoked pane catches the
+  // current chapter's light while leaving the stellar lifecycle unobscured.
+  const glassGeo = new THREE.ShapeGeometry(shapeFromPts(HULL_HOLE));
+  const glassUniforms: Uniforms = { ...shared };
+  const glassMat = new THREE.ShaderMaterial({
+    uniforms: glassUniforms,
+    vertexShader: cockpitPanelVertexShader,
+    fragmentShader: cockpitGlassFragmentShader,
+    ...overlayMatOpts,
+  });
+  const glass = new THREE.Mesh(glassGeo, glassMat);
+  glass.frustumCulled = false;
+  glass.renderOrder = 39;
+  glass.visible = false;
+  overlay.add(glass);
 
   // The recessed console screen — powered display glass under the CTA readout.
   const screenGeo = new THREE.ShapeGeometry(shapeFromPts(PANEL_SCREEN));
@@ -282,7 +301,7 @@ export function buildCockpit(): CockpitRig {
   hud.visible = false;
   overlay.add(hud);
 
-  const meshes = [panels, screen, beams, hud];
+  const meshes = [glass, panels, screen, beams, hud];
 
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
@@ -312,6 +331,9 @@ export function buildCockpit(): CockpitRig {
     // The decloak owns visibility per pixel (cloakMask in the shaders); the
     // master alpha stays at 1 so the reveal is materialisation, never a fade.
     shared.uDecloak.value = decloak;
+    // Structure arrives first, then the projections expand from their physical
+    // emitters. On shutdown this reverses: instruments retract before the hull.
+    shared.uHudDeploy.value = Math.min(1, Math.max(0, (decloak - 0.46) / 0.48));
     shared.uTime.value = t;
     shared.uAlpha.value = 1;
     shared.uNova.value = nova;
@@ -343,10 +365,12 @@ export function buildCockpit(): CockpitRig {
     hudGeo.dispose();
     beamGeo.dispose();
     screenGeo.dispose();
+    glassGeo.dispose();
     panelGeo.dispose();
     hudMat.dispose();
     beamMat.dispose();
     screenMat.dispose();
+    glassMat.dispose();
     panelMat.dispose();
   };
 

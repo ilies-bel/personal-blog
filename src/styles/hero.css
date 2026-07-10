@@ -731,26 +731,34 @@ body.graveyard-page .bh-backdrop::before {
    fill beyond a whisper of shadow: the hull behind IS the plate. Desktop-only;
    the observation deck (HUD off) keeps the bare lockup. */
 @media (min-width: 60.0625rem) {
-  body.bare.hud-active .bh-identity {
-    animation: hud-decloak 1.4s steps(1, end);
+  body.bare .bh-identity {
     padding: 0.7rem 1.15rem 0.75rem;
-    /* The bezel line is the TRIM's saturated amber (the WebGL beam-edge hue,
-       sRGB 255/153/48) so the plate reads as mounted on the same metal. */
-    border: 1px solid oklch(0.74 0.15 62 / 0.5);
+    border: 1px solid transparent;
     border-radius: 2px;
-    background: rgb(8 6 4 / 0.4);
+    background: rgb(8 6 4 / 0);
   }
-  body.bare.hud-active .bh-identity::before,
-  body.bare.hud-active .bh-identity::after {
+  body.bare .bh-identity::before,
+  body.bare .bh-identity::after {
     content: '';
     position: absolute;
     width: 4px;
     height: 4px;
     border-radius: 50%;
     background: oklch(0.78 0.155 64 / 0.9);
+    opacity: 0;
+    transition: opacity 0.3s var(--ease-out-quint);
   }
-  body.bare.hud-active .bh-identity::before { left: -2.5px; top: -2.5px; }
-  body.bare.hud-active .bh-identity::after { right: -2.5px; bottom: -2.5px; }
+  body.bare .bh-identity::before { left: -2.5px; top: -2.5px; }
+  body.bare .bh-identity::after { right: -2.5px; bottom: -2.5px; }
+  body.bare.hud-active .bh-identity {
+    border-color: oklch(0.74 0.15 62 / 0.5);
+    background: rgb(8 6 4 / 0.4);
+  }
+  body.bare.hud-active .bh-identity::before,
+  body.bare.hud-active .bh-identity::after {
+    opacity: 1;
+    transition-delay: 0.75s;
+  }
   body.bare.hud-active .bh-identity .bh-identity-name {
     color: color-mix(in oklch, var(--highlight) 42%, var(--fg));
   }
@@ -809,7 +817,7 @@ body.bare .overlay-blog {
    specificity. */
 body.bare .bh-identity {
   transform-origin: top left;
-  transform: scale(0.82);
+  transform: scale(1);
   /* P8 contrast fix: the resting whisper used to come from a 0.52 whole-element
      opacity, which multiplied the role line down to ~2.2:1 (axe, measured over
      the loader's solid ground) — under the AA floor for an interactive link.
@@ -819,10 +827,16 @@ body.bare .bh-identity {
   opacity: 1;
   transition:
     transform 0.6s var(--ease-out-quint),
-    opacity 0.5s var(--ease-out-quint);
+    opacity 0.5s var(--ease-out-quint),
+    border-color 0.45s var(--ease-out-quint),
+    background-color 0.45s var(--ease-out-quint);
+}
+body.bare.hud-active .bh-identity {
+  transform: scale(1);
+  opacity: 1;
+  transition-delay: 0s, 0s, 0.95s, 0.95s;
 }
 body.bare:not(.hud-active) .bh-identity .bh-identity-name { color: var(--fg-dim); }
-body.bare.hud-active .bh-identity { transform: scale(1.18); opacity: 1; }
 /* At the black hole the name brightens to full presence — but keep the cool overlay
    bone (it still floats on the live scene), just at full strength. */
 body.bare.hud-active .bh-identity-name { color: var(--fg-overlay); }

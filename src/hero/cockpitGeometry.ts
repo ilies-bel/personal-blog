@@ -394,7 +394,23 @@ const HOUSING_RAW: RawPt[] = [
   [1220, 887, 60],
   [1367, 1090],
 ];
-export const HOUSING_BEAM: CockpitBeam = { pts: resolveCorners(HOUSING_RAW), dw: 22, w: 0.85 };
+/** The housing's inner (+normal) hairline approaches the screen-recess groove
+ *  within a pixel at both shoulder fillets. Let the recess carry that short
+ *  handoff so the two lit edges cannot bloom together into a bright dash. */
+function housingInnerW(x: number, y: number): number {
+  const c01 = (value: number): number => Math.min(1, Math.max(0, value));
+  const top = 1 - c01((y - 930) / 70);
+  const shoulderDistance = Math.min(Math.abs(x - 700), Math.abs(x - 1220));
+  const shoulder = 1 - c01((shoulderDistance - 20) / 90);
+  return 0.85 - 1.2 * top * shoulder;
+}
+
+export const HOUSING_BEAM: CockpitBeam = {
+  pts: resolveCorners(HOUSING_RAW),
+  dw: 22,
+  w: 0.85,
+  wPlusAt: housingInnerW,
+};
 
 // ─── Grooves: seams, inset panels, the screen recess ─────────────────────────
 // Narrow beams (~6-8 design px) the shader renders as dark channels between
