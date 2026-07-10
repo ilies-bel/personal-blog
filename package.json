@@ -17,6 +17,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "screenshot": "node scripts/screenshot.mjs",
+    "audit-a11y": "node scripts/audit-a11y.mjs",
     "astro": "astro",
     "optimize-media": "node scripts/optimize-media.mjs",
     "check-media": "node scripts/check-media.mjs"

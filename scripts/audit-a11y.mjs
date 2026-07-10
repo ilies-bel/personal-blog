@@ -130,9 +130,15 @@ function contrastRatio(rgb1, rgb2) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-function wcagMinContrast(textSize, role) {
-  if (textSize === 'n/a' || textSize === 'large')               return 3.0;
-  if (role === 'interactive' || role === 'button' || role === 'link') return 3.0;
+function wcagMinContrast(textSize, _role) {
+  // Icon-only controls (textSize 'n/a'): WCAG SC 1.4.11 Non-text Contrast — 3:1.
+  // Large text (≥18pt regular or ≥14pt bold): WCAG SC 1.4.3 large-text exception — 3:1.
+  // All other text — including text INSIDE buttons, links, and interactive controls —
+  // falls under WCAG SC 1.4.3 normal-text threshold — 4.5:1.
+  // (SC 1.4.11's 3:1 applies to the non-text visual indicator of state/boundary, not
+  // to the rendered text characters within the control.)
+  if (textSize === 'n/a')    return 3.0;
+  if (textSize === 'large')  return 3.0;
   return 4.5;
 }
 
