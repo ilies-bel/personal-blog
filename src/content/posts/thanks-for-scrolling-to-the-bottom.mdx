@@ -32,12 +32,40 @@ The first is a black hole. Not the famous 2019 photograph, but a drawing from 19
 The second is gold. The Voyager Golden Record, bolted to a probe that left our solar system and will outlive every one of us. A disk engraved with how to find Earth and what we sounded like, flung into the dark on the off chance that someone, someday, finds it. A message with no expectation of a reply.
 
 <figure>
-  <img
-    src={`${import.meta.env.BASE_URL}/inspirations/voyager-golden-record.jpg`.replace(/\/+/g, '/')}
-    alt="The Voyager Golden Record, a gold-plated copper disk carrying sounds and images of life on Earth"
-    style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
-    loading="lazy"
-  />
+  <picture>
+    <source
+      type="image/avif"
+      srcSet={
+        [480, 768, 1280]
+          .map(w => {
+            const u = `${import.meta.env.BASE_URL}/opt/inspirations/voyager-golden-record-${w}.avif`.replace(/\/+/g, '/');
+            return `${u} ${w}w`;
+          })
+          .join(', ')
+      }
+      sizes="(max-width: 640px) 480px, (max-width: 1024px) 768px, 1280px"
+    />
+    <source
+      type="image/webp"
+      srcSet={
+        [480, 768, 1280]
+          .map(w => {
+            const u = `${import.meta.env.BASE_URL}/opt/inspirations/voyager-golden-record-${w}.webp`.replace(/\/+/g, '/');
+            return `${u} ${w}w`;
+          })
+          .join(', ')
+      }
+      sizes="(max-width: 640px) 480px, (max-width: 1024px) 768px, 1280px"
+    />
+    <img
+      src={`${import.meta.env.BASE_URL}/opt/inspirations/voyager-golden-record-1280.jpg`.replace(/\/+/g, '/')}
+      alt="The Voyager Golden Record, a gold-plated copper disk carrying sounds and images of life on Earth"
+      style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
+      loading="lazy"
+      width="1280"
+      height="1280"
+    />
+  </picture>
   <figcaption>
     The Voyager Golden Record, NASA/JPL, 1977.
     {' '}

@@ -1,0 +1,163 @@
+{
+  "generated": "2026-07-10T12:23:41.569Z",
+  "version": 1,
+  "sources": [
+    {
+      "source": "media-source/inspirations/voyager-golden-record.jpg",
+      "sourceHash": "sha256:89f8666e15f201cf4d428bc3e4d9bd11e064cedcac212a13f2124bc556055cff",
+      "sourceSizeBytes": 4073030,
+      "outputs": [
+        {
+          "path": "opt/inspirations/voyager-golden-record-480.avif",
+          "format": "avif",
+          "width": 480,
+          "height": 480,
+          "sizeBytes": 35221,
+          "contentHash": "sha256:4e349e5a21cd8f448668df5cdabfe87f763d2842159480dd031b9fa6c1175735"
+        },
+        {
+          "path": "opt/inspirations/voyager-golden-record-480.webp",
+          "format": "webp",
+          "width": 480,
+          "height": 480,
+          "sizeBytes": 40772,
+          "contentHash": "sha256:7c7b438fdcbd4fb65ea6faf7d89873f648182e452f54accea5f3e39ca661fe21"
+        },
+        {
+          "path": "opt/inspirations/voyager-golden-record-768.avif",
+          "format": "avif",
+          "width": 768,
+          "height": 768,
+          "sizeBytes": 83094,
+          "contentHash": "sha256:6b193d6a600e1aee5d2e12d5ba1b307c5db94e712e00cea15fd668c0d278811a"
+        },
+        {
+          "path": "opt/inspirations/voyager-golden-record-768.webp",
+          "format": "webp",
+          "width": 768,
+          "height": 768,
+          "sizeBytes": 96146,
+          "contentHash": "sha256:e5bbc9f9e065196abf6c8ab2abcefb1e9e2e6351d40b130360c73ecf5b0e396a"
+        },
+        {
+          "path": "opt/inspirations/voyager-golden-record-1280.avif",
+          "format": "avif",
+          "width": 1280,
+          "height": 1280,
+          "sizeBytes": 185748,
+          "contentHash": "sha256:3bcea4809bade400ba83d9deaae63e532a4336de6b2c40902df441622960e7b4"
+        },
+        {
+          "path": "opt/inspirations/voyager-golden-record-1280.webp",
+          "format": "webp",
+          "width": 1280,
+          "height": 1280,
+          "sizeBytes": 228384,
+          "contentHash": "sha256:6e68bffa9225bc4e0fa6f5e6b286dd2fa5988e7d4949b088024b7e107b9cad35"
+        },
+        {
+          "path": "opt/inspirations/voyager-golden-record-1280.jpg",
+          "format": "jpeg",
+          "width": 1280,
+          "height": 1280,
+          "sizeBytes": 270866,
+          "contentHash": "sha256:ee8d68f38a37c4e4be8455047dc76891b3c3de95db0367be514a9adbef6ef958"
+        }
+      ]
+    },
+    {
+      "source": "media-source/graveyard/heydaniel.png",
+      "sourceHash": "sha256:3ac6c6e1c660980b902c8d719d595aa4f51d7043416254bfe02a9998a37b0362",
+      "sourceSizeBytes": 695485,
+      "outputs": [
+        {
+          "path": "opt/graveyard/heydaniel-480.avif",
+          "format": "avif",
+          "width": 480,
+          "height": 775,
+          "sizeBytes": 16135,
+          "contentHash": "sha256:756a1f21cbde4371daa909a7fbe41ed975d2a73ac857f788ffac8b6fda125e6f"
+        },
+        {
+          "path": "opt/graveyard/heydaniel-480.webp",
+          "format": "webp",
+          "width": 480,
+          "height": 775,
+          "sizeBytes": 23522,
+          "contentHash": "sha256:c9fad8e190cd09f66641de50b17dc375b8e19ea1a240a28ffcec280dac38dc7d"
+        },
+        {
+          "path": "opt/graveyard/heydaniel-768.avif",
+          "format": "avif",
+          "width": 768,
+          "height": 1239,
+          "sizeBytes": 37039,
+          "contentHash": "sha256:532e62e483461447d8d1571fd5733fdb0dd59c7880a29868a5edcba8910d2508"
+        },
+        {
+          "path": "opt/graveyard/heydaniel-768.webp",
+          "format": "webp",
+          "width": 768,
+          "height": 1239,
+          "sizeBytes": 56842,
+          "contentHash": "sha256:e5ddc060aa09f9cc9a46d48ca55c07e903076bdc232bbb605a8f7b3aaf1b4c83"
+        },
+        {
+          "path": "opt/graveyard/heydaniel-768.jpg",
+          "format": "jpeg",
+          "width": 768,
+          "height": 1239,
+          "sizeBytes": 69783,
+          "contentHash": "sha256:5e04e3d49f2053c9c430da029b530163c992ef84643fa7bcb1a04fc87297a2e7"
+        }
+      ]
+    },
+    {
+      "source": "media-source/graveyard/keywordlens.png",
+      "sourceHash": "sha256:5364dbf429ea383f369e608d8c62ed9ffef21952254a4c59d550f8bb47a1613f",
+      "sourceSizeBytes": 520955,
+      "outputs": [
+        {
+          "path": "opt/graveyard/keywordlens-480.avif",
+          "format": "avif",
+          "width": 480,
+          "height": 1360,
+          "sizeBytes": 29175,
+          "contentHash": "sha256:8ab53da818ece64660e1ef5c948b1a1109d9463783de0807dc6f16683c07569a"
+        },
+        {
+          "path": "opt/graveyard/keywordlens-480.webp",
+          "format": "webp",
+          "width": 480,
+          "height": 1360,
+          "sizeBytes": 37648,
+          "contentHash": "sha256:eb64a033eeef79a12781d853840404fd6e4c9972117cc3a3658c449ad16db6d9"
+        },
+        {
+          "path": "opt/graveyard/keywordlens-768.avif",
+          "format": "avif",
+          "width": 768,
+          "height": 2175,
+          "sizeBytes": 55363,
+          "contentHash": "sha256:03b4f50ea4b89122eb8ec807afe499bac5f7b2cc18a2137c8784585ff47201a7"
+        },
+        {
+          "path": "opt/graveyard/keywordlens-768.webp",
+          "format": "webp",
+          "width": 768,
+          "height": 2175,
+          "sizeBytes": 76794,
+          "contentHash": "sha256:504227ac4a61d2eec99c62f5962103ea18f93866ff5dd615ec7b41061727a125"
+        },
+        {
+          "path": "opt/graveyard/keywordlens-768.jpg",
+          "format": "jpeg",
+          "width": 768,
+          "height": 2175,
+          "sizeBytes": 121915,
+          "contentHash": "sha256:4e18ca6172e9ec8f68e6a7426ea08b35f6b5ea7ad16e69ae2ea4a8dd88252990"
+        }
+      ]
+    }
+  ]
+}

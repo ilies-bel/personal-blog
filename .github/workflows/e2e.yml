@@ -17,6 +17,34 @@ permissions:
   contents: read
 
 jobs:
+  # PERF-006: media pipeline guard — validates on every push/PR.
+  # Builds the site and checks that no delivered raster exceeds 500 KB,
+  # every manifest entry has intrinsic dimensions, no duplicate hashes
+  # exist, and no large asset is unreferenced in the built output.
+  media:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build with Astro
+        run: pnpm run build
+
+      - name: Check media pipeline
+        run: pnpm run check-media
+
   e2e:
     runs-on: ubuntu-latest
     steps:

@@ -53,6 +53,13 @@ jobs:
       - name: Build with Astro
         run: pnpm run build
 
+      # PERF-006: validate the media pipeline — fails if any delivered raster
+      # exceeds 500 KB without an approval entry, if a manifest output lacks
+      # intrinsic dimensions, if content-hash duplicates exist, or if an asset
+      # ≥ 100 KB is in dist/ but unreferenced in any HTML/CSS/JS.
+      - name: Check media pipeline
+        run: pnpm run check-media
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
