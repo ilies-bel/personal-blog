@@ -7,6 +7,15 @@ import { createContext, useContext, type ReactNode } from 'react';
 import type { ScrollDirection } from '../lib/constants';
 import type { HudTargetId } from '../HudNavigation';
 
+/** Build-time content counts threaded into the finale UI via SceneStateContext.
+ *  Derived in index.astro from the data modules and content collection — never
+ *  hardcoded in FinaleLedger. */
+export interface FinaleCounts {
+  projectCount: number;
+  articleCount: number;
+  specimenCount: number;
+}
+
 export interface SceneState {
   /** 0..1 presentation progress — the EASED output of the island's
    *  PresentationClock, i.e. the same value the canvas renders (NOT the raw
@@ -44,6 +53,9 @@ export interface SceneState {
   brightZone: boolean;
   /** import.meta.env.BASE_URL, resolved once. */
   base: string;
+  /** Build-time content counts for the finale's proof paths and directory notes.
+   *  Derived from data modules and content collection in index.astro. */
+  finaleCounts: FinaleCounts;
 }
 
 export interface SceneActions {

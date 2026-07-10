@@ -54,7 +54,7 @@ import {
 // initial bundle and block first paint. Only the TYPE is imported eagerly (types
 // are erased at build time, so this costs nothing at runtime). See the effect.
 import { isWebGLUnavailableError, type SceneHandle, type MarkerFrame } from '../scene/types';
-import { SceneStateProvider } from './SceneStateContext';
+import { SceneStateProvider, type FinaleCounts } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
 import ExplorationHud from './ExplorationHud';
@@ -81,6 +81,11 @@ declare global {
   }
 }
 
+/** Zeros passed to FinaleLedger when the island is mounted without finaleCounts
+ *  (e.g. the about page backdrop) so the overlay never renders stale hardcoded
+ *  numbers on a page that doesn't show the finale UI at all. */
+const DEFAULT_FINALE_COUNTS: FinaleCounts = { projectCount: 0, articleCount: 0, specimenCount: 0 };
+
 interface HeroIslandProps {
   /** Backdrop mode: render only the scene canvas (no manifesto beats, no chrome,
    *  no scroll subscription) pinned to a fixed lifecycle frame. Used by reading
@@ -92,6 +97,10 @@ interface HeroIslandProps {
    *  coolest, most on-palette still, so reading copy sits over atmosphere, not a
    *  hot disk. */
   backdropStage?: number;
+  /** Build-time content counts derived in index.astro from the data modules and
+   *  the posts collection. Threaded into SceneStateContext so FinaleLedger can
+   *  render dynamic counts without any runtime data fetching. */
+  finaleCounts?: FinaleCounts;
 }
 
 // React only needs a perceptual scroll snapshot for DOM copy/chrome. The scene
@@ -150,7 +159,7 @@ const DATA_SCENE_BY_ID: Record<HudTargetId, 'blackhole' | 'red-giant' | 'yellow-
   beginning: 'final',
 };
 
-export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES }: HeroIslandProps = {}) {
+export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, finaleCounts }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Frame-cadence marker data from the scene (position of the star object in CSS px).
   // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
@@ -756,7 +765,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   return (
     <SceneStateProvider
-      state={{ progress, stage, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base }}
+      state={{ progress, stage, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base, finaleCounts: finaleCounts ?? DEFAULT_FINALE_COUNTS }}
       actions={{ beginDive, requestReducedMotion }}
     >
       {/* data-zone="bright" over the supernova flash + yellow-star beat flips the
