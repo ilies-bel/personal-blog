@@ -235,6 +235,20 @@
   outline-offset: 3px;
   border-radius: 2px;
 }
+/* The pointer to the dedicated /contact route (availability, timezone, terms)
+   — one quiet body-sm line under the quick links. */
+.about-contact-more {
+  margin: 1.1rem 0 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+  color: var(--fg-faint);
+}
+.about-contact-more a {
+  color: var(--accent-strong);
+}
+.about-contact-more a:hover {
+  color: var(--fg);
+}
 
 @media (max-width: 44rem) {
   .about-principles {

@@ -75,15 +75,18 @@ export const WEBGL_UNAVAILABLE_BODY_CLASS = 'webgl-unavailable';
  *  until the loader is gone. */
 export const LOADER_GONE_BODY_CLASS = 'loader-gone';
 /** Minimum time (ms) the instant intro loader is held on the FIRST load of a
- *  browser session, so the boot sequence (LOADING → READY → glide-to-HUD) reads
- *  fully even when the scene paints fast. It is a FLOOR, never a cap: on first
- *  load the loader lifts at `max(scene:ready, LOADER_MIN_MS)`; a slower scene
- *  still waits for its real first frame. Kept comfortably under the 8s safety
- *  backstop (see the inline script in index.astro) so the two compose cleanly —
- *  the floor raises the early bound, the safety caps the late bound. Spelled here
- *  once and passed into the inline loader script via define:vars so there is no
- *  inline magic number. */
-export const LOADER_MIN_MS = 2500;
+ *  browser session, so the boot readout gets ONE legible beat even when the
+ *  scene paints fast. It is a FLOOR, never a cap: on first load the loader
+ *  lifts at `max(scene:ready, LOADER_MIN_MS)`; a slower scene still waits for
+ *  its real first frame. HONESTY BUDGET (P7): the floor is capped at ≤1s — the
+ *  old 2.5s theater hold made visitors wait on a scene that was already
+ *  painted, so it now covers only the readout's read time, and the visible
+ *  "Skip intro" control (index.astro) bypasses even that. Kept far under the
+ *  8s safety backstop (see the loader script in index.astro) so the two
+ *  compose cleanly — the floor raises the early bound, the safety caps the
+ *  late bound. Spelled here once and imported by the bundled loader script so
+ *  there is no inline magic number. */
+export const LOADER_MIN_MS = 900;
 /** sessionStorage key recording that the minimum-time loader has already played
  *  once THIS browser session. On first load the key is absent → apply the
  *  LOADER_MIN_MS floor, then set it; on subsequent loads in the same session

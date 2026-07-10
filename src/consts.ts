@@ -38,3 +38,16 @@ export const SOCIALS = {
 
 // Default social-share image (lives in /public). Replace with your own.
 export const DEFAULT_OG_IMAGE = 'og-default.png';
+
+// Availability readout for the /contact route — the mono instrument rows the
+// page renders as a <dl>. Safe defaults pending the owner's confirmation
+// (tracked in docs/INPUTS-NEEDED.md, P13): status/note/location are the
+// fields most likely to change; edit HERE and the contact page follows.
+export const AVAILABILITY = {
+  status: 'open' as 'open' | 'limited' | 'closed',
+  note: 'Open to interesting engagements',
+  location: 'France',
+  timezone: 'Europe/Paris (CET/CEST)',
+  engagements: ['Frontend & creative development', 'Web performance', 'Design engineering'],
+  responseTime: 'Usually within 48 hours',
+};

@@ -1,0 +1,257 @@
+/* Contact — the transmission page (P7). One calm reading column in the
+   standard chrome over the ambient nebula poster: the projects/writing page
+   header grammar up top, ONE big mailto action, then the availability facts as
+   full-width mono instrument rows (the projects-meta <dl> language scaled up).
+   Everything is plain server HTML — no JS is needed to read or act on this
+   page. The transmission backdrop art direction lands in P9. */
+
+.contact-page .wrap {
+  padding-bottom: 7rem;
+}
+
+/* Column: the readable measure, same centring pattern as writing/projects. */
+.contact-hero,
+.contact-panel {
+  width: min(44rem, calc(100vw - var(--gutter) - var(--gutter)));
+  margin-inline: auto;
+}
+
+/* Page header — snapped to the sitewide ladder like .projects-hero: kicker in
+   the mono chapter voice, h1 at the hero rung, one lead sentence. (The hero
+   class also opts the block into the sitewide entrance choreography —
+   transitions.css keys on .contact-hero alongside the other page heroes.) */
+.contact-hero {
+  display: grid;
+  gap: 1.1rem;
+  margin-top: clamp(4rem, 11vw, 7.5rem);
+  margin-bottom: clamp(2.25rem, 7vw, 4.5rem);
+}
+.contact-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-chrome-faint);
+}
+.contact-hero h1 {
+  max-width: 16ch;
+  margin: 0;
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+.contact-lead {
+  max-width: 38rem;
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--text-subtitle);
+  line-height: 1.58;
+  text-wrap: pretty;
+}
+
+/* --- The one big action ----------------------------------------------------- */
+/* A full-width instrument plate, not a pill: square-cut 1px hairline (the
+   room's corner grammar), tonal lift over the poster, mono verb + the real
+   address. Comfortably past the 44px target floor via padding. Hover/focus
+   wake the hairline gold and lift the verb — the same signal grammar as the
+   projects links / ledger rows. */
+.contact-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  min-height: 44px;
+  padding: clamp(1.1rem, 3vw, 1.5rem) clamp(1.1rem, 3vw, 1.6rem);
+  border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--line));
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
+  text-decoration: none;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.contact-cta-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-hud);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  transition: color 0.18s ease;
+}
+.contact-cta-addr {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.03em;
+  color: var(--fg-dim);
+  overflow-wrap: anywhere; /* the address must never overflow a 320px column */
+  transition: color 0.18s ease;
+}
+.contact-cta:hover,
+.contact-cta:focus-visible {
+  border-color: var(--accent-strong);
+  background: color-mix(in oklch, var(--bg-soft) 88%, transparent);
+  box-shadow: 0 0 18px color-mix(in oklch, var(--highlight) 18%, transparent);
+}
+.contact-cta:hover .contact-cta-label,
+.contact-cta:focus-visible .contact-cta-label {
+  color: var(--highlight);
+}
+.contact-cta:hover .contact-cta-addr,
+.contact-cta:focus-visible .contact-cta-addr {
+  color: var(--fg);
+}
+.contact-cta:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+:where(html[data-motion='reduced']) .contact-cta,
+:where(html[data-motion='reduced']) .contact-cta-label,
+:where(html[data-motion='reduced']) .contact-cta-addr {
+  transition: none;
+}
+
+/* --- Channel readout (the availability <dl>) --------------------------------- */
+/* Full-width hairline rows — the projects-meta instrument language at page
+   scale: mono-caps terms in the faint chrome tier, values one register up. */
+.contact-channel {
+  margin: clamp(2rem, 6vw, 3rem) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.contact-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 12rem) minmax(0, 1fr);
+  gap: 0.35rem 1.5rem;
+  align-items: baseline;
+  padding: 0.85rem 0.1rem;
+  border-bottom: 1px solid var(--line);
+}
+.contact-channel dt {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 400;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-chrome-faint);
+}
+.contact-channel dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.02em;
+  line-height: 1.55;
+  color: var(--fg-dim);
+}
+
+/* Status lamp — a small signal dot ahead of the status word. Gold = open (the
+   site's live-signal colour; the room has no green), the white-hot highlight
+   = limited (rarer, hotter), etched gray = closed. Breathes gently on the
+   full-motion page; a steady lamp under reduced motion. */
+.contact-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.55rem;
+  border-radius: 999px;
+  vertical-align: baseline;
+  background: var(--accent-strong);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--accent-strong) 55%, transparent);
+  animation: contact-status-pulse 2.4s var(--ease-out-quint) infinite;
+}
+.contact-status-dot[data-status='limited'] {
+  background: var(--highlight);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--highlight) 55%, transparent);
+}
+.contact-status-dot[data-status='closed'] {
+  background: var(--fg-faint);
+  box-shadow: none;
+  animation: none;
+}
+@keyframes contact-status-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+:where(html[data-motion='reduced']) .contact-status-dot {
+  animation: none;
+}
+
+/* --- Other frequencies + the proof line -------------------------------------- */
+.contact-elsewhere {
+  margin-top: clamp(2rem, 6vw, 3rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem 1.5rem;
+}
+.contact-elsewhere-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-chrome-faint);
+}
+.contact-elsewhere-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.5rem;
+}
+.contact-elsewhere-list a {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.02em;
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  padding-bottom: 2px;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+.contact-elsewhere-list a:hover {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+.contact-elsewhere-list a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.contact-proof {
+  margin: 1.6rem 0 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--fg-dim);
+  text-wrap: pretty;
+}
+.contact-proof a {
+  color: var(--accent-strong);
+}
+.contact-proof a:hover {
+  color: var(--fg);
+}
+
+/* Narrow phones: the term column collapses and each row stacks term-over-value
+   (the same fold projects-meta makes when it wraps). */
+@media (max-width: 34rem) {
+  .contact-hero,
+  .contact-panel {
+    width: min(100%, calc(100vw - 2rem));
+  }
+  .contact-hero {
+    margin-top: 2.75rem;
+  }
+  .contact-row {
+    grid-template-columns: 1fr;
+  }
+  .contact-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

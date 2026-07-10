@@ -49,8 +49,9 @@ body.bare.hud-active::after {
    document arrives — no JS, no font wait beyond the sitewide faces — so the visitor
    never stares at a blank black page while the ~200 KB-gzip three.js engine chunk
    loads, parses, allocates ~40 MB of typed arrays and compiles the shader. It fills
-   the viewport ABOVE everything (canvas 0, vignette/chrome/HUD up to ~21), in the
-   site's own palette: a single quiet pale speck pulsing under the wordmark — the
+   the viewport above the scene layers (canvas 0, vignette 9, identity 20) but BELOW
+   the corner nav (z-70 — labelled navigation stays clickable during the load, P7), in
+   the site's own palette: a single quiet pale speck pulsing under the wordmark — the
    pale-blue-dot the scene itself opens on — so the wait reads as the dot about to
    bloom, not a broken page. It fades out (and stops catching pointer events) the
    moment the hero paints its first real frame: body.scene-ready, added by the inline
@@ -168,6 +169,45 @@ html.js .static-edition {
   0%, 100% { transform: scale(0.82); opacity: 0.5; }
   50%      { transform: scale(1.12); opacity: 1; }
 }
+/* SKIP INTRO (P7 loader honesty) — the loader's one real control: a quiet mono
+   bracket label pinned to the loader's bottom-centre (the slot the boot readout
+   only occupies AFTER the reveal, so they never overlap). Server-rendered,
+   wired by the bundled loader script (works pre-hydration), ≥44px target via
+   padding. It disappears the moment any reveal starts (body.scene-ready below)
+   — once the dissolve is running its job is done. */
+.scene-loader-skip {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 5vh, 3rem));
+  left: 50%;
+  transform: translateX(-50%);
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  background: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.75rem 1.1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  transition: color 0.16s ease;
+}
+.scene-loader-skip:hover { color: var(--fg); }
+.scene-loader-skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+}
+body.scene-ready .scene-loader-skip { display: none; }
+:where(html[data-motion='reduced']) .scene-loader-skip { transition: none; }
 /* Ready: SEQUENCE the dissolve around the glide instead of fading the whole overlay at
    once. The element itself stays opacity:1 (it must keep blocking the scene); pointer
    events fall through to the live scene immediately. The two layers fade on their OWN
@@ -219,8 +259,20 @@ body.scene-ready .scene-loader::before {
    ≈192svh of scrolling to ≈0.20 × (6 × 300) = ≈360svh (~1.9× longer to scroll
    through), giving the gas a long, legible build into the forming star. SCROLL_SECTION_COUNT
    (=6) is unchanged; this is purely a height change, so all proportions/easings hold. */
-.scene-track { position: relative; z-index: 0; }
-.scene-stage { height: 300svh; } /* was 160svh — lengthens the whole arc ~1.875×; collapse ≈360svh */
+.scene-track { position: relative; z-index: 0; --stage-h: 300svh; }
+/* Per-stage height rides ONE custom property so the whole timeline compresses
+   with a single override — scroll.ts normalizes progress against the MEASURED
+   document height, so every beat proportion, easing and stage bound is
+   untouched by this value; only "pixels scrolled per unit progress" changes. */
+.scene-stage { height: var(--stage-h, 300svh); } /* desktop: was 160svh — lengthens the whole arc ~1.875×; collapse ≈360svh */
+/* MOBILE LIFECYCLE CUT (P7): 6 × 300svh = 1800svh was an ~18-viewport thumb
+   marathon on a phone. 140svh per stage → 6 × 140 = 840svh ≈ 8.4 viewports of
+   scrolling for the full arc — still one long cinematic pull, but finishable.
+   Desktop keeps the full 300svh pacing (mouse wheels + trackpads scroll far
+   faster per gesture than thumbs). */
+@media (max-width: 768px) {
+  .scene-track { --stage-h: 140svh; }
+}
 
 /* --- Fixed corner overlay (brand top-left, blog micro-nav top-right) --------- */
 /* About's brand mark — the shared identity lockup (.bh-identity-lockup, hero.css)
@@ -239,7 +291,13 @@ body.scene-ready .scene-loader::before {
   position: fixed;
   top: clamp(0.75rem, 2.5vw, 1.5rem);
   right: clamp(1rem, 4vw, 3rem);
-  z-index: 21;                           /* above the manifesto overlay, stays clickable */
+  /* ABOVE the intro loader (z-60), deliberately (P7): labelled navigation must
+     be usable from FIRST PAINT, so the corner nav paints over the dark loader
+     cover and stays clickable while the engine warms — same precedent as the
+     boot readout, which already rides above the loader stack (hud.css). The
+     brand/identity and the in-scene markers stay UNDER the cover on purpose
+     (the loader centres the same wordmark; markers gate on loader-gone). */
+  z-index: 70;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -571,15 +629,31 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
    active. The base .overlay-blog-power[aria-pressed='true'] rule already styles this;
    this is just a documentation anchor — no extra declarations needed. */
 
-/* On the smallest screens the HOME canvas folds the section links away and keeps
-   only the socials + power controls (the bottom number rail carries the scene
-   sections there). About is a calm reading panel, so it KEEPS its links — without
-   them the page would have no navigation at all on a phone. As one fixed top-right
-   row they would wrap straight over the fixed brand lockup, so on About the whole
-   corner nav drops to a WRAPPED BAND below the brand (absolute, not fixed — it
-   scrolls away with the page like the reading pages' stacked subnav). */
+/* On the smallest screens a single fixed top-right row (four labels + socials +
+   controls) would wrap straight over the fixed brand/identity lockup, so BOTH
+   bare pages drop the whole corner nav to a WRAPPED BAND below the brand.
+   P7: the HOME canvas used to fold the section links away entirely here (only
+   socials + power survived) — that left a phone visitor with NO labelled
+   navigation in the first viewport, which violates the one-interaction IA
+   guarantee. Home now keeps its links in the same band treatment, still FIXED
+   (the home nav is scene chrome — it must ride the whole 840svh scroll), while
+   About's band stays absolute (a reading panel — it scrolls away with the page
+   like the reading pages' stacked subnav). */
 @media (max-width: 34rem) {
-  body:not(.about-page) .overlay-blog-links { display: none; }
+  body.bare:not(.about-page) .overlay-blog {
+    top: 4.9rem;
+    left: clamp(1rem, 4vw, 3rem);
+    right: clamp(1rem, 4vw, 3rem);
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+  /* Two designed rows, not an accidental wrap: the four destination labels own
+     the first line (flex-basis 100% forces the break), the icon controls
+     (socials + motion + power) group on the second. */
+  body.bare:not(.about-page) .overlay-blog-links {
+    flex-basis: 100%;
+  }
   body.bare.about-page .overlay-blog {
     position: absolute;
     top: 4.9rem;
@@ -588,7 +662,7 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
-  body.bare.about-page .overlay-blog-links {
+  .overlay-blog-links {
     flex-wrap: wrap;
     gap: 0.2rem 0.9rem;
     justify-content: flex-start;

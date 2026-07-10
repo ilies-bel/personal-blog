@@ -105,7 +105,7 @@ interface HeroIslandProps {
   counts?: LedgerCounts;
 }
 
-const ZERO_COUNTS: LedgerCounts = { shipped: 0, dead: 0 };
+const ZERO_COUNTS: LedgerCounts = { shipped: 0, dead: 0, posts: 0 };
 
 // React only needs a perceptual scroll snapshot for DOM copy/chrome. The scene
 // render loop reads exact progress from progressRef, so this gate cuts context

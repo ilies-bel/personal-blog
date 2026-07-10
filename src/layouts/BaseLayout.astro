@@ -348,8 +348,8 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               link labels right (same underline-sweep hover as .subnav-link). Pinned
               across SPA swaps like the header (transition:name + animate none) so
               the chrome holds still while only the page content moves. Carries the
-              two social profiles plus the Behind the Build case study, surfaced
-              site-wide. */}
+              two social profiles, the Behind the Build case study (a secondary
+              destination, surfaced site-wide), and Contact. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
             <nav class="site-footer-links" aria-label="Footer links">
@@ -359,6 +359,10 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 href={href('behind-the-build')}
                 aria-current={isCurrentPage('behind-the-build') ? 'page' : undefined}
               ><span class="site-footer-label" data-decode>Behind the build</span></a>
+              <a
+                href={href('contact')}
+                aria-current={isCurrentPage('contact') ? 'page' : undefined}
+              ><span class="site-footer-label" data-decode>Contact</span></a>
             </nav>
           </footer>
         </div>

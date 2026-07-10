@@ -116,6 +116,13 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
           {SOCIALS.twitter && <li><a href={SOCIALS.twitter} data-decode>Twitter / X</a></li>}
           {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`} data-decode>Email</a></li>}
         </ul>
+        {/* The quick links stay (this section long WAS the site's contact
+            surface); the dedicated route carries the full channel readout —
+            availability, location, timezone, terms. */}
+        <p class="about-contact-more">
+          Availability, timezone, and what I take on:
+          <a href={href('contact')}> the contact page</a>.
+        </p>
       </section>
     </article>
   </div>

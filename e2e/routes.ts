@@ -8,6 +8,7 @@ export const CONTENT_ROUTES = [
   '/graveyard',
   '/behind-the-build',
   '/about',
+  '/contact',
   '/posts/memory-leak-search-and-destroy',
   '/posts/thanks-for-scrolling-to-the-bottom',
 ] as const;

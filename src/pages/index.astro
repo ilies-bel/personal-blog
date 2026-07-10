@@ -47,14 +47,23 @@ const counts = await getCounts();
       the wait reads as "the hero is about to ignite", not "the page is broken". It
       fades out smoothly once the hero
       paints its FIRST real frame (body.scene-ready, added by the inline listener
-      below on the scene:ready event). aria-hidden — it is pure decoration over the
-      same copy the manifesto/SSR fallback already announce. Styling lives in
-      scene.css under "Instant intro loader". */}
-  <div class="scene-loader" aria-hidden="true">
-    <div class="scene-loader-mark">
+      below on the scene:ready event). The mark (dot + wordmark) is aria-hidden —
+      pure decoration over the same copy the manifesto/SSR fallback already
+      announce — but the loader element itself is NOT: it also carries the REAL
+      "Skip intro" control (P7 loader honesty), a server-rendered <button> that
+      is visible, Tab-reachable and wired by the same bundled loader script
+      below, so it works long before the React island hydrates. Clicking it
+      reveals the scene + releases interactivity immediately (scene-ready +
+      loader-gone in one stroke). Styling lives in scene.css under "Instant
+      intro loader". */}
+  <div class="scene-loader">
+    <div class="scene-loader-mark" aria-hidden="true">
       <span class="scene-loader-dot"></span>
       <span class="scene-loader-name">{BRAND_NAME}</span>
     </div>
+    <button type="button" class="scene-loader-skip">
+      <span aria-hidden="true">[&nbsp;</span><span class="scene-loader-skip-label">Skip intro</span><span aria-hidden="true">&nbsp;]</span>
+    </button>
   </div>
 
   {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout.
@@ -64,20 +73,29 @@ const counts = await getCounts();
       composited frame).
 
       FIRST load of the SESSION only, the loader is held for a minimum of
-      LOADER_MIN_MS so the boot sequence (LOADING → READY → glide-to-HUD) reads
-      fully even when the scene paints fast — the reveal lands at
-      max(scene:ready, LOADER_MIN_MS). The floor only RAISES the early bound; a
-      slower scene still waits for its real first frame. "First load of the
-      session" is tracked in sessionStorage (LOADER_SEEN_STORAGE_KEY): a fresh
-      session shows the full boot once, then reloads/returns within the session
+      LOADER_MIN_MS (≤1s — the P7 honesty budget: one legible beat for the boot
+      readout, never a theater hold over an already-painted scene) — the reveal
+      lands at max(scene:ready, LOADER_MIN_MS). The floor only RAISES the early
+      bound; a slower scene still waits for its real first frame. "First load of
+      the session" is tracked in sessionStorage (LOADER_SEEN_STORAGE_KEY): a fresh
+      session shows the boot beat once, then reloads/returns within the session
       reveal as soon as scene:ready fires (no floor). A back-nav WITHIN the
       session therefore never re-imposes the floor.
+
+      SKIP INTRO — the loader's server-rendered .scene-loader-skip button is
+      wired HERE (this bundled script runs on page load, long before the React
+      island hydrates, so the control works from first paint). Clicking it is
+      the impatient path PLUS the honest one: it reveals the scene AND releases
+      interactivity in one stroke (scene-ready + loader-gone immediately — no
+      waiting out the dissolve choreography), and the session is marked seen so
+      the floor never re-imposes. The button hides itself once scene-ready lands
+      (CSS display:none) — its job is done the moment the reveal starts.
 
       A long safety timeout is the hard backstop in BOTH cases — it fires solely
       if scene:ready never arrives (a failed WebGL context / a browser with JS but
       no WebGL), so the loader can never get stuck over a dead canvas. It bypasses
-      the floor (the floor only fires once the scene is actually ready). 8s > the
-      2.5s floor, so they compose cleanly: floor raises the early bound, safety
+      the floor (the floor only fires once the scene is actually ready). 8s ≫ the
+      ≤1s floor, so they compose cleanly: floor raises the early bound, safety
       caps the late bound.
 
       Once the loader is REVEALED (scene-ready added) the dissolve runs in order:
@@ -160,6 +178,22 @@ const counts = await getCounts();
         armGone();
       };
 
+      // SKIP INTRO — the server-rendered button inside the loader markup. Wired
+      // here (not in the island) so it works pre-hydration. Skipping is the
+      // IMMEDIATE path: reveal() starts the dissolve (scene-ready) and markGone()
+      // releases interactivity (loader-gone) in the same stroke — the visitor
+      // asked to move on, so nothing gates on the dissolve choreography. The
+      // session was already marked seen at init below, so a later reload never
+      // re-imposes the floor either. CSS hides the button on body.scene-ready
+      // (its job is done once any reveal starts).
+      const skip = loader.querySelector<HTMLButtonElement>('.scene-loader-skip');
+      if (skip) {
+        skip.addEventListener('click', () => {
+          reveal();
+          markGone();
+        });
+      }
+
       // Warm back-nav / fast-hydration race: scene-ready is already on the body
       // (a previous reveal() call within this DOM phase already ran).
       // Just arm the loader-gone signal and exit — no need to re-listen.
@@ -175,9 +209,10 @@ const counts = await getCounts();
       // Is this the first load of the session? sessionStorage access is wrapped
       // in try/catch — private mode / disabled storage must never throw and trap
       // the loader. On ANY storage error we treat it as a first load and apply
-      // the floor: a 2.5s hold is harmless (it can't be remembered, so a reload
-      // would re-apply it, but it never traps the user — the safety still fires
-      // and the floor is a fixed short hold, not a flag-dependent gate).
+      // the floor: a sub-second hold is harmless (it can't be remembered, so a
+      // reload would re-apply it, but it never traps the user — the safety still
+      // fires, the skip button stands, and the floor is a fixed short hold, not
+      // a flag-dependent gate).
       let firstLoad = true;
       try {
         firstLoad = !window.sessionStorage.getItem(LOADER_SEEN_STORAGE_KEY);
@@ -225,7 +260,7 @@ const counts = await getCounts();
     </p>
     <p class="webgl-fallback-cta">
       Make it last, or don't make it. Sounds interesting?
-      <a href={`${href('about')}#get-in-touch`}>Get in touch.</a>
+      <a href={href('contact')}>Get in touch.</a>
     </p>
   </div>
 
@@ -243,7 +278,7 @@ const counts = await getCounts();
       (dynamically imported inside HeroIsland) downloads off it. The component is
       SSR-safe: every window/three.js touch lives inside its mount effect, so the
       server only renders the empty canvas shell + manifesto chrome. */}
-  <BlackHole client:visible counts={{ shipped: counts.shipped, dead: counts.dead }} />
+  <BlackHole client:visible counts={{ shipped: counts.shipped, dead: counts.dead, posts: counts.posts }} />
 
   {/* The scroll track. It contributes no visuals of its own — it exists only to
       give the page real scrollable height so the pinned scene can be scrubbed.

@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { numberToWord, graveyardNote, projectsNote } from '../src/lib/contentFormat.ts';
+import { numberToWord, graveyardNote, projectsNote, writingNote } from '../src/lib/contentFormat.ts';
 
 test('numberToWord spells out one–twelve for prose quality', () => {
   assert.equal(numberToWord(0), 'zero');
@@ -35,4 +35,10 @@ test('graveyard note: any other count switches to "all"/singular wording — no 
 test('projects note', () => {
   assert.equal(projectsNote(2), '2 shipped');
   assert.equal(projectsNote(3), '3 shipped');
+});
+
+test('writing note pluralizes off the real article count (P7 finale ledger)', () => {
+  assert.equal(writingNote(1), '1 article');
+  assert.equal(writingNote(2), '2 articles');
+  assert.equal(writingNote(12), '12 articles');
 });

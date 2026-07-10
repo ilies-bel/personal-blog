@@ -28,3 +28,10 @@ export function graveyardNote(dead: number): string {
 export function projectsNote(shipped: number): string {
   return `${shipped} shipped`;
 }
+
+/** The WRITING ledger note — the real article count (the same filter /writing's
+ *  Articles shelf applies: drafts and the site-meta Inspiration essay are out),
+ *  so the finale can never advertise essays that aren't on the shelf. */
+export function writingNote(posts: number): string {
+  return posts === 1 ? '1 article' : `${posts} articles`;
+}

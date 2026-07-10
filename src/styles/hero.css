@@ -1076,6 +1076,31 @@ body.scene-ready.at-opening .bh-focus-dot {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
 }
+/* REPLAY (P7) — the ledger's one non-navigation row is a real <button>, so the
+   UA button chrome is stripped back to the row grammar the <a> rows share: the
+   base .bh-finale-ledger-row rules give it the border-top hairline, padding and
+   flex layout; this only zeroes what a <button> brings of its own. font:inherit
+   re-inherits the row's mono stack, and the child label/note spans carry their
+   own sizes exactly as in the anchor rows. */
+.bh-finale-ledger-replay {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  margin: 0;
+  background: none;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+/* The base :last-child rule re-adds the closing hairline via border-bottom;
+   restate it after the reset above (which zeroes border-bottom at equal
+   specificity but later source order within this file's cascade). */
+.bh-finale-ledger-replay:last-child {
+  border-bottom: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
+}
 /* SHORT viewports: compress the rows so the ledger's top edge stays below the
    hover card's bottom (~50vh + ~100px) instead of riding up into it. 46rem
    (736px) is where the uncompressed column starts brushing that region. */
@@ -1108,6 +1133,16 @@ body.scene-ready.at-opening .bh-focus-dot {
   }
   .bh-finale-ledger-note {
     display: none;
+  }
+}
+
+/* SMALL PHONES (≤34rem): the corner nav is a WRAPPED BAND below the identity
+   there (scene.css — labels row + controls row, ending ≈9.5rem down), and the
+   finale is the one beat whose copy sits at the TOP of the viewport — so it
+   alone needs extra clearance or the headline rises into the band. */
+@media (max-width: 34rem) {
+  .bh-beat.bh-beat--finale {
+    padding-top: 11.5rem;
   }
 }
 

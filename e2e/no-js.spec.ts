@@ -36,7 +36,7 @@ test('no-JS homepage shows the static edition, not the loader', async ({ page })
 });
 
 test('no-JS content routes still render their content', async ({ page }) => {
-  for (const route of ['/projects', '/writing', '/graveyard', '/about']) {
+  for (const route of ['/projects', '/writing', '/graveyard', '/about', '/contact']) {
     await page.goto(route, { waitUntil: 'load' });
     await expect(page.locator('h1'), `${route} has a visible h1`).toBeVisible();
     // Body copy must not be gated behind JS-driven reveals.

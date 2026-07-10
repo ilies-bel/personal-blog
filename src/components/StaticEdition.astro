@@ -14,14 +14,14 @@
 import { BEATS } from '../hero/sceneTable';
 import { BRAND_NAME, BRAND_ROLE, withBase } from '../consts';
 
-// Primary destinations, in the canonical IA order. Labels stay conventional —
-// celestial names live only inside the live scene. Contact deep-links to the
-// About contact section until the dedicated /contact route ships.
+// Primary destinations, in the canonical IA order (the same four rows
+// SiteNav renders). Labels stay conventional — celestial names live only
+// inside the live scene.
 const DESTINATIONS = [
   { label: 'Work', href: withBase('projects') },
   { label: 'Writing', href: withBase('writing') },
   { label: 'About', href: withBase('about') },
-  { label: 'Contact', href: `${withBase('about')}#get-in-touch` },
+  { label: 'Contact', href: withBase('contact') },
 ];
 ---
 
@@ -53,6 +53,6 @@ const DESTINATIONS = [
 
   <p>
     Make it last, or don't make it. Sounds interesting?
-    <a href={`${withBase('about')}#get-in-touch`}> Get in touch.</a>
+    <a href={withBase('contact')}> Get in touch.</a>
   </p>
 </div>

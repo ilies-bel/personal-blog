@@ -9,10 +9,11 @@
 // body the dim caption) — so no two surfaces can disagree about what the
 // sections are called or where they sit.
 //
-// The model is three primary destinations — Projects, Writing, About. WRITING is
-// now a prose menu (src/pages/writing.astro) that hubs the written material — the
-// posts and Behind the Build — so the old separate INDEX (/archive) entry is gone
-// and Writing lights for those pages. The graveyard has no top-nav item and claims
+// The model is four primary destinations — Work, Writing, About, Contact (the
+// conventional portfolio IA; Work keeps its /projects path). WRITING is a prose
+// menu (src/pages/writing.astro) that hubs the written material — the posts and
+// Behind the Build — so the old separate INDEX (/archive) entry is gone and
+// Writing lights for those pages. The graveyard has no top-nav item and claims
 // none: no section reads as current there (aria-current is a true-path statement,
 // not a "nearest section" hint). The hero's vertical rail still walks all five
 // lifecycle scenes; a menu doesn't need to mirror the scene order.
@@ -72,9 +73,10 @@ interface NavRow {
   active: boolean;
 }
 const rows: NavRow[] = [
-  { href: href('projects'), label: 'Projects', active: isActive('projects') },
+  { href: href('projects'), label: 'Work', active: isActive('projects') },
   { href: href('writing'), label: 'Writing', active: isWritingActive },
   { href: href('about'), label: 'About', active: isActive('about') },
+  { href: href('contact'), label: 'Contact', active: isActive('contact') },
 ];
 
 // Official simple-icons brand paths (GitHub octocat, X logo), fill=currentColor
