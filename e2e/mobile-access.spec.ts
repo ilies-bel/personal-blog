@@ -116,6 +116,10 @@ test.describe('phone viewport (390×844)', () => {
   });
 
   test('the compressed track still plays the full manifesto arc', async ({ page }) => {
+    // Long test under parallel CI contention (the presentation clock eases
+    // toward each scroll target on wall-clock time, which stretches when
+    // workers share a software-rendered CPU).
+    test.slow();
     await page.goto('/', { waitUntil: 'load' });
     await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });
 
@@ -123,21 +127,31 @@ test.describe('phone viewport (390×844)', () => {
     // The manifesto is scroll-driven DOM (independent of the GL canvas), so
     // this holds on CI software rendering too. ≥5 distinct beats proves the
     // six stage transitions survived the 140svh compression.
+    //
+    // A fixed settle-time races the eased clock and goes flaky under load, so
+    // each step samples until the visible beat is STABLE (two consecutive
+    // identical reads) or a per-step deadline passes.
     const seen = new Set<string>();
     const steps = 36;
     const max = await page.evaluate(
       () => document.documentElement.scrollHeight - window.innerHeight,
     );
-    for (let i = 0; i <= steps; i++) {
-      await page.evaluate((y) => window.scrollTo(0, y), Math.round((max * i) / steps));
-      // Let the presentation clock ease toward the target before sampling.
-      await page.waitForTimeout(180);
-      const visible = await page.evaluate(() => {
+    const sample = () =>
+      page.evaluate(() => {
         const beats = Array.from(document.querySelectorAll<HTMLElement>('.bh-beat'));
         const on = beats.find((b) => Number(getComputedStyle(b).opacity) > 0.5);
         return on?.querySelector('.bh-beat-big')?.textContent?.trim() ?? '';
       });
-      if (visible) seen.add(visible);
+    for (let i = 0; i <= steps; i++) {
+      await page.evaluate((y) => window.scrollTo(0, y), Math.round((max * i) / steps));
+      let prev = '';
+      for (let tries = 0; tries < 10; tries++) {
+        await page.waitForTimeout(150);
+        const cur = await sample();
+        if (cur && cur === prev) break;
+        prev = cur;
+      }
+      if (prev) seen.add(prev);
     }
     expect(seen.size, `distinct manifesto beats seen: ${[...seen].join(' | ')}`).toBeGreaterThanOrEqual(5);
   });
