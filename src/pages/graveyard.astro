@@ -103,12 +103,41 @@ const specimens = (await getCollection('graveyard')).sort(
             <figcaption>{s.data.image.caption}</figcaption>
           </figure>
 
+          {/* FORENSIC RECORD — five structured fields that replace the undifferentiated
+              body-copy model. Each field is a <dt>/<dd> pair inside a <dl> so
+              keyboard and screen-reader users can navigate the record field by
+              field. data-forensic-field drives E2E assertions (EXP-030). */}
           <div class="graveyard-copy">
-            {s.data.body.map((paragraph) => <p>{paragraph}</p>)}
-            <p class="graveyard-lesson">
-              <span class="graveyard-lesson-label">What it taught me:</span>
-              {' '}{s.data.lesson}
-            </p>
+            <dl class="graveyard-forensic">
+              {s.data.premise && (
+                <div class="forensic-field" data-forensic-field="hypothesis">
+                  <dt class="forensic-label">Hypothesis</dt>
+                  <dd class="forensic-value">{s.data.premise}</dd>
+                </div>
+              )}
+              {s.data.warningSign && (
+                <div class="forensic-field" data-forensic-field="warning-sign">
+                  <dt class="forensic-label">Warning sign</dt>
+                  <dd class="forensic-value">{s.data.warningSign}</dd>
+                </div>
+              )}
+              {s.data.causeOfDeath && (
+                <div class="forensic-field" data-forensic-field="cause-of-death">
+                  <dt class="forensic-label">Cause of death</dt>
+                  <dd class="forensic-value">{s.data.causeOfDeath}</dd>
+                </div>
+              )}
+              <div class="forensic-field forensic-field--lesson" data-forensic-field="lesson">
+                <dt class="forensic-label">Lesson</dt>
+                <dd class="forensic-value">{s.data.lesson}</dd>
+              </div>
+              {s.data.survivingInsight && (
+                <div class="forensic-field" data-forensic-field="surviving-insight">
+                  <dt class="forensic-label">Surviving insight</dt>
+                  <dd class="forensic-value">{s.data.survivingInsight}</dd>
+                </div>
+              )}
+            </dl>
           </div>
         </div>
       </article>
@@ -300,43 +329,47 @@ const specimens = (await getCollection('graveyard')).sort(
     line-height: 1.4;
   }
 
-  .graveyard-copy {
+  /* FORENSIC RECORD — structured five-field layout (EXP-030).
+     The <dl>/<dt>/<dd> pattern is natively navigable by keyboard and screen
+     readers; the visual stacking mirrors the severity ladder top-to-bottom
+     (hypothesis → warning → death → lesson → insight). */
+  .graveyard-forensic {
+    margin: 0;
+    padding: 0;
     display: grid;
-    gap: 0;
+    gap: 1rem;
   }
 
-  .graveyard-copy p {
-    margin: 0 0 1.15rem;
-    color: var(--fg-dim);
-    font-size: 1.04rem;
-    line-height: 1.72;
-    text-wrap: pretty;
-  }
-
-  .graveyard-copy p:last-child {
-    margin-bottom: 0;
-  }
-
-  .graveyard-lesson {
-    padding: 1rem 1.1rem;
+  .forensic-field {
+    padding: 0.85rem 1rem;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    /* Slight lift off the live backdrop: the panel reads as a specimen-card
-       drawer, distinct from the page surface, without crushing readability. */
-    background: color-mix(in oklch, var(--bg) 78%, transparent);
+    background: color-mix(in oklch, var(--bg) 60%, transparent);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
-    font-size: 0.96rem !important;
   }
 
-  .graveyard-lesson-label {
+  /* Lesson field: slightly more prominent — same frosted panel, accent label. */
+  .forensic-field--lesson {
+    background: color-mix(in oklch, var(--bg) 78%, transparent);
+  }
+
+  .forensic-label {
+    display: block;
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--highlight);
-    display: block;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .forensic-value {
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: 0.98rem;
+    line-height: 1.68;
+    text-wrap: pretty;
   }
 
   @media (max-width: 58rem) {

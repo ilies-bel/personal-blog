@@ -15,6 +15,10 @@
   "interred": "2024",
   "cause": "No market validation",
   "status": "Interred",
+  "premise": "A context-aware reminder assistant: send a task by Telegram, screenshot, or note, and it surfaces the right reminder based on where you are and what your day looks like.",
+  "warningSign": "It worked perfectly — for me. I poured engineering into the problem without ever checking whether anyone else had it.",
+  "causeOfDeath": "No market validation. Generalising beyond a single-person use case would have required significant additional engineering, and nothing justified the investment.",
+  "survivingInsight": "I still use it every day. A tool that only serves you isn't a failure — it just isn't a business. Build the tool first, then find out whether it's a product.",
   "body": [
     "A context-aware reminder assistant. You'd send it a task by Telegram, a screenshot, or a note, and it would surface the right one based on where you were and what your day looked like. Walk into a shop, your list appears. Capturing cost nothing, remembering cost nothing.",
     "It worked. For me. Generalizing it for other people would have meant a lot more engineering, and I never got any market validation to justify the work. So I stopped building it as a product. I still use it every day."
