@@ -25,7 +25,7 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
      the same asset as the hero, here as quiet atmosphere, not the showpiece. */}
   <BlackHole client:only="react" backdrop />
 
-  <main class="about-shell">
+  <div class="about-shell">
     <article class="about-panel">
       <p class="about-kicker">About</p>
 
@@ -109,7 +109,7 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         </ul>
       </section>
     </article>
-  </main>
+  </div>
 </BaseLayout>
 
 {/* No scripted initial focus: the old Close autofocus painted a visible focus
