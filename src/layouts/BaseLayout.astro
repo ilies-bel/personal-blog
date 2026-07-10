@@ -333,7 +333,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             initHudFsm();
           </script>
 
-          <main id="main-content" class="bare-main">
+          <main id="main-content" class="bare-main" tabindex="-1">
             <slot />
           </main>
         </Fragment>
@@ -359,7 +359,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             <SiteNav surface="page" />
           </header>
 
-          <main id="main-content">
+          <main id="main-content" tabindex="-1">
             <slot />
           </main>
 

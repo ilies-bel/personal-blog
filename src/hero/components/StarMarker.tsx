@@ -433,12 +433,17 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // thing that still overrides it is `!nextVisible` (the marker scrolled away),
       // which also resets touchLockedRef so a re-entry starts clean.
       let nextLocked = lastLocked;
-      if (!nextVisible) {
+      if (focusedRef.current) {
+        // Keyboard focus always engages the lock — regardless of whether the
+        // marker is in its beat window (nextVisible).  A Tab user must be able
+        // to open the card even when the 3-D scene is mid-transition or the
+        // marker is not currently the active beat; aria-expanded must flip to
+        // "true" as soon as focus lands.
+        nextLocked = true;
+      } else if (!nextVisible) {
         nextLocked = false;
         touchLockedRef.current = false;
       } else if (touchLockedRef.current) {
-        nextLocked = true;
-      } else if (focusedRef.current) {
         nextLocked = true;
       } else {
         if (p) {
@@ -492,14 +497,12 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // state can't chatter as the pointer hovers a boundary. The tiers sit strictly
       // OUTSIDE the lock radius, so this never changes WHEN the lock fires.
       let nextState: MarkerState = lastState;
-      if (!nextVisible) {
-        nextState = 'idle';
-      } else if (nextLocked) {
+      if (nextLocked) {
+        // nextLocked is true whenever focusedRef or touchLockedRef is set, so
+        // checking nextLocked first also covers the keyboard-focus path above.
         nextState = 'locked';
-      } else if (focusedRef.current) {
-        // Keyboard focus engages the lock above already, but guard so a focused
-        // marker is never left below ACTIVE even if the lock branch is bypassed.
-        nextState = 'active';
+      } else if (!nextVisible) {
+        nextState = 'idle';
       } else if (distSq < 0) {
         nextState = 'idle';
       } else {
