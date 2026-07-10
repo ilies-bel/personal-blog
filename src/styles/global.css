@@ -22,4 +22,5 @@
 @import './behind-the-build.css'; /* the Behind-the-Build case-study page (shader gallery, budget table, FPS meter, fallback ladder) */
 @import './about.css';    /* the about overlay panel */
 @import './route-materials.css'; /* EXP-035: named material tokens + visual rules scoped per route body class */
+@import './route-typography.css'; /* EXP-036: per-route typographic rhythm tokens (scale, leading, measure, density) */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */

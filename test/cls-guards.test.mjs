@@ -56,10 +56,20 @@ test('CLS guard: the reading column width is set on .prose, not on the canvas su
   // The reading measure is owned by .prose in prose.css (max-width + margin-inline:auto).
   // If a future change ever ties the column width to a backdrop class instead, the canvas
   // mount could become a CLS source again — pin the SSR-CSS ownership here.
+  //
+  // EXP-036: .prose now uses var(--rhy-measure, 680px) so the per-route rhythm token drives
+  // the column on prose routes. The px fallback is still a concrete anchor: the body class
+  // is set during SSR (no async resolution) and CSS custom properties resolve synchronously,
+  // so there is no first-paint layout shift. The regex accepts either a bare pixel value or
+  // a var() whose fallback is a pixel value.
   const css = styles('prose.css');
   const body = ruleBody(css, '.prose');
   assert.ok(body, '.prose rule must exist');
-  assert.match(body, /max-width:\s*\d+px/, '.prose must declare an explicit max-width');
+  assert.match(
+    body,
+    /max-width:\s*(?:\d+px|var\(--rhy-measure,\s*\d+px\))/,
+    '.prose must declare an explicit max-width (pixel value or var() with px fallback — concrete anchor prevents canvas-driven layout shift)',
+  );
   assert.match(body, /margin-inline:\s*auto/, '.prose must center via margin-inline:auto');
 });
 

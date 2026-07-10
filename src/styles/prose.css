@@ -4,7 +4,10 @@
 .prose {
   position: relative;
   z-index: 1;
-  max-width: 680px;
+  /* --rhy-measure is declared per route in route-typography.css.
+     On prose routes (article-page, behind-the-build) this resolves to a
+     65–75ch value; the 680px fallback keeps non-route uses unaffected. */
+  max-width: var(--rhy-measure, 680px);
   margin-inline: auto;
   padding-top: clamp(2.5rem, 8vw, 5rem);
   /* Body sentence lands on the --text-body rung (16px) with the prose leading. */
