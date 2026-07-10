@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
+import RouteEnding from '../components/RouteEnding.astro';
 import { SITE_TITLE, SOCIALS } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -116,13 +117,14 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
           {SOCIALS.twitter && <li><a href={SOCIALS.twitter} data-decode>Twitter / X</a></li>}
           {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`} data-decode>Email</a></li>}
         </ul>
-        {/* The quick links stay (this section long WAS the site's contact
-            surface); the dedicated route carries the full channel readout —
-            availability, location, timezone, terms. */}
-        <p class="about-contact-more">
-          Availability, timezone, and what I take on:
-          <a href={href('contact')}> the contact page</a>.
-        </p>
+        {/* ROUTE ENDING (P9) — About hands off to Contact: the quick links stay
+            (this section long WAS the site's contact surface); the ending points
+            at the full channel readout — availability, timezone, terms. */}
+        <RouteEnding
+          eyebrow="Availability, timezone, and what I take on"
+          title="Start a conversation"
+          href={href('contact')}
+        />
       </section>
     </article>
   </div>

@@ -56,16 +56,19 @@
   border-radius: 3px;
 }
 
-/* Chrome-ramp mono kicker, matching .writing-kicker — gold is reserved for
-   signal (current section, hover, readouts), not page scaffolding. */
+/* Article kicker — QUIET plain dim text (P9 typography hygiene). The old
+   treatment was tiny mono uppercase, which spent the site's instrument voice
+   on mere section scaffolding; mono caps are now reserved for real state /
+   records / measurement (dates in lists, specimen records, HUD readouts,
+   code). The kicker keeps its slot and its content (the date IS still here),
+   just in the body face at a whisper — context, not a control. */
 .article-header .article-kicker {
   margin: 0 0 0.85rem;
   width: max-content;
   max-width: 100%;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.01em;
   color: var(--fg-chrome-dim);
 }
 .article-header h1 {

@@ -320,3 +320,59 @@ body.behind-the-build .btb-fallback-detail {
    is otherwise quiet by design.
    --------------------------------------------------------------- */
 :where(html[data-motion='reduced']) body.behind-the-build .fps-meter-button { transition: none; }
+
+/* ---------------------------------------------------------------
+   P9 EXPOSED ANATOMY — the instrument-panel grammar, strengthened.
+   Each top-level section boundary becomes an ANNOTATED RULE: a
+   hairline with measurement ticks etched along it (repeating 1px
+   gradient in the route accent — fills-only, tokens.css) and a
+   mono station index riding the rule's right end. This is REAL
+   measurement grammar (the page is the engine's spec sheet), so
+   mono caps are the correct register here — the ::after carries
+   empty alt text so screen readers skip the decoration.
+   --------------------------------------------------------------- */
+body.behind-the-build .prose {
+  counter-reset: btb-section;
+}
+body.behind-the-build .prose > section {
+  position: relative;
+  margin-top: clamp(2.75rem, 7vh, 4rem);
+  padding-top: clamp(1.5rem, 4vh, 2rem);
+  border-top: 1px solid var(--line);
+  counter-increment: btb-section;
+}
+body.behind-the-build .prose > section > h2 {
+  margin-top: 0;
+}
+/* Measurement ticks: short 1px marks hanging off the section rule at a fixed
+   2rem pitch, like the etched scale on a caliper rail. */
+body.behind-the-build .prose > section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 7px;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--route-accent) 60%, transparent) 0 1px,
+    transparent 1px 2rem
+  );
+  opacity: 0.55;
+}
+/* The station index — "01", "02", … — seated in the rule at its right end,
+   backed by the room colour so the hairline reads as passing under it. */
+body.behind-the-build .prose > section::after {
+  content: counter(btb-section, decimal-leading-zero) / '';
+  position: absolute;
+  top: -0.62em;
+  right: 0;
+  padding-inline: 0.45rem;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-faint);
+  pointer-events: none;
+}

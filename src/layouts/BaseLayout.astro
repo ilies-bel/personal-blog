@@ -65,6 +65,26 @@ const isCurrentPage = (p: string) =>
 // page already passes, so the layout API stays unchanged.
 const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
 
+// ROUTE IDENTITY (P9) — one `data-route` attribute on <body>, derived from the
+// URL, so every stylesheet can scope a route's art direction (accent tokens,
+// backdrop treatments, entry rhythm) without inventing another body class per
+// page. The ids are the site's own section names (the /projects URL is the
+// "Work" section). Route-scoped tokens live in tokens.css and are FILLS-ONLY
+// (hairlines, washes, grain) — never text colour — so the audited contrast
+// pairs are untouched.
+const routeId = (() => {
+  // Strip the deploy base (import.meta.env.BASE_URL) so the ids hold under a
+  // sub-path deploy too, then take the first path segment.
+  const rel = (currentPath.startsWith(base) ? currentPath.slice(base.length) : currentPath)
+    .replace(/^\/+/, '');
+  const head = rel.split('/')[0];
+  if (!head) return 'home';
+  if (head === 'posts') return 'post';
+  if (head === 'projects') return 'work';
+  const KNOWN = ['writing', 'graveyard', 'behind-the-build', 'about', 'contact', '404'];
+  return KNOWN.includes(head) ? head : 'page';
+})();
+
 ---
 
 <!doctype html>
@@ -73,7 +93,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
     <BaseHead {...props} />
     <ClientRouter />
   </head>
-  <body class={bodyClasses}>
+  <body class={bodyClasses} data-route={routeId}>
     {/* Cinematic dive overlay — a single full-viewport bloom layer present on EVERY
         page, persisted across ClientRouter swaps (transition:persist) so the home
         page's dive can ramp its opacity to a soft, capped veil (never full white) — in
@@ -402,15 +422,15 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
           // Arriving from a dive: the overlay is sitting at its capped soft veil →
           // ease it out + rise the content. The body[data-resurface] attribute gates
           // the content keyframe in hero.css (and is auto-removed when that animation
-          // ends). The recede is lengthened to 0.8s and reuses the project's eased
-          // curve (--ease-out-quint, resolved from the computed root style so we don't
-          // re-literalise the cubic-bezier) — a softer, gentler dissolve that matches
-          // the lower-peak veil instead of the old abrupt 0.6s ease-out.
+          // ends). The recede reuses the project's eased curve (--ease-out-quint,
+          // resolved from the computed root style so we don't re-literalise the
+          // cubic-bezier); 0.7s matches the dive-resurface keyframe and keeps the
+          // arrival tail inside the P9 sub-700ms route-transition budget.
           const easeQuint =
             getComputedStyle(document.documentElement)
               .getPropertyValue('--ease-out-quint')
               .trim() || 'ease-out';
-          overlay.style.transition = `opacity 0.8s ${easeQuint}`;
+          overlay.style.transition = `opacity 0.7s ${easeQuint}`;
           requestAnimationFrame(() => {
             overlay.style.opacity = '0';
           });

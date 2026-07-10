@@ -455,13 +455,15 @@ body.article-page .prose[data-scene-journey] {
   border-top: 1px solid color-mix(in oklch, var(--accent) 18%, var(--line));
 }
 
+/* Eyebrow — quiet plain dim text (P9 typography hygiene): the "Next note"
+   line is section scaffolding, not a readout, so it drops the mono-caps
+   instrument voice (and the gold — signal belongs to the interactive title). */
 .article-next-eyebrow {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--highlight);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.01em;
+  color: var(--fg-chrome-dim);
 }
 
 .article-next-link {

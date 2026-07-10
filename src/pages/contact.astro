@@ -10,11 +10,12 @@
 //
 // The availability facts live in src/consts.ts (AVAILABILITY) — safe defaults
 // pending the owner's confirmation (docs/INPUTS-NEEDED.md, P13). Edit there,
-// this page follows. The transmission ART DIRECTION (a dedicated backdrop
-// variant) lands in P9; until then the calm nebula frame reads closest to
-// "open frequency".
+// this page follows. The TRANSMISSION art direction (P9) is the dedicated
+// 'transmission' AmbientBackdrop variant: the pale-blue-dot frame with static
+// signal rings and a slow radial pulse from the CTA area (hero.css).
 import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
+import RouteEnding from '../components/RouteEnding.astro';
 import { SITE_TITLE, SOCIALS, AVAILABILITY } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -34,10 +35,11 @@ const STATUS_LABEL: Record<typeof AVAILABILITY.status, string> = {
   type="website"
   bodyClass="contact-page"
 >
-  {/* Static celestial backdrop — the calm nebula frame as quiet atmosphere
-      (P4 poster pipeline; zero JS, zero WebGL). P9 gives Contact its own
-      transmission variant; the corner scene-toggle circle still parks it. */}
-  <AmbientBackdrop variant="nebula" />
+  {/* TRANSMISSION backdrop (P9) — the pale-blue-dot frame as a signal source:
+      static concentric rings + a slow motion-gated radial pulse from the CTA
+      area (hero.css). Zero JS, zero WebGL (P4 poster pipeline); the corner
+      scene-toggle circle still parks it. */}
+  <AmbientBackdrop variant="transmission" />
 
   <section class="contact-hero" aria-labelledby="contact-title">
     <p class="contact-kicker">Transmission</p>
@@ -99,8 +101,14 @@ const STATUS_LABEL: Record<typeof AVAILABILITY.status, string> = {
       </ul>
     </nav>
 
-    <p class="contact-proof">
-      Want proof before you write? Start with <a href={href('projects')}>the work that held</a>.
-    </p>
   </div>
+
+  {/* ROUTE ENDING (P9) — Contact closes the loop back to Work: proof before
+      the first message. Replaces the old generic one-line proof paragraph. */}
+  <RouteEnding
+    width="column"
+    eyebrow="Want proof before you write?"
+    title="Start with the work that held"
+    href={href('projects')}
+  />
 </BaseLayout>

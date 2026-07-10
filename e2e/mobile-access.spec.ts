@@ -130,7 +130,12 @@ test.describe('phone viewport (390×844)', () => {
     //
     // A fixed settle-time races the eased clock and goes flaky under load, so
     // each step samples until the visible beat is STABLE (two consecutive
-    // identical reads) or a per-step deadline passes.
+    // identical reads) or a per-step deadline passes. EVERY non-empty sample
+    // counts as a seen beat (not just the settled one): the assertion is that
+    // each beat BECOMES visible across the pass, and under worker contention
+    // the eased clock can still be mid-glide when the per-step deadline hits —
+    // dropping those sightings made the run under-count and flake (observed
+    // failing on a fully-loaded software-rendered box, passing in isolation).
     const seen = new Set<string>();
     const steps = 36;
     const max = await page.evaluate(
@@ -148,10 +153,10 @@ test.describe('phone viewport (390×844)', () => {
       for (let tries = 0; tries < 10; tries++) {
         await page.waitForTimeout(150);
         const cur = await sample();
+        if (cur) seen.add(cur);
         if (cur && cur === prev) break;
         prev = cur;
       }
-      if (prev) seen.add(prev);
     }
     expect(seen.size, `distinct manifesto beats seen: ${[...seen].join(' | ')}`).toBeGreaterThanOrEqual(5);
   });

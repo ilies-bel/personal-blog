@@ -37,22 +37,40 @@ body.graveyard-page .wrap {
   opacity: 0.55;
 }
 
-/* SCROLL REVEAL — entries fade + rise into place as they enter the spy window.
-   The script in graveyard.astro toggles [data-revealed] on each entry; the
-   transform/opacity transition is on this attribute. Reduced motion gates the
-   transition off (rules in @media block at the bottom) and ships the entries in
-   place instantly — the IntersectionObserver still runs to keep the HUD
-   accurate. The token --ease-out-quint is the project's standard ease. */
+/* SCROLL REVEAL — DRAWER PULLS (P9). Each entry slides OUT of the cabinet as it
+   enters the spy window: a horizontal pull from the left rail (with a whisper of
+   settle), not the generic rise every other list uses — the specimen drawers are
+   this route's own gesture. The script in graveyard.astro toggles [data-revealed]
+   on each entry; the transform/opacity transition is on this attribute. Reduced
+   motion gates the transition off (rules at the bottom) and ships the entries in
+   place instantly. The token --ease-out-quint is the project's standard ease. */
 .graveyard-entry {
   opacity: 0;
-  transform: translateY(14px);
+  transform: translate(-22px, 4px);
   transition:
-    opacity 0.7s var(--ease-out-quint),
-    transform 0.7s var(--ease-out-quint);
+    opacity 0.55s var(--ease-out-quint),
+    transform 0.65s var(--ease-out-quint);
 }
 .graveyard-entry[data-revealed='true'] {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(0, 0);
+}
+
+/* COOLING RESIDUE — FILM GRAIN (P9). A static luminance-noise sheet fixed over
+   the whole frame (fixed ::before on the page shell — body::before/::after are
+   the sitewide lift/grid), opacity driven by the fills-only --route-grain token
+   (tokens.css; 0 everywhere but this route). The grain is the route's grayscale
+   fingerprint: even with colour stripped, /graveyard reads as the cold, grainy
+   archival print next to the clean pages. Pure CSS, no request, never animated. */
+body[data-route='graveyard'] .wrap::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: var(--route-grain, 0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
 
 /* NO-JS / SSR FALLBACK — the inline script sets data-revealed; without JS the

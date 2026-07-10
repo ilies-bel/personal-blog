@@ -30,28 +30,34 @@ const WARP_FLAG = 'bh:warp';
 
 // --- Timing (ms) -----------------------------------------------------------
 // The jump-out: the field starts almost DARK (a few faint drifting sparks — the
-// ship still at sub-light), holds a beat while the HUD flickers + the readout
-// counts up, THEN accelerates HARD into the light and slams into the white flash.
-// We navigate at the flash apex so the swap is hidden behind the brightest frame.
-// Longer than a snappy nav on purpose — this is a set-piece, not a page turn.
-const JUMP_MS = 1500;
+// ship still at sub-light), then accelerates HARD into the light and slams into
+// the white flash. We navigate at the flash apex so the swap is hidden behind
+// the brightest frame.
+//
+// P9 BUDGET: route transitions must stay UNDER 700ms PERCEIVED. The About copy
+// is on screen the moment the swap lands (JUMP_MS - NAV_BEFORE_END_MS ≈ 450ms)
+// and the arrival fade only dissolves the residual streaks OVER the already-
+// readable page, so the perceived transition is ~JUMP_MS (≤ 700). The old
+// 1500/750 set-piece read as a loading screen; the same acceleration curve at
+// this length reads as a cut. test/route-transitions.test.mjs pins these.
+const JUMP_MS = 560;
 // The arrival: the streaks STAY fully stretched (no decelerate / contract-back)
 // and the whole field simply fades out as the About content shows through — the
 // jump carries its momentum right onto the page instead of braking.
-const ARRIVE_MS = 750;
+const ARRIVE_MS = 380;
 // Navigate this long before the jump animation nominally ends, i.e. right at the
 // white-flash apex, so the (already-prepared) swap lands under the peak brightness.
-const NAV_BEFORE_END_MS = 130;
+const NAV_BEFORE_END_MS = 110;
 
 // The body class that gates the sitewide HUD flicker (hud.css) for the jump.
 const WARP_ACTIVE_CLASS = 'warp-active';
 
 // The bottom-centre readout copy, swapped across the jump so the instrument
 // narrates the jump like a cockpit callout. Timed as fractions of JUMP_MS.
+// Two lines only at the P9 length — three callouts in ~560ms was unreadable.
 const WARP_LINES: Array<{ at: number; label: string }> = [
   { at: 0, label: 'ENGAGING HYPERDRIVE' },
-  { at: 0.34, label: 'BEGINNING LIGHTSPEED TRAVEL' },
-  { at: 0.72, label: 'PUNCH IT' },
+  { at: 0.5, label: 'PUNCH IT' },
 ];
 
 // --- Starfield geometry ----------------------------------------------------

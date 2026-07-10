@@ -55,14 +55,18 @@
   border-top: none;
 }
 
-/* One quiet mono section marker at the head of the panel. */
+/* The panel opens on a HUMAN voice, not an instrument label (P9 — return to
+   human scale): the kicker is Instrument Serif italic at reading size, the
+   same face as the signature that closes the panel, so the page is bracketed
+   by the personal register. Colour stays on the audited --fg-dim pair. */
 .about-kicker {
-  margin: 0 0 1.75rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--fg-chrome-faint);
+  margin: 0 0 1.5rem;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-weight: 400;
+  font-size: var(--text-title);
+  letter-spacing: 0.01em;
+  color: var(--fg-dim);
 }
 
 /* The lead sits larger and brighter; the body steps down to muted. It is the
@@ -235,20 +239,8 @@
   outline-offset: 3px;
   border-radius: 2px;
 }
-/* The pointer to the dedicated /contact route (availability, timezone, terms)
-   — one quiet body-sm line under the quick links. */
-.about-contact-more {
-  margin: 1.1rem 0 0;
-  font-size: var(--text-body-sm);
-  line-height: 1.6;
-  color: var(--fg-faint);
-}
-.about-contact-more a {
-  color: var(--accent-strong);
-}
-.about-contact-more a:hover {
-  color: var(--fg);
-}
+/* (The old .about-contact-more pointer line was replaced by the sitewide
+   RouteEnding block — About → Contact, P9.) */
 
 @media (max-width: 44rem) {
   .about-principles {

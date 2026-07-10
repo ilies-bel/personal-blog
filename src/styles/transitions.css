@@ -114,3 +114,40 @@ html:where([data-motion='full']):not([data-astro-nav]) :is(.writing-list, .proje
     transform: translateY(12px);
   }
 }
+
+/* ── 3 · Per-route entry rhythm (P9 — one motion verb per route) ────────────
+   The shared page-enter rise stays the base; each route may retune ONLY the
+   verb of its list reveal, still hard-load-only, still motion-gated, still
+   transform/opacity. Durations here are pinned ≤ 700ms by
+   test/route-transitions.test.mjs (the sub-700ms transition budget). */
+
+/* WRITING — DISPERSED MATTER COALESCING: the shelf rows drift in from a slight
+   two-sided scatter (odd rows from the left, even from the right) and align on
+   the hairline grid — once, on load, like gas settling into a disk. */
+@keyframes writing-coalesce-l {
+  from {
+    opacity: 0;
+    transform: translate(-22px, 8px);
+  }
+}
+@keyframes writing-coalesce-r {
+  from {
+    opacity: 0;
+    transform: translate(24px, 10px);
+  }
+}
+html:where([data-motion='full']):not([data-astro-nav]) [data-route='writing'] .writing-list > :nth-child(-n + 6):nth-child(odd) {
+  animation-name: writing-coalesce-l;
+  animation-duration: 0.65s;
+}
+html:where([data-motion='full']):not([data-astro-nav]) [data-route='writing'] .writing-list > :nth-child(-n + 6):nth-child(even) {
+  animation-name: writing-coalesce-r;
+  animation-duration: 0.65s;
+}
+
+/* WORK — SUSTAINED ORBIT: the reveal is held and stable — the same rise, but
+   on the longest allowed duration with a long settling tail (quintic-out at
+   0.7s), so the entries arrive with mass instead of snap. */
+html:where([data-motion='full']):not([data-astro-nav]) [data-route='work'] :is(.projects-hero > *, .projects-list > :nth-child(-n + 6)) {
+  animation-duration: 0.7s;
+}

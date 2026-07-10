@@ -32,7 +32,17 @@ Jury-dependent rows require the owner-side sessions in `docs/INPUTS-NEEDED.md` (
     (static edition + 404), WebGL governance (≤2 contexts, zero three.js on
     reading routes, heap growth <max(15MB,10%) over 10 SPA cycles), images
     (dimensions + no 404s), content (derived counts match collections),
-    mobile access (first-viewport nav, ≤9-viewport mobile track, skip control)
+    mobile access (first-viewport nav, ≤9-viewport mobile track, skip control),
+    route identity (P9: body[data-route] on every route, per-route structural
+    marker, one RouteEnding per section page / article-next on posts)
+
+Unit-test layer additions (P9): `test/route-transitions.test.mjs` pins every
+time literal in transitions.css, the warpTransition JUMP/ARRIVE constants and
+the dive arrival tail to the ≤700ms route-transition budget (the home hero's
+scroll choreography is exempt by design — it is not a route transition).
+Blind-screenshot evidence: `node scripts/shoot-routes-grayscale.mjs` (against
+a fresh `pnpm build`) regenerates the grayscale contact sheets under
+`scratchpad/p9/` for the phase-exit review.
 
 Local invocation (sandbox): prefix Playwright with
 `PW_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium` and run

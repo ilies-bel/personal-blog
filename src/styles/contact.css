@@ -3,7 +3,9 @@
    header grammar up top, ONE big mailto action, then the availability facts as
    full-width mono instrument rows (the projects-meta <dl> language scaled up).
    Everything is plain server HTML — no JS is needed to read or act on this
-   page. The transmission backdrop art direction lands in P9. */
+   page. The TRANSMISSION backdrop (P9) — the pale-blue-dot poster with static
+   signal rings + a motion-gated radial pulse — lives in hero.css under the
+   ambient-backdrop variant table. */
 
 .contact-page .wrap {
   padding-bottom: 7rem;
@@ -26,13 +28,15 @@
   margin-top: clamp(4rem, 11vw, 7.5rem);
   margin-bottom: clamp(2.25rem, 7vw, 4.5rem);
 }
+/* Kicker — quiet plain dim text (P9 typography hygiene): "Transmission" is
+   page scaffolding, so it leaves the mono-caps register to the ACTUAL
+   instrument rows below (the availability <dl>, which keeps mono). */
 .contact-kicker {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--fg-chrome-faint);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.01em;
+  color: var(--fg-chrome-dim);
 }
 .contact-hero h1 {
   max-width: 16ch;
@@ -223,19 +227,8 @@
   border-radius: 2px;
 }
 
-.contact-proof {
-  margin: 1.6rem 0 0;
-  font-size: var(--text-body);
-  line-height: var(--leading-body);
-  color: var(--fg-dim);
-  text-wrap: pretty;
-}
-.contact-proof a {
-  color: var(--accent-strong);
-}
-.contact-proof a:hover {
-  color: var(--fg);
-}
+/* (The old .contact-proof line was replaced by the sitewide RouteEnding block
+   — Contact → Work, P9.) */
 
 /* Narrow phones: the term column collapses and each row stacks term-over-value
    (the same fold projects-meta makes when it wraps). */

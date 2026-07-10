@@ -152,6 +152,14 @@
     min-width: 44px;
   }
 
+  /* Route-ending continuation link (RouteEnding.astro, P9): the display-size
+     title already clears 44px on one line; pin the minimum so a squeezed
+     single-word title can never undercut it. */
+  .route-ending-link {
+    min-height: 44px;
+    align-content: center;
+  }
+
   /* Skip link (visible on focus): make the revealed pill itself ≥44px. */
   .skip-link {
     display: inline-flex;

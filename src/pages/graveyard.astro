@@ -4,7 +4,11 @@ import { getCollection, render } from 'astro:content';
 import { Picture } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ArticleScene from '../hero/components/ArticleScene.tsx';
+import RouteEnding from '../components/RouteEnding.astro';
 import { SITE_TITLE } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
 // SPECIMEN LEDGER — P6: the specimens are a CONTENT COLLECTION
 // (src/content/graveyard/*.mdx, schema in src/lib/contentSchemas.ts). The
@@ -133,6 +137,16 @@ const resolveShot = (filename: string): ImageMetadata => {
     ))}
   </div>
 
+  {/* ROUTE ENDING (P9) — the graveyard hands off to Writing: what survived the
+      dead ends became the lessons on the shelf. */}
+  <RouteEnding
+    width="ledger"
+    eyebrow="What survived"
+    title="The dead ends became lessons"
+    note="Every specimen here paid for a rule I now build by. The writing shelf is where those rules live on."
+    href={href('writing')}
+  />
+
   {/* NO-JS FALLBACK — the entries are hidden-by-default in graveyard.css so the
       reveal transition can run; without JS the IntersectionObserver never sets
       data-revealed, so we force them visible. Same defensive trick as the
@@ -209,13 +223,15 @@ const resolveShot = (filename: string): ImageMetadata => {
   /* Page-hero block snapped to the sitewide ladder (tokens.css) so Writing /
      Projects / Graveyard open at the same scale and tracking — the old local
      clamps ran a full rung louder than every other reading page. */
+  /* Kicker — quiet plain dim text (P9 typography hygiene): the page name is
+     scaffolding; mono caps stay reserved for the SPECIMEN RECORDS below
+     (INTERRED / CAUSE — real archival state, graveyard.css). */
   .graveyard-kicker {
     margin: 0;
     width: max-content;
-    font-family: var(--font-mono);
-    font-size: var(--text-label);
-    letter-spacing: var(--tracking-caps);
-    text-transform: uppercase;
+    font-family: var(--font-sans);
+    font-size: var(--text-body-sm);
+    letter-spacing: 0.01em;
     color: var(--fg-chrome-dim);
   }
 

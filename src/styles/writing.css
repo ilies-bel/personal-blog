@@ -32,19 +32,20 @@
   text-wrap: balance;
 }
 
-/* Sections — a mono uppercase shelf label over a hairline list. Chrome ramp,
-   not gold (gold is signal, not scaffolding), and no numbering. */
+/* Sections — a QUIET shelf label over a hairline list (P9 typography hygiene:
+   the shelf names are scaffolding, so they speak the body face plainly; mono
+   caps stay reserved for the real records in the rows — dates, read times,
+   entry kinds). Chrome ramp, not gold (gold is signal, not scaffolding). */
 .writing-section + .writing-section {
   margin-top: clamp(2.75rem, 7vw, 4.5rem);
 }
 
 .writing-section-title {
   margin: 0 0 1rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  font-weight: 400;
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.01em;
   color: var(--fg-chrome-dim);
 }
 

@@ -9,6 +9,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
+import RouteEnding from '../components/RouteEnding.astro';
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 import { SITE_TITLE } from '../consts';
 import { getCounts } from '../lib/contentStats';
@@ -133,4 +134,14 @@ const readMinutes = (body: string | undefined) =>
       </a>
     </div>
   </section>
+
+  {/* ROUTE ENDING (P9) — Writing hands off to Work: the thinking points at the
+      thing it produced. */}
+  <RouteEnding
+    width="ledger"
+    eyebrow="The writing is the thinking"
+    title="See the work it produced"
+    note="Shipped tools with their claims, limitations, and evidence — the part that had to survive contact with users."
+    href={href('projects')}
+  />
 </BaseLayout>

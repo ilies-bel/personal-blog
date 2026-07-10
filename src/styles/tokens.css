@@ -203,5 +203,32 @@
   --bloom-red: oklch(0.88 0.075 47);         /* red-giant ember */
   --bloom-end: var(--bloom);                 /* black hole → warm bone (default) */
 
+  /* ROUTE ACCENT TOKENS (P9) — the per-route tint seam. BaseLayout stamps
+     body[data-route] from the URL; the overrides below shift these two tokens
+     per route so each section's furniture (route-ending hairlines/arrows, the
+     behind-the-build measurement ticks, the graveyard grain) carries its own
+     temperature. FILLS-ONLY, like --hud-rail-dim: neither token may ever
+     colour text — the audited pairs in test/contrast.test.mjs stay the whole
+     text story. Subtle by design: a tint shift inside the one brand system,
+     never a theme swap. */
+  --route-accent: var(--accent);   /* decorative hairlines / rules / glyph fills */
+  --route-grain: 0;                /* film-grain overlay opacity (graveyard only) */
+
   color-scheme: dark;
 }
+
+/* Per-route accent shifts (fills-only — see the token comment above).
+   work            sustained orbit — the settled star's gold, unchanged.
+   writing         coalescing nebula — a cool slate pulled from the gas.
+   graveyard       cooling residue — ember with the heat gone, plus grain.
+   behind-the-build exposed anatomy — the instrument gold, a touch brighter.
+   about           human scale — warmer, toward the ember.
+   contact         transmission — the pale-blue-dot's cool signal. */
+body[data-route='writing'] { --route-accent: oklch(0.68 0.045 245); }
+body[data-route='graveyard'] {
+  --route-accent: oklch(0.6 0.035 55);
+  --route-grain: 0.12;
+}
+body[data-route='behind-the-build'] { --route-accent: oklch(0.76 0.095 80); }
+body[data-route='about'] { --route-accent: oklch(0.72 0.08 62); }
+body[data-route='contact'] { --route-accent: oklch(0.74 0.05 242); }

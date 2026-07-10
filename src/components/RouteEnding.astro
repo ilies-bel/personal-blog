@@ -1,0 +1,132 @@
+---
+// RouteEnding — the ONE consistent closing block for content routes (P9).
+//
+// Every reading route used to stop on the footer's copyright line (or a
+// repeated generic card); now each ends with a route-specific continuation
+// that hands the visitor onward: Work → Contact, Writing → Work, Graveyard →
+// Writing, Behind the Build → Work, About → Contact, Contact → Work. The
+// component is deliberately light — an annotated hairline (tinted by the
+// fills-only --route-accent token), a quiet plain-text eyebrow (P9 typography
+// hygiene: no mono-caps scaffolding), one display-size link, one supporting
+// sentence — so the ending reads as the same instrument on every route while
+// the copy stays the route's own. Posts keep their richer .article-next
+// continuation (shared-element title morph); this block is for the section
+// pages.
+//
+// `width` matches the host page's column system:
+//   ledger — the 68rem list pages (projects / writing / graveyard)
+//   column — the 44rem contact column
+//   inline — flows with the parent measure (prose articles, the About panel)
+interface Props {
+  eyebrow: string;
+  title: string;
+  href: string;
+  note?: string;
+  width?: 'ledger' | 'column' | 'inline';
+}
+
+const { eyebrow, title, href, note, width = 'inline' } = Astro.props;
+---
+
+<aside class={`route-ending route-ending--${width}`}>
+  <p class="route-ending-eyebrow">{eyebrow}</p>
+  <a class="route-ending-link" href={href}>
+    <span class="route-ending-title">
+      {title}
+      <span class="route-ending-arrow" aria-hidden="true">→</span>
+    </span>
+    {note && <span class="route-ending-note">{note}</span>}
+  </a>
+</aside>
+
+<style>
+  .route-ending {
+    display: grid;
+    gap: 0.8rem;
+    margin-top: clamp(3.25rem, 9vh, 5.5rem);
+    padding-top: clamp(1.5rem, 4vh, 2.2rem);
+    /* The rule carries the route's temperature — fills-only route token. */
+    border-top: 1px solid color-mix(in oklch, var(--route-accent) 32%, var(--line));
+  }
+
+  .route-ending--ledger {
+    width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
+    margin-inline: auto;
+  }
+
+  .route-ending--column {
+    width: min(44rem, calc(100vw - var(--gutter) - var(--gutter)));
+    margin-inline: auto;
+  }
+
+  /* Quiet plain scaffolding line (P9 typography hygiene — not mono caps). */
+  .route-ending-eyebrow {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--text-body-sm);
+    letter-spacing: 0.01em;
+    color: var(--fg-chrome-dim);
+  }
+
+  .route-ending-link {
+    display: grid;
+    gap: 0.55rem;
+    justify-items: start;
+    /* Comfortable tap box (≥44px with the title's line box) without widening
+       the hit area past the text column. */
+    padding-block: 0.35rem;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .route-ending-title {
+    font-family: var(--font-display);
+    font-size: var(--text-display);
+    font-weight: var(--weight-display);
+    line-height: 1.12;
+    letter-spacing: var(--tracking-tight);
+    color: var(--fg);
+    text-wrap: balance;
+    transition: color 0.16s ease;
+  }
+
+  .route-ending-arrow {
+    display: inline-block;
+    margin-left: 0.35em;
+    color: var(--route-accent);
+    transition: transform 0.22s var(--ease-out-quint);
+  }
+
+  .route-ending-link:hover .route-ending-title,
+  .route-ending-link:focus-visible .route-ending-title {
+    color: var(--accent-strong);
+  }
+
+  .route-ending-link:hover .route-ending-arrow,
+  .route-ending-link:focus-visible .route-ending-arrow {
+    transform: translateX(0.3em);
+  }
+
+  .route-ending-note {
+    max-width: 46rem;
+    color: var(--fg-dim);
+    font-size: var(--text-body-sm);
+    line-height: 1.58;
+  }
+
+  :where(html[data-motion='reduced']) .route-ending-title,
+  :where(html[data-motion='reduced']) .route-ending-arrow {
+    transition: none;
+  }
+  :where(html[data-motion='reduced']) .route-ending-link:hover .route-ending-arrow {
+    transform: none;
+  }
+
+  /* Narrow phones: mirror the ledger pages' own width fold. */
+  @media (max-width: 40rem) {
+    .route-ending--ledger,
+    .route-ending--column {
+      width: min(100%, calc(100vw - 2rem));
+    }
+  }
+</style>

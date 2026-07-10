@@ -442,6 +442,113 @@ html[data-motion='full'] .ambient-backdrop-poster {
       color-mix(in oklch, var(--bg) 74%, transparent) 100%);
 }
 
+/* ===========================================================================
+   PER-ROUTE PHYSICAL LAWS (P9) — one lifecycle-derived law per route, layered
+   on the ambient base above via body[data-route] (BaseLayout). Everything is
+   transform/opacity-only, gated on html[data-motion='full'] where it moves,
+   and leaves a STATIC equivalent (the grades/rings below render in stills).
+   =========================================================================== */
+
+/* WORK — SUSTAINED ORBIT. The settled star holds its place while the whole
+   frame slowly banks around it: a gentle ±1.6° roll on a minutes-long period
+   (compositor-only rotation, alternate so it never jumps). Replaces the base
+   translate drift on this route; the extra overscan hides the rotated edges. */
+@keyframes ambient-orbit {
+  from { transform: rotate(-1.6deg) scale(1.07); }
+  to   { transform: rotate(1.6deg) scale(1.07); }
+}
+body[data-route='work'] .ambient-backdrop-poster {
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+}
+html[data-motion='full'] body[data-route='work'] .ambient-backdrop-poster {
+  animation: ambient-orbit 210s ease-in-out infinite alternate;
+}
+
+/* ABOUT — RETURN TO HUMAN SCALE. The same nebula frame as Writing, re-graded
+   WARM: the cool gas pool is swapped for a candle-warm ember pool pulled low
+   and left (toward the reading panel), so the room reads lived-in rather than
+   interstellar. Writing keeps the cool default above — one poster, two
+   temperatures, still one brand system. */
+body[data-route='about'] .ambient-backdrop[data-variant='nebula'] .ambient-backdrop-grade {
+  background:
+    radial-gradient(56% 46% at 38% 56%,
+      oklch(0.42 0.055 62 / 0.16) 0%,
+      transparent 68%),
+    radial-gradient(80% 60% at 70% 20%,
+      oklch(0.3 0.03 78 / 0.18) 0%,
+      transparent 75%),
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--bg) 45%, transparent) 0%,
+      transparent 30%,
+      transparent 72%,
+      color-mix(in oklch, var(--bg) 74%, transparent) 100%);
+}
+
+/* CONTACT — TRANSMISSION. The pale-blue-dot poster becomes a signal source:
+   static concentric rings (survive reduced motion + screenshots) centred just
+   above mid-frame where the CTA column sits, plus two slow radial PULSES that
+   expand from the same origin (transform/opacity only, motion-gated). The dot
+   frame is nearly black, so the page reads as one point of light broadcasting
+   into a dark field — unmistakable even in grayscale. */
+.ambient-backdrop[data-variant='transmission'] .ambient-backdrop-poster {
+  /* The dot frame is a precision element — keep it crisp, not atmospheric. */
+  filter: blur(1px);
+}
+.ambient-backdrop[data-variant='transmission'] .ambient-backdrop-grade {
+  background:
+    /* etched static signal rings around the source */
+    repeating-radial-gradient(circle at 50% 34%,
+      transparent 0 5.5rem,
+      oklch(0.66 0.05 242 / 0.15) 5.5rem calc(5.5rem + 1px),
+      transparent calc(5.5rem + 1px) 11rem),
+    /* the cool pool the dot sits in */
+    radial-gradient(34% 28% at 50% 34%,
+      oklch(0.5 0.06 242 / 0.14) 0%,
+      transparent 70%),
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--bg) 45%, transparent) 0%,
+      transparent 28%,
+      transparent 70%,
+      color-mix(in oklch, var(--bg) 78%, transparent) 100%);
+}
+/* The dot frame is near-black everywhere, so the backdrop can sit LESS dimmed
+   than the luminous nebula/star posters without ever fighting the copy — the
+   rings + pulse need the headroom to register through the wrapper dim. */
+body[data-route='contact'] .bh-backdrop {
+  opacity: 0.68;
+}
+/* The two pulse rings — round 1px strokes that expand and dissolve from the
+   CTA area. Sized in vmin so the wave reads on phones and desktops alike;
+   opacity never exceeds ~0.5 so it stays atmosphere, not alarm. */
+.ambient-backdrop[data-variant='transmission'] .ambient-backdrop-grade::before,
+.ambient-backdrop[data-variant='transmission'] .ambient-backdrop-grade::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: 74vmin;
+  height: 74vmin;
+  margin: -37vmin 0 0 -37vmin;
+  border-radius: 999px;
+  border: 1px solid oklch(0.7 0.055 242 / 0.5);
+  opacity: 0;
+  transform: scale(0.12);
+  pointer-events: none;
+}
+@keyframes transmission-pulse {
+  0%        { transform: scale(0.12); opacity: 0; }
+  10%       { opacity: 0.5; }
+  75%, 100% { transform: scale(1); opacity: 0; }
+}
+html[data-motion='full'] .ambient-backdrop[data-variant='transmission'] .ambient-backdrop-grade::before {
+  animation: transmission-pulse 8s linear infinite;
+}
+html[data-motion='full'] .ambient-backdrop[data-variant='transmission'] .ambient-backdrop-grade::after {
+  animation: transmission-pulse 8s linear 4s infinite;
+}
+
 /* Article variant: the SAME pinned scene but at the BLACK-HOLE frame, whose
    photon ring is a bright full-width white band — far hotter than About's smoky
    nebula. The goal here is NOT to bury it but to make the article read as the
@@ -539,7 +646,11 @@ body.article-page .bh-poster-slideshow::before {
         body 13.5:1, secondary 6.9:1, faint-label 4.3:1 — clear of AA. */
 body.graveyard-page .bh-backdrop {
   opacity: 0.34;
-  filter: saturate(0.7) brightness(0.66) sepia(0.12);
+  /* P9 cooling residue: saturation pulled further down and the warm sepia cast
+     dropped — the live ember light reads as heat ALREADY LEAVING the frame.
+     The cold tint itself rides the scrim below; the film grain lives in
+     graveyard.css (body[data-route='graveyard']::after, --route-grain). */
+  filter: saturate(0.52) brightness(0.62);
 }
 body.graveyard-page .bh-backdrop::after {
   /* Column-ellipse wash, slightly DEEPER than article's so the somber list copy
@@ -564,10 +675,12 @@ body.graveyard-page .bh-backdrop::before {
   content: "";
   position: fixed;
   inset: 0;
+  /* Cold, not neutral: the darkening band carries a faint night-blue so the
+     residue reads chilled next to the article variant's warm gutters (P9). */
   background: linear-gradient(90deg,
-    rgba(0, 0, 0, 0.92),
-    rgba(0, 0, 0, 0.7),
-    rgba(0, 0, 0, 0.92));
+    oklch(0.1 0.012 250 / 0.92),
+    oklch(0.09 0.01 250 / 0.7),
+    oklch(0.1 0.012 250 / 0.92));
   pointer-events: none;
   z-index: 0;
 }

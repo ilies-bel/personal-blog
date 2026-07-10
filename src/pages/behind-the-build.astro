@@ -17,6 +17,7 @@ import ArticleScene from '../hero/components/ArticleScene.tsx';
 import ArticleHud from '../hero/components/ArticleHud.tsx';
 import SceneFigure from '../components/mdx/SceneFigure.tsx';
 import FpsMeter from '../components/FpsMeter.tsx';
+import RouteEnding from '../components/RouteEnding.astro';
 import { SITE_TITLE, SOCIALS } from '../consts';
 // The documented-shader catalog (P6) — the SAME array this page renders as its
 // gallery, exported from src/lib/shaderCatalog.ts so the "one engine, N
@@ -28,6 +29,10 @@ import { numberToWord } from '../lib/contentFormat';
 
 // GitHub source for the "view full" links. The repo lives at ilies-bel/personal-blog.
 const REPO = 'https://github.com/ilies-bel/personal-blog/blob/main';
+
+// Base-safe internal href (the RouteEnding continuation below).
+const base = import.meta.env.BASE_URL;
+const withHref = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
 // Derived prose forms of the shader count: "nine" mid-sentence, "Nine" opening one.
 const shaderCountWord = numberToWord(SHADERS.length);
@@ -347,5 +352,15 @@ const FALLBACKS: readonly FallbackRow[] = [
         <a href={SOCIALS.github} rel="noopener noreferrer">github.com/ilies-bel</a>.
       </p>
     </section>
+
+    {/* ROUTE ENDING (P9) — the anatomy lesson hands off to Work: the engine is
+        the demonstration, the shipped tools are the point. Inline width so it
+        inherits the prose column. */}
+    <RouteEnding
+      eyebrow="The engine is the demonstration"
+      title="See what ships beside it"
+      note="The same budgets and honesty, pointed at product work — the projects that held."
+      href={withHref('projects')}
+    />
   </article>
 </BaseLayout>
