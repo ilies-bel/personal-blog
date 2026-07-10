@@ -152,6 +152,18 @@ test('unknown path — HTTP 404 with branded page and recovery links', async ({ 
   // noindex — crawlers must be told to skip the 404 page.
   const robots = await page.locator('meta[name="robots"]').getAttribute('content')
   expect(robots, 'Expected noindex on the 404 page').toContain('noindex')
+
+  // Authored heading — the 404 must carry the stellar-world copy (EXP-011).
+  await expect(
+    page.locator('#not-found-title'),
+    'Expected authored heading "Signal lost." on the 404 page'
+  ).toHaveText('Signal lost.')
+
+  // Lost-signal illustration — decorative SVG beacon must be present in the DOM.
+  await expect(
+    page.locator('.not-found-signal'),
+    'Expected lost-signal illustration (.not-found-signal) on the 404 page'
+  ).toBeAttached()
 })
 
 // ---------------------------------------------------------------------------

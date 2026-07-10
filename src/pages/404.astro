@@ -13,11 +13,37 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   bodyClass="not-found-page"
 >
   <section class="not-found-hero" aria-labelledby="not-found-title">
+    <!--
+      Lost-signal illustration — CSS/SVG only, no JS, no Three.js.
+      Three staggered sonar rings emanate from a drifting probe body.
+    -->
+    <div class="not-found-signal" aria-hidden="true">
+      <svg
+        class="signal-svg"
+        viewBox="0 0 120 120"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <!-- Pulsing rings: same circle, staggered via animation-delay -->
+        <circle class="ring ring-a" cx="60" cy="60" r="52" />
+        <circle class="ring ring-b" cx="60" cy="60" r="52" />
+        <circle class="ring ring-c" cx="60" cy="60" r="52" />
+
+        <!-- Probe: diamond body + antenna mast + two solar arms -->
+        <g class="probe">
+          <polygon class="probe-body" points="60,52 68,60 60,68 52,60" />
+          <line class="probe-mast" x1="60" y1="44" x2="60" y2="52" stroke-linecap="round" />
+          <line class="probe-arm"  x1="43" y1="60" x2="52" y2="60" stroke-linecap="round" />
+          <line class="probe-arm"  x1="68" y1="60" x2="77" y2="60" stroke-linecap="round" />
+        </g>
+      </svg>
+    </div>
+
     <p class="not-found-code" aria-hidden="true">404</p>
-    <h1 id="not-found-title">Nothing here.</h1>
+    <h1 id="not-found-title">Signal lost.</h1>
     <p class="not-found-body">
-      This page doesn't exist — it may have moved, been removed, or the
-      address may have been typed incorrectly.
+      Nothing at these coordinates. This page may have moved, been removed,
+      or the address never existed.
     </p>
   </section>
 
@@ -67,6 +93,86 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     margin-bottom: clamp(2.5rem, 8vw, 5rem);
   }
 
+  /* ── Lost-signal illustration ───────────────────────────────────────────── */
+
+  .not-found-signal {
+    margin-bottom: clamp(1rem, 3vw, 1.75rem);
+  }
+
+  .signal-svg {
+    display: block;
+    width: clamp(72px, 11vw, 96px);
+    height: auto;
+    overflow: visible;
+  }
+
+  /*
+   * Rings: three identical circles, staggered by –1.6 s each so one ring
+   * is always expanding while another is fading — continuous sonar pulse.
+   */
+  .ring {
+    stroke: var(--fg-dim);
+    stroke-width: 0.75;
+    fill: none;
+    transform-origin: 60px 60px;
+    animation: ring-pulse 4.8s ease-out infinite;
+    opacity: 0;
+  }
+
+  .ring-b { animation-delay: -1.6s; }
+  .ring-c { animation-delay: -3.2s; }
+
+  @keyframes ring-pulse {
+    0%  { opacity: 0;    transform: scale(0.08); }
+    8%  { opacity: 0.35; }
+    85% { opacity: 0;    }
+    100%{ opacity: 0;    transform: scale(1);    }
+  }
+
+  /*
+   * Probe: gold accent body that drifts very slowly — adrift in the void.
+   * Eight-second cycle so it reads as genuinely lost, not just bouncing.
+   */
+  .probe {
+    transform-origin: 60px 60px;
+    animation: probe-drift 8s ease-in-out infinite;
+  }
+
+  .probe-body {
+    fill: var(--accent);
+    fill-opacity: 0.12;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  .probe-mast,
+  .probe-arm {
+    stroke: var(--accent);
+    stroke-width: 1.5;
+  }
+
+  @keyframes probe-drift {
+    0%, 100% { transform: translate(0,     0)    rotate(0deg);   }
+    25%       { transform: translate(2px,  -3px) rotate(5deg);   }
+    75%       { transform: translate(-2px,  2px) rotate(-4deg);  }
+  }
+
+  /* Respect reduced motion: keep the illustration, drop all animation */
+  @media (prefers-reduced-motion: reduce) {
+    .ring {
+      animation: none;
+      opacity: 0.18;
+      transform: scale(0.55);
+    }
+
+    .probe {
+      animation: none;
+    }
+  }
+
+  /* ── Type stack ─────────────────────────────────────────────────────────── */
+
   .not-found-code {
     margin: 0;
     font-family: var(--font-mono);
@@ -94,7 +200,8 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     text-wrap: pretty;
   }
 
-  /* Recovery nav */
+  /* ── Recovery nav ───────────────────────────────────────────────────────── */
+
   .not-found-recovery {
     border-top: 1px solid var(--line);
     padding-top: clamp(1.5rem, 5vw, 2.5rem);
@@ -123,14 +230,13 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     align-items: center;
   }
 
-  /* Separator between items — a quiet slash mirroring the footer pattern. */
+  /* Quiet slash separator between items — mirrors the footer pattern */
   .not-found-links li + li::before {
     content: '/';
     padding: 0 0.75rem;
     color: var(--fg-chrome-faint);
     font-family: var(--font-mono);
     font-size: 0.8rem;
-    aria-hidden: true;
   }
 
   .not-found-links a {
