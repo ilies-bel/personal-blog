@@ -367,26 +367,28 @@ const FALLBACKS: readonly FallbackRow[] = [
         each. Anything that changes one of these by more than a small step should
         be re-measured against the same conditions.
       </p>
-      <table class="btb-budget-table">
-        <thead>
-          <tr>
-            <th scope="col">Metric</th>
-            <th scope="col">Budget</th>
-            <th scope="col">Last measured</th>
-            <th scope="col">Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {BUDGETS.map((row) => (
+      <div class="btb-budget-table-wrap">
+        <table class="btb-budget-table">
+          <thead>
             <tr>
-              <th scope="row">{row.name}</th>
-              <td>{row.budget}</td>
-              <td>{row.measured}</td>
-              <td>{row.note}</td>
+              <th scope="col">Metric</th>
+              <th scope="col">Budget</th>
+              <th scope="col">Last measured</th>
+              <th scope="col">Note</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {BUDGETS.map((row) => (
+              <tr>
+                <th scope="row">{row.name}</th>
+                <td>{row.budget}</td>
+                <td>{row.measured}</td>
+                <td>{row.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p>
         And what your machine is doing right now — independent of the engine, just
         the browser's own rAF clock:

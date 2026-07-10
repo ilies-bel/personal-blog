@@ -101,10 +101,21 @@ body.behind-the-build .btb-shader-code {
    instrument language. Lives inside the prose column, so it respects
    the article's measure ceiling and reads as another instrument
    panel, not a separate widget.
+
+   The wrapper is a local scroll container so the table can scroll
+   horizontally on narrow viewports without ever widening the document.
+   This mirrors the same pattern prose.css uses for <pre> blocks.
+   The browser's scrollbar (or touch scroll) is the visible affordance;
+   -webkit-overflow-scrolling: touch keeps it inertia-scrollable on iOS.
    --------------------------------------------------------------- */
+body.behind-the-build .btb-budget-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.75rem 0;
+}
 body.behind-the-build .btb-budget-table {
   width: 100%;
-  margin: 1.75rem 0;
+  margin: 0;
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
