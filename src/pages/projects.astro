@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import BlackHole from '../hero/BlackHole.tsx';
+import RouteBackdrop from '../components/RouteBackdrop.astro';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -14,11 +14,11 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   withCreativeWork
   bodyClass="projects-page"
 >
-  {/* Static celestial backdrop — the scene frozen at the YELLOW STAR frame
-      (stage 2.9, Projects' own celestial body in the nav model), heavily dimmed
-      behind the ledger. client:only: the page reads fully without JS; the corner
-      scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
-  <BlackHole client:only="react" backdrop backdropStage={2.9} />
+  {/* Lightweight CSS backdrop — YELLOW STAR atmosphere (stage 2.9, Projects'
+      own celestial body in the nav model).  Zero Three.js bytes (PERF-002).
+      The `variant` prop is the EXP-020/EXP-035 seam — restyle here without
+      re-plumbing the page.  body.backdrop-off still dims it (RouteBackdrop.astro). */}
+  <RouteBackdrop variant="yellow" />
 
   <section class="projects-hero" aria-labelledby="projects-title">
     <h1 id="projects-title">The work that held.</h1>

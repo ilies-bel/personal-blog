@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import BlackHole from '../hero/BlackHole.tsx';
+import RouteBackdrop from '../components/RouteBackdrop.astro';
 import { SITE_TITLE, SOCIALS } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -21,9 +21,10 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   withPerson
   bodyClass="about-page"
 >
-  {/* Our signature object, pinned to its calm nebula frame and dimmed by CSS —
-     the same asset as the hero, here as quiet atmosphere, not the showpiece. */}
-  <BlackHole client:only="react" backdrop />
+  {/* Lightweight CSS backdrop — dark event-horizon atmosphere (stage 0, black
+     hole).  Zero Three.js bytes (PERF-002).  The `variant` prop is the seam for
+     EXP-020/EXP-035 art direction — restyle without re-plumbing the page. */}
+  <RouteBackdrop variant="dark" />
 
   <div class="about-shell">
     <article class="about-panel">

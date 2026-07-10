@@ -1,0 +1,198 @@
+---
+/**
+ * RouteBackdrop — a zero-JS, CSS-only ambient backdrop for inner/reading routes.
+ *
+ * This component is the SEAM for PERF-002: it replaces the BlackHole WebGL
+ * backdrop on projects, writing, and about so those routes ship zero Three.js
+ * bytes, while preserving each route's celestial atmosphere through authored
+ * CSS gradients and a tiny inline SVG noise filter.
+ *
+ * The `variant` prop (and the `data-backdrop-variant` attribute it emits) is the
+ * hook for later route art-direction tasks EXP-020 and EXP-035.  To restyle the
+ * atmosphere for a route, update the CSS block for the relevant variant here — no
+ * re-plumbing of the page layout is required.
+ *
+ * Variant → lifecycle station mapping (mirrors BackHole's backdropStage values):
+ *   "nebula"  → stage 3.5 — diffuse blue-purple cloud  (Writing)
+ *   "yellow"  → stage 2.9 — warm amber point source     (Projects)
+ *   "dark"    → stage 0   — near-black event horizon    (About)
+ *
+ * The backdrop renders at z-index -1 (behind all page content) and is
+ * pointer-events: none so it never interferes with interaction.  It is
+ * aria-hidden="true" because it is purely decorative.
+ *
+ * CSS custom properties used:
+ *   --backdrop-primary  — the route's foreground accent colour (for tint sync)
+ *   --backdrop-opacity  — overall dim (default 1; body.backdrop-off → 0)
+ *
+ * body.backdrop-off (toggled by the existing corner scene-toggle circle in
+ * hero.css) sets `--backdrop-opacity: 0` so the same JS toggle that could hide
+ * the canvas backdrop also hides this CSS backdrop.
+ */
+
+interface Props {
+  /**
+   * Which atmospheric treatment to render.
+   * Maps to the celestial lifecycle station closest to this route's identity.
+   */
+  variant?: 'nebula' | 'yellow' | 'dark';
+}
+const { variant = 'dark' } = Astro.props;
+---
+
+{/* Inline SVG noise filter — referenced by the nebula and yellow variants via
+    CSS `filter: url(#rb-noise)`.  Declared once in the document at the top of
+    the backdrop layer.  The filter is purely decorative (aria-hidden) and its
+    raster dimensions are irrelevant (it is applied as a texture, not a layout
+    object).  Keeping it inline avoids a separate HTTP request and keeps the
+    backdrop self-contained. */}
+<svg aria-hidden="true" class="route-backdrop-defs" width="0" height="0">
+  <defs>
+    <filter id="rb-noise" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="linearRGB">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency="0.65 0.75"
+        numOctaves="3"
+        stitchTiles="stitch"
+        result="noise"
+      />
+      <feColorMatrix type="saturate" values="0" in="noise" result="grey" />
+      <feBlend in="SourceGraphic" in2="grey" mode="screen" result="blended" />
+      <feComposite in="blended" in2="SourceGraphic" operator="in" />
+    </filter>
+  </defs>
+</svg>
+
+<div
+  class="route-backdrop"
+  data-backdrop-variant={variant}
+  aria-hidden="true"
+></div>
+
+<style>
+  /* The SVG defs block is invisible and takes no layout space. */
+  .route-backdrop-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* -------------------------------------------------------------------------
+   * Base layer — fixed, behind all content, non-interactive.
+   * Mirrors exactly the CSS position of the BlackHole canvas backdrop:
+   *   position fixed / inset 0 / z-index -1 / pointer-events none.
+   * The `--backdrop-opacity` custom property lets the existing backdrop-off
+   * body class (toggled by the scene-toggle circle in hero.css) dim this too.
+   * ------------------------------------------------------------------------- */
+  .route-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: var(--backdrop-opacity, 1);
+    /* Smooth the opacity toggle to match the canvas backdrop's CSS transition. */
+    transition: opacity 0.4s ease;
+    /* Prevent the backdrop from contributing to paint outside the viewport. */
+    will-change: opacity;
+  }
+
+  /* -------------------------------------------------------------------------
+   * body.backdrop-off — the scene-toggle circle sets this class (hero.css
+   * pattern).  Mirror it here so the CSS backdrop dims the same way the canvas
+   * backdrop did.
+   * ------------------------------------------------------------------------- */
+  :global(body.backdrop-off) .route-backdrop {
+    opacity: 0;
+  }
+
+  /* =========================================================================
+   * NEBULA variant — stage 3.5 — Writing
+   *
+   * The WebGL nebula is a diffuse blue-indigo gaseous cloud occupying most of
+   * the viewport, heavily dimmed behind the writing index.  The CSS treatment:
+   *   1. A layered radial gradient — a faint central bloom with a wider halo.
+   *   2. A second off-centre smear to break the perfect symmetry.
+   *   3. The SVG turbulence noise filter softens the circular gradients into
+   *      something organic (the filter is a screen blend at low opacity).
+   *
+   * Colour anchors use the site's colour-space (oklch) and stay well below the
+   * backdrop's own text contrast — this is atmosphere, not foreground chrome.
+   * ========================================================================= */
+  [data-backdrop-variant="nebula"] {
+    /* Core bloom — centred, indigo-leaning, very soft. */
+    background:
+      radial-gradient(
+        ellipse 70% 55% at 52% 48%,
+        oklch(0.20 0.10 260 / 0.55) 0%,
+        oklch(0.14 0.07 250 / 0.35) 35%,
+        oklch(0.07 0.03 240 / 0.15) 65%,
+        transparent 100%
+      ),
+      /* Off-centre secondary smear — breaks symmetry, adds depth. */
+      radial-gradient(
+        ellipse 45% 35% at 68% 32%,
+        oklch(0.16 0.08 270 / 0.25) 0%,
+        oklch(0.08 0.03 255 / 0.10) 55%,
+        transparent 100%
+      ),
+      /* Base — the site's near-black room. */
+      oklch(0.04 0 0);
+    /* Turbulence noise applied on top as a screen-mode texture layer.
+       Kept deliberately subtle — the filter url() references the inline SVG
+       above; browsers that skip the filter still see the gradient. */
+    filter: url(#rb-noise);
+  }
+
+  /* =========================================================================
+   * YELLOW variant — stage 2.9 — Projects
+   *
+   * The WebGL yellow-star backdrop shows the settled gold photosphere,
+   * off-centre and dimmed to a warm glow behind the project ledger.  CSS:
+   *   1. A tight central radial glow (the star body).
+   *   2. A wider corona halo with a warm amber tint.
+   *   3. A slight right-of-centre bias to match the WebGL camera's composition.
+   *   4. Noise filter gives the glow an organic granular texture.
+   * ========================================================================= */
+  [data-backdrop-variant="yellow"] {
+    /* Core — tight warm amber nucleus, off-centre right. */
+    background:
+      radial-gradient(
+        ellipse 28% 28% at 58% 50%,
+        oklch(0.42 0.14 68 / 0.50) 0%,
+        oklch(0.28 0.10 65 / 0.30) 35%,
+        oklch(0.14 0.05 62 / 0.12) 65%,
+        transparent 100%
+      ),
+      /* Corona — wider, cooler gold halo. */
+      radial-gradient(
+        ellipse 55% 45% at 58% 50%,
+        oklch(0.20 0.06 65 / 0.20) 0%,
+        oklch(0.10 0.03 60 / 0.08) 55%,
+        transparent 100%
+      ),
+      /* Base. */
+      oklch(0.04 0 0);
+    filter: url(#rb-noise);
+  }
+
+  /* =========================================================================
+   * DARK variant — stage 0 — About (event-horizon / black-hole atmosphere)
+   *
+   * The WebGL black-hole backdrop is nearly pure black with a subtle centred
+   * gravitational lens ring.  The CSS treatment is intentionally the most
+   * restrained: just a faint cool-toned radial suggesting depth.
+   * ========================================================================= */
+  [data-backdrop-variant="dark"] {
+    background:
+      /* Subtle centred depth — barely visible, just breaks the flat black. */
+      radial-gradient(
+        ellipse 40% 35% at 50% 50%,
+        oklch(0.10 0.03 220 / 0.30) 0%,
+        oklch(0.06 0.01 215 / 0.12) 45%,
+        transparent 100%
+      ),
+      oklch(0.04 0 0);
+  }
+</style>
