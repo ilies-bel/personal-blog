@@ -69,10 +69,29 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
 ---
 
 <!doctype html>
-<html lang={SITE_LANG} class={bare ? 'is-bare' : undefined}>
+<html lang={SITE_LANG} class={bare ? 'no-js is-bare' : 'no-js'}>
   <head>
     <BaseHead {...props} />
     <ClientRouter />
+    {/* ENG-001 — no-JS loader/track fix.
+        The html element starts with class="no-js" so that CSS rules keyed on
+        html.no-js can hide the fixed loader cover and the ~1800svh scroll track
+        before any paint occurs (no flash for JS users). This IIFE removes the
+        class synchronously in <head> — before the browser can paint any body
+        content — so JS-enabled visitors never see the no-JS layout. The
+        astro:page-load listener re-removes it after every ClientRouter SPA swap
+        because swapRootAttributes copies the server-rendered class (which still
+        includes "no-js") from the incoming document's <html> onto the live one;
+        without the listener a back-nav to "/" would re-impose the no-JS layout
+        on JS users. The listener is bound ONCE here and persists across swaps
+        (document is not replaced by ClientRouter). */}
+    <script is:inline>
+      (function () {
+        function removeNoJs() { document.documentElement.classList.remove('no-js'); }
+        removeNoJs();
+        document.addEventListener('astro:page-load', removeNoJs);
+      }());
+    </script>
   </head>
   <body class={bodyClasses}>
     {/* Cinematic dive overlay — a single full-viewport bloom layer present on EVERY

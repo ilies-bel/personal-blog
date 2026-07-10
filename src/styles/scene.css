@@ -660,6 +660,17 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page
    stays meaningful and indexable. Inherits .measure from the markup. */
+
+/* ENG-001 — neutralise the JS-only scene elements when JS is absent.
+   html.no-js is set by BaseLayout.astro on the <html> element and removed
+   synchronously by the is:inline head script when JS is available, so
+   JS-enabled visitors never see these overrides. With JS disabled the class
+   persists and these two rules prevent:
+     • the fixed loader cover (scene-loader) blocking the entire viewport
+     • the ~1800svh scroll track adding miles of dead scrollable height */
+html.no-js .scene-loader { display: none !important; }
+html.no-js .scene-track  { display: none !important; }
+
 .scene-fallback {
   padding-block: clamp(2.5rem, 12vh, 6rem);
   color: var(--fg);
@@ -680,6 +691,38 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--fg-faint);
+}
+/* No-JS primary-destination nav (ENG-001). Appears immediately below the
+   identity lockup so Work / Writing / About / Contact are visible without
+   scrolling. Uses the same mono-uppercase type as .scene-fallback-role; the
+   accent underline mirrors the site's link grammar. */
+.scene-fallback-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+}
+.scene-fallback-nav a {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg);
+  text-decoration-line: underline;
+  text-underline-offset: 0.25em;
+  text-decoration-color: color-mix(in oklch, var(--accent) 55%, transparent);
+}
+.scene-fallback-nav a:hover,
+.scene-fallback-nav a:focus-visible {
+  color: var(--accent-strong);
+  text-decoration-color: var(--accent-strong);
+}
+.scene-fallback-nav a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 /* --- WebGL-unavailable fallback (index.astro .webgl-fallback) --------------- */

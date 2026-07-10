@@ -264,6 +264,18 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
       <p class="scene-fallback-role">Software Engineer</p>
 
+      {/* ENG-001 — primary destinations, keyboard-reachable in the first
+          no-JS viewport. The nav sits directly below the identity lockup so
+          a visitor who arrives without JS can reach every canonical section
+          without scrolling. Labels match the canonical IA (EXP-009): Work
+          maps to /projects, which is the projects section. */}
+      <nav class="scene-fallback-nav" aria-label="Site sections">
+        <a href={href('projects')}>Work</a>
+        <a href={href('writing')}>Writing</a>
+        <a href={href('about')}>About</a>
+        <a href={`${href('about')}#get-in-touch`}>Contact</a>
+      </nav>
+
       {BEATS.slice().reverse().map((beat) => (
         <Fragment>
           <h2>{beat.down}</h2>
