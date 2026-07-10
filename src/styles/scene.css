@@ -693,6 +693,73 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
   }
 }
 
+/* ENG-006 — Mobile primary-navigation bottom bar (320–430 px).
+   The ≤ 34 rem block above hides .overlay-blog-links on the home scene surface,
+   relying on the HUD's bottom number rail for section access. The HUD requires JS
+   and the full scene boot, which means the FIRST VIEWPORT has no labelled canonical
+   destinations on mobile. This narrower breakpoint (≤ 26.9375 rem = 430 px) overrides
+   that: Work / Writing / About / Contact are restored and the whole overlay is
+   repositioned as a full-width bottom bar visible in the opening viewport through every
+   lifecycle phase — loading, scene-ready, mid-scroll. It must appear ABOVE the intro
+   loader (z-60) so the links are tappable from the first server render.
+   This block is placed AFTER the ≤ 34 rem block so the narrower breakpoint wins
+   the cascade at equal specificity. body:not(.about-page) preserves About's
+   absolute-band layout (defined in the block above). */
+@media (max-width: 26.9375rem) {
+  /* Reposition: top-right corner → full-width pinned bottom bar. */
+  body:not(.about-page) .overlay-blog {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 61;                      /* above intro loader (z-60); below skip-link (z-62) */
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
+    background: color-mix(in oklch, var(--bg) 88%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--hud-line);
+  }
+  /* Restore link visibility — the ≤ 34 rem block sets display:none here. */
+  body:not(.about-page) .overlay-blog-links {
+    display: flex;
+    flex: 1;
+    align-items: stretch;
+    justify-content: space-around;
+    gap: 0;
+  }
+  /* Minimum 44 × 44 CSS-px touch target per link (WCAG 2.5.5 / EXP-013). */
+  body:not(.about-page) .overlay-blog-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;              /* 44 CSS px */
+    padding: 0.5rem 0.25rem;
+  }
+  /* Suppress non-destination controls — the bottom bar is the primary
+     destinations slot only; socials and HUD function buttons are hidden here. */
+  body:not(.about-page) .overlay-blog .overlay-blog-social,
+  body:not(.about-page) .overlay-blog .overlay-blog-power,
+  body:not(.about-page) .overlay-blog .overlay-blog-motion {
+    display: none;
+  }
+  /* Cancel the HUD-active label-lift inside the bottom bar so labels don't
+     shift position when the HUD powers on. */
+  body.bare.hud-active .overlay-blog-links .overlay-blog-link {
+    transform: none;
+  }
+  /* Lift skip-experience above the bottom nav bar so both are reachable
+     without overlap (bar height ≈ 2.75 rem + existing bottom offset). */
+  .skip-experience {
+    bottom: calc(2.75rem + clamp(0.875rem, 2.5vw, 1.5rem));
+  }
+}
+
 /* Per-page overlay visibility. On the home the manifesto identity (.bh-identity,
    hero.css) replaces the small wordmark, so the wordmark is hidden and the
    micro-nav is shown. About runs the scene in backdrop mode (no .bh-identity), so
