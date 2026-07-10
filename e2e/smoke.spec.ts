@@ -109,13 +109,49 @@ for (const { path, name } of ALL_ROUTES) {
 // 404 guard — unknown paths must return HTTP 404, not a silent 200
 // ---------------------------------------------------------------------------
 
-test('unknown path — HTTP 404', async ({ page }) => {
+test('unknown path — HTTP 404 with branded page and recovery links', async ({ page }) => {
   // Use a path that can never collide with a real route.
   const response = await page.goto('/no-such-route-xyzzy-e2e-probe')
+
+  // Correct status code — the host must never serve a 200 for unknown paths.
   expect(
     response?.status(),
     'Expected HTTP 404 for an unknown path'
   ).toBe(404)
+
+  // Branded chrome — the standard reading-page subnav header must be present
+  // (this is the .subnav header rendered by BaseLayout in non-bare mode).
+  await expect(
+    page.locator('.subnav'),
+    'Expected branded subnav header on the 404 page'
+  ).toBeVisible()
+
+  // Recovery links — the 404 page must offer a path back to each main section.
+  // Covers: Home (/), Work / Projects (/projects), Writing (/writing),
+  //         About (/about), and Contact (mailto:).
+  const recoverySections = [
+    { label: 'Home',     href: '/'         },
+    { label: 'Work',     href: '/projects' },
+    { label: 'Writing',  href: '/writing'  },
+    { label: 'About',    href: '/about'    },
+  ] as const
+
+  for (const { label, href } of recoverySections) {
+    await expect(
+      page.locator(`#not-found-recovery a[href="${href}"]`),
+      `Expected a recovery link to ${label} (${href}) on the 404 page`
+    ).toBeVisible()
+  }
+
+  // Contact link — email link in the recovery section.
+  await expect(
+    page.locator('#not-found-recovery a[href^="mailto:"]'),
+    'Expected a Contact mailto link on the 404 page'
+  ).toBeVisible()
+
+  // noindex — crawlers must be told to skip the 404 page.
+  const robots = await page.locator('meta[name="robots"]').getAttribute('content')
+  expect(robots, 'Expected noindex on the 404 page').toContain('noindex')
 })
 
 // ---------------------------------------------------------------------------

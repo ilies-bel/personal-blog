@@ -22,6 +22,8 @@ interface Props {
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
+  // When true, emits `noindex, nofollow` so crawlers skip this page (e.g. 404).
+  noindex?: boolean;
 }
 
 const {
@@ -31,6 +33,7 @@ const {
   type = 'website',
   publishedTime,
   modifiedTime,
+  noindex = false,
 } = Astro.props;
 
 // Canonical URL resolved against `site` + `base` from astro.config.
@@ -82,7 +85,7 @@ const jsonLd =
 <meta name="title" content={fullTitle} />
 <meta name="description" content={description} />
 <link rel="canonical" href={canonicalURL} />
-<meta name="robots" content="index, follow" />
+<meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
 
 <!-- Icons -->
 <!-- SVG first: modern browsers use it and it self-inverts via its own @media rule. -->

@@ -29,6 +29,8 @@ interface Props {
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
+  // When true, passes noindex to BaseHead so crawlers skip this page (e.g. 404).
+  noindex?: boolean;
   // `bare` strips the standard reading chrome (gutter shell + footer) and shows
   // only the fixed corner overlay: brand top-left, the blog micro-nav top-right.
   // Used by the home page, whose whole canvas is the scroll-scrubbed scene.
