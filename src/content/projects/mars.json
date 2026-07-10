@@ -1,0 +1,20 @@
+{
+  "name": "Mars",
+  "order": 2,
+  "isPrivate": true,
+  "privateNote": "B2B product. No public link.",
+  "role": "Solo — design, build, ship",
+  "stack": "Multi-agent orchestration · task graph",
+  "status": "Private · in use",
+  "figureType": "topology-svg",
+  "figure": {
+    "alt": "Mars agent task topology diagram",
+    "caption": "Mars: agent task topology — tasks coloured by lifecycle state, edges are blocker dependencies."
+  },
+  "body": [
+    "A local AFK agent swarm for software work. You give it a goal and it builds a web of tasks, figures out the order they have to run in, and executes the whole graph autonomously: writing code, recovering from failures, and chaining the follow-up work without a human in the loop. The topology view lets you watch the dependency web plan and run itself in real time.",
+    "It is the most ambitious thing I have built. Coordinating many agents so they do the right work in the right order, and recover when a step fails, is a genuinely hard orchestration problem, and Mars does it."
+  ],
+  "proofStatement": "a private product, so there is no public link. The diagram above mirrors the live topology view — nodes are tasks, edges are blocker dependencies, colours are lifecycle state, and the failed branch shows a recovered task picked up by a follow-up agent.",
+  "proofLabel": "Note"
+}

@@ -1,10 +1,15 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import RouteBackdrop from '../components/RouteBackdrop.astro';
+import { getCollection } from 'astro:content';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+
+const projects = (await getCollection('projects')).sort(
+  (a, b) => a.data.order - b.data.order,
+);
 ---
 
 <BaseLayout
@@ -27,231 +32,230 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
   <div class="projects-list" aria-label="Shipped projects">
 
-    <article class="projects-entry" id="fleet">
-      <header class="projects-entry-header">
-        <h2 class="projects-entry-name"><span data-decode>Fleet</span></h2>
-        <div class="projects-entry-links">
-          <a href="https://github.com/ilies-bel/fleet" class="projects-link" target="_blank" rel="noopener noreferrer">github.com/ilies-bel/fleet</a>
-          <span class="projects-link-sep" aria-hidden="true">/</span>
-          <span class="projects-pkg"><span class="projects-pkg-label">npm</span> @ilies-bel/fleet</span>
+    {projects.map((project) => (
+      <article class="projects-entry" id={project.id}>
+        <header class="projects-entry-header">
+          <h2 class="projects-entry-name">
+            <span data-decode>{project.data.name}</span>
+            {project.data.isPrivate && <span class="projects-badge">private</span>}
+          </h2>
+
+          {project.data.isPrivate ? (
+            <span class="projects-private-note">{project.data.privateNote}</span>
+          ) : (
+            <div class="projects-entry-links">
+              {(project.data.links ?? []).map((link) => (
+                <a href={link.href} class="projects-link" target="_blank" rel="noopener noreferrer">{link.label}</a>
+              ))}
+              {project.data.npmPackage && (
+                <>
+                  <span class="projects-link-sep" aria-hidden="true">/</span>
+                  <span class="projects-pkg">
+                    <span class="projects-pkg-label">npm</span> {project.data.npmPackage}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          <dl class="projects-meta">
+            {project.data.role && (
+              <div class="projects-meta-item">
+                <dt>Role</dt>
+                <dd>{project.data.role}</dd>
+              </div>
+            )}
+            {project.data.stack && (
+              <div class="projects-meta-item">
+                <dt>Stack</dt>
+                <dd>{project.data.stack}</dd>
+              </div>
+            )}
+            {project.data.status && (
+              <div class="projects-meta-item">
+                <dt>Status</dt>
+                <dd>{project.data.status}</dd>
+              </div>
+            )}
+          </dl>
+        </header>
+
+        <div class="projects-entry-body">
+          <figure class="projects-figure">
+            {project.data.figureType === 'topology-svg' ? (
+              <svg
+                class="projects-topology"
+                viewBox="0 0 800 540"
+                role="img"
+                aria-labelledby="mars-topology-title mars-topology-desc"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <title id="mars-topology-title">Mars agent task topology</title>
+                <desc id="mars-topology-desc">A directed graph of thirteen agent tasks for the goal "feature/auth-v2": three planning tasks resolved as merged, two integration tasks merged or coding, a failed accessibility task that triggered a retry now coding, downstream verify and queued tasks, all converging on a final queued merge step. Nodes are colour-coded by lifecycle state (queued, coding, verify, merged, failed) and edges are blocker dependencies.</desc>
+
+                {/* Header band */}
+                <text x="32" y="32" class="projects-topology__kicker">AGENT TASK TOPOLOGY</text>
+                <text x="768" y="32" text-anchor="end" class="projects-topology__kicker">RUN #214 · 13 TASKS · 1 RECOVERY</text>
+                <line x1="32" y1="46" x2="768" y2="46" class="projects-topology__rule" />
+
+                {/* Edges (blocker dependencies). Drawn first so nodes sit on top.
+                    Each path is a vertical cubic Bezier from parent-bottom to child-top. */}
+                <g class="projects-topology__edges" fill="none">
+                  {/* GOAL → planning */}
+                  <path d="M400,76 C400,96 160,96 160,116" class="projects-topology__edge" />
+                  <path d="M400,76 C400,96 400,96 400,116" class="projects-topology__edge" />
+                  <path d="M400,76 C400,96 640,96 640,116" class="projects-topology__edge" />
+                  {/* planning → integration */}
+                  <path d="M160,162 C160,186 280,186 280,206" class="projects-topology__edge" />
+                  <path d="M400,162 C400,186 280,186 280,206" class="projects-topology__edge" />
+                  <path d="M400,162 C400,186 520,186 520,206" class="projects-topology__edge" />
+                  <path d="M640,162 C640,186 520,186 520,206" class="projects-topology__edge" />
+                  {/* integration → build */}
+                  <path d="M280,252 C280,276 160,276 160,296" class="projects-topology__edge" />
+                  <path d="M280,252 C280,276 400,276 400,296" class="projects-topology__edge" />
+                  <path d="M520,252 C520,276 400,276 400,296" class="projects-topology__edge" />
+                  <path d="M520,252 C520,276 640,276 640,296" class="projects-topology__edge" />
+                  {/* failed → retry (recovery edge) */}
+                  <path d="M400,342 C400,362 400,362 400,382" class="projects-topology__edge projects-topology__edge--recovery" />
+                  {/* build → verify */}
+                  <path d="M160,342 C160,392 280,392 280,432" class="projects-topology__edge" />
+                  <path d="M400,428 C400,442 280,442 280,432" class="projects-topology__edge" />
+                  <path d="M400,428 C400,442 520,442 520,432" class="projects-topology__edge" />
+                  <path d="M640,342 C640,392 520,392 520,432" class="projects-topology__edge" />
+                  {/* verify → merge */}
+                  <path d="M280,478 C280,498 400,498 400,518" class="projects-topology__edge" />
+                  <path d="M520,478 C520,498 400,498 400,518" class="projects-topology__edge" />
+                </g>
+
+                {/* Nodes. Each node is a small rounded card with mono ID + name. */}
+                <g class="projects-topology__nodes">
+                  {/* GOAL */}
+                  <g class="projects-topology__node projects-topology__node--goal" transform="translate(400 60)">
+                    <rect x="-110" y="-16" width="220" height="32" rx="4" />
+                    <text x="-100" y="0" class="projects-topology__node-tag">GOAL</text>
+                    <text x="-58" y="0" class="projects-topology__node-name">feature/auth-v2</text>
+                  </g>
+
+                  {/* Row 1: planning */}
+                  <g class="projects-topology__node projects-topology__node--merge" transform="translate(160 139)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T01</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">schema</text>
+                  </g>
+                  <g class="projects-topology__node projects-topology__node--merge" transform="translate(400 139)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T02</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">api-spec</text>
+                  </g>
+                  <g class="projects-topology__node projects-topology__node--verify" transform="translate(640 139)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T03</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">layout</text>
+                  </g>
+
+                  {/* Row 2: integration */}
+                  <g class="projects-topology__node projects-topology__node--merge" transform="translate(280 229)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T04</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">migrate</text>
+                  </g>
+                  <g class="projects-topology__node projects-topology__node--coding" transform="translate(520 229)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T05</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">endpoints</text>
+                  </g>
+
+                  {/* Row 3: build */}
+                  <g class="projects-topology__node projects-topology__node--coding" transform="translate(160 319)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T06</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">ui-shell</text>
+                  </g>
+                  <g class="projects-topology__node projects-topology__node--failed" transform="translate(400 319)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T07</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">a11y</text>
+                  </g>
+                  <g class="projects-topology__node projects-topology__node--queued" transform="translate(640 319)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T08</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">telemetry</text>
+                  </g>
+
+                  {/* Row 4: recovery */}
+                  <g class="projects-topology__node projects-topology__node--coding" transform="translate(400 405)">
+                    <rect x="-66" y="-12" width="132" height="24" rx="3" />
+                    <text x="-56" y="4" class="projects-topology__node-tag">T09</text>
+                    <text x="-29" y="4" class="projects-topology__node-name">a11y-retry</text>
+                  </g>
+
+                  {/* Row 5: verify */}
+                  <g class="projects-topology__node projects-topology__node--verify" transform="translate(280 455)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T10</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">contract</text>
+                  </g>
+                  <g class="projects-topology__node projects-topology__node--queued" transform="translate(520 455)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T11</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">e2e</text>
+                  </g>
+
+                  {/* Row 6: merge */}
+                  <g class="projects-topology__node projects-topology__node--queued" transform="translate(400 528)">
+                    <rect x="-60" y="-12" width="120" height="24" rx="3" />
+                    <text x="-50" y="4" class="projects-topology__node-tag">T12</text>
+                    <text x="-23" y="4" class="projects-topology__node-name">merge</text>
+                  </g>
+                </g>
+
+                {/* Legend strip (top-right under header rule) */}
+                <g class="projects-topology__legend" transform="translate(0 0)">
+                  <g transform="translate(412 -2)">
+                    <rect class="projects-topology__chip projects-topology__chip--queued" x="0" y="40" width="10" height="6" rx="1" />
+                    <text x="16" y="46" class="projects-topology__legend-label">QUEUED</text>
+                  </g>
+                  <g transform="translate(486 -2)">
+                    <rect class="projects-topology__chip projects-topology__chip--coding" x="0" y="40" width="10" height="6" rx="1" />
+                    <text x="16" y="46" class="projects-topology__legend-label">CODING</text>
+                  </g>
+                  <g transform="translate(558 -2)">
+                    <rect class="projects-topology__chip projects-topology__chip--verify" x="0" y="40" width="10" height="6" rx="1" />
+                    <text x="16" y="46" class="projects-topology__legend-label">VERIFY</text>
+                  </g>
+                  <g transform="translate(626 -2)">
+                    <rect class="projects-topology__chip projects-topology__chip--merge" x="0" y="40" width="10" height="6" rx="1" />
+                    <text x="16" y="46" class="projects-topology__legend-label">MERGED</text>
+                  </g>
+                  <g transform="translate(704 -2)">
+                    <rect class="projects-topology__chip projects-topology__chip--failed" x="0" y="40" width="10" height="6" rx="1" />
+                    <text x="16" y="46" class="projects-topology__legend-label">FAILED</text>
+                  </g>
+                </g>
+              </svg>
+            ) : (
+              <img
+                src={img(project.data.figure.src!)}
+                alt={project.data.figure.alt}
+                class="projects-screenshot"
+                loading="lazy"
+              />
+            )}
+            <figcaption>{project.data.figure.caption}</figcaption>
+          </figure>
+
+          <div class="projects-copy">
+            {project.data.body.map((paragraph) => <p>{paragraph}</p>)}
+            {project.data.proofStatement && (
+              <p class="projects-proud">
+                <span class="projects-proud-label">{project.data.proofLabel ?? 'What I am proud of'}:</span>{' '}
+                {project.data.proofStatement}
+              </p>
+            )}
+          </div>
         </div>
-        <dl class="projects-meta">
-          <div class="projects-meta-item">
-            <dt>Role</dt>
-            <dd>Solo — design, build, ship</dd>
-          </div>
-          <div class="projects-meta-item">
-            <dt>Stack</dt>
-            <dd>Containers · gateway proxy · git worktrees</dd>
-          </div>
-          <div class="projects-meta-item">
-            <dt>Status</dt>
-            <dd>Open source · shipped</dd>
-          </div>
-        </dl>
-      </header>
-
-      <div class="projects-entry-body">
-        <figure class="projects-figure">
-          <img
-            src={img('projects/fleet.png')}
-            alt="Fleet dashboard showing multiple feature branches running in parallel containers"
-            class="projects-screenshot"
-            loading="lazy"
-          />
-          <figcaption>Fleet: parallel branch preview dashboard</figcaption>
-        </figure>
-
-        <div class="projects-copy">
-          <p>An open-source tool that runs every feature branch of your app at the same time on localhost, each in its own container behind a gateway. One dashboard to spin them up, tail logs, preview the running app, diff UI states, and leave QA notes per feature. It auto-detects the stack and manages multiple repos through git worktrees.</p>
-          <p>I built it because reviewing several branches at once meant constantly tearing down and rebuilding one local environment. Fleet just runs them all in parallel and lets you flip between them.</p>
-          <p class="projects-proud"><span class="projects-proud-label">What I am proud of:</span> it is a real tool, not a demo, and it found its people. It is niche by design, built for engineers doing parallel QA, and it has genuine adoption among them. The container orchestration, the gateway proxy, the stack auto-detection, and the diff view all had to work together, and they do.</p>
-        </div>
-      </div>
-    </article>
-
-    <article class="projects-entry" id="mars">
-      <header class="projects-entry-header">
-        <h2 class="projects-entry-name"><span data-decode>Mars</span> <span class="projects-badge">private</span></h2>
-        <span class="projects-private-note">B2B product. No public link.</span>
-        <dl class="projects-meta">
-          <div class="projects-meta-item">
-            <dt>Role</dt>
-            <dd>Solo — design, build, ship</dd>
-          </div>
-          <div class="projects-meta-item">
-            <dt>Stack</dt>
-            <dd>Multi-agent orchestration · task graph</dd>
-          </div>
-          <div class="projects-meta-item">
-            <dt>Status</dt>
-            <dd>Private · in use</dd>
-          </div>
-        </dl>
-      </header>
-
-      <div class="projects-entry-body">
-        <figure class="projects-figure">
-          <svg
-            class="projects-topology"
-            viewBox="0 0 800 540"
-            role="img"
-            aria-labelledby="mars-topology-title mars-topology-desc"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <title id="mars-topology-title">Mars agent task topology</title>
-            <desc id="mars-topology-desc">A directed graph of thirteen agent tasks for the goal "feature/auth-v2": three planning tasks resolved as merged, two integration tasks merged or coding, a failed accessibility task that triggered a retry now coding, downstream verify and queued tasks, all converging on a final queued merge step. Nodes are colour-coded by lifecycle state (queued, coding, verify, merged, failed) and edges are blocker dependencies.</desc>
-
-            <!-- Header band -->
-            <text x="32" y="32" class="projects-topology__kicker">AGENT TASK TOPOLOGY</text>
-            <text x="768" y="32" text-anchor="end" class="projects-topology__kicker">RUN #214 · 13 TASKS · 1 RECOVERY</text>
-            <line x1="32" y1="46" x2="768" y2="46" class="projects-topology__rule" />
-
-            <!-- Edges (blocker dependencies). Drawn first so nodes sit on top.
-                 Each path is a vertical cubic Bezier from parent-bottom to child-top. -->
-            <g class="projects-topology__edges" fill="none">
-              <!-- GOAL → planning -->
-              <path d="M400,76 C400,96 160,96 160,116" class="projects-topology__edge" />
-              <path d="M400,76 C400,96 400,96 400,116" class="projects-topology__edge" />
-              <path d="M400,76 C400,96 640,96 640,116" class="projects-topology__edge" />
-              <!-- planning → integration -->
-              <path d="M160,162 C160,186 280,186 280,206" class="projects-topology__edge" />
-              <path d="M400,162 C400,186 280,186 280,206" class="projects-topology__edge" />
-              <path d="M400,162 C400,186 520,186 520,206" class="projects-topology__edge" />
-              <path d="M640,162 C640,186 520,186 520,206" class="projects-topology__edge" />
-              <!-- integration → build -->
-              <path d="M280,252 C280,276 160,276 160,296" class="projects-topology__edge" />
-              <path d="M280,252 C280,276 400,276 400,296" class="projects-topology__edge" />
-              <path d="M520,252 C520,276 400,276 400,296" class="projects-topology__edge" />
-              <path d="M520,252 C520,276 640,276 640,296" class="projects-topology__edge" />
-              <!-- failed → retry (recovery edge) -->
-              <path d="M400,342 C400,362 400,362 400,382" class="projects-topology__edge projects-topology__edge--recovery" />
-              <!-- build → verify -->
-              <path d="M160,342 C160,392 280,392 280,432" class="projects-topology__edge" />
-              <path d="M400,428 C400,442 280,442 280,432" class="projects-topology__edge" />
-              <path d="M400,428 C400,442 520,442 520,432" class="projects-topology__edge" />
-              <path d="M640,342 C640,392 520,392 520,432" class="projects-topology__edge" />
-              <!-- verify → merge -->
-              <path d="M280,478 C280,498 400,498 400,518" class="projects-topology__edge" />
-              <path d="M520,478 C520,498 400,498 400,518" class="projects-topology__edge" />
-            </g>
-
-            <!-- Nodes. Each node is a small rounded card with mono ID + name. -->
-            <g class="projects-topology__nodes">
-              <!-- GOAL -->
-              <g class="projects-topology__node projects-topology__node--goal" transform="translate(400 60)">
-                <rect x="-110" y="-16" width="220" height="32" rx="4" />
-                <text x="-100" y="0" class="projects-topology__node-tag">GOAL</text>
-                <text x="-58" y="0" class="projects-topology__node-name">feature/auth-v2</text>
-              </g>
-
-              <!-- Row 1: planning -->
-              <g class="projects-topology__node projects-topology__node--merge" transform="translate(160 139)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T01</text>
-                <text x="-23" y="4" class="projects-topology__node-name">schema</text>
-              </g>
-              <g class="projects-topology__node projects-topology__node--merge" transform="translate(400 139)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T02</text>
-                <text x="-23" y="4" class="projects-topology__node-name">api-spec</text>
-              </g>
-              <g class="projects-topology__node projects-topology__node--verify" transform="translate(640 139)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T03</text>
-                <text x="-23" y="4" class="projects-topology__node-name">layout</text>
-              </g>
-
-              <!-- Row 2: integration -->
-              <g class="projects-topology__node projects-topology__node--merge" transform="translate(280 229)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T04</text>
-                <text x="-23" y="4" class="projects-topology__node-name">migrate</text>
-              </g>
-              <g class="projects-topology__node projects-topology__node--coding" transform="translate(520 229)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T05</text>
-                <text x="-23" y="4" class="projects-topology__node-name">endpoints</text>
-              </g>
-
-              <!-- Row 3: build -->
-              <g class="projects-topology__node projects-topology__node--coding" transform="translate(160 319)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T06</text>
-                <text x="-23" y="4" class="projects-topology__node-name">ui-shell</text>
-              </g>
-              <g class="projects-topology__node projects-topology__node--failed" transform="translate(400 319)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T07</text>
-                <text x="-23" y="4" class="projects-topology__node-name">a11y</text>
-              </g>
-              <g class="projects-topology__node projects-topology__node--queued" transform="translate(640 319)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T08</text>
-                <text x="-23" y="4" class="projects-topology__node-name">telemetry</text>
-              </g>
-
-              <!-- Row 4: recovery -->
-              <g class="projects-topology__node projects-topology__node--coding" transform="translate(400 405)">
-                <rect x="-66" y="-12" width="132" height="24" rx="3" />
-                <text x="-56" y="4" class="projects-topology__node-tag">T09</text>
-                <text x="-29" y="4" class="projects-topology__node-name">a11y-retry</text>
-              </g>
-
-              <!-- Row 5: verify -->
-              <g class="projects-topology__node projects-topology__node--verify" transform="translate(280 455)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T10</text>
-                <text x="-23" y="4" class="projects-topology__node-name">contract</text>
-              </g>
-              <g class="projects-topology__node projects-topology__node--queued" transform="translate(520 455)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T11</text>
-                <text x="-23" y="4" class="projects-topology__node-name">e2e</text>
-              </g>
-
-              <!-- Row 6: merge -->
-              <g class="projects-topology__node projects-topology__node--queued" transform="translate(400 528)">
-                <rect x="-60" y="-12" width="120" height="24" rx="3" />
-                <text x="-50" y="4" class="projects-topology__node-tag">T12</text>
-                <text x="-23" y="4" class="projects-topology__node-name">merge</text>
-              </g>
-            </g>
-
-            <!-- Legend strip (top-right under header rule) -->
-            <g class="projects-topology__legend" transform="translate(0 0)">
-              <g transform="translate(412 -2)">
-                <rect class="projects-topology__chip projects-topology__chip--queued" x="0" y="40" width="10" height="6" rx="1" />
-                <text x="16" y="46" class="projects-topology__legend-label">QUEUED</text>
-              </g>
-              <g transform="translate(486 -2)">
-                <rect class="projects-topology__chip projects-topology__chip--coding" x="0" y="40" width="10" height="6" rx="1" />
-                <text x="16" y="46" class="projects-topology__legend-label">CODING</text>
-              </g>
-              <g transform="translate(558 -2)">
-                <rect class="projects-topology__chip projects-topology__chip--verify" x="0" y="40" width="10" height="6" rx="1" />
-                <text x="16" y="46" class="projects-topology__legend-label">VERIFY</text>
-              </g>
-              <g transform="translate(626 -2)">
-                <rect class="projects-topology__chip projects-topology__chip--merge" x="0" y="40" width="10" height="6" rx="1" />
-                <text x="16" y="46" class="projects-topology__legend-label">MERGED</text>
-              </g>
-              <g transform="translate(704 -2)">
-                <rect class="projects-topology__chip projects-topology__chip--failed" x="0" y="40" width="10" height="6" rx="1" />
-                <text x="16" y="46" class="projects-topology__legend-label">FAILED</text>
-              </g>
-            </g>
-          </svg>
-          <figcaption>Mars: agent task topology &mdash; tasks coloured by lifecycle state, edges are blocker dependencies.</figcaption>
-        </figure>
-
-        <div class="projects-copy">
-          <p>A local AFK agent swarm for software work. You give it a goal and it builds a web of tasks, figures out the order they have to run in, and executes the whole graph autonomously: writing code, recovering from failures, and chaining the follow-up work without a human in the loop. The topology view lets you watch the dependency web plan and run itself in real time.</p>
-          <p>It is the most ambitious thing I have built. Coordinating many agents so they do the right work in the right order, and recover when a step fails, is a genuinely hard orchestration problem, and Mars does it.</p>
-          <p class="projects-proud"><span class="projects-proud-label">Note:</span> a private product, so there is no public link. The diagram above mirrors the live topology view &mdash; nodes are tasks, edges are blocker dependencies, colours are lifecycle state, and the failed branch shows a recovered task picked up by a follow-up agent.</p>
-        </div>
-      </div>
-    </article>
+      </article>
+    ))}
 
   </div>
 </BaseLayout>

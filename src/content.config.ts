@@ -56,4 +56,113 @@ const posts = defineCollection({
   }),
 });
 
-export const collections = { posts };
+// ---------------------------------------------------------------------------
+// Projects — shipped tools and products (CON-001 evidence schema).
+// All evidence fields are optional so missing data is explicit, never invented.
+// ---------------------------------------------------------------------------
+const projects = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/projects' }),
+  schema: z.object({
+    // Display identity
+    name: z.string(),
+    order: z.number().default(0),
+    isPrivate: z.boolean().default(false),
+    privateNote: z.string().optional(),
+
+    // External links (github, npm, live demo, etc.)
+    links: z
+      .array(
+        z.object({
+          href: z.string(),
+          label: z.string(),
+          type: z.enum(['github', 'npm', 'live', 'other']),
+        }),
+      )
+      .optional(),
+    npmPackage: z.string().optional(),
+
+    // CON-001 evidence fields — all optional; absent = evidence not yet captured.
+    problem: z.string().optional(),
+    role: z.string().optional(),
+    team: z.string().optional(),
+    stack: z.string().optional(),
+    constraints: z.string().optional(),
+    decisiveChoice: z.string().optional(),
+    rejectedPath: z.string().optional(),
+    outcome: z
+      .object({
+        summary: z.string(),
+        baseline: z.string().optional(),
+        source: z.string().optional(),
+      })
+      .optional(),
+    proofLinks: z.array(z.string()).optional(),
+    status: z.string().optional(),
+    limitation: z.string().optional(),
+
+    // Figure — screenshot or the topology-svg (Mars-specific inline SVG)
+    figureType: z.enum(['screenshot', 'topology-svg']),
+    figure: z.object({
+      src: z.string().optional(), // relative to /public (screenshot only)
+      alt: z.string(),
+      caption: z.string(),
+    }),
+
+    // Body copy and optional proof/note callout
+    body: z.array(z.string()),
+    proofStatement: z.string().optional(),
+    proofLabel: z.string().optional(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// Graveyard — projects that didn't survive.
+// Evidence fields aligned with CON-001 spirit; all optional.
+// ---------------------------------------------------------------------------
+const graveyard = defineCollection({
+  loader: glob({ pattern: '**/*.json', base: './src/content/graveyard' }),
+  schema: z.object({
+    // Display identity
+    name: z.string(),
+    order: z.number().default(0),
+
+    // Link to the (often still-alive) domain
+    link: z.object({
+      href: z.string(),
+      label: z.string(),
+    }),
+
+    // Specimen image
+    image: z.object({
+      src: z.string(), // relative to /public (source raster; rendering uses the
+                       // optimised opt/graveyard/<id>-<w> variants from PERF-006)
+      alt: z.string(),
+      caption: z.string(),
+      // Intrinsic size of the 768-wide optimised fallback, carried so the <img>
+      // can reserve space and prevent CLS (PERF-006). Optional: entries without
+      // a generated raster simply omit the reservation.
+      width: z.number().optional(),
+      height: z.number().optional(),
+    }),
+
+    // Death certificate fields — these are required; they're what make a specimen
+    interred: z.string(), // year of death / abandonment
+    cause: z.string(),   // short mono-caps cause-of-death tag
+
+    // Evidence-aligned optional fields (not yet filled; kept explicit)
+    premise: z.string().optional(),        // the original hypothesis
+    warningSign: z.string().optional(),    // what should have been spotted earlier
+    causeOfDeath: z.string().optional(),   // longer form than `cause`
+    survivingInsight: z.string().optional(), // what's still valuable
+    artifact: z.string().optional(),       // link to any remaining public artifact
+
+    // Status classification (private / redacted / public)
+    status: z.string().optional(),
+
+    // Body paragraphs and the lesson
+    body: z.array(z.string()),
+    lesson: z.string(),
+  }),
+});
+
+export const collections = { posts, projects, graveyard };

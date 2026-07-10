@@ -1,0 +1,28 @@
+{
+  "name": "Fleet",
+  "order": 1,
+  "isPrivate": false,
+  "links": [
+    {
+      "href": "https://github.com/ilies-bel/fleet",
+      "label": "github.com/ilies-bel/fleet",
+      "type": "github"
+    }
+  ],
+  "npmPackage": "@ilies-bel/fleet",
+  "role": "Solo — design, build, ship",
+  "stack": "Containers · gateway proxy · git worktrees",
+  "status": "Open source · shipped",
+  "figureType": "screenshot",
+  "figure": {
+    "src": "projects/fleet.png",
+    "alt": "Fleet dashboard showing multiple feature branches running in parallel containers",
+    "caption": "Fleet: parallel branch preview dashboard"
+  },
+  "body": [
+    "An open-source tool that runs every feature branch of your app at the same time on localhost, each in its own container behind a gateway. One dashboard to spin them up, tail logs, preview the running app, diff UI states, and leave QA notes per feature. It auto-detects the stack and manages multiple repos through git worktrees.",
+    "I built it because reviewing several branches at once meant constantly tearing down and rebuilding one local environment. Fleet just runs them all in parallel and lets you flip between them."
+  ],
+  "proofStatement": "it is a real tool, not a demo, and it found its people. It is niche by design, built for engineers doing parallel QA, and it has genuine adoption among them. The container orchestration, the gateway proxy, the stack auto-detection, and the diff view all had to work together, and they do.",
+  "proofLabel": "What I am proud of"
+}
