@@ -75,7 +75,12 @@ const projects = (await getCollection('projects')).sort(
       <circle cx="0" cy="650" r="3" class="projects-ring-focus projects-ring-focus--outer" />
     </svg>
 
-    {projects.map((project, orbitIdx) => (
+    {projects.map((project, orbitIdx) => {
+      // Optimised-media base path for the screenshot <picture> (PERF-005):
+      // figure.src "projects/fleet.png" → "projects/fleet", so the pipeline
+      // outputs resolve as opt/projects/fleet-<w>.{avif,webp,jpg}.
+      const figureBase = project.data.figure.src?.replace(/\.[^.]+$/, '');
+      return (
       <article
         class="projects-entry"
         id={project.id}
@@ -282,14 +287,26 @@ const projects = (await getCollection('projects')).sort(
                 </g>
               </svg>
             ) : (
-              <img
-                src={img(project.data.figure.src!)}
-                alt={project.data.figure.alt}
-                class="projects-screenshot"
-                loading="lazy"
-                width={project.data.figure.width}
-                height={project.data.figure.height}
-              />
+              <picture>
+                <source
+                  type="image/avif"
+                  srcset={(project.data.figure.widths ?? []).map((w) => `${img(`opt/${figureBase}-${w}.avif`)} ${w}w`).join(', ')}
+                  sizes="(max-width: 58rem) 100vw, 440px"
+                />
+                <source
+                  type="image/webp"
+                  srcset={(project.data.figure.widths ?? []).map((w) => `${img(`opt/${figureBase}-${w}.webp`)} ${w}w`).join(', ')}
+                  sizes="(max-width: 58rem) 100vw, 440px"
+                />
+                <img
+                  src={img(`opt/${figureBase}-${project.data.figure.width}.jpg`)}
+                  alt={project.data.figure.alt}
+                  class="projects-screenshot"
+                  loading="lazy"
+                  width={project.data.figure.width}
+                  height={project.data.figure.height}
+                />
+              </picture>
             )}
             <figcaption>{project.data.figure.caption}</figcaption>
           </figure>
@@ -305,7 +322,8 @@ const projects = (await getCollection('projects')).sort(
           </div>
         </div>
       </article>
-    ))}
+      );
+    })}
 
   </div>
 </BaseLayout>

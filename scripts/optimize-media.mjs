@@ -52,6 +52,13 @@ const MEDIA_SOURCES = [
     fallbackFormat: 'jpeg',
   },
   {
+    // Luminet 1979 black-hole simulation — 700×346 px, displayed at ≤ prose
+    // column width. Two widths cover mobile (<640px) and the full column.
+    source: 'inspirations/luminet-blackhole-1979.jpg',
+    widths: [480, 700],
+    fallbackFormat: 'jpeg',
+  },
+  {
     source: 'graveyard/heydaniel.png',
     widths: [480, 768],
     fallbackFormat: 'jpeg',  // no alpha channel → JPEG is smaller
@@ -60,6 +67,14 @@ const MEDIA_SOURCES = [
     source: 'graveyard/keywordlens.png',
     widths: [480, 768],
     fallbackFormat: 'jpeg',  // no alpha channel → JPEG is smaller
+  },
+  {
+    // Fleet dashboard screenshot — 1440×900 px. Displayed in a 2-col grid
+    // so the figure renders at roughly 40 % of page width on large screens;
+    // on mobile it is full-bleed. Three widths cover every breakpoint.
+    source: 'projects/fleet.png',
+    widths: [480, 768, 1440],
+    fallbackFormat: 'jpeg',  // no alpha channel in a UI screenshot → JPEG
   },
 ];
 

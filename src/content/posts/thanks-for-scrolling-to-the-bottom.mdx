@@ -21,14 +21,44 @@ The first is a black hole. Not the famous 2019 photograph, but a drawing from 19
   <div style="border-top: 1px solid oklch(0.38 0.018 252); padding-top: 0.4em; margin-bottom: 0.6em;">
     <span style="font-size: 0.68em; letter-spacing: 0.09em; text-transform: uppercase; color: oklch(0.52 0.022 252);">Plate I</span>
   </div>
-  <img
-    src={`${import.meta.env.BASE_URL}/inspirations/luminet-blackhole-1979.jpg`.replace(/\/+/g, '/')}
-    alt="Jean-Pierre Luminet's hand-drawn simulation of a black hole, 1979, showing the gravitational lensing of the accretion disk"
-    style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
-    loading="lazy"
-    width="700"
-    height="346"
-  />
+  {/* Responsive <picture>: AVIF → WebP → JPEG fallback from scripts/optimize-media.mjs.
+      Two widths (480, 700) cover mobile and the full prose column (≤ 680 px wide).
+      Intrinsic width/height tell the browser the 700×346 aspect ratio before the file
+      loads so no layout shift occurs (PERF-005). */}
+  <picture>
+    <source
+      type="image/avif"
+      srcSet={
+        [480, 700]
+          .map(w => {
+            const u = `${import.meta.env.BASE_URL}/opt/inspirations/luminet-blackhole-1979-${w}.avif`.replace(/\/+/g, '/');
+            return `${u} ${w}w`;
+          })
+          .join(', ')
+      }
+      sizes="(max-width: 640px) 480px, 700px"
+    />
+    <source
+      type="image/webp"
+      srcSet={
+        [480, 700]
+          .map(w => {
+            const u = `${import.meta.env.BASE_URL}/opt/inspirations/luminet-blackhole-1979-${w}.webp`.replace(/\/+/g, '/');
+            return `${u} ${w}w`;
+          })
+          .join(', ')
+      }
+      sizes="(max-width: 640px) 480px, 700px"
+    />
+    <img
+      src={`${import.meta.env.BASE_URL}/opt/inspirations/luminet-blackhole-1979-700.jpg`.replace(/\/+/g, '/')}
+      alt="Jean-Pierre Luminet's hand-drawn simulation of a black hole, 1979, showing the gravitational lensing of the accretion disk"
+      style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
+      loading="lazy"
+      width="700"
+      height="346"
+    />
+  </picture>
   <figcaption>
     <strong>Plate I — Gravitational-lensing simulation of a black hole (1979).</strong>
     {' '}Jean-Pierre Luminet. Computed and rendered dot by dot in ink — no printer of the era could reproduce the required precision.

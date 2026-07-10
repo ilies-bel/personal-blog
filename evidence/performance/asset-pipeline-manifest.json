@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-10T12:31:43.793Z",
+  "generated": "2026-07-10T13:26:41.380Z",
   "version": 1,
   "sources": [
     {
@@ -46,6 +46,53 @@
           "height": 680,
           "sizeBytes": 84632,
           "contentHash": "sha256:a84ea72df6ae1941ee231a5a8e123b49d174d4c56d563f57236d0f3664088032"
+        }
+      ]
+    },
+    {
+      "source": "media-source/inspirations/luminet-blackhole-1979.jpg",
+      "sourceHash": "sha256:29a056cc968d25ecae8d11f14582075d7c880481bd7c80b0a858f0116b8c06da",
+      "sourceSizeBytes": 186579,
+      "outputs": [
+        {
+          "path": "opt/inspirations/luminet-blackhole-1979-480.avif",
+          "format": "avif",
+          "width": 480,
+          "height": 237,
+          "sizeBytes": 38111,
+          "contentHash": "sha256:08a6df7bd6088083f4fc77c227f09890f3ee02a0f294eb016a32fa48a8970d2d"
+        },
+        {
+          "path": "opt/inspirations/luminet-blackhole-1979-480.webp",
+          "format": "webp",
+          "width": 480,
+          "height": 237,
+          "sizeBytes": 40762,
+          "contentHash": "sha256:c8d4cb4eb9142e96782133b8d1c3ef5aadbafd1790fda867e7ab6d6ba7b6847e"
+        },
+        {
+          "path": "opt/inspirations/luminet-blackhole-1979-700.avif",
+          "format": "avif",
+          "width": 700,
+          "height": 346,
+          "sizeBytes": 88028,
+          "contentHash": "sha256:10fbd2ae9fae57f309c0567fca93bec9bf33afb3cc7abc09ed6d69b121a79c38"
+        },
+        {
+          "path": "opt/inspirations/luminet-blackhole-1979-700.webp",
+          "format": "webp",
+          "width": 700,
+          "height": 346,
+          "sizeBytes": 99324,
+          "contentHash": "sha256:8b705825bf4cd10298b8a3e72c84cd068df85100b96ba6d7af286bd0ad5901ee"
+        },
+        {
+          "path": "opt/inspirations/luminet-blackhole-1979-700.jpg",
+          "format": "jpeg",
+          "width": 700,
+          "height": 346,
+          "sizeBytes": 85456,
+          "contentHash": "sha256:2bb419a777b2531976309a0b2158106709db08077cbae56ce94e96a54515f180"
         }
       ]
     },
@@ -140,6 +187,69 @@
           "height": 2175,
           "sizeBytes": 121915,
           "contentHash": "sha256:4e18ca6172e9ec8f68e6a7426ea08b35f6b5ea7ad16e69ae2ea4a8dd88252990"
+        }
+      ]
+    },
+    {
+      "source": "media-source/projects/fleet.png",
+      "sourceHash": "sha256:f8b3b3cbe46eda4e392c0cd53ccd8620bdc6247ddf5b63687829ac47742609e5",
+      "sourceSizeBytes": 151434,
+      "outputs": [
+        {
+          "path": "opt/projects/fleet-480.avif",
+          "format": "avif",
+          "width": 480,
+          "height": 300,
+          "sizeBytes": 9232,
+          "contentHash": "sha256:cfd3012b37f3cae3c17e2f48b917fc95eca1bcbc44320f725281804cef7f96cf"
+        },
+        {
+          "path": "opt/projects/fleet-480.webp",
+          "format": "webp",
+          "width": 480,
+          "height": 300,
+          "sizeBytes": 10888,
+          "contentHash": "sha256:7f6e34c84c6110cee40dd567d61d0199183a91769d202d1d6c26dc1001ad6625"
+        },
+        {
+          "path": "opt/projects/fleet-768.avif",
+          "format": "avif",
+          "width": 768,
+          "height": 480,
+          "sizeBytes": 17052,
+          "contentHash": "sha256:102da623d40942397900b69268c076e22cfd189e735b533b427544756d8b9627"
+        },
+        {
+          "path": "opt/projects/fleet-768.webp",
+          "format": "webp",
+          "width": 768,
+          "height": 480,
+          "sizeBytes": 22474,
+          "contentHash": "sha256:87fdf898a84406f81a45d87a8f36a0b199717b586719eecf8f6dc59527d8a734"
+        },
+        {
+          "path": "opt/projects/fleet-1440.avif",
+          "format": "avif",
+          "width": 1440,
+          "height": 900,
+          "sizeBytes": 31193,
+          "contentHash": "sha256:5d357845ef5379de6fe8c697fee904c478b160530a836265a89cf61880c150bb"
+        },
+        {
+          "path": "opt/projects/fleet-1440.webp",
+          "format": "webp",
+          "width": 1440,
+          "height": 900,
+          "sizeBytes": 56100,
+          "contentHash": "sha256:bbb110341a3e76b91e7f70d329446bfd2464632cddb319ab6e541d42b320a09e"
+        },
+        {
+          "path": "opt/projects/fleet-1440.jpg",
+          "format": "jpeg",
+          "width": 1440,
+          "height": 900,
+          "sizeBytes": 121227,
+          "contentHash": "sha256:2e8eb8e035e32a4a3fff3c278ed0b658371a4afb3873eb93abce64ac03dceb1c"
         }
       ]
     }
