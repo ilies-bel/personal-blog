@@ -1,10 +1,26 @@
 ---
+import type { ImageMetadata } from 'astro';
+import { Picture } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ArticleScene from '../hero/components/ArticleScene.tsx';
 import { SITE_TITLE } from '../consts';
+import heydanielShot from '../assets/graveyard/heydaniel.png';
+import keywordlensShot from '../assets/graveyard/keywordlens.png';
 
-const base = import.meta.env.BASE_URL;
-const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+// SCREENSHOT DELIVERY — the specimen screenshots ship through astro:assets
+// (P5): AVIF/WebP sources + WebP fallback, sized for the figure column. The
+// entry-body grid gives the figure ~26rem on desktop (1fr of a 1:1.5 split of
+// the 68rem ledger) and ≤36rem when the grid stacks under 58rem — so 1x/2x of
+// 36rem (576/1152px) plus a desktop-1x rung is every pixel any device paints.
+// Never the raw pngs again: heydaniel.png shipped 679KB, keywordlens.png 509KB.
+const SCREENSHOT_WIDTHS = [432, 864, 1152];
+// The fallback <img src> rung. Also why this is a hardcoded number and not
+// Math.min(src.width, …): reading ANY property off imported image metadata
+// marks the original as referenced and ships the raw png into dist (see
+// src/components/mdx/Img.astro). The service never upscales, so a narrower
+// future screenshot would simply cap at its own width.
+const SCREENSHOT_FALLBACK_WIDTH = 1152;
+const SCREENSHOT_SIZES = '(max-width: 58rem) min(100vw - 2rem, 36rem), 26rem';
 
 // SPECIMEN LEDGER — the source of truth for the page. The entries render the
 // list and the templating below stays flat. Order is the visual order of the
@@ -15,7 +31,7 @@ interface Specimen {
   id: string;
   name: string;          // mono-caps display name (HUD readout + entry header)
   link: { href: string; label: string };
-  image: { src: string; alt: string; caption: string };
+  image: { src: ImageMetadata; alt: string; caption: string };
   interred: string;      // year of death / abandonment (mono caps)
   cause: string;         // short mono-caps cause-of-death tag
   body: readonly string[];   // ordered paragraphs of running copy
@@ -28,7 +44,7 @@ const specimens: readonly Specimen[] = [
     name: 'KeywordLens',
     link: { href: 'https://getkeywordlens.com/', label: 'getkeywordlens.com' },
     image: {
-      src: img('graveyard/keywordlens.png'),
+      src: keywordlensShot,
       alt: 'KeywordLens interface showing keyword demand analysis for stock media platforms',
       caption: 'KeywordLens: stock media keyword demand tool',
     },
@@ -46,7 +62,7 @@ const specimens: readonly Specimen[] = [
     name: 'HeyDaniel',
     link: { href: 'https://heydaniel.app/', label: 'heydaniel.app' },
     image: {
-      src: img('graveyard/heydaniel.png'),
+      src: heydanielShot,
       alt: 'HeyDaniel app interface showing context-aware reminders and task capture',
       caption: 'HeyDaniel: context-aware reminder assistant',
     },
@@ -109,11 +125,18 @@ const specimens: readonly Specimen[] = [
 
         <div class="graveyard-entry-body">
           <figure class="graveyard-figure">
-            <img
+            <Picture
               src={s.image.src}
               alt={s.image.alt}
               class="graveyard-screenshot"
+              width={SCREENSHOT_FALLBACK_WIDTH}
+              widths={SCREENSHOT_WIDTHS}
+              sizes={SCREENSHOT_SIZES}
+              formats={['avif', 'webp']}
+              fallbackFormat="webp"
+              quality={70}
               loading="lazy"
+              decoding="async"
             />
             <figcaption>{s.image.caption}</figcaption>
           </figure>

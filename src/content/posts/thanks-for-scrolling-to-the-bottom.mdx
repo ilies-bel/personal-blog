@@ -11,16 +11,18 @@ scene:
   backdrop: tesseract
 ---
 
+import Img from '../../components/mdx/Img.astro';
+import luminet from '../../assets/inspirations/luminet-blackhole-1979.jpg';
+import voyager from '../../assets/inspirations/voyager-golden-record.jpg';
+
 I didn't start with a philosophy. I started with two pictures I could never quite get out of my head.
 
 The first is a black hole. Not the famous 2019 photograph, but a drawing from 1979. A young CNRS researcher named Jean-Pierre Luminet calculated what a black hole would actually look like, the way its gravity would sling the light of its own disk around it, brighter on one side than the other. There were no printers that could render it, so he placed the shading by hand, dot by dot, in ink. It was not an artist's impression. It was physics, drawn by a person who cared enough to draw it.
 
 <figure>
-  <img
-    src={`${import.meta.env.BASE_URL}/inspirations/luminet-blackhole-1979.jpg`.replace(/\/+/g, '/')}
+  <Img
+    src={luminet}
     alt="Jean-Pierre Luminet's hand-drawn simulation of a black hole, 1979, showing the gravitational lensing of the accretion disk"
-    style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
-    loading="lazy"
   />
   <figcaption>
     Jean-Pierre Luminet, the first black hole simulation, 1979. (c) Jean-Pierre Luminet / Observatoire de Paris / CNRS.
@@ -31,12 +33,14 @@ The first is a black hole. Not the famous 2019 photograph, but a drawing from 19
 
 The second is gold. The Voyager Golden Record, bolted to a probe that left our solar system and will outlive every one of us. A disk engraved with how to find Earth and what we sounded like, flung into the dark on the off chance that someone, someday, finds it. A message with no expectation of a reply.
 
+{/* quality 55: the 2215px source photo lands its largest delivered variant
+    (AVIF at 1360w, the 2x of the prose column) around 146KB — the asset this
+    replaces shipped as a raw 4MB jpg. */}
 <figure>
-  <img
-    src={`${import.meta.env.BASE_URL}/inspirations/voyager-golden-record.jpg`.replace(/\/+/g, '/')}
+  <Img
+    src={voyager}
     alt="The Voyager Golden Record, a gold-plated copper disk carrying sounds and images of life on Earth"
-    style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
-    loading="lazy"
+    quality={55}
   />
   <figcaption>
     The Voyager Golden Record, NASA/JPL, 1977.

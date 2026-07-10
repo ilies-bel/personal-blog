@@ -1,10 +1,21 @@
 ---
+import { Picture } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import { SITE_TITLE } from '../consts';
+import fleetShot from '../assets/projects/fleet.png';
 
-const base = import.meta.env.BASE_URL;
-const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+// SCREENSHOT DELIVERY — same astro:assets contract as the graveyard specimens
+// (P5): AVIF/WebP + WebP fallback, sized for the figure column of the 1:1.5
+// entry-body grid (~26rem desktop, ≤36rem stacked under 58rem → 1x/2x rungs).
+// P6 migrates this page to a content collection; the image import + <Picture>
+// wiring below carries over as-is (collection schema: image() helper).
+const SCREENSHOT_WIDTHS = [432, 864, 1152];
+// Hardcoded fallback rung, NOT Math.min(fleetShot.width, …): reading any
+// property off imported image metadata marks the original as referenced and
+// ships the raw png into dist (see src/components/mdx/Img.astro).
+const SCREENSHOT_FALLBACK_WIDTH = 1152;
+const SCREENSHOT_SIZES = '(max-width: 58rem) min(100vw - 2rem, 36rem), 26rem';
 ---
 
 <BaseLayout
@@ -53,11 +64,18 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
       <div class="projects-entry-body">
         <figure class="projects-figure">
-          <img
-            src={img('projects/fleet.png')}
+          <Picture
+            src={fleetShot}
             alt="Fleet dashboard showing multiple feature branches running in parallel containers"
             class="projects-screenshot"
+            width={SCREENSHOT_FALLBACK_WIDTH}
+            widths={SCREENSHOT_WIDTHS}
+            sizes={SCREENSHOT_SIZES}
+            formats={['avif', 'webp']}
+            fallbackFormat="webp"
+            quality={70}
             loading="lazy"
+            decoding="async"
           />
           <figcaption>Fleet: parallel branch preview dashboard</figcaption>
         </figure>

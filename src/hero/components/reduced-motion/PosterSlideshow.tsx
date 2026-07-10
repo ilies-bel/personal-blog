@@ -58,6 +58,11 @@ export default function PosterSlideshow({ progress, base }: PosterSlideshowProps
           src={resolveHref(base, poster.src)}
           alt={poster.alt}
           style={{ opacity: opacityFor(index, progress) }}
+          // Intrinsic dimensions of the capture files (all four posters are
+          // 1920×1080) — the layout is fixed/cover so these never size the box,
+          // but the sitewide contract (P5) is that every <img> declares them.
+          width={1920}
+          height={1080}
           draggable={false}
           decoding="async"
           // The first poster is the opening frame, so load it eagerly; the rest are

@@ -49,6 +49,12 @@ jobs:
       - name: Asset size gate
         run: node scripts/check-asset-sizes.mjs dist
 
+      - name: Public raster optimization gate
+        # Fails if a raster committed to public/ would shrink >10% under the
+        # optimizer — i.e. someone bypassed the image pipeline. Fix locally:
+        # `node scripts/optimize-public-images.mjs` and commit the result.
+        run: node scripts/optimize-public-images.mjs --check
+
       - name: Figure capture staleness gate
         run: node scripts/check-figure-staleness.mjs
 
