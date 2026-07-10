@@ -172,3 +172,44 @@ test('dev-blueprint — absent from production build (HTTP 404)', async ({ page 
     '/dev-blueprint must not exist in the production build'
   ).toBe(404)
 })
+
+// ---------------------------------------------------------------------------
+// ENG-002: Icon and resource URL resolution on nested routes
+//
+// When the site is served from a subpath (e.g. /personal-blog/) or from the
+// domain root (/), icon hrefs must never be protocol-relative (//favicon.svg).
+// A protocol-relative URL on a file: origin or a custom-domain deploy resolves
+// to the wrong host and produces a 404.
+//
+// We exercise a nested post route (/posts/<slug>) because relative URLs that
+// would work from / break when the depth increases — the browser would resolve
+// favicon.svg against /posts/ instead of the site root.
+// ---------------------------------------------------------------------------
+
+test('nested post route — icon hrefs are root-relative, not protocol-relative (ENG-002)', async ({ page }) => {
+  const { failedRequests } = attachMonitor(page)
+
+  await page.goto('/posts/memory-leak-search-and-destroy')
+
+  // Read raw href attributes (not browser-resolved .href property) so we catch
+  // protocol-relative strings like "//favicon.svg" before the browser "fixes" them.
+  const iconHrefs = await page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')
+    ).map(el => el.getAttribute('href') ?? '')
+  )
+
+  expect(iconHrefs.length, 'Expected at least one icon <link> element').toBeGreaterThan(0)
+
+  for (const href of iconHrefs) {
+    expect(
+      href,
+      `Icon href "${href}" is protocol-relative — must start with / not //`
+    ).not.toMatch(/^\/\//)
+  }
+
+  expect(
+    failedRequests,
+    `Network request failures detected on nested post route`
+  ).toHaveLength(0)
+})
