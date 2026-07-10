@@ -23,3 +23,4 @@
 @import './about.css';    /* the about overlay panel */
 @import './contact.css';  /* the contact transmission page */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */
+@import './a11y.css';      /* accessibility hardening overrides (P8): coarse-pointer 44px targets + forced-colors — LAST so its targeted overrides win the cascade */

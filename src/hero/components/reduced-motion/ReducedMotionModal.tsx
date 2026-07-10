@@ -12,8 +12,12 @@
 //     OS users understand the lighter view and can opt into the full hero.
 //
 // Accessibility: role="dialog" aria-modal, a focus trap, Escape cancels, backdrop
-// click cancels (the safe / no-change option), and a visible focus ring. The modal is
-// itself reduced-motion-friendly — a simple opacity fade, no transform-heavy motion.
+// click cancels (the safe / no-change option), a visible focus ring, and the
+// BACKGROUND page is made `inert` while the dialog is up (every <body> child that
+// doesn't contain the dialog — so the corner nav, skip link, scene chrome and page
+// content are unreachable by Tab, click AND assistive-tech navigation, matching
+// what aria-modal announces). The modal is itself reduced-motion-friendly — a
+// simple opacity fade, no transform-heavy motion.
 import { useEffect, useRef } from 'react';
 
 export type ReducedMotionModalMode = 'confirm' | 'explain';
@@ -63,6 +67,29 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
   // the modal is self-contained — the parent only owns its open/closed state.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // INERT BACKGROUND (P8): while the dialog is up, everything OUTSIDE its own
+    // ancestor chain is made inert — removed from the tab order, hit-testing and
+    // the accessibility tree — so the "modal" the ARIA claims is real. The dialog
+    // lives deep inside the hero island's subtree, so a body-children sweep alone
+    // would leave the island's own chrome (identity, HUD, markers) live; instead
+    // we walk UP from the backdrop to <body>, inerting every element sibling at
+    // each level (the classic make-inert-outside). Only the elements WE inerted
+    // are restored on close (a pre-existing inert attribute is left as found).
+    const backdropEl = dialogRef.current?.closest('.bh-rm-modal-backdrop') ?? dialogRef.current;
+    const inerted: HTMLElement[] = [];
+    for (
+      let node: HTMLElement | null = backdropEl as HTMLElement | null;
+      node && node !== document.body && node.parentElement;
+      node = node.parentElement
+    ) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue;
+        sibling.inert = true;
+        inerted.push(sibling);
+      }
+    }
+
     confirmRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -93,7 +120,9 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      // Restore focus to whatever opened the modal (the corner toggle) on close.
+      // Un-inert the background FIRST (an inert ancestor would swallow the focus
+      // restore), then hand focus back to whatever opened the modal (the toggle).
+      for (const el of inerted) el.inert = false;
       previouslyFocused?.focus?.();
     };
   }, [onCancel]);

@@ -451,6 +451,34 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
       });
     </script>
 
+    {/* FOCUS AFTER SPA NAVIGATION (P8) — Astro's ClientRouter announces the new
+        route to assistive tech but leaves keyboard focus wherever the old page
+        put it (usually <body> after the swap destroys the focused node), so a
+        keyboard user's next Tab starts from nowhere. On every astro:page-load
+        AFTER the initial hard load, move focus to the swapped-in #main-content
+        (tabindex="-1" so it's programmatically focusable without joining the tab
+        order; preventScroll so the scroll restoration/anchor position is never
+        disturbed). Programmatic focus on a non-interactive target doesn't match
+        :focus-visible's heuristics, so mouse navigations never flash a ring —
+        and the global focus ring only styles interactive elements anyway.
+        Bundled module: executes once, the listener survives every swap. */}
+    <script>
+      let firstPageLoad = true;
+      document.addEventListener('astro:page-load', () => {
+        if (window.self !== window.top) return; // dev pre-load iframe — not a nav
+        if (firstPageLoad) {
+          // Initial hard load: the browser's own focus handling (URL fragment /
+          // sequential start-of-document) is correct — don't fight it.
+          firstPageLoad = false;
+          return;
+        }
+        const main = document.getElementById('main-content');
+        if (!main) return;
+        if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+        main.focus({ preventScroll: true });
+      });
+    </script>
+
     {/* NAVIGATION CHOREOGRAPHY ARBITER — one before-swap hook that decides which
         motion system owns each ClientRouter navigation (see transitions.css):
           • Every SPA nav stamps html[data-astro-nav] onto the INCOMING document

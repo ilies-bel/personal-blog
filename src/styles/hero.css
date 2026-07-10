@@ -697,11 +697,18 @@ body.bare .overlay-blog {
 body.bare .bh-identity {
   transform-origin: top left;
   transform: scale(0.82);
-  opacity: 0.52;
+  /* P8 contrast fix: the resting whisper used to come from a 0.52 whole-element
+     opacity, which multiplied the role line down to ~2.2:1 (axe, measured over
+     the loader's solid ground) — under the AA floor for an interactive link.
+     The quiet-at-rest look now comes from dimmer COLOR rungs instead (below):
+     name drops to --fg-dim (9.9:1), the role keeps --fg-faint (5.5:1) — still
+     clearly a standby state next to the powered cool-bone treatment. */
+  opacity: 1;
   transition:
     transform 0.6s var(--ease-out-quint),
     opacity 0.5s var(--ease-out-quint);
 }
+body.bare:not(.hud-active) .bh-identity .bh-identity-name { color: var(--fg-dim); }
 body.bare.hud-active .bh-identity { transform: scale(1.18); opacity: 1; }
 /* At the black hole the name brightens to full presence — but keep the cool overlay
    bone (it still floats on the live scene), just at full strength. */
@@ -821,6 +828,44 @@ body.scene-ready.at-opening .bh-focus-dot {
   mask-composite: intersect;
 }
 
+/* STATE-AWARE SCRIM (P8): a SECOND, deeper text pool that fades in only while
+   the chrome sits over a BRIGHT lifecycle zone — HeroIsland stamps
+   .bh-root[data-zone='bright'] across the supernova whiteout flash and the
+   yellow-star hold (the same beats that flip the HUD tokens dark). The manifesto
+   keeps its cool-bone --fg-overlay on those frames, so the base ::before pool
+   (α 0.46 at core) alone can't hold 4.5:1 against the near-white photosphere;
+   stacked with this booster (α 0.78 core → combined transmittance ≈ 0.12) the
+   effective ground under the headline stays dark enough for AA even at the
+   star's brightest. Same geometry + edge-feather mask as the base pool so the
+   two read as ONE region deepening, never a second box; opacity-only transition
+   so the flip eases exactly like the token swap (0.45s, same curve). */
+.bh-beat::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: -1.5rem -2.5rem -2rem -2.5rem;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 130% at 18% 70%,
+      rgba(0, 0, 0, 0.78) 0%,
+      rgba(0, 0, 0, 0.58) 42%,
+      rgba(0, 0, 0, 0.26) 68%,
+      transparent 100%);
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(90deg, transparent 0, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  mask-composite: intersect;
+  opacity: 0;
+  transition: opacity 0.45s var(--ease-out-quint);
+}
+.bh-root[data-zone='bright'] .bh-beat::after {
+  opacity: 1;
+}
+
 /* Big line: one line per beat, always shown at full bone (no direction swap).
    z-index lifts it (and the whisper) above the local .bh-beat::before scrim. */
 .bh-beat-big {
@@ -934,7 +979,8 @@ body.scene-ready.at-opening .bh-focus-dot {
      ABOVE it, so the clearance is compass-sized, not cosmetic. */
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(5.75rem, 11vh, 8rem));
 }
-.bh-beat.bh-beat--finale::before {
+.bh-beat.bh-beat--finale::before,
+.bh-beat.bh-beat--finale::after {
   display: none;
 }
 .bh-beat--finale .bh-beat-whisper {
@@ -1073,7 +1119,9 @@ body.scene-ready.at-opening .bh-focus-dot {
   color: var(--fg-overlay);
 }
 .bh-finale-ledger-row:focus-visible {
-  outline: 1px solid var(--accent);
+  /* 2px — the sitewide focus grammar (base.css double ring); 1px vanished
+     against the starfield at typical DPRs. */
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 /* REPLAY (P7) — the ledger's one non-navigation row is a real <button>, so the

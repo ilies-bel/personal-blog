@@ -1659,7 +1659,9 @@ body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marke
 /* Focus ring: keyboard focus also engages the locked state (see component:
    onFocus sets focusedRef → rAF loop locks). The reticle box gets the ring. */
 .star-marker:focus-visible {
-  outline: 1px solid var(--marker-gold);
+  /* 2px + the near-black halo (base.css double-ring grammar): the marker floats
+     over ANY scene brightness, so the gold ring alone isn't guaranteed to read. */
+  outline: 2px solid var(--marker-gold);
   outline-offset: 0.35rem;
   border-radius: var(--radius-sm);
 }

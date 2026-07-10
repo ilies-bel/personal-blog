@@ -88,7 +88,10 @@
   font-size: var(--text-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--hud-rail-dim);
+  /* P8 contrast fix: --hud-rail-dim is a FILLS/decoration-only token (2.6:1 vs
+     --bg — see tokens.css) and this is REAL readout text; the interactive-text
+     rung (--hud-rail-dim-text, 6.5:1) is the correct dim-text token. */
+  color: var(--hud-rail-dim-text);
 }
 /* Bright-zone parity with the hero: when the article's scene window scrubs through a
    bright beat (supernova flash / yellow star), flip the readout to a dark graphite

@@ -1,0 +1,211 @@
+/* a11y.css — the sitewide accessibility hardening layer (P8, WCAG 2.2 AA).
+   Imported LAST by global.css on purpose: everything here is a targeted override
+   of a component's ergonomics — coarse-pointer target sizes and forced-colors
+   fallbacks — and must win the cascade over the per-concern partials without
+   specificity games. Two sections:
+
+     1. COARSE-POINTER TARGETS — every interactive control reaches a ≥44×44px
+        CSS-pixel box on touch devices (WCAG 2.5.8 at the AAA-grade 44px bar the
+        program adopted), grown via padding/min-height only — type sizes are
+        never touched. Fine-pointer (mouse) layouts keep today's compact chrome.
+        Enforced by e2e/targets.spec.ts at 390×844 with touch emulation.
+
+     2. FORCED COLORS — @media (forced-colors: active) fallbacks: real borders
+        where a glow/box-shadow/backdrop carried the boundary, and opaque Canvas
+        backing under text that floats over the WebGL canvas (which forced-colors
+        does NOT repaint — CanvasText over an arbitrary rendered frame could be
+        invisible in either theme polarity). Enforced by e2e/forced-colors.spec.ts. */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1. COARSE-POINTER TARGET SIZES (≥44×44 CSS px)
+   ──────────────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  /* Circular corner controls (power, scene toggle, reduced-motion toggle — the
+     motion toggle reuses .overlay-blog-power). The ring grows 33.6 → 44px; the
+     glyph keeps its size (scene.css), so it reads as the same instrument. */
+  .overlay-blog-power,
+  .scene-toggle {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  /* The fixed-position fallback slot for the motion toggle offsets itself by the
+     power button's width — keep the pair from overlapping at the grown size. */
+  .bh-root > .overlay-blog-motion {
+    right: calc(clamp(1rem, 4vw, 3rem) + 2.75rem + 0.6rem);
+  }
+
+  /* Hero corner nav: section labels + social glyphs (scene.css pads them for the
+     target-lock frame; here the padding grows the tap box to ≥44px tall — the
+     label is cap-trimmed (text-box-trim) to ~9px, so the block padding carries
+     nearly the whole height). */
+  .overlay-blog-section {
+    padding: 1.15rem 0.5rem;
+  }
+  .overlay-blog-social {
+    padding: 0.75rem;
+  }
+
+  /* Brand lockups (name + role stack) are links. The reading-page header and
+     the About overlay use the raw lockup (~40px); the home hero's .bh-identity
+     additionally rests SCALED to 0.82, so its padding is sized for the scaled
+     rect (57px × 0.82 ≈ 47px). Negative margins return the grown box to the
+     original visual position, so the fixed/flex layouts don't shift. */
+  .overlay-brand.bh-identity-lockup,
+  .subnav-brand.bh-identity-lockup {
+    padding: 0.3rem 0.35rem;
+    margin: -0.3rem -0.35rem;
+  }
+  body.bare .bh-identity {
+    padding: 0.55rem 0.4rem;
+    margin: -0.55rem -0.4rem;
+  }
+
+  /* Reading-rail nav (chrome.css .subnav): same grammar, same growth. */
+  .subnav-link {
+    padding-block: 1rem;
+  }
+  .subnav-link.subnav-social {
+    padding: 0.75rem;
+  }
+
+  /* Footer links: 11px mono labels → grow the box, pull the growth back out of
+     the row with negative margins so the footer's visual rhythm is unchanged
+     (the 1.6rem link gap comfortably absorbs the ±0.4rem horizontal bleed). */
+  .site-footer-links a {
+    display: inline-block;
+    padding: 0.85rem 0.4rem;
+    margin: -0.85rem -0.4rem;
+  }
+
+  /* Finale ledger rows (hero.css): label rows compress on phones — pin a real
+     minimum and centre so the grown box stays symmetric around the text. */
+  .bh-finale-ledger-row {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  /* Compact HUD strip (≤60rem in hud.css): the five scene buttons rest at
+     2.45×2.55rem — grow both axes past 44px. The expanded (hover/focus) width
+     rules in hud.css still win when they apply (wider than this minimum). */
+  @media (max-width: 60rem) {
+    .hud-nav-button {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+    body.hud-active .hud-nav-button {
+      width: 2.75rem;
+    }
+  }
+
+  /* Instrument buttons on the reading pages (FpsMeter benchmark, SceneFigure
+     "Run live", the MDX demo/readout buttons, modal actions): UA buttons centre
+     their content, so a min-height alone grows the box without moving the label. */
+  body.behind-the-build .fps-meter-button,
+  .scene-figure-run,
+  .islands-demo-button,
+  .signals-readout-button,
+  .bh-rm-modal-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Shader-source drawers (<details>/<summary>, behind-the-build.css). */
+  body.behind-the-build .btb-shader-source > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* Small text-link affordances: centre the text in a ≥44px box. */
+  .article-back,
+  .article-next-all,
+  .projects-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* Contact "elsewhere" links carry their underline as a border-bottom, which
+     would sink to the bottom of a grown box — swap it for a text-decoration
+     underline (same 1px weight, same offset) on touch so the box can grow while
+     the line stays under the words. */
+  .contact-elsewhere-list a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    border-bottom: 0;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+    text-decoration-color: color-mix(in oklch, var(--accent) 40%, transparent);
+  }
+  .contact-elsewhere-list a:hover {
+    text-decoration-color: var(--fg);
+  }
+  /* About-panel contact list + the 404 destination list + the graveyard entry
+     out-links share the pattern (min-width too — "Email" is narrower than 44). */
+  .about-contact-list a,
+  .notfound-links a,
+  .graveyard-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Skip link (visible on focus): make the revealed pill itself ≥44px. */
+  .skip-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* No-JS static edition nav (visible only without JS, but touch is touch). */
+  .static-edition-nav a {
+    padding-block: 0.85rem;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2. FORCED COLORS (Windows High Contrast / forced-colors: active)
+   ──────────────────────────────────────────────────────────────────────────── */
+@media (forced-colors: active) {
+  /* Controls whose boundary is carried by a glow, box-shadow, backdrop blur or
+     background tint — all stripped in forced-colors — get a real border (color
+     resolves to the theme's ButtonText/CanvasText automatically). */
+  .overlay-blog-power,
+  .scene-toggle,
+  .scene-loader-skip,
+  .bh-rm-modal-btn,
+  body.behind-the-build .fps-meter-button,
+  .scene-figure-run,
+  .islands-demo-button,
+  .signals-readout-button,
+  .skip-link,
+  .hud-nav-button,
+  .star-marker,
+  .contact-cta,
+  .writing-row,
+  .bh-finale-ledger-row {
+    border: 1px solid;
+  }
+
+  /* Text that floats over the WebGL canvas / poster slideshow: forced-colors
+     repaints the TEXT to CanvasText but leaves the canvas frame as rendered, so
+     over a bright star the theme's light-on-dark text (or a dark theme's text
+     over the void) can vanish. Back every floating text surface with the theme's
+     own opaque Canvas so CanvasText-on-Canvas contrast is guaranteed. */
+  .bh-beat-line,
+  .bh-beat-whisper,
+  .bh-identity-name,
+  .bh-identity-role,
+  .overlay-blog-label,
+  .hud-nav-copy,
+  .hud-nav-mobile-readout,
+  .hud-compass-read,
+  .bh-finale-ledger-label,
+  .bh-finale-ledger-note,
+  .star-marker-card,
+  .webgl-fallback {
+    background-color: Canvas;
+  }
+}

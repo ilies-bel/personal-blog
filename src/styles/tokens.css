@@ -34,7 +34,12 @@
      improves (was pinned at 4.5:1). These two are INTERACTIVE-text-only tokens —
      decorative fills keep --hud-rail-dim above. */
   --hud-rail-dim-text: oklch(0.66 0.012 78); /* resting nav number/title text */
-  --hud-rail-dim-sub: oklch(0.43 0.012 78); /* dimmest non-current subtext */
+  /* -sub RAISED again for P8 (0.43 → 0.575): the dimmest rung still LABELS real
+     nav subtext (.hud-nav-destination on non-current rows), and 0.43 measured
+     2.48:1 against --bg — under the WCAG AA 4.5:1 floor test/contrast.test.mjs
+     now enforces. 0.575 is the minimal lightness that clears it (4.60:1) while
+     staying plainly the dimmest text rung (dim-text 0.66, current row 0.92). */
+  --hud-rail-dim-sub: oklch(0.575 0.012 78); /* dimmest non-current subtext */
   /* INTERACTIVE HUD resting foreground — the interaction layer's answer to
      --fg-faint. The compass idle readout, the arc gauge's station digits/label
      caption and other CLICKABLE/actionable HUD text rest here (~15-20% brighter
@@ -70,6 +75,17 @@
   --highlight: oklch(0.78 0.085 72);    /* white-hot gold, rare readout signal */
   --ember: oklch(0.58 0.08 48);         /* red-giant residue, surface wash only */
   --link: var(--accent);
+
+  /* FOCUS RING PAIR (P8) — the sitewide keyboard-focus treatment is a DOUBLE
+     RING: a 2px --focus-ring outline (offset 2px) over a 2px --focus-halo
+     box-shadow that fills the offset gap. The gold ring carries focus on the
+     dark room; the near-black halo separates the ring from BRIGHT grounds (the
+     supernova whiteout, the yellow star, gold button fills), so the indicator
+     reads on any surface the scene can produce. Consumed by base.css's global
+     :focus-visible rule; inside .bh-root[data-zone='bright'] the ring rides the
+     flipped dark --accent automatically (a dark ring on the bleached canvas). */
+  --focus-ring: var(--accent);
+  --focus-halo: oklch(0.13 0.008 80 / 0.92);
 
   /* HUD text-shadow tint — the inner legibility halo behind the floating HUD/manifesto
      text. Defaults to neutral black; the per-scene blocks (hero.css [data-scene]) can
