@@ -12,7 +12,7 @@ identity-role,.bh-identity-role,/,Black Hole,1440x900,text,small,11,"rgb(198,203
 manifesto-headline,.bh-beat-line,/,Black Hole,1440x900,heading,large,64,"rgb(223,229,236)","rgb(14,16,20)",15.01,3.0,PASS,N/A,N/A,N/A
 manifesto-whisper,.bh-beat-whisper,/,Black Hole,1440x900,text,body,14,"rgb(223,229,236)","rgb(4,5,7)",16.08,4.5,PASS,N/A,N/A,N/A
 scene-nav-label,.overlay-blog-label,/,Black Hole,1440x900,text,small,13,"rgb(150,145,138)","rgb(22,24,27)",5.69,4.5,PASS,N/A,N/A,N/A
-scene-nav-link,.overlay-blog-link,/,Black Hole,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(22,23,28)",5.72,4.5,PASS,49,44,PASS
+scene-nav-link,.overlay-blog-link,/,Black Hole,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(22,24,28)",5.68,4.5,PASS,49,44,PASS
 hud-power-btn,.overlay-blog-power,/,Black Hole,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(9,9,9)",9.82,3.0,PASS,44,44,PASS
 compass-label,.hud-compass-label,/,Black Hole,1440x900,text,small,17,"rgb(178,170,157)","rgb(37,36,37)",6.72,4.5,PASS,N/A,N/A,N/A
 identity-name,.bh-identity-name,/,Red Giant,1440x900,text,large,20,"rgb(223,229,236)","rgb(47,43,38)",11.08,3.0,PASS,N/A,N/A,N/A
@@ -20,7 +20,7 @@ identity-role,.bh-identity-role,/,Red Giant,1440x900,text,small,11,"rgb(198,203,
 manifesto-headline,.bh-beat-line,/,Red Giant,1440x900,heading,large,64,"rgb(223,229,236)","rgb(53,40,26)",11.26,3.0,PASS,N/A,N/A,N/A
 manifesto-whisper,.bh-beat-whisper,/,Red Giant,1440x900,text,body,14,"rgb(223,229,236)","rgb(14,10,5)",15.56,4.5,PASS,N/A,N/A,N/A
 scene-nav-label,.overlay-blog-label,/,Red Giant,1440x900,text,small,13,"rgb(150,145,138)","rgb(45,35,24)",4.92,4.5,PASS,N/A,N/A,N/A
-scene-nav-link,.overlay-blog-link,/,Red Giant,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(45,36,23)",4.88,4.5,PASS,49,44,PASS
+scene-nav-link,.overlay-blog-link,/,Red Giant,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(45,36,24)",4.88,4.5,PASS,49,44,PASS
 hud-power-btn,.overlay-blog-power,/,Red Giant,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(15,12,7)",9.62,3.0,PASS,44,44,PASS
 compass-label,.hud-compass-label,/,Red Giant,1440x900,text,small,17,"rgb(178,170,157)","rgb(53,46,37)",5.82,4.5,PASS,N/A,N/A,N/A
 identity-name,.bh-identity-name,/,Yellow Star,1440x900,text,large,20,"rgb(223,229,236)","rgb(29,30,31)",13.16,3.0,PASS,N/A,N/A,N/A
@@ -33,12 +33,12 @@ hud-power-btn,.overlay-blog-power,/,Yellow Star,1440x900,button,n/a,13,"rgb(189,
 compass-label,.hud-compass-label,/,Yellow Star,1440x900,text,small,17,"rgb(216,200,176)","rgb(4,4,4)",12.50,4.5,PASS,N/A,N/A,N/A
 identity-name,.bh-identity-name,/,Nebula,1440x900,text,large,20,"rgb(223,229,236)","rgb(29,30,31)",13.16,3.0,PASS,N/A,N/A,N/A
 identity-role,.bh-identity-role,/,Nebula,1440x900,text,small,11,"rgb(198,203,209)","rgb(68,70,72)",5.81,4.5,PASS,N/A,N/A,N/A
-manifesto-headline,.bh-beat-line,/,Nebula,1440x900,heading,large,64,"rgb(223,229,236)","rgb(18,19,23)",14.64,3.0,PASS,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Nebula,1440x900,heading,large,64,"rgb(223,229,236)","rgb(16,17,21)",14.88,3.0,PASS,N/A,N/A,N/A
 manifesto-whisper,.bh-beat-whisper,/,Nebula,1440x900,text,body,14,"rgb(223,229,236)","rgb(1,1,1)",16.46,4.5,PASS,N/A,N/A,N/A
-scene-nav-label,.overlay-blog-label,/,Nebula,1440x900,text,small,13,"rgb(150,145,138)","rgb(15,15,18)",6.12,4.5,PASS,N/A,N/A,N/A
-scene-nav-link,.overlay-blog-link,/,Nebula,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(15,15,18)",6.12,4.5,PASS,49,44,PASS
+scene-nav-label,.overlay-blog-label,/,Nebula,1440x900,text,small,13,"rgb(150,145,138)","rgb(15,15,17)",6.12,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Nebula,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(15,15,17)",6.12,4.5,PASS,49,44,PASS
 hud-power-btn,.overlay-blog-power,/,Nebula,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(6,6,5)",9.99,3.0,PASS,44,44,PASS
-compass-label,.hud-compass-label,/,Nebula,1440x900,text,small,17,"rgb(216,200,176)","rgb(4,4,6)",12.49,4.5,PASS,N/A,N/A,N/A
+compass-label,.hud-compass-label,/,Nebula,1440x900,text,small,17,"rgb(216,200,176)","rgb(3,4,5)",12.52,4.5,PASS,N/A,N/A,N/A
 identity-name,.bh-identity-name,/,Pale Blue Dot,1440x900,text,large,20,"rgb(223,229,236)","rgb(30,32,34)",12.89,3.0,PASS,N/A,N/A,N/A
 identity-role,.bh-identity-role,/,Pale Blue Dot,1440x900,text,small,11,"rgb(198,203,209)","rgb(69,71,74)",5.71,4.5,PASS,N/A,N/A,N/A
 manifesto-headline,.bh-beat-line,/,Pale Blue Dot,1440x900,heading,large,64,"rgb(223,229,236)","rgb(3,4,6)",16.17,3.0,PASS,N/A,N/A,N/A
@@ -78,7 +78,7 @@ subnav-link,.subnav-link,/behind-the-build/,n/a,1440x900,interactive,small,13,"r
 subnav-label,.subnav-label,/behind-the-build/,n/a,1440x900,text,small,13,"rgb(198,203,209)","rgb(8,7,5)",12.33,4.5,PASS,N/A,N/A,N/A
 page-button,button,/behind-the-build/,n/a,1440x900,button,n/a,13,"rgb(198,203,209)","rgb(9,7,5)",12.32,3.0,PASS,44,44,PASS
 scene-nav-link,.overlay-blog-link,/,Black Hole,375x812,interactive,small,17,"rgb(150,145,138)","rgb(16,13,12)",6.19,4.5,PASS,94,44,PASS
-hud-nav-btn,.hud-nav-button,/,Black Hole,375x812,interactive,small,17,"rgb(223,229,236)","rgb(21,20,19)",14.51,4.5,PASS,44,44,PASS
+hud-nav-btn,.hud-nav-button,/,Black Hole,375x812,interactive,small,17,"rgb(223,229,236)","rgb(21,21,20)",14.41,4.5,PASS,44,44,PASS
 subnav-link,.subnav-link,/writing/,n/a,375x812,interactive,small,13,"rgb(198,203,209)","rgb(18,17,15)",11.56,4.5,PASS,61,44,PASS
 page-button,button,/writing/,n/a,375x812,button,n/a,13,"rgb(198,203,209)","rgb(13,11,9)",12.03,3.0,PASS,44,44,PASS
 page-button,button,/about/,n/a,375x812,button,n/a,13,"rgb(198,203,209)","rgb(5,4,3)",12.55,3.0,PASS,44,44,PASS
