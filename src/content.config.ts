@@ -106,6 +106,13 @@ const projects = defineCollection({
       src: z.string().optional(), // relative to /public (screenshot only)
       alt: z.string(),
       caption: z.string(),
+      // Intrinsic pixel dimensions of the screenshot (PERF-005 / CLS gate).
+      // Supplied on <img> so the browser reserves the 16:9-ish box before the
+      // file decodes; CSS (.projects-screenshot { width:100%; height:auto })
+      // scales it responsively while the ratio is held pre-load. Optional so
+      // the topology-svg figure (no raster) need not carry them.
+      width: z.number().optional(),
+      height: z.number().optional(),
     }),
 
     // Body copy and optional proof/note callout

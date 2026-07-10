@@ -17,7 +17,9 @@
   "figure": {
     "src": "projects/fleet.png",
     "alt": "Fleet dashboard showing multiple feature branches running in parallel containers",
-    "caption": "Fleet: parallel branch preview dashboard"
+    "caption": "Fleet: parallel branch preview dashboard",
+    "width": 1440,
+    "height": 900
   },
   "body": [
     "An open-source tool that runs every feature branch of your app at the same time on localhost, each in its own container behind a gateway. One dashboard to spin them up, tail logs, preview the running app, diff UI states, and leave QA notes per feature. It auto-detects the stack and manages multiple repos through git worktrees.",

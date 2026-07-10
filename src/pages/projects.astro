@@ -287,6 +287,8 @@ const projects = (await getCollection('projects')).sort(
                 alt={project.data.figure.alt}
                 class="projects-screenshot"
                 loading="lazy"
+                width={project.data.figure.width}
+                height={project.data.figure.height}
               />
             )}
             <figcaption>{project.data.figure.caption}</figcaption>
