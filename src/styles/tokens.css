@@ -146,6 +146,12 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Motion verb easing — shared physics grammar (EXP-037).
+     The house curve --ease-out-quint is the default for all verbs; the peel
+     verb uses a spec-mandated override (slower start, sharp settle) that
+     reinforces the geological cross-section reading direction. */
+  --ease-verb-peel: cubic-bezier(0.2, 0, 0.1, 1); /* BtB peel: spec-mandated */
+
   /* Transition duration tokens — navigation and interaction choreography.
      SINGLE CSS SOURCE OF TRUTH. Every other stylesheet must read from these;
      no stylesheet may hard-code its own duration literal for a named transition.
@@ -172,6 +178,28 @@
   --transition-dur-rise: 0.45s;             /* vt-rise incoming (450ms) */
   --transition-dur-page-enter: 0.6s;        /* hard-load hero block (600ms) */
   --transition-dur-page-enter-rows: 0.5s;   /* hard-load row stagger (500ms) */
+
+  /* Verb INTERACTION duration tokens — all <= 700ms (destination-transition cap).
+     CSS mirrors for VERB_*_MS constants in src/lib/transitionDurations.ts.
+     Any change here must be reflected in transitionDurations.ts, and vice versa.
+     Governance: docs/specs/transition-contract.md §Duration token rule. */
+  --verb-dur-arc: 0.35s;              /* Projects arc hover (350ms) */
+  --verb-dur-coalesce-pull: 0.3s;     /* Writing coalesce sibling pull (300ms) */
+  --verb-dur-contract: 0.2s;          /* Graveyard contract hover (200ms) */
+  --verb-dur-peel: 0.35s;             /* Behind the Build peel hover (350ms) */
+  --verb-dur-settle-hover: 0.25s;     /* About settle hover brightening (250ms) */
+  --verb-dur-transmit-ripple: 0.4s;   /* Contact transmit field ripple (400ms) */
+  --verb-dur-transmit-shift: 0.3s;    /* Contact transmit submit shift (300ms) */
+
+  /* Verb ENTRANCE duration tokens — exempt from cap (content pre-rendered).
+     Not in DESTINATION_TOKENS; the unit test does not enforce the cap here.
+     Mirrors: VERB_*_ENTRY_MS constants in src/lib/transitionDurations.ts. */
+  --verb-dur-arc-entry: 0.5s;         /* Projects stagger arc entry (500ms) */
+  --verb-dur-coalesce-entry: 0.6s;    /* Writing coalesce page-entry drift (600ms) */
+  --verb-dur-contract-entry: 0.9s;    /* Graveyard contract fade per specimen (900ms) */
+  --verb-dur-peel-entry: 0.45s;       /* Behind the Build peel stagger slide (450ms) */
+  --verb-dur-settle-entry: 0.7s;      /* About settle page entry (700ms) */
+  --verb-dur-transmit-entry: 0.5s;    /* Contact transmit convergence entry (500ms) */
 
   /* Boot-to-HUD intro glide timing — the SINGLE source for the readout's downward
      travel from loader-centre to the bottom HUD slot, shared by hud.css (the glide

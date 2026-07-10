@@ -23,4 +23,5 @@
 @import './about.css';    /* the about overlay panel */
 @import './route-materials.css'; /* EXP-035: named material tokens + visual rules scoped per route body class */
 @import './route-typography.css'; /* EXP-036: per-route typographic rhythm tokens (scale, leading, measure, density) */
-@import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */
+@import './transitions.css'; /* SPA view-transitions + entrance choreography */
+@import './motion-verbs.css'; /* EXP-037: named route motion verbs + shared physics grammar (last — overrides generic page-enter per route) */

@@ -37,22 +37,24 @@ body.graveyard-page .wrap {
   opacity: 0.55;
 }
 
-/* SCROLL REVEAL — entries fade + rise into place as they enter the spy window.
-   The script in graveyard.astro toggles [data-revealed] on each entry; the
-   transform/opacity transition is on this attribute. Reduced motion gates the
-   transition off (rules in @media block at the bottom) and ships the entries in
-   place instantly — the IntersectionObserver still runs to keep the HUD
-   accurate. The token --ease-out-quint is the project's standard ease. */
+/* SCROLL REVEAL — entries cool into visibility as they enter the spy window.
+   The contract verb (EXP-037): specimens appear as if cooling from black —
+   a pure opacity fade, no slide, no bounce (route-physical-laws.md §Graveyard).
+   The script in graveyard.astro toggles [data-revealed] on each entry via
+   IntersectionObserver, providing the 120ms natural stagger as entries enter
+   the viewport sequentially.
+   Duration: --verb-dur-contract-entry (900ms, tokens.css).
+   Hover contract transition is also listed here so one declaration covers both
+   interactions without cascade conflicts with motion-verbs.css.
+   Reduced motion gates everything off (rules in @media block at the bottom). */
 .graveyard-entry {
   opacity: 0;
-  transform: translateY(14px);
   transition:
-    opacity 0.7s var(--ease-out-quint),
-    transform 0.7s var(--ease-out-quint);
+    opacity var(--verb-dur-contract-entry, 0.9s) var(--ease-out-quint),
+    transform var(--verb-dur-contract, 0.2s) var(--ease-out-quint);
 }
 .graveyard-entry[data-revealed='true'] {
   opacity: 1;
-  transform: translateY(0);
 }
 
 /* NO-JS / SSR FALLBACK — the inline script sets data-revealed; without JS the
@@ -61,11 +63,10 @@ body.graveyard-page .wrap {
    ALSO honour prefers-reduced-motion below: instant in, no rise. */
 
 /* Reduced motion: ship the entries in instantly — only the visual transition is
-   gated off. */
+   gated off. The IntersectionObserver still runs to keep the HUD accurate. */
 @media (prefers-reduced-motion: reduce) {
   .graveyard-entry {
     opacity: 1;
-    transform: none;
     transition: none;
   }
 }

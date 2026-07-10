@@ -1,0 +1,392 @@
+/* Route Motion Verbs — EXP-037
+ *
+ * One named motion verb per major route, governed by one shared physics grammar.
+ *
+ * Shared grammar:
+ *   Easing   — --ease-out-quint (house curve) for all verbs except peel which
+ *              uses the spec-mandated --ease-verb-peel (slower start, sharp settle).
+ *   Duration — --verb-dur-* tokens from tokens.css (mirrors VERB_*_MS in
+ *              transitionDurations.ts). All interaction tokens <= 700ms.
+ *   Mechanism — CSS transform/opacity only; no width/height/top/left paint.
+ *              CSS transitions are inherently interruptible.
+ *
+ * Verb inventory (docs/specs/route-physical-laws.md EXP-020):
+ *   projects-page    → arc         orbital perspective tilt, leading edge first
+ *   writing-page     → coalesce    gravitational drift; siblings pull toward hover
+ *   graveyard-page   → contract    barely-perceptible inward scale (0.985)
+ *   behind-the-build → peel        layer reveals from beneath the section header
+ *   about-page       → settle      gentle downward resolution; brightening on hover
+ *   contact          → transmit    field focus ripple; outward shift on submit
+ *
+ * Every motion is:
+ *   Interruptible  — CSS transitions cancel cleanly mid-play.
+ *   Frame-budgeted — transform/opacity/filter only; compositor-friendly.
+ *   Gated          — all @keyframes and interactions live inside
+ *                     @media (prefers-reduced-motion: no-preference).
+ *   Reduced-motion — explicit calm variant in the @media reduce block below.
+ *   Static edition — composition (orbit spread, strata labels, contracted column)
+ *                    is visible without motion via route-materials.css;
+ *                    this file adds the kinetic layer only.
+ *
+ * Load order: imported AFTER transitions.css in global.css so verb entry
+ * animations correctly override the generic page-enter keyframe for each route. */
+
+/* ── 1. PROJECTS — verb: arc ─────────────────────────────────────────────────
+   Physical law: Sustained Orbit (Yellow Star). Bodies in orbit swing into
+   position; they don't snap. The card arcs in with a shallow perspective tilt —
+   the leading (left) edge moves first, then the card settles into its orbital
+   slot. The arc collapses to an instant cross-fade under reduced motion. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Arc hover: perspective tilt in-plane, leading edge forward.
+     transform-origin: center left so the right edge sweeps slightly away. */
+  .projects-entry {
+    transition:
+      transform var(--verb-dur-arc) var(--ease-out-quint),
+      box-shadow var(--verb-dur-arc) var(--ease-out-quint);
+    will-change: transform;
+    transform-origin: center left;
+  }
+  .projects-entry:hover {
+    transform: perspective(640px) rotateY(-2.5deg) translateX(3px);
+    box-shadow: -6px 0 18px color-mix(in oklch, var(--mat-accent) 18%, transparent);
+  }
+
+  /* Arc entry: cards enter from a shallow orbital angle and settle into position.
+     Stagger: 80ms per item (spec). Overrides the generic page-enter for .projects-list. */
+  html:not([data-astro-nav]) .projects-list > :nth-child(-n+6) {
+    animation: verb-arc-enter var(--verb-dur-arc-entry) var(--ease-out-quint) both;
+  }
+  html:not([data-astro-nav]) .projects-list > :nth-child(1) { animation-delay: 0s; }
+  html:not([data-astro-nav]) .projects-list > :nth-child(2) { animation-delay: 0.08s; }
+  html:not([data-astro-nav]) .projects-list > :nth-child(3) { animation-delay: 0.16s; }
+  html:not([data-astro-nav]) .projects-list > :nth-child(4) { animation-delay: 0.24s; }
+  html:not([data-astro-nav]) .projects-list > :nth-child(5) { animation-delay: 0.32s; }
+  html:not([data-astro-nav]) .projects-list > :nth-child(6) { animation-delay: 0.40s; }
+}
+
+/* Orbital focus ring: rounded path, not a rectangle. Always visible (not motion-
+   gated) so keyboard users get the ring regardless of motion preference. */
+.projects-entry:focus-within {
+  outline: 2px solid var(--mat-accent, var(--accent));
+  outline-offset: 6px;
+  border-radius: var(--radius-md);
+}
+
+@keyframes verb-arc-enter {
+  from {
+    opacity: 0;
+    /* Shallow tilt from an incoming orbital angle; leading edge arrives first. */
+    transform: perspective(500px) rotateY(3.5deg) translateX(-10px);
+  }
+}
+
+/* ── 2. WRITING — verb: coalesce ─────────────────────────────────────────────
+   Physical law: Dispersed Matter Coalescing (Nebula). Articles begin at their
+   cluster positions minus a 6px outward offset and drift inward. On hover,
+   nearby siblings shift 2px toward the hovered card — local gravitational pull
+   (max shift per spec: 4px). Opacity-only under reduced motion. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Base transition for writing rows — transform for coalesce pull + existing
+     colour transitions (background-color, border-color from writing.css). */
+  .writing-list .writing-row {
+    transition:
+      transform var(--verb-dur-coalesce-pull) var(--ease-out-quint),
+      background-color 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  /* Sibling gravitational pull: non-hovered siblings drift slightly toward
+     the hovered card. Uses :has() (Baseline 2023, all modern browsers).
+     Maximum shift: 2px vertical (4px is the spec ceiling; 2px is a calm default
+     that respects "barely perceptible" at the reading scale). */
+  .writing-list:has(.writing-row:hover) .writing-row:not(:hover) {
+    transform: translateY(2px);
+  }
+
+  /* Coalesce entry: articles drift inward from a 6px outward cluster offset.
+     Overrides generic page-enter for .writing-list rows. */
+  html:not([data-astro-nav]) .writing-list > :nth-child(-n+6) {
+    animation: verb-coalesce-enter var(--verb-dur-coalesce-entry) var(--ease-out-quint) both;
+  }
+  html:not([data-astro-nav]) .writing-list > :nth-child(1) { animation-delay: 0s; }
+  html:not([data-astro-nav]) .writing-list > :nth-child(2) { animation-delay: 0.06s; }
+  html:not([data-astro-nav]) .writing-list > :nth-child(3) { animation-delay: 0.12s; }
+  html:not([data-astro-nav]) .writing-list > :nth-child(4) { animation-delay: 0.18s; }
+  html:not([data-astro-nav]) .writing-list > :nth-child(5) { animation-delay: 0.24s; }
+  html:not([data-astro-nav]) .writing-list > :nth-child(6) { animation-delay: 0.30s; }
+}
+
+@keyframes verb-coalesce-enter {
+  from {
+    opacity: 0;
+    transform: translateX(6px); /* 6px outward from cluster center; drifts inward */
+  }
+}
+
+/* ── 3. GRAVEYARD — verb: contract ───────────────────────────────────────────
+   Physical law: Thermal Decay (White Dwarf). The cooled remnant pulls inward
+   on hover — barely perceptible, scale 0.985, the inverse of expansion.
+   The entry fade (opacity 0→1, 900ms, IO-staggered) is owned by graveyard.css
+   which declares transition: opacity + transform in one place to avoid cascade
+   conflicts. This file adds only the hover state.
+   Focus ring: 1px rectangular outline — forensic precision, no glow. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Contract hover: scale 0.985 — barely perceptible inward pull (spec). */
+  .graveyard-page .graveyard-entry:hover {
+    transform: scale(0.985);
+  }
+}
+
+/* Forensic focus ring — 1px, rectangular, no rounding, no glow. Always
+   rendered regardless of motion preference. */
+.graveyard-page .graveyard-entry:focus-within {
+  outline: 1px solid var(--mat-accent, var(--accent));
+  outline-offset: 3px;
+  border-radius: 0;
+}
+
+/* ── 4. BEHIND THE BUILD — verb: peel ────────────────────────────────────────
+   Physical law: Interior Layers Exposed (Red Giant). Sections slide in from
+   the left (cross-section reading direction) on page entry. On hover, a shader
+   panel peels slightly forward — a 3px translateX that suggests the stratum
+   lifting. Easing: --ease-verb-peel (spec-mandated: cubic-bezier(0.2, 0, 0.1, 1)).
+   Focus: bracket pair [·] anchored to the left edge — typographic, not animated. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Peel hover: shader panel peels forward; border-left warms to route accent. */
+  body.behind-the-build .btb-shader {
+    transition:
+      transform var(--verb-dur-peel) var(--ease-verb-peel),
+      border-left-color var(--verb-dur-peel) var(--ease-verb-peel);
+  }
+  body.behind-the-build .btb-shader:hover {
+    transform: translateX(3px);
+  }
+
+  /* Peel entry: layers slide in from the left, stagger 100ms per layer (spec). */
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader {
+    animation: verb-peel-enter var(--verb-dur-peel-entry) var(--ease-verb-peel) both;
+  }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader:nth-child(2) { animation-delay: 0.10s; }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader:nth-child(3) { animation-delay: 0.20s; }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader:nth-child(4) { animation-delay: 0.30s; }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader:nth-child(5) { animation-delay: 0.40s; }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader:nth-child(6) { animation-delay: 0.50s; }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader:nth-child(n+7) { animation-delay: 0.60s; }
+}
+
+@keyframes verb-peel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-12px); /* slides in from left (cross-section direction) */
+  }
+}
+
+/* Bracket focus cue — typographic, not animated; rendered regardless of motion
+   preference. A left-edge box-shadow draws [ ; the outline-offset right side
+   suggests ]. Replaces the default outline so BtB has its own cue character. */
+body.behind-the-build .btb-shader:focus-within {
+  outline: none;
+  box-shadow:
+    -3px 0 0 0 var(--mat-accent, var(--accent)),
+    inset 0 0 0 1px color-mix(in oklch, var(--mat-accent, var(--accent)) 18%, transparent);
+  border-radius: 0;
+}
+
+/* ── 5. ABOUT — verb: settle ─────────────────────────────────────────────────
+   Physical law: Scale Contraction to Human (Pale Blue Dot). The camera has
+   stopped; focus has resolved. The about-shell settles from a very slight
+   upward offset (6px) — not a dramatic rise, a gentle arrival. On hover,
+   the name/signature brightens ~12% (recognition, not expansion — no size/
+   position change). Focus: soft glow halo at 4px radius. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Settle entry: the panel drifts down 6px into its resting position (spec). */
+  html:not([data-astro-nav]) .about-page .about-shell {
+    animation: verb-settle-enter var(--verb-dur-settle-entry) var(--ease-out-quint) both;
+  }
+
+  /* Hover brightening: name and signature gain ~12% luminance (spec).
+     filter: brightness() is GPU-composited; element does not move. */
+  .about-page .about-signature-name,
+  .about-page .about-lead {
+    transition: filter var(--verb-dur-settle-hover) var(--ease-out-quint);
+  }
+  .about-page .about-signature-name:hover,
+  .about-page .about-lead:hover {
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes verb-settle-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px); /* upward offset resolves downward into rest */
+  }
+}
+
+/* Soft focus glow — 4px radius, 40% opacity (spec). Rendered regardless of
+   motion preference (glow is static, not animated). */
+.about-page :focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--mat-accent, var(--accent)) 40%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* ── 6. CONTACT — verb: transmit ─────────────────────────────────────────────
+   Physical law: Electromagnetic Propagation. Signals travel outward from a
+   point source and decay. On field focus: a ripple expands and fades (400ms,
+   60%→0% opacity). On submit: the send button shifts outward 4px. Page entry:
+   elements converge inward from 12px (signals arriving at the form center);
+   stagger 60ms per element (spec). Reduced motion collapses to opacity only. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Transmit entry: elements converge inward from slightly outside the form.
+     Stagger: 60ms per element (spec). */
+  html:not([data-astro-nav]) .contact-form > * {
+    animation: verb-transmit-enter var(--verb-dur-transmit-entry) var(--ease-out-quint) both;
+  }
+  html:not([data-astro-nav]) .contact-form > :nth-child(2) { animation-delay: 0.06s; }
+  html:not([data-astro-nav]) .contact-form > :nth-child(3) { animation-delay: 0.12s; }
+  html:not([data-astro-nav]) .contact-form > :nth-child(4) { animation-delay: 0.18s; }
+  html:not([data-astro-nav]) .contact-form > :nth-child(5) { animation-delay: 0.24s; }
+  html:not([data-astro-nav]) .contact-form > :nth-child(n+6) { animation-delay: 0.30s; }
+
+  /* Field focus ripple: a ::after pseudo-element expands and fades from the
+     focused field boundary (inverse-square opacity decay, spec). */
+  .contact-field {
+    position: relative;
+  }
+  .contact-field::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--accent);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .contact-field:focus-within::after {
+    animation: verb-transmit-ripple var(--verb-dur-transmit-ripple) var(--ease-out-quint) forwards;
+  }
+
+  /* Submit shift: the send button translates outward 4px on transmitting state (spec).
+     Content is never hidden — the shift is additive visual choreography. */
+  .contact-submit {
+    transition:
+      transform var(--verb-dur-transmit-shift) var(--ease-out-quint),
+      opacity var(--verb-dur-transmit-shift) var(--ease-out-quint);
+  }
+  .contact-submit[data-transmitting='true'] {
+    transform: translateX(4px);
+    opacity: 0.7;
+  }
+}
+
+@keyframes verb-transmit-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px); /* converge inward from right side toward form center */
+  }
+}
+
+@keyframes verb-transmit-ripple {
+  /* Expands from the field boundary; opacity decays inverse-square style. */
+  from {
+    opacity: 0.6;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+/* ── Reduced-motion calm variants ────────────────────────────────────────────
+   For every route: animations collapse to instant; transitions either collapse
+   to instant or are replaced by the reduced-motion equivalent specified in
+   docs/specs/route-physical-laws.md §[Route].Interaction — Reduced motion.
+   The CSS @media gate is the authoritative source for CSS consumers; the
+   A11Y-004 html[data-reduced-motion='true'] attribute governs JS consumers.
+   Both gates are independent and complementary. */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Projects/arc: arc collapses to instant cross-fade; orbital focus ring → static. */
+  .projects-entry {
+    transition: none;
+    will-change: auto;
+  }
+  .projects-entry:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  html:not([data-astro-nav]) .projects-list > :nth-child(-n+6) {
+    animation: none;
+  }
+
+  /* Writing/coalesce: all drift and pull collapses; entry positions are final from
+     first paint; opacity transitions are permitted (spec: "opacity transitions only"). */
+  .writing-list .writing-row {
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease;
+  }
+  .writing-list:has(.writing-row:hover) .writing-row:not(:hover) {
+    transform: none;
+  }
+  html:not([data-astro-nav]) .writing-list > :nth-child(-n+6) {
+    animation: none;
+  }
+
+  /* Graveyard/contract: hover contraction removed; transition is handled in
+     graveyard.css (transition: none already set there for prefers-reduce). */
+  .graveyard-page .graveyard-entry:hover {
+    transform: none;
+  }
+
+  /* BtB/peel: layer slide collapses to instant; peel removed; brackets remain
+     (typographic, not animated). */
+  body.behind-the-build .btb-shader {
+    transition: none;
+  }
+  body.behind-the-build .btb-shader:hover {
+    transform: none;
+  }
+  html:not([data-astro-nav]) body.behind-the-build .btb-shader {
+    animation: none;
+  }
+
+  /* About/settle: all entry motion removed; hover brightness removed; focus glow
+     rendered as static box-shadow (no transition). */
+  html:not([data-astro-nav]) .about-page .about-shell {
+    animation: none;
+  }
+  .about-page .about-signature-name,
+  .about-page .about-lead {
+    transition: none;
+    filter: none;
+  }
+  .about-page .about-signature-name:hover,
+  .about-page .about-lead:hover {
+    filter: none;
+  }
+
+  /* Contact/transmit: ripple and convergence removed; submit shift is opacity only
+     (spec: "transmit animation is an opacity change only"). */
+  html:not([data-astro-nav]) .contact-form > * {
+    animation: none;
+  }
+  .contact-field::after {
+    display: none;
+  }
+  .contact-submit {
+    transition: opacity var(--verb-dur-transmit-shift) ease;
+  }
+  .contact-submit[data-transmitting='true'] {
+    transform: none;
+    opacity: 0.7; /* opacity cross-fade only — the spec's calm transmit variant */
+  }
+}
