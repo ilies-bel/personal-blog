@@ -10,6 +10,13 @@
   /* Body sentence lands on the --text-body rung (16px) with the prose leading. */
   font-size: var(--text-body);
   line-height: var(--leading-body);
+  /* Long technical identifiers (class paths, URLs, package names) must wrap
+     inside the column rather than pushing the document wider than the viewport.
+     overflow-wrap: break-word allows an emergency break anywhere in a run when
+     no softer break opportunity exists — without splitting regular prose words
+     mid-syllable (hyphens remain off). Code blocks opt out below via
+     overflow-wrap: normal so they still scroll horizontally. */
+  overflow-wrap: break-word;
 }
 /* The article header is a page-hero in the same language as the writing index
    and About: a mono kicker (one rare gold signal), a display title at the
@@ -159,6 +166,9 @@
   overflow-x: auto;
   font-size: 0.92rem;
   line-height: 1.6;
+  /* Code blocks scroll horizontally — never wrap. Overrides the overflow-wrap:
+     break-word inherited from .prose so long lines stay intact and readable. */
+  overflow-wrap: normal;
 }
 .prose pre code {
   background: none;
