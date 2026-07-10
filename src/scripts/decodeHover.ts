@@ -21,9 +21,9 @@
 // consumer (nav labels, footer labels, back-links, contact links, HUD rail
 // titles) satisfies this.
 import { resolveMotionPreference } from '../lib/motionPreference';
+import { DECODE_HOVER_MS as DURATION_MS } from '../lib/transitionDurations';
 
 const GLYPHS = '#/\\|<>[]{}=+*%$@!?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const DURATION_MS = 300;
 
 /** Per-element churn pool. Mono labels can churn through anything (fixed
  *  advance), but display-font titles (writing rows, entry names) would jitter

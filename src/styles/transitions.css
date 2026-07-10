@@ -30,19 +30,20 @@
 @media (prefers-reduced-motion: no-preference) {
   :root::view-transition-old(root) {
     /* Outgoing content settles: a small sink + dim, quick so the incoming
-       rise owns the moment. */
-    animation: vt-settle 0.25s ease-out both;
+       rise owns the moment. Duration token: --transition-dur-settle (tokens.css). */
+    animation: vt-settle var(--transition-dur-settle) ease-out both;
   }
   :root::view-transition-new(root) {
-    /* Incoming content has mass: it rises 14px into place on the house curve. */
-    animation: vt-rise 0.45s var(--ease-out-quint) both;
+    /* Incoming content has mass: it rises 14px into place on the house curve.
+       Duration token: --transition-dur-rise (tokens.css). */
+    animation: vt-rise var(--transition-dur-rise) var(--ease-out-quint) both;
   }
   /* Shared-element groups (the post-title morph) glide on the house curve.
      Longhands only — the pinned chrome's `animation: none` (Astro's
      transition:animate="none") zeroes animation-name, so retiming the
      duration/easing here can never un-pin it. */
   :root::view-transition-group(*) {
-    animation-duration: 0.45s;
+    animation-duration: var(--transition-dur-rise);
     animation-timing-function: var(--ease-out-quint);
   }
 }
@@ -81,9 +82,12 @@
    zero animation-delay, and a delayed `both` fill would hold content hidden). */
 @media (prefers-reduced-motion: no-preference) {
   /* Page-hero block (kicker, h1, lead) + the article header: rise with a
-     slight stagger. The whole reveal stays under ~0.8s. */
+     slight stagger. Duration token: --transition-dur-page-enter (tokens.css).
+     Note: stagger delays push the LAST visible item to ~0.24+0.6 = 0.84s total
+     elapsed, but each element's individual animation is --transition-dur-page-enter
+     (600ms). Content is in the DOM before any animation runs. */
   html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > * {
-    animation: page-enter 0.6s var(--ease-out-quint) both;
+    animation: page-enter var(--transition-dur-page-enter) var(--ease-out-quint) both;
   }
   html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(2) { animation-delay: 0.06s; }
   html:not([data-astro-nav]) :is(.writing-hero, .projects-hero, .graveyard-hero, .article-header) > :nth-child(3) { animation-delay: 0.12s; }
@@ -93,15 +97,16 @@
 
   /* The writing featured pair lands just behind the hero block. */
   html:not([data-astro-nav]) .writing-featured > * {
-    animation: page-enter 0.6s var(--ease-out-quint) both;
+    animation: page-enter var(--transition-dur-page-enter) var(--ease-out-quint) both;
     animation-delay: 0.16s;
   }
   html:not([data-astro-nav]) .writing-featured > * + * { animation-delay: 0.22s; }
 
   /* List/section rows: a small stagger for the FIRST six only (capped — later
-     items appear instantly, no animation, so long archives never crawl in). */
+     items appear instantly, no animation, so long archives never crawl in).
+     Duration token: --transition-dur-page-enter-rows (tokens.css). */
   html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(-n + 6) {
-    animation: page-enter 0.5s var(--ease-out-quint) both;
+    animation: page-enter var(--transition-dur-page-enter-rows) var(--ease-out-quint) both;
     animation-delay: 0.18s;
   }
   html:not([data-astro-nav]) :is(.writing-list, .projects-list, .graveyard-list) > :nth-child(2) { animation-delay: 0.23s; }

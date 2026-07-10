@@ -146,6 +146,33 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* Transition duration tokens — navigation and interaction choreography.
+     SINGLE CSS SOURCE OF TRUTH. Every other stylesheet must read from these;
+     no stylesheet may hard-code its own duration literal for a named transition.
+     JS mirrors live in src/lib/transitionDurations.ts (any change here must be
+     reflected there, and vice versa).
+
+     Governance: all --transition-dur-* values for DESTINATION and INTERACTION
+     transitions must be <= 700ms. The JS unit test (test/transitionDurations.test.mjs)
+     asserts this for every token; see transitionDurations.ts for the full contract.
+
+     SET-PIECE tokens (warp jump-out) are NOT listed here because the canvas
+     animation is driven entirely from JavaScript; only the JS module is the
+     source for those values.
+
+     DESTINATION — transitions that reveal content at the arrival page:
+       vt-settle  : outgoing content settles quickly so the incoming rise owns the moment
+       vt-rise    : incoming content rises into place (the primary arrival move)
+       warp-arrive: warp-streak overlay fades over already-loaded About content
+
+     ENTRANCE — hard-load-only visual choreography; content is already in the DOM.
+       page-enter     : hero block stagger (kicker, h1, lead)
+       page-enter-rows: first-6-row stagger for list/archive pages */
+  --transition-dur-settle: 0.25s;           /* vt-settle outgoing (250ms) */
+  --transition-dur-rise: 0.45s;             /* vt-rise incoming (450ms) */
+  --transition-dur-page-enter: 0.6s;        /* hard-load hero block (600ms) */
+  --transition-dur-page-enter-rows: 0.5s;   /* hard-load row stagger (500ms) */
+
   /* Boot-to-HUD intro glide timing — the SINGLE source for the readout's downward
      travel from loader-centre to the bottom HUD slot, shared by hud.css (the glide
      transition itself) and scene.css (which sequences the loader fades around it).

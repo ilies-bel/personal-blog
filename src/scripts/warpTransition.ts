@@ -24,23 +24,31 @@
 // (BaseLayout's resurface handler no-ops the deceleration too), so a reduced-motion
 // visitor gets a plain, instant swap with no light show.
 import { resolveMotionPreference } from '../lib/motionPreference';
+import {
+  WARP_JUMP_MS as JUMP_MS,
+  WARP_ARRIVE_MS as ARRIVE_MS,
+  WARP_NAV_BEFORE_END_MS as NAV_BEFORE_END_MS,
+} from '../lib/transitionDurations';
 
 const WARP_FLAG = 'bh:warp';
 
 // --- Timing (ms) -----------------------------------------------------------
-// The jump-out: the field starts almost DARK (a few faint drifting sparks — the
-// ship still at sub-light), holds a beat while the HUD flickers + the readout
-// counts up, THEN accelerates HARD into the light and slams into the white flash.
-// We navigate at the flash apex so the swap is hidden behind the brightest frame.
-// Longer than a snappy nav on purpose — this is a set-piece, not a page turn.
-const JUMP_MS = 1500;
-// The arrival: the streaks STAY fully stretched (no decelerate / contract-back)
-// and the whole field simply fades out as the About content shows through — the
-// jump carries its momentum right onto the page instead of braking.
-const ARRIVE_MS = 750;
-// Navigate this long before the jump animation nominally ends, i.e. right at the
-// white-flash apex, so the (already-prepared) swap lands under the peak brightness.
-const NAV_BEFORE_END_MS = 130;
+// Durations are imported from src/lib/transitionDurations.ts — the single
+// source of truth for every timed transition on the site. See that module for
+// the governance contract (cap, interruptibility, reduced-motion rules).
+//
+// JUMP_MS (= WARP_JUMP_MS): the jump-out set-piece. The field starts almost
+// DARK, holds a beat while the HUD flickers, then accelerates into the white
+// flash. Longer than a snappy nav on purpose — this is a narrative experience,
+// not a page turn. Exempt from the 700ms destination cap.
+//
+// ARRIVE_MS (= WARP_ARRIVE_MS): the arrival fade-out. Streaks stay stretched
+// and the field dissolves as the About content shows through. Content is in
+// the DOM from the moment the SPA swap fires; this overlay merely fades.
+// Must be <= 700ms (currently 700ms — enforced by the unit test).
+//
+// NAV_BEFORE_END_MS (= WARP_NAV_BEFORE_END_MS): navigate this many ms before
+// the jump nominally ends, right at the white-flash apex.
 
 // The body class that gates the sitewide HUD flicker (hud.css) for the jump.
 const WARP_ACTIVE_CLASS = 'warp-active';
