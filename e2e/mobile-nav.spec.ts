@@ -31,7 +31,7 @@ const DESTINATIONS = ['Work', 'Writing', 'About', 'Contact'] as const
 // 1. Labelled destinations visible in the first viewport without scrolling
 // ---------------------------------------------------------------------------
 for (const vp of MOBILE_VIEWPORTS) {
-  test(`${vp.label}: Work, Writing, About, Contact visible in first viewport`, async ({ page }) => {
+  test(`${vp.label}: Work, Writing, About, Contact visible in first viewport`, { tag: vp.width === 375 ? ['@smoke'] : [] }, async ({ page }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height })
     await page.goto('/')
     await page.waitForLoadState('domcontentloaded')

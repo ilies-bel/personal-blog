@@ -65,9 +65,36 @@ jobs:
           path: ./dist
 
   # ---------------------------------------------------------------------------
-  # E2E gate — blocks the deploy job.
+  # QA-002: Full release-gate E2E — all tests, no grep filter (chromium project).
   #
-  # Runs the full Playwright smoke suite against the production-built app.
+  # Runs the complete Playwright suite against the production-built app.
+  # This is the comprehensive release-candidate gate required before any deploy.
+  # It covers all QA-002 acceptance criteria:
+  #   • no-JS (homepage + per inner route)
+  #   • no-WebGL stub (getContext returns null → authored fallback)
+  #   • Forced WebGL context loss (WEBGL_lose_context extension, PERF-010)
+  #   • Reduced motion (fresh, persisted, mid-session flip — A11Y-001/EXP-002)
+  #   • First-viewport mobile navigation (320/375/430 px — ENG-006)
+  #   • History traversal (multi-step chain + icon URL regression)
+  #   • HTTP 404 status with branded page and recovery links (ENG-008)
+  #   • Keyboard-only walk (skip links, SPA focus, StarMarker Escape — A11Y-006)
+  #   • Zero console errors and zero failed requests per route (QA-001)
+  #   • Mobile-width overflow matrix (320–430 px, 100%/200% zoom — EXP-012)
+  #   • Landmark structure per route (A11Y-002)
+  #   • Semantic narrative and live-region safety (A11Y-003)
+  #   • Loader interruptibility contract (EXP-006)
+  #   • Opening controls (skip-experience — EXP-005)
+  #   • Cross-route transitions under reduced motion (EXP-014)
+  #   • Reflow matrix — all routes × 48 viewport combinations (EXP-012)
+  #   • Three.js absent from inner routes (PERF-002)
+  #   • WebGL context count cap across navigation (PERF-001)
+  #   • Writing orientation system (EXP-016)
+  #   • Nebular writing map (EXP-027)
+  #   • Graveyard forensic record (EXP-030)
+  #   • Finale proof paths (EXP-008)
+  #   • Mobile scroll-track height (ENG-007)
+  #   • Budget-table overflow at 320 px (ENG-005)
+  #
   # The webServer in playwright.config.ts builds the static bundle with
   # `astro build` and serves it via `astro preview`, so the tests exercise
   # the same SSG output that the build job uploads to GitHub Pages.
@@ -96,19 +123,22 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install chromium --with-deps
 
-      - name: Run E2E tests
+      # QA-002: Full release-gate — runs all tests via the `chromium` project
+      # (no grep filter).  The smoke subset is already a strict subset of these
+      # tests; passing this gate means ALL QA-002 criteria are satisfied.
+      - name: Run full release-gate E2E tests
         run: pnpm run test:e2e
         env:
           CI: true
 
       # Always upload artifacts so failures are diagnosable even when the job
       # exits non-zero.  The artifact name includes the commit SHA so every
-      # release has its own evidence slot (QA-001 artifact-retention requirement).
-      - name: Upload E2E artifacts
+      # release has its own evidence slot (QA-001/QA-002 artifact-retention).
+      - name: Upload E2E release-gate artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-artifacts-${{ github.sha }}
+          name: e2e-gate-artifacts-${{ github.sha }}
           path: |
             test-results/
             playwright-report/

@@ -27,6 +27,7 @@ import { test, expect } from '@playwright/test'
 test.describe('ENG-001 no-JS homepage', () => {
   test(
     'no fixed cover, sane height, nav links present and focusable',
+    { tag: ['@smoke'] },
     async ({ browser }) => {
       // Disable JavaScript for this context only — does not affect other tests.
       const ctx = await browser.newContext({ javaScriptEnabled: false })
@@ -215,3 +216,76 @@ test.describe('EXP-001 no-JS homepage — authored manifesto edition', () => {
     },
   )
 })
+
+// ---------------------------------------------------------------------------
+// QA-002 — no-JS per route (javaScriptEnabled=false on every public route)
+//
+// Inner routes are server-rendered static HTML and must deliver readable
+// content, a primary heading, and canonical navigation links even when the
+// visitor's browser has JavaScript disabled.  This confirms:
+//   • The SSG output is a complete document (not a blank JS shell).
+//   • nav[aria-label="Sections"] is server-rendered and keyboard-reachable.
+//   • Each route has at least one h1 in the document tree.
+// ---------------------------------------------------------------------------
+
+const NO_JS_INNER_ROUTES = [
+  { path: '/projects',         name: 'projects'          },
+  { path: '/writing',          name: 'writing'            },
+  { path: '/about',            name: 'about'              },
+  { path: '/graveyard',        name: 'graveyard'          },
+  { path: '/behind-the-build', name: 'behind-the-build'  },
+] as const
+
+test.describe('QA-002 no-JS per route', () => {
+  for (const { path, name } of NO_JS_INNER_ROUTES) {
+    test(
+      `${name} — content readable and nav operable without JavaScript`,
+      async ({ browser }) => {
+        const ctx = await browser.newContext({ javaScriptEnabled: false })
+        const page = await ctx.newPage()
+
+        try {
+          const response = await page.goto(path)
+
+          // Must return HTTP 200 (the SSG output must exist).
+          expect(
+            response?.status(),
+            `${path} must return HTTP 200 without JavaScript`,
+          ).toBe(200)
+
+          // Primary heading — the page must have visible content.
+          await expect(
+            page.locator('h1').first(),
+            `${path} must have an <h1> visible without JavaScript`,
+          ).toBeVisible()
+
+          // Server-rendered primary nav — canonical destinations must be
+          // in the DOM as plain <a> links (no JS required to render them).
+          const nav = page.locator('nav[aria-label="Sections"]')
+          await expect(
+            nav,
+            `${path} must have nav[aria-label="Sections"] without JavaScript`,
+          ).toBeAttached()
+
+          for (const label of ['Work', 'Writing', 'About', 'Contact'] as const) {
+            const link = nav.getByRole('link', { name: label, exact: true })
+            await expect(
+              link,
+              `"${label}" link must be present on ${path} without JavaScript`,
+            ).toBeAttached()
+
+            // Keyboard-focusable — programmatic focus must land on the link.
+            await link.focus()
+            await expect(
+              link,
+              `"${label}" link must be keyboard-focusable on ${path} without JavaScript`,
+            ).toBeFocused()
+          }
+        } finally {
+          await ctx.close()
+        }
+      },
+    )
+  }
+})
+

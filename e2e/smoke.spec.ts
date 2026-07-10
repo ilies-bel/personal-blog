@@ -83,7 +83,7 @@ function attachMonitor(page: Page): PageMonitor {
 // ---------------------------------------------------------------------------
 
 for (const { path, name } of ALL_ROUTES) {
-  test(`${name} — HTTP 200, no console errors, no network failures`, async ({ page }) => {
+  test(`${name} — HTTP 200, no console errors, no network failures`, { tag: ['@smoke'] }, async ({ page }) => {
     const { consoleErrors, failedRequests } = attachMonitor(page)
 
     const response = await page.goto(path)
@@ -109,7 +109,7 @@ for (const { path, name } of ALL_ROUTES) {
 // 404 guard — unknown paths must return HTTP 404, not a silent 200
 // ---------------------------------------------------------------------------
 
-test('unknown path — HTTP 404 with branded page and recovery links', async ({ page }) => {
+test('unknown path — HTTP 404 with branded page and recovery links', { tag: ['@smoke'] }, async ({ page }) => {
   // Use a path that can never collide with a real route.
   const response = await page.goto('/no-such-route-xyzzy-e2e-probe')
 
@@ -177,7 +177,7 @@ test('unknown path — HTTP 404 with branded page and recovery links', async ({ 
 // host-level redirect.
 // ---------------------------------------------------------------------------
 
-test('dev-blueprint — absent from production build (HTTP 404)', async ({ page }) => {
+test('dev-blueprint — absent from production build (HTTP 404)', { tag: ['@smoke'] }, async ({ page }) => {
   const response = await page.goto('/dev-blueprint')
   expect(
     response?.status(),
@@ -198,7 +198,7 @@ test('dev-blueprint — absent from production build (HTTP 404)', async ({ page 
 // favicon.svg against /posts/ instead of the site root.
 // ---------------------------------------------------------------------------
 
-test('nested post route — icon hrefs are root-relative, not protocol-relative (ENG-002)', async ({ page }) => {
+test('nested post route — icon hrefs are root-relative, not protocol-relative (ENG-002)', { tag: ['@smoke'] }, async ({ page }) => {
   const { failedRequests } = attachMonitor(page)
 
   await page.goto('/posts/memory-leak-search-and-destroy')
@@ -238,7 +238,7 @@ test('nested post route — icon hrefs are root-relative, not protocol-relative 
 // satisfies the ≤ 2 invariant automatically.
 // ---------------------------------------------------------------------------
 
-test('PERF-001 — WebGL context count never exceeds 2 across home↔behind-the-build navigation', async ({ page }) => {
+test('PERF-001 — WebGL context count never exceeds 2 across home↔behind-the-build navigation', { tag: ['@smoke'] }, async ({ page }) => {
   const getCount = (): Promise<number> =>
     page.evaluate(() => (window as unknown as { __webgl_context_count__?: number }).__webgl_context_count__ ?? 0)
 
@@ -295,7 +295,7 @@ test('PERF-001 — WebGL context count never exceeds 2 across home↔behind-the-
 const PRIMARY_IA = ['Work', 'Writing', 'About', 'Contact'] as const
 
 for (const { path, name } of ALL_ROUTES) {
-  test(`${name} — primary nav has Work, Writing, About, Contact`, async ({ page }) => {
+  test(`${name} — primary nav has Work, Writing, About, Contact`, { tag: ['@smoke'] }, async ({ page }) => {
     await page.goto(path)
 
     // The nav is present on every page (both scene and page surfaces use

@@ -54,7 +54,35 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // ---------------------------------------------------------------------------
+  // Playwright projects — tagged for tiered CI execution (QA-002)
+  //
+  // smoke  — Tests tagged @smoke only.  Fast subset; runs on every push and PR
+  //          to catch the most common regressions (HTTP status, console, network,
+  //          canonical nav, no-JS homepage, WebGL fallback, history traversal).
+  //          Invoked via `npm run test:e2e:smoke`.
+  //
+  // chromium (full gate) — All tests with no grep filter.  Comprehensive release
+  //          gate; runs only on release-candidate deploys (version tags).
+  //          Invoked via `npm run test:e2e`.  Covers no-WebGL context loss,
+  //          reduced motion, mobile-width overflow matrix, keyboard walks,
+  //          landmarks, semantic narrative, reflow matrix, and all other
+  //          per-route and per-feature checks.
+  // ---------------------------------------------------------------------------
+  projects: [
+    {
+      name: 'smoke',
+      use: { ...devices['Desktop Chrome'] },
+      // Filter to tests that carry the @smoke tag (matched against the full test
+      // title including tags set via the `{ tag: ['@smoke'] }` option).
+      grep: /@smoke/,
+    },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      // No grep — runs every test in the e2e/ directory.
+    },
+  ],
 
   webServer: {
     // Build the production static bundle first, then serve it with astro preview.

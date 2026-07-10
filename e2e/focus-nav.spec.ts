@@ -101,7 +101,7 @@ test('projects — skip link activating focuses #main-content', async ({ page })
 //    first <h1> inside #main-content of the incoming page.
 // ---------------------------------------------------------------------------
 
-test('SPA navigation — focus moves to h1 inside #main-content', async ({ page }) => {
+test('SPA navigation — focus moves to h1 inside #main-content', { tag: ['@smoke'] }, async ({ page }) => {
   // Start on a reading page so the subnav rail is present.
   await page.goto('/projects')
   await page.waitForLoadState('networkidle')

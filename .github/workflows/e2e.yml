@@ -1,14 +1,35 @@
 name: E2E Tests
 
 # ---------------------------------------------------------------------------
-# Runs the Playwright smoke suite on every PR targeting main.  This is the
-# pre-merge gate: it catches regressions before they land on main.
+# QA-002: Tiered E2E gate — the @smoke subset is the pre-merge PR gate.
+#
+# This workflow runs the @smoke-tagged test subset (the `smoke` Playwright
+# project) on every PR targeting main.  It is the pre-merge gate: fast,
+# high-signal coverage that catches regressions before they land on main.
+# The smoke project covers:
+#   • HTTP 200 for every public route
+#   • Zero console errors and zero network failures per route
+#   • HTTP 404 for unknown paths and dev-only routes
+#   • Canonical primary-nav presence (Work, Writing, About, Contact)
+#   • No-JS homepage (no fixed cover, nav operable without JavaScript)
+#   • WebGL context-creation failure → authored fallback visible
+#   • Multi-step history traversal → correct URLs, zero errors
+#   • 375 px first-viewport mobile navigation
+#   • SPA navigation focus management
+#   • Icon href root-relative on nested routes (ENG-002)
+#   • WebGL context count cap across navigation (PERF-001)
 #
 # Push-to-main coverage is handled by the deploy workflow (deploy.yml), which
-# gates the deploy job on the same E2E suite.  Running both workflows on push
-# would duplicate the work; scope them so they compose rather than overlap:
-#   - PR → e2e.yml (pre-merge gate, no deploy)
-#   - push to main → deploy.yml (build + E2E gate → deploy)
+# runs the FULL release-gate (all tests, no grep filter) and gates the deploy
+# job on it.  Scoping the two workflows so they compose rather than overlap
+# avoids running the E2E suite twice on push:
+#   - PR → e2e.yml (smoke subset, pre-merge gate, no deploy)
+#   - push to main → deploy.yml (build + full E2E gate → deploy)
+#
+# Beyond the smoke subset, the full gate adds: no-WebGL context loss
+# (PERF-010), reduced motion (fresh/persisted/mid-session), mobile overflow
+# matrix, keyboard-only walk, landmarks, semantic narrative, reflow matrix,
+# loader interruptibility, per-route no-JS, and all other comprehensive checks.
 #
 # The suite builds the static bundle fresh with `astro build` and serves it
 # via `astro preview`, so tests always exercise the real SSG output.
@@ -49,7 +70,10 @@ jobs:
       - name: Check media pipeline
         run: pnpm run check-media
 
-  e2e:
+  # QA-002: Smoke E2E subset — @smoke-tagged tests only.
+  # Runs the `smoke` Playwright project, which filters to tests tagged @smoke.
+  # This is fast enough for push/PR CI without sacrificing high-signal coverage.
+  e2e-smoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -71,19 +95,19 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install chromium --with-deps
 
-      - name: Run E2E tests
-        run: pnpm run test:e2e
+      - name: Run smoke E2E tests
+        run: pnpm run test:e2e:smoke
         env:
           CI: true
 
       # Always upload artifacts so failures are diagnosable even when the job
       # exits non-zero.  The artifact name includes the commit SHA so every
       # run has its own evidence slot (QA-001 artifact-retention requirement).
-      - name: Upload E2E artifacts
+      - name: Upload E2E smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-artifacts-${{ github.sha }}
+          name: e2e-smoke-artifacts-${{ github.sha }}
           path: |
             test-results/
             playwright-report/
