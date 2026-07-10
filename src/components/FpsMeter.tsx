@@ -6,8 +6,14 @@
 //      hero uses (same detectDeviceTier() probe — so what the page says about its
 //      own engine is what the engine would actually see on this machine).
 //   2. OPTIONAL benchmark — a "Run 5s benchmark" button samples per-frame deltas
-//      for 5 seconds and reports min / median / max FPS. Hands the visitor the
-//      same diagnostic the developer ran while tuning the perf budgets.
+//      for 5 seconds and reports min / 1% low / p50 / p95-frame / max FPS. Hands
+//      the visitor the same diagnostic the developer ran while tuning the perf
+//      budgets. The percentile stats are computed over FRAME TIMES (the thing
+//      that stutters), then expressed as FPS: p50 is the typical frame, "p95
+//      frame" is the fps you get at the 95th-percentile (slow-end) frame time,
+//      and "1% low" is the average fps across the slowest 1% of frames — the
+//      standard stutter metrics, so a run that averages 60 but hitches visibly
+//      can no longer hide behind its median.
 //
 // No three.js — this measures the browser's rAF clock on its own, so it does not
 // interfere with the page's actual GPU work. SSR-safe (no globals on import); the
@@ -18,8 +24,12 @@ import { detectDeviceTier, type DeviceTier } from '../hero/lib/config';
 interface BenchmarkResult {
   /** Slowest single-frame FPS observed during the sweep. */
   minFps: number;
-  /** Median FPS across the sweep (50th percentile of frame samples). */
-  medianFps: number;
+  /** Average FPS across the slowest 1% of frames ("1% low"). */
+  onePercentLowFps: number;
+  /** Median FPS (FPS at the 50th-percentile frame time). */
+  p50Fps: number;
+  /** FPS at the 95th-percentile (slow-end) frame time. */
+  p95FrameFps: number;
   /** Fastest single-frame FPS observed. */
   maxFps: number;
   /** Number of frame samples collected in the window. */
@@ -29,12 +39,29 @@ interface BenchmarkResult {
 const BENCHMARK_MS = 5_000;
 const EMA_ALPHA = 0.1; // gentle smoothing — fast enough to react to a stutter, slow enough not to hop on every frame.
 
-/** Median of a (mutated) numeric array. Returns 0 for an empty array. */
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+/** Value at quantile q (0..1) of an ASCENDING-sorted array (nearest-rank). */
+function quantileSorted(sorted: number[], q: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1));
+  return sorted[idx]!;
+}
+
+/** Full stutter-aware summary over a sweep of frame times (ms). */
+function summarizeFrameTimes(frameTimesMs: number[]): Omit<BenchmarkResult, 'samples'> {
+  if (frameTimesMs.length === 0) {
+    return { minFps: 0, onePercentLowFps: 0, p50Fps: 0, p95FrameFps: 0, maxFps: 0 };
+  }
+  const sorted = [...frameTimesMs].sort((a, b) => a - b);
+  // Slowest 1% of frames (at least one frame): their MEAN frame time → fps.
+  const worst = sorted.slice(-Math.max(1, Math.floor(sorted.length * 0.01)));
+  const worstMean = worst.reduce((sum, t) => sum + t, 0) / worst.length;
+  return {
+    minFps: Math.round(1_000 / sorted[sorted.length - 1]!),
+    onePercentLowFps: Math.round(1_000 / worstMean),
+    p50Fps: Math.round(1_000 / quantileSorted(sorted, 0.5)),
+    p95FrameFps: Math.round(1_000 / quantileSorted(sorted, 0.95)),
+    maxFps: Math.round(1_000 / sorted[0]!),
+  };
 }
 
 export default function FpsMeter() {
@@ -76,11 +103,8 @@ export default function FpsMeter() {
           benchSamplesRef.current.push(dt);
           if (now >= benchEndRef.current) {
             const samples = benchSamplesRef.current;
-            const fpsValues = samples.map((ms) => 1_000 / ms);
             const result: BenchmarkResult = {
-              minFps: Math.round(Math.min(...fpsValues)),
-              medianFps: Math.round(median(fpsValues)),
-              maxFps: Math.round(Math.max(...fpsValues)),
+              ...summarizeFrameTimes(samples),
               samples: samples.length,
             };
             benchSamplesRef.current = [];
@@ -132,8 +156,18 @@ export default function FpsMeter() {
             <dd>{benchResult.minFps} fps</dd>
           </div>
           <div>
-            <dt>median</dt>
-            <dd>{benchResult.medianFps} fps</dd>
+            {/* Average fps across the slowest 1% of frames — the stutter number. */}
+            <dt>1% low</dt>
+            <dd>{benchResult.onePercentLowFps} fps</dd>
+          </div>
+          <div>
+            <dt>p50</dt>
+            <dd>{benchResult.p50Fps} fps</dd>
+          </div>
+          <div>
+            {/* fps at the 95th-percentile (slow-end) frame time. */}
+            <dt>p95 frame</dt>
+            <dd>{benchResult.p95FrameFps} fps</dd>
           </div>
           <div>
             <dt>max</dt>

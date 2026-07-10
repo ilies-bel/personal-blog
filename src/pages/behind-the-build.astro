@@ -26,6 +26,12 @@ import { SITE_TITLE, SOCIALS } from '../consts';
 // prose can no longer drift from the gallery it describes.
 import { SHADERS } from '../lib/shaderCatalog';
 import { numberToWord } from '../lib/contentFormat';
+// Generated performance telemetry (P10) — written by scripts/gen-perf-report.mjs
+// from the built dist; a stale copy fails CI (gen-perf-report --check).
+// NOTE: this import must stay in the top import group — the compiler hoists
+// imports, and a mid-file import below multibyte-heavy comment text gets
+// sliced with wrong offsets (observed: corrupted frontmatter, build failure).
+import perfReport from '../data/perf-report.json';
 
 // GitHub source for the "view full" links. The repo lives at ilies-bel/personal-blog.
 const REPO = 'https://github.com/ilies-bel/personal-blog/blob/main';
@@ -53,53 +59,84 @@ const SECTIONS = [
 // of the system, so the journey covers the full built range.
 const JOURNEY: readonly [number, number] = [0, 3.5];
 
-// Performance budgets — MEASURED on this branch (production build, M-class laptop,
-// throttled to Slow 4G in Chrome devtools). Anything you change in the engine should
-// be cross-checked against these numbers. The deltas matter more than the absolutes,
-// so the page surfaces both the budget the engine targets and the last value seen.
+// Performance budgets — GENERATED, not hand-written. The table below renders
+// src/data/perf-report.json, which scripts/gen-perf-report.mjs measures from the
+// built dist (same measurement core as the scripts/check-bundle-budgets.mjs CI
+// gate), so the numbers this page claims are the numbers CI enforces — a stale
+// report FAILS the build (gen-perf-report --check, ±5%). The hand-entered
+// BUDGETS array this replaced claimed "measured on this branch" with no way to
+// re-measure it; claims that cannot be generated (field INP and friends) were
+// deleted, not hedged — field CWV wait for RUM (see the prose note below).
+
 interface BudgetRow {
   name: string;
   budget: string;
   measured: string;
   note: string;
 }
-const BUDGETS: readonly BudgetRow[] = [
+
+const { bundle, html, rasters, budgets, lighthouse } = perfReport;
+const b = (row: { hard: number; target: number }) => `≤ ${row.hard} KiB (target ${row.target})`;
+
+// Lab metrics land only when a Lighthouse CI run exists to back them (the
+// gen script folds .lighthouseci results in). CLS and LCP are shown: CLS is
+// deterministic (error-gated in CI) and LCP holds even on the software-GL
+// runner. Main-thread time (TBT) is deliberately NOT tabled — on a
+// software-rendered runner it measures the runner, not the site (the raw
+// number stays in perf-report.json and gates warn-level in CI; see
+// lighthouserc.cjs). Presenting it here as "measured" would misinform.
+const labRoutes = lighthouse ? Object.values(lighthouse.perRoute) : [];
+const labHome = lighthouse?.perRoute['/'];
+const LAB_ROWS: BudgetRow[] =
+  lighthouse && labHome
+    ? [
+        {
+          name: 'CLS (lab, worst route)',
+          budget: '≤ 0.02 (CI error)',
+          measured: `${Math.max(...labRoutes.map((r) => r.cls))}`,
+          note: `Lighthouse ${lighthouse.measuredAt}, ${labRoutes.length} routes (${lighthouse.environment} runner). Fixed-footprint canvas host + dimensioned images.`,
+        },
+        {
+          name: 'LCP (lab, home)',
+          budget: '≤ 2.0 s (CI warn)',
+          measured: labHome.lcpMs >= 0 ? `${(labHome.lcpMs / 1000).toFixed(2)} s` : '—',
+          note: `Lighthouse ${lighthouse.measuredAt}, throttled mobile profile on a software-rendered ${lighthouse.environment} runner — an upper bound: the loader paints as server HTML before any engine byte arrives.`,
+        },
+      ]
+    : [];
+
+const BUDGETS: BudgetRow[] = [
   {
-    name: 'JS initial payload (gz)',
-    budget: '≤ 220 KB',
-    measured: '~205 KB',
-    note: 'three.js + the engine chunk; dynamically imported so it never blocks first paint.',
+    name: 'Hero engine graph JS (gz)',
+    budget: b(budgets.js.heroGraphGzipKiB),
+    measured: `${bundle.heroGraphGzipKiB} KiB`,
+    note: 'three-core + three-post + the createScene chunk + the warmThree facade; dynamically imported, so it never blocks first paint.',
   },
   {
-    name: 'LCP (laptop, broadband)',
-    budget: '≤ 1.5 s',
-    measured: '~1.2 s',
-    note: 'The intro loader is server-rendered HTML + CSS; it paints before the engine arrives.',
+    name: 'Home pre-engine JS (gz)',
+    budget: b(budgets.js.preHeroRouteGzipKiB),
+    measured: `${bundle.preHeroGzipKiB} KiB`,
+    note: 'Everything / requests before the engine import fires: island runtime, hero shell, HUD nav, loader controls.',
   },
   {
-    name: 'INP at scroll (median)',
-    budget: '≤ 100 ms',
-    measured: '~32 ms',
-    note: 'Scroll is sampled on rAF; HUD broadcasts gate on a PROGRESS_MIN_DELTA so React stays out of the hot path.',
+    name: 'Reading-route JS (gz, worst route)',
+    budget: b(budgets.js.readingRouteGzipKiB),
+    measured: `${bundle.readingRouteMaxGzipKiB} KiB`,
+    note: 'Reading routes ship zero three.js (e2e-asserted); this caps everything else they load.',
   },
   {
-    name: 'CLS',
-    budget: '≤ 0.05',
-    measured: '0.00',
-    note: 'The canvas host has a fixed footprint and the prose lives inside a single column — no layout shift on hydration.',
+    name: 'HTML per page (gz, worst page)',
+    budget: b(budgets.html.perPageGzipKiB),
+    measured: `${html.maxPageGzipKiB} KiB`,
+    note: 'Stylesheets are inlined, so this one number also caps CSS growth — grain data-URIs included.',
   },
   {
-    name: 'Render pixel ratio (high tier)',
-    budget: '≤ 1.85×',
-    measured: '1.85×',
-    note: 'Clamped in tuneRenderPixelRatio so a 3× DPR display never burns four times the fragments for invisible gain.',
+    name: 'Largest shipped raster',
+    budget: `≤ ${budgets.rasters.hardKiB} KiB (target ${budgets.rasters.targetKiB})`,
+    measured: `${rasters.largestKiB} KiB (of ${rasters.count})`,
+    note: 'Every content raster goes through astro:assets; the CI gate has no grandfather list.',
   },
-  {
-    name: 'Render pixel ratio (low tier)',
-    budget: '≤ 0.6×',
-    measured: '0.6×',
-    note: 'Low tier renders well below native and lets the browser upscale — the cloud is fragment-bound.',
-  },
+  ...LAB_ROWS,
 ];
 
 // Fallback ladder — same beat (the held nebula at stage 3.42), four ways the system
@@ -256,9 +293,16 @@ const FALLBACKS: readonly FallbackRow[] = [
     <section aria-labelledby="performance">
       <h2 id="performance">Performance budgets</h2>
       <p>
-        Budgets the engine is tuned against, with the last measured value next to
-        each. Anything that changes one of these by more than a small step should
-        be re-measured against the same conditions.
+        Budgets the site is built against, with the measured value next to each.
+        Nothing in this table is typed by hand: CI enforces the same numbers
+        (<code>scripts/check-bundle-budgets.mjs</code>), and a build whose output
+        drifts from what this page claims fails
+        (<code>gen-perf-report.mjs --check</code>, ±5%).
+      </p>
+      <p class="btb-provenance">
+        Generated {perfReport.generatedAt} at <code>{perfReport.commit}</code> by
+        <code>scripts/gen-perf-report.mjs</code> — regenerated per release, not
+        hand-written.
       </p>
       {/* Scroll container: the nowrap numeric columns can outgrow narrow
           viewports; the table scrolls locally instead of widening the document
@@ -285,6 +329,15 @@ const FALLBACKS: readonly FallbackRow[] = [
         </tbody>
       </table>
       </div>
+      <p>
+        Field Core Web Vitals (real-visitor INP, LCP, CLS) are deliberately absent:
+        they need RUM, which this site does not run yet — the wiring is documented
+        and waiting rather than the numbers being guessed. Main-thread lab time
+        (TBT) is also collected per release but not tabled: the available runners
+        render WebGL in software, so that number describes the runner, not the
+        site — it lives in <code>perf-report.json</code> and gates as a CI warning
+        until real rendering hardware joins the pipeline.
+      </p>
       <p>
         And what your machine is doing right now — independent of the engine, just
         the browser's own rAF clock:

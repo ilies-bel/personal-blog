@@ -111,6 +111,16 @@ body.behind-the-build .btb-shader-code {
    the article's measure ceiling and reads as another instrument
    panel, not a separate widget.
    --------------------------------------------------------------- */
+/* Provenance line — the generated-telemetry stamp above the budget table.
+   Mono because it IS a record (date + SHA + generator), quiet because it is a
+   caption, not content. */
+body.behind-the-build .btb-provenance {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--fg-faint);
+  letter-spacing: 0.02em;
+}
+
 /* Local scroll region for the table: on narrow viewports the nowrap numeric
    columns exceed the prose measure; the table pans inside this container
    instead of widening the document. Focusable (tabindex=0 in markup) so

@@ -94,6 +94,38 @@ test('first-visit floor is honest: reveal lands promptly after scene:ready', asy
   }
 });
 
+test('labelled nav is interactive from first paint, before the engine arrives', async ({ page }) => {
+  // The roadmap phrases this as "labelled navigation usable ≤2.5s while
+  // shaders compile". Asserting a wall-clock bound on contended software-
+  // rendered CI gates the scheduler, not the site — so this asserts the
+  // STRONGER, stable property instead: the nav is visible and clickable
+  // IMMEDIATELY after the document paints, while the loader still covers the
+  // scene and the engine chunks have not even arrived (they are held at the
+  // network edge below). If nav works before the engine exists, it trivially
+  // works "within 2.5s while shaders compile" on any real device.
+  // (e2e/mobile-access.spec.ts pins the same contract on a 390×844 phone;
+  // this covers the desktop viewport.)
+  await page.route(/three-core|three-post|createScene/i, async (route) => {
+    await new Promise((r) => setTimeout(r, 4000));
+    await route.continue().catch(() => {});
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  await expect(page.locator('.scene-loader')).toBeVisible();
+  for (const label of ['Work', 'Writing', 'About', 'Contact']) {
+    await expect(
+      page.locator('.overlay-blog-links a', { hasText: label }),
+      `${label} visible while the loader is up`,
+    ).toBeVisible();
+  }
+
+  // Clickable, not merely painted: navigate off the loading hero via the nav.
+  expect(await page.locator('.scene-loader').isVisible(), 'loader still up when clicking').toBe(true);
+  await page.locator('.overlay-blog-links a', { hasText: 'Writing' }).click();
+  await page.waitForURL(/\/writing\/?$/);
+  await expect(page.locator('h1')).toBeVisible();
+});
+
 test('warm return (same session) reveals without the first-visit floor', async ({ page }) => {
   await page.goto('/', { waitUntil: 'load' });
   await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });

@@ -6,12 +6,21 @@
     "src/scripts/*.ts",
     "src/dev-pages/*.astro"
   ],
-  "project": ["src/**/*.{ts,tsx,astro}", "scripts/**/*.mjs", "e2e/**/*.ts"],
+  "project": [
+    "src/**/*.{ts,tsx,astro}",
+    "scripts/**/*.mjs",
+    "e2e/**/*.ts"
+  ],
   "ignoreExportsUsedInFile": true,
-  "tags": ["-public"],
+  "tags": [
+    "-public"
+  ],
   "rules": {
     "exports": "warn",
     "types": "warn",
     "duplicates": "warn"
-  }
+  },
+  "ignoreDependencies": [
+    "tslib"
+  ]
 }

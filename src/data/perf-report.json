@@ -1,0 +1,162 @@
+{
+  "generatedAt": "2026-07-10",
+  "commit": "d087a49",
+  "bundle": {
+    "heroGraphGzipKiB": 232.4,
+    "heroGraphFiles": [
+      {
+        "name": "three-core.V_QMjIXb.js",
+        "gzipKiB": 124
+      },
+      {
+        "name": "createScene.QbZsSdvw.js",
+        "gzipKiB": 103.5
+      },
+      {
+        "name": "three-post.CjpyKcsR.js",
+        "gzipKiB": 4.8
+      },
+      {
+        "name": "warmThree.BRg6drB7.js",
+        "gzipKiB": 0.1
+      }
+    ],
+    "preHeroGzipKiB": 93.6,
+    "readingRouteMaxGzipKiB": 15.6,
+    "perRoute": {
+      "/": {
+        "kind": "engine",
+        "jsGzipKiB": 93.6,
+        "htmlGzipKiB": 32.2
+      },
+      "/404.html": {
+        "kind": "reading",
+        "jsGzipKiB": 15.3,
+        "htmlGzipKiB": 26.7
+      },
+      "/about/": {
+        "kind": "reading",
+        "jsGzipKiB": 15.6,
+        "htmlGzipKiB": 27.8
+      },
+      "/behind-the-build/": {
+        "kind": "engine",
+        "jsGzipKiB": 89.5,
+        "htmlGzipKiB": 51.1
+      },
+      "/contact/": {
+        "kind": "reading",
+        "jsGzipKiB": 15.3,
+        "htmlGzipKiB": 27.3
+      },
+      "/graveyard/": {
+        "kind": "engine",
+        "jsGzipKiB": 82.6,
+        "htmlGzipKiB": 30.7
+      },
+      "/posts/memory-leak-search-and-destroy/": {
+        "kind": "reading",
+        "jsGzipKiB": 15.3,
+        "htmlGzipKiB": 31.3
+      },
+      "/posts/thanks-for-scrolling-to-the-bottom/": {
+        "kind": "reading",
+        "jsGzipKiB": 15.3,
+        "htmlGzipKiB": 29.2
+      },
+      "/projects/": {
+        "kind": "reading",
+        "jsGzipKiB": 15.3,
+        "htmlGzipKiB": 30.8
+      },
+      "/writing/": {
+        "kind": "reading",
+        "jsGzipKiB": 15.3,
+        "htmlGzipKiB": 27.8
+      }
+    }
+  },
+  "html": {
+    "maxPageGzipKiB": 51.1
+  },
+  "rasters": {
+    "count": 47,
+    "largestKiB": 156.5,
+    "largest": "assets/posters/poster-2-red-giant.webp"
+  },
+  "budgets": {
+    "comments": {
+      "what": "Committed performance budgets, enforced by scripts/check-bundle-budgets.mjs on every build (CI: after the asset gate). All JS/HTML numbers are gzip KiB measured from dist/ — fully deterministic, identical on a laptop and on software-rendered CI. 'hard' fails the build; 'target' prints a warning (drift guard).",
+      "heroGraph": "The dynamically-imported engine graph: three-core + three-post + the createScene scene-code chunk + the warmThree facade. Measured 232.4 KiB gz on 2026-07-10 (three-core 124.0 + createScene 103.5 + three-post 4.8 + warmThree 0.1). The roadmap's 210 KiB aspiration is NOT met: the excess is the site's own scene code (createScene 295 KiB raw — 9 shaders, GPGPU sim, cockpit geometry), and trimming it means an engine diet, not a P10 cheap win. Target is set at current+headroom so growth warns immediately; hard stays at the roadmap's 240 cap.",
+      "preHeroRoute": "JS actually requested by an ENGINE page (/, /behind-the-build, /graveyard) before the engine import fires: eager <script> tags + astro-island component/renderer URLs + their static import closure. Dynamic imports (the engine graph) are excluded by construction. Measured 93.6 KiB gz on / (2026-07-10). The roadmap's 85/65 caps predate counting the React island runtime as pre-hero JS: react-dom/client alone is 56.0 KiB gz, and the interactive-before-engine surface (HeroIsland shell, HUD nav, loader/skip controls) is React — removing it is a shell rewrite, not a P10 trim. Everything else on the route totals ~38 KiB. Hard/target adjusted to reality and documented here instead of silently reclassifying the runtime.",
+      "readingRoute": "Same eager-JS measurement for non-engine routes (about, projects, writing, contact, posts, 404). Measured max 15.6 KiB gz (2026-07-10). TIGHTENED far below the roadmap's 85/65: at those caps a React-runtime leak onto a reading route (+56 KiB) would pass silently — at 40/20 it fails the build, which is the regression this budget exists to catch (P4's zero-three.js e2e guards the engine chunks; this guards everything else).",
+      "html": "Per-page HTML gzip. Stylesheets are inlined (inlineStylesheets:'always'), so this single number also caps CSS growth including the P9 grain/backdrop data-URIs (the P9→P10 handoff note). Measured max 50.5 KiB gz (/behind-the-build, 2026-07-10); target = reality + headroom, hard = comfortable ceiling under the roadmap's 120.",
+      "rasters": "Echo of the raster gate enforced by scripts/check-asset-sizes.mjs (hard fail >500 KiB, warn >250 KiB). Kept here so budgets.json is the one place all shipping budgets live."
+    },
+    "js": {
+      "heroGraphGzipKiB": {
+        "hard": 240,
+        "target": 235
+      },
+      "preHeroRouteGzipKiB": {
+        "hard": 100,
+        "target": 96
+      },
+      "readingRouteGzipKiB": {
+        "hard": 40,
+        "target": 20
+      }
+    },
+    "html": {
+      "perPageGzipKiB": {
+        "hard": 90,
+        "target": 56
+      }
+    },
+    "rasters": {
+      "hardKiB": 500,
+      "targetKiB": 250
+    }
+  },
+  "lighthouse": {
+    "measuredAt": "2026-07-10",
+    "environment": "local",
+    "perRoute": {
+      "/": {
+        "performance": 61,
+        "lcpMs": 1546,
+        "cls": 0.001,
+        "tbtMs": 155543,
+        "totalByteWeightKiB": 403
+      },
+      "/projects/": {
+        "performance": 100,
+        "lcpMs": 1490,
+        "cls": 0,
+        "tbtMs": 7,
+        "totalByteWeightKiB": 121
+      },
+      "/writing/": {
+        "performance": 100,
+        "lcpMs": 1519,
+        "cls": 0,
+        "tbtMs": 0,
+        "totalByteWeightKiB": 120
+      },
+      "/contact/": {
+        "performance": 100,
+        "lcpMs": 1502,
+        "cls": 0,
+        "tbtMs": 0,
+        "totalByteWeightKiB": 96
+      },
+      "/posts/memory-leak-search-and-destroy/": {
+        "performance": 100,
+        "lcpMs": 1497,
+        "cls": 0,
+        "tbtMs": 0,
+        "totalByteWeightKiB": 86
+      }
+    }
+  }
+}

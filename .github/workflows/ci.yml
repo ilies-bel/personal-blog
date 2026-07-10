@@ -49,6 +49,19 @@ jobs:
       - name: Asset size gate
         run: node scripts/check-asset-sizes.mjs dist
 
+      - name: Bundle budget gate (budgets.json)
+        # gzip JS/HTML budgets over dist: hero engine graph, per-route eager
+        # JS (engine vs reading routes), per-page HTML. Deterministic bytes —
+        # safe to hard-enforce on any runner. Budgets live in budgets.json.
+        run: node scripts/check-bundle-budgets.mjs dist
+
+      - name: Perf report staleness gate
+        # The committed src/data/perf-report.json (rendered on
+        # /behind-the-build) must match the just-built dist within ±5% — the
+        # page cannot claim numbers the build no longer produces. Fix locally:
+        # pnpm build && node scripts/gen-perf-report.mjs && pnpm build, commit.
+        run: node scripts/gen-perf-report.mjs --check dist
+
       - name: Public raster optimization gate
         # Fails if a raster committed to public/ would shrink >10% under the
         # optimizer — i.e. someone bypassed the image pipeline. Fix locally:
@@ -67,6 +80,48 @@ jobs:
           name: dist
           path: dist
           retention-days: 1
+
+  lighthouse:
+    name: Lighthouse CI (lab metrics)
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download built site
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Lighthouse CI (lhci autorun)
+        # Assertion severities are set in lighthouserc.cjs: CLS ≤0.02 is a hard
+        # error (deterministic); LCP/TBT/byte-weight are WARN because GitHub
+        # runners render through software GL, where wall-clock lab numbers
+        # measure the runner. They harden to errors when the pipeline gets real
+        # hardware (docs/roadmaps/acceptance-gates.md tracks that promotion).
+        run: pnpm lhci
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci
+          retention-days: 7
 
   e2e:
     name: Playwright E2E (${{ matrix.project }})

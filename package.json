@@ -13,6 +13,7 @@
     "check": "astro check",
     "knip": "knip",
     "test": "node --test \"test/**/*.test.mjs\"",
+    "lhci": "lhci autorun",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "screenshot": "node scripts/screenshot.mjs",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@axe-core/playwright": "^4.12.1",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.61.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
@@ -40,12 +42,20 @@
     "playwright": "^1.61.1",
     "png-to-ico": "^3.0.1",
     "sharp": "^0.35.3",
+    "tslib": "^2.8.1",
     "typescript": "^6.0.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
       "sharp"
-    ]
+    ],
+    "packageExtensions": {
+      "intl-messageformat": {
+        "dependencies": {
+          "tslib": "^2.6.0"
+        }
+      }
+    }
   }
 }
