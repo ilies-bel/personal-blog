@@ -293,14 +293,24 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         <a href={`${href('about')}#get-in-touch`}>Contact</a>
       </nav>
 
+      {/* EXP-001 — reverse-lifecycle manifesto, authored typographic treatment.
+          Each beat gets a lifecycle-state kicker (text-transform: uppercase in CSS),
+          a display-sized headline (the `down` line), and a dim italic whisper —
+          the same three tiers as the live overlay but composed as a deliberate
+          static piece. The arc reads top-to-bottom in reverse-lifecycle order:
+          black hole → red giant → yellow star → nebula → pale blue dot.
+          BEATS.slice() avoids mutating the source array; .reverse() walks the
+          lifecycle from end (black hole) to beginning (pale blue dot), matching
+          the physical scroll direction of the live scene. */}
       {BEATS.slice().reverse().map((beat) => (
-        <Fragment>
-          <h2>{beat.down}</h2>
-          <p>{beat.whisper}</p>
-        </Fragment>
+        <section class="scene-fallback-beat">
+          <p class="scene-fallback-beat-kicker">{beat.state}</p>
+          <h2 class="scene-fallback-beat-heading">{beat.down}</h2>
+          <p class="scene-fallback-beat-whisper">{beat.whisper}</p>
+        </section>
       ))}
 
-      <p>Make it last, or don't make it. Sounds interesting?
+      <p class="scene-fallback-cta">Make it last, or don't make it. Sounds interesting?
         <a href={`${href('about')}#get-in-touch`}>Get in touch.</a></p>
     </div>
   </noscript>

@@ -795,6 +795,52 @@ html.no-js .scene-track  { display: none !important; }
   border-radius: 2px;
 }
 
+/* EXP-001 — manifesto beats, authored typographic treatment.
+   Each beat section gets a hairline rule separating it from the previous so
+   the reverse-lifecycle arc reads as a deliberate sequence (black hole → pale
+   blue dot) rather than an undifferentiated dump of copy. Three typographic
+   tiers mirror the live overlay: kicker (mono uppercase dim), headline (display
+   large), whisper (dim small italic). The kicker text is lowercase in the data
+   (beat.state = 'black hole', 'red giant', …) — text-transform: uppercase in
+   CSS handles the presentation so the data never needs to hard-code case. */
+.scene-fallback-beat {
+  padding-block-start: 2.25rem;
+  border-top: 1px solid color-mix(in oklch, var(--fg) 12%, transparent);
+  margin-block-start: 2.25rem;
+}
+/* Override margin when two beats sit adjacent (avoid double-gap). */
+.scene-fallback-beat:first-of-type {
+  margin-block-start: 0;
+}
+.scene-fallback-beat-kicker {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+/* h2 global already sets font-family / weight / line-height / letter-spacing;
+   only the size needs to be declared here so the beat reads as a major statement. */
+.scene-fallback-beat-heading {
+  margin: 0 0 0.625rem;
+  font-size: var(--text-display);
+}
+.scene-fallback-beat-whisper {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  font-style: italic;
+  color: var(--fg-dim);
+}
+/* CTA paragraph — matches the "Get in touch" closes from other pages; separated
+   from the last beat by the same hairline treatment used between beats. */
+.scene-fallback-cta {
+  margin-block-start: 2.25rem;
+  padding-block-start: 2rem;
+  border-top: 1px solid color-mix(in oklch, var(--fg) 12%, transparent);
+  font-size: var(--text-body);
+}
+
 /* --- WebGL-unavailable fallback (index.astro .webgl-fallback) --------------- */
 /* Shown (display:flex) ONLY when body.webgl-unavailable is present — HeroIsland adds
    that class when the hero's WebGL visual can't run (no/blocked WebGL at mount, or a
