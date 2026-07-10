@@ -198,6 +198,15 @@ body.scene-ready .scene-loader::before {
    (=6) is unchanged; this is purely a height change, so all proportions/easings hold. */
 .scene-track { position: relative; z-index: 0; }
 .scene-stage { height: 300svh; } /* was 160svh — lengthens the whole arc ~1.875×; collapse ≈360svh */
+/* ENG-007 — Mobile cut: compress the scroll track to 8 × 100svh so the full
+   stellar lifecycle fits in ~8 phone viewports (vs ≈18 on the desktop track).
+   Each of the 6 .scene-stage elements is raised to ≈133svh so 6 × 133svh ≈
+   8 × 100svh. The stage coordinate system and every lifecycle threshold remain
+   byte-identical — only the PHYSICAL scroll distance per beat changes.
+   See docs/specs/mobile-cut.md §2 and §8.1. */
+@media (max-width: 767px) {
+  .scene-stage { height: calc(8 / 6 * 100svh); /* ≈ 133.33svh — 8 VP total */ }
+}
 
 /* --- Fixed corner overlay (brand top-left, blog micro-nav top-right) --------- */
 /* About's brand mark — the shared identity lockup (.bh-identity-lockup, hero.css)
