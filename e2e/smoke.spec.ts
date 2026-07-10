@@ -265,3 +265,44 @@ test('PERF-001 — WebGL context count never exceeds 2 across home↔behind-the-
     await assertCap(`home (return ${i})`)
   }
 })
+
+// ---------------------------------------------------------------------------
+// EXP-009 — Canonical IA: Work, Writing, About, Contact on every route
+//
+// Every primary destination must be reachable in one interaction from every
+// page, in every edition (JS, no-JS, reduced-motion, mobile). The nav is
+// server-rendered by SiteNav.astro, so these labels are present in the HTML
+// regardless of JS or motion preference.
+//
+// We assert DOM presence and a valid href (operability), not CSS visibility —
+// the home page boot-gate dims labels visually but they remain in the markup
+// and are always keyboard-accessible.
+// ---------------------------------------------------------------------------
+
+/** The four canonical primary destinations defined by EXP-009. */
+const PRIMARY_IA = ['Work', 'Writing', 'About', 'Contact'] as const
+
+for (const { path, name } of ALL_ROUTES) {
+  test(`${name} — primary nav has Work, Writing, About, Contact`, async ({ page }) => {
+    await page.goto(path)
+
+    // The nav is present on every page (both scene and page surfaces use
+    // aria-label="Sections" — same accessible name, different CSS skins).
+    const nav = page.locator('nav[aria-label="Sections"]')
+    await expect(nav, `Expected nav[aria-label="Sections"] on ${path}`).toBeAttached()
+
+    for (const label of PRIMARY_IA) {
+      // Locate by accessible role + name: the lock-tick spans are aria-hidden,
+      // so the link's accessible name is exactly the visible label text.
+      const link = nav.getByRole('link', { name: label, exact: true })
+      await expect(
+        link,
+        `Expected "${label}" link in nav on ${path}`
+      ).toBeAttached()
+
+      // The link must have a non-empty href — proving it is a real destination.
+      const dest = await link.getAttribute('href')
+      expect(dest, `"${label}" link must have an href on ${path}`).toBeTruthy()
+    }
+  })
+}
