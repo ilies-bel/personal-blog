@@ -1,5 +1,5 @@
 // Post-processing chain: render pass -> bloom -> film grade -> nova whiteout.
-import * as THREE from 'three';
+import { HalfFloatType, PerspectiveCamera, Scene, Vector2, WebGLRenderer, WebGLRenderTarget } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -46,12 +46,12 @@ export interface PostRig extends Rig {
   dispose: () => void;
 }
 export function buildPostChain(
-  renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene,
-  camera: THREE.PerspectiveCamera,
+  renderer: WebGLRenderer,
+  scene: Scene,
+  camera: PerspectiveCamera,
   bloomQuality: BloomQuality = 'full',
 ): PostRig {
-  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+  const composer = new EffectComposer(renderer, new WebGLRenderTarget(1, 1, { type: HalfFloatType }));
   composer.addPass(new RenderPass(scene, camera));
   // Bloom is the most expensive pass (a mip pyramid of blurs). 'full' builds it at
   // the composer resolution EXACTLY as before (high path, byte-identical). 'cheap'
@@ -62,7 +62,7 @@ export function buildPostChain(
   let bloom: UnrealBloomPass | null = null;
   if (bloomQuality !== 'none') {
     bloom = new UnrealBloomPass(
-      new THREE.Vector2(1, 1),
+      new Vector2(1, 1),
       CFG.bloomStr * BLOOM_STRENGTH_MUL[bloomQuality],
       CFG.bloomRad * BLOOM_RADIUS_MUL[bloomQuality],
       0.55,

@@ -7,15 +7,15 @@
 // themselves trail (there is no synthetic separate field). Sparse by construction
 // (a few hundred lanes) so the field reads as separated streaks on black, not a
 // fur ball. See shaders/streak.glsl for the projection + stretch.
-import * as THREE from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, LineSegments, Scene, ShaderMaterial, Sphere, Vector3 } from 'three';
 import { CFG } from '../lib/config';
 import { streakVertexShader, streakFragmentShader } from '../shaders/streak.glsl';
 import type { Uniforms, UniformRig } from './types';
 
 export interface StreakRig extends UniformRig {
-  seg: THREE.LineSegments; // the streak field (frame toggles .visible)
-  geo: THREE.BufferGeometry;
-  mat: THREE.ShaderMaterial;
+  seg: LineSegments; // the streak field (frame toggles .visible)
+  geo: BufferGeometry;
+  mat: ShaderMaterial;
   uniforms: Uniforms;
   dispose: () => void;
 }
@@ -25,9 +25,9 @@ export interface StreakRig extends UniformRig {
 // gas occupies. Kept in sync with disk.glsl's nebula placement.
 const GIANT_R = 4.2;
 const NR = GIANT_R * 1.3;
-const ELL = new THREE.Vector3(1.55, 0.78, 1.15);
+const ELL = new Vector3(1.55, 0.78, 1.15);
 
-export function buildStreak(scene: THREE.Scene, _particleCount: number, pixelRatio: number): StreakRig {
+export function buildStreak(scene: Scene, _particleCount: number, pixelRatio: number): StreakRig {
   // ITEM 6: REDUCE the line noise around the final dot. The lane count is cut ~30%
   // (520 -> 360) and the field is split into TWO opacity tiers: most lanes are FAINT
   // (rgba(160,185,255,0.18)) and only a few — ~7 — are STRONG structural rays
@@ -62,12 +62,12 @@ export function buildStreak(scene: THREE.Scene, _particleCount: number, pixelRat
     end[i0] = 0; end[i1] = 1;
     strong[i0] = isStrong; strong[i1] = isStrong;
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(anchor, 3));
-  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-  geo.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
-  geo.setAttribute('aStrong', new THREE.BufferAttribute(strong, 1));
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new BufferAttribute(anchor, 3));
+  geo.setAttribute('aSeed', new BufferAttribute(seed, 1));
+  geo.setAttribute('aEnd', new BufferAttribute(end, 1));
+  geo.setAttribute('aStrong', new BufferAttribute(strong, 1));
+  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e7);
 
   const uniforms: Uniforms = {
     uTime: { value: 0 },
@@ -77,17 +77,17 @@ export function buildStreak(scene: THREE.Scene, _particleCount: number, pixelRat
     uStreakDir: { value: 1 }, // +1 stretch OUT (toward the dot), -1 pull IN (toward nebula)
   };
   void CFG;
-  const mat = new THREE.ShaderMaterial({
+  const mat = new ShaderMaterial({
     uniforms,
     vertexShader: streakVertexShader,
     fragmentShader: streakFragmentShader,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
 
-  const seg = new THREE.LineSegments(geo, mat);
+  const seg = new LineSegments(geo, mat);
   seg.frustumCulled = false;
   seg.visible = false; // off until the nebula→dot jump
   scene.add(seg);

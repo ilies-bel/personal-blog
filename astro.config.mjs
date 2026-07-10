@@ -5,6 +5,48 @@ import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 
 // ---------------------------------------------------------------------------
+// GLSL comment stripping — PERF-007
+//
+// GLSL shader sources are embedded as template-literal strings tagged with
+// `/* glsl */`. The content is sent verbatim to the GPU driver, which ignores
+// comments, but Vite's esbuild minifier cannot see inside string literals and
+// therefore cannot remove them.  This Vite transform plugin strips single-line
+// (`// …`) and multi-line (`/* … */`) comments from those strings at build
+// time, keeping the source files readable while eliminating dead bytes from the
+// production bundle.  Only files inside `src/hero/shaders/` are affected.
+// ---------------------------------------------------------------------------
+/** @returns {import('vite').Plugin} */
+function stripGlslComments() {
+  return {
+    name: 'strip-glsl-comments',
+    enforce: /** @type {'pre'} */ ('pre'),
+    transform(code, id) {
+      if (!id.includes('/shaders/')) return null;
+      if (!id.endsWith('.ts') && !id.endsWith('.js')) return null;
+
+      let changed = false;
+      const result = code.replace(
+        /\/\* glsl \*\/ `([\s\S]*?)`/g,
+        (_match, content) => {
+          const stripped = content
+            // strip GLSL single-line comments (keep the newline so line numbers
+            // roughly track — the GPU compiler never sees them anyway)
+            .replace(/[ \t]*\/\/[^\n]*/g, '')
+            // strip GLSL multi-line comments
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            // collapse runs of blank lines down to one
+            .replace(/\n{3,}/g, '\n\n');
+          if (stripped !== content) changed = true;
+          return '/* glsl */ `' + stripped + '`';
+        },
+      );
+
+      return changed ? { code: result, map: null } : null;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // GitHub Pages config — custom domain
 // ---------------------------------------------------------------------------
 // The site is served from the apex custom domain `ilies-bel.dev` (GitHub Pages
@@ -70,6 +112,7 @@ export default defineConfig({
     inlineStylesheets: 'always',
   },
   vite: {
+    plugins: [stripGlslComments()],
     build: {
       rollupOptions: {
         output: {

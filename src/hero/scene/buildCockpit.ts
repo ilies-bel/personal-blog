@@ -23,7 +23,7 @@
 // moves or zooms, it simply STOPS BEING INVISIBLE. All meshes stand down
 // (`visible = false`) at decloak 0 and rig.render() skips the pass entirely,
 // so a powered-off cockpit costs zero draws (the draw-audit convention).
-import * as THREE from 'three';
+import { BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Path, PerspectiveCamera, Scene, ShaderMaterial, Shape, ShapeGeometry, Sphere, Vector2, Vector3, WebGLRenderer } from 'three';
 import {
   COCKPIT_BEAMS,
   HULL_OUTER,
@@ -53,15 +53,15 @@ export interface CockpitRig extends Rig {
   frame(ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean, nova: number): void;
   /** Composite the cockpit over the already-graded canvas (autoClear off).
    *  No-op while fully cloaked — zero draws when powered down. */
-  render(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera): void;
+  render(renderer: WebGLRenderer, camera: PerspectiveCamera): void;
 }
 
 // The trim palette, DISPLAY sRGB, written raw by the post-grade shaders —
 // matched to the DOM instruments' highlight family so metal and holography
 // read as one machine.
-const AMBER = new THREE.Color(1.0, 0.6, 0.19);
-const CORE_TINT = new THREE.Color(1.0, 0.88, 0.64);
-const HUD_WHITE = new THREE.Color(0.88, 0.92, 0.99);
+const AMBER = new Color(1.0, 0.6, 0.19);
+const CORE_TINT = new Color(1.0, 0.88, 0.64);
+const HUD_WHITE = new Color(0.88, 0.92, 0.99);
 
 // ── Star-light keyframes over the eased stage ───────────────────────────────
 // The chapter's light colour + intensity, matched to what the canvas actually
@@ -79,7 +79,7 @@ const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: numb
   { s: 4.5, c: [0.74, 0.82, 1.0], i: 0.72 }, // the pale dot
 ];
 
-function starLightAt(stage: number, outColor: THREE.Color): number {
+function starLightAt(stage: number, outColor: Color): number {
   let a = STAR_KEYS[0];
   let b = STAR_KEYS[STAR_KEYS.length - 1];
   for (let i = 0; i < STAR_KEYS.length - 1; i++) {
@@ -102,7 +102,7 @@ function starLightAt(stage: number, outColor: THREE.Color): number {
  *  chisel tapers ride this) — the vertex shader extrudes half per side, and
  *  the fragment shader draws flat fill + edge hairlines off the cross
  *  coordinate. */
-function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeometry {
+function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): BufferGeometry {
   const pos: number[] = [];
   const norm: number[] = [];
   const side: number[] = [];
@@ -165,20 +165,20 @@ function buildBeamRibbons(beams: ReadonlyArray<CockpitBeam>): THREE.BufferGeomet
     }
   }
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('aPos', new THREE.BufferAttribute(new Float32Array(pos), 2));
-  geo.setAttribute('aNorm', new THREE.BufferAttribute(new Float32Array(norm), 2));
-  geo.setAttribute('aSide', new THREE.BufferAttribute(new Float32Array(side), 1));
-  geo.setAttribute('aW', new THREE.BufferAttribute(new Float32Array(weight), 1));
-  geo.setAttribute('aDW', new THREE.BufferAttribute(new Float32Array(dw), 1));
+  const geo = new BufferGeometry();
+  geo.setAttribute('aPos', new BufferAttribute(new Float32Array(pos), 2));
+  geo.setAttribute('aNorm', new BufferAttribute(new Float32Array(norm), 2));
+  geo.setAttribute('aSide', new BufferAttribute(new Float32Array(side), 1));
+  geo.setAttribute('aW', new BufferAttribute(new Float32Array(weight), 1));
+  geo.setAttribute('aDW', new BufferAttribute(new Float32Array(dw), 1));
   geo.setAttribute('position', geo.getAttribute('aPos'));
   geo.setIndex(idx);
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e6);
   return geo;
 }
 
-function shapeFromPts(pts: ReadonlyArray<Pt>): THREE.Shape {
-  const s = new THREE.Shape();
+function shapeFromPts(pts: ReadonlyArray<Pt>): Shape {
+  const s = new Shape();
   s.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
   s.closePath();
@@ -189,19 +189,19 @@ const overlayMatOpts = {
   transparent: true,
   depthWrite: false,
   depthTest: false,
-  side: THREE.DoubleSide,
+  side: DoubleSide,
 } as const;
 
 export function buildCockpit(): CockpitRig {
   // The overlay's private scene — composited over the graded canvas by
   // rig.render(); the main scene never sees these meshes.
-  const overlay = new THREE.Scene();
+  const overlay = new Scene();
 
   const shared = {
     uDecloak: { value: 0 },
     uTime: { value: 0 },
-    uLight: { value: new THREE.Vector2(COCKPIT_W / 2, COCKPIT_H * 0.43) },
-    uStarColor: { value: new THREE.Color(0.88, 0.86, 0.8) },
+    uLight: { value: new Vector2(COCKPIT_W / 2, COCKPIT_H * 0.43) },
+    uStarColor: { value: new Color(0.88, 0.86, 0.8) },
     uStarIntensity: { value: 0.65 },
     uNova: { value: 0 },
     uAlpha: { value: 0 },
@@ -216,32 +216,32 @@ export function buildCockpit(): CockpitRig {
   // edge sits on a member's centreline (the beam band overlaps it).
   const hullShape = shapeFromPts(HULL_OUTER);
   for (const hole of HULL_HOLES) {
-    hullShape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
+    hullShape.holes.push(new Path(hole.map(([x, y]) => new Vector2(x, y))));
   }
-  const panelGeo = new THREE.ShapeGeometry(hullShape);
+  const panelGeo = new ShapeGeometry(hullShape);
   const panelUniforms: Uniforms = { ...shared, uFill: { value: 1.0 } };
-  const panelMat = new THREE.ShaderMaterial({
+  const panelMat = new ShaderMaterial({
     uniforms: panelUniforms,
     vertexShader: cockpitPanelVertexShader,
     fragmentShader: cockpitPanelFragmentShader,
     ...overlayMatOpts,
   });
-  const panels = new THREE.Mesh(panelGeo, panelMat);
+  const panels = new Mesh(panelGeo, panelMat);
   panels.frustumCulled = false;
   panels.renderOrder = 40;
   panels.visible = false;
   overlay.add(panels);
 
   // The recessed console screen — powered display glass under the CTA readout.
-  const screenGeo = new THREE.ShapeGeometry(shapeFromPts(PANEL_SCREEN));
+  const screenGeo = new ShapeGeometry(shapeFromPts(PANEL_SCREEN));
   const screenUniforms: Uniforms = { ...shared };
-  const screenMat = new THREE.ShaderMaterial({
+  const screenMat = new ShaderMaterial({
     uniforms: screenUniforms,
     vertexShader: cockpitPanelVertexShader,
     fragmentShader: cockpitScreenFragmentShader,
     ...overlayMatOpts,
   });
-  const screen = new THREE.Mesh(screenGeo, screenMat);
+  const screen = new Mesh(screenGeo, screenMat);
   screen.frustumCulled = false;
   screen.renderOrder = 41;
   screen.visible = false;
@@ -251,13 +251,13 @@ export function buildCockpit(): CockpitRig {
   // echo drawn in-shader off the cross-section coordinate.
   const beamGeo = buildBeamRibbons(COCKPIT_BEAMS);
   const beamUniforms: Uniforms = { ...shared };
-  const beamMat = new THREE.ShaderMaterial({
+  const beamMat = new ShaderMaterial({
     uniforms: beamUniforms,
     vertexShader: cockpitBeamVertexShader,
     fragmentShader: cockpitBeamFragmentShader,
     ...overlayMatOpts,
   });
-  const beams = new THREE.Mesh(beamGeo, beamMat);
+  const beams = new Mesh(beamGeo, beamMat);
   beams.frustumCulled = false;
   beams.renderOrder = 42;
   beams.visible = false;
@@ -270,13 +270,13 @@ export function buildCockpit(): CockpitRig {
     ...shared,
     uHud: { value: HUD_WHITE.clone() },
   };
-  const hudMat = new THREE.ShaderMaterial({
+  const hudMat = new ShaderMaterial({
     uniforms: hudUniforms,
     vertexShader: cockpitHudVertexShader,
     fragmentShader: cockpitHudFragmentShader,
     ...overlayMatOpts,
   });
-  const hud = new THREE.Mesh(hudGeo, hudMat);
+  const hud = new Mesh(hudGeo, hudMat);
   hud.frustumCulled = false;
   hud.renderOrder = 45;
   hud.visible = false;
@@ -289,7 +289,7 @@ export function buildCockpit(): CockpitRig {
   let animFrom = 0;
   let animStart = -1;
   let target: boolean | null = null; // null until the first frame samples power
-  const scratchColor = new THREE.Color();
+  const scratchColor = new Color();
 
   const frame = (ndcX: number, ndcY: number, stage: number, t: number, hudActive: boolean, nova: number): void => {
     if (target === null || hudActive !== target) {
@@ -321,16 +321,16 @@ export function buildCockpit(): CockpitRig {
     // near edge; colour/intensity keyframed over the eased stage.
     const lx = Math.max(-200, Math.min(COCKPIT_W + 200, (ndcX * 0.5 + 0.5) * COCKPIT_W));
     const ly = Math.max(-200, Math.min(COCKPIT_H + 200, (1 - (ndcY * 0.5 + 0.5)) * COCKPIT_H));
-    (shared.uLight.value as THREE.Vector2).set(lx, ly);
+    (shared.uLight.value as Vector2).set(lx, ly);
     shared.uStarIntensity.value = starLightAt(stage, scratchColor);
-    (shared.uStarColor.value as THREE.Color).copy(scratchColor);
+    (shared.uStarColor.value as Color).copy(scratchColor);
 
     // Design units per CSS half-px, tracking the live viewport height (the
     // non-scaling-stroke contract; per-member widths ride aDW).
     shared.uHalfW.value = 0.5 * (COCKPIT_H / window.innerHeight);
   };
 
-  const render = (renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera): void => {
+  const render = (renderer: WebGLRenderer, camera: PerspectiveCamera): void => {
     if (decloak <= 0.001) return; // powered off — zero draws
     const prevAutoClear = renderer.autoClear;
     renderer.autoClear = false;

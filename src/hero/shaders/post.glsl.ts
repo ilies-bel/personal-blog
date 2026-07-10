@@ -1,13 +1,13 @@
 // Post-processing passes: film grade + supernova whiteout.
 // Extracted verbatim from BlackHole.tsx — GLSL byte-identical, EXCEPT the
 // NovaShader's uNova early-out branch (a pixel-identical perf gate; see main()).
-import * as THREE from 'three';
+import { Texture, Vector2 } from 'three';
 
 export const GradeShader = {
   uniforms: {
-    tDiffuse: { value: null as THREE.Texture | null },
+    tDiffuse: { value: null as Texture | null },
     uTime: { value: 0 },
-    uResolution: { value: new THREE.Vector2(1, 1) },
+    uResolution: { value: new Vector2(1, 1) },
     uExposure: { value: 1.0 },
     uGrain: { value: 0.05 },
     uWarmth: { value: 0.05 },
@@ -116,11 +116,11 @@ export const GradeShader = {
 
 export const NovaShader = {
   uniforms: {
-    tDiffuse: { value: null as THREE.Texture | null },
+    tDiffuse: { value: null as Texture | null },
     uNova: { value: 0 },                                  // 0..1 master envelope
     uNovaDir: { value: 1 },                               // +1 explode / -1 implode
     uAspect: { value: 1 },                                // round (not elliptical) falloff
-    uCenter: { value: new THREE.Vector2(0.5, 0.5) },      // blast origin in screen UV
+    uCenter: { value: new Vector2(0.5, 0.5) },      // blast origin in screen UV
     uPeak: { value: 0.94 },                               // filmic cap (NOT pure white)
     uShock: { value: 0.82 },                              // expanding shock-ring intensity (0 = off) — dimmed for a moodier read
     uShockDeg: { value: 26.0 },                           // disk inclination in DEGREES from edge-on (low = flatter/more edge-on)

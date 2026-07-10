@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "postbuild": "node --test \"test/metadata.test.mjs\"",
+    "postbuild": "node --test \"test/metadata.test.mjs\" && node scripts/bundle-budget.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "knip": "knip",

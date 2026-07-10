@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bundle Budget Report — PERF-007</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  .meta { color: #666; font-size: 0.85rem; margin-bottom: 2rem; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 2rem; }
+  th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #eee; }
+  th { background: #f5f5f5; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; font-family: monospace; }
+  .pass { color: #2d8a4e; font-weight: bold; }
+  .warn { color: #b45309; font-weight: bold; }
+  .fail { color: #c0392b; font-weight: bold; }
+  tr.fail td { background: #fff5f5; }
+  tr.warn td { background: #fffbeb; }
+  tr.pass td { background: #f0fff4; }
+  .section { margin-top: 2rem; }
+  .note { font-size: 0.85rem; color: #555; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+<h1>Bundle Budget Report — PERF-007</h1>
+<p class="meta">
+  Generated: 2026-07-10T13:52:17.651Z<br>
+  Dist: <code>/Users/ib472e5l/project/perso/personal-blog/.mars/worktrees/mars-07621695/dist</code>
+</p>
+
+<div class="section">
+<h2>Budget Summary</h2>
+<table>
+  <thead><tr><th>Metric</th><th class="num">Actual</th><th class="num">Target</th><th class="num">Hard Limit</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr class="pass">
+      <td>Pre-hero (sync JS)</td>
+      <td class="num">13.0 KiB</td>
+      <td class="num">65.0 KiB</td>
+      <td class="num">85.0 KiB</td>
+      <td class="pass">PASS</td>
+    </tr>
+    <tr class="pass">
+      <td>Hero graph (engine + component)</td>
+      <td class="num">200.9 KiB</td>
+      <td class="num">210.0 KiB</td>
+      <td class="num">240.0 KiB</td>
+      <td class="pass">PASS</td>
+    </tr>
+    <tr class="pass">
+      <td>Reading routes Three.js bytes</td>
+      <td class="num">0.0 KiB</td>
+      <td class="num">0.0 KiB</td>
+      <td class="num">0.0 KiB</td>
+      <td class="pass">PASS</td>
+    </tr>
+    <tr class="pass">
+      <td>Duplicate engine copies</td>
+      <td class="num">0 chunk(s)</td>
+      <td class="num">0</td>
+      <td class="num">0</td>
+      <td class="pass">PASS</td>
+    </tr>
+  </tbody>
+</table>
+<p class="note">
+  <strong>Pre-hero:</strong> Chunks from sync &lt;script&gt; tags on the hero page and their static transitive deps.
+  This is the blocking JS before any island hydrates.<br>
+  <strong>Hero graph:</strong> The BlackHole island component's full chunk graph (static + dynamic imports, transitively).
+  Excludes the Astro/React renderer-url (framework overhead).<br>
+  <strong>Reading routes:</strong> /posts/** pages must ship zero Three.js bytes.<br>
+  <strong>Duplicate engine:</strong> Three.js core symbols must not appear in more than one chunk family.
+</p>
+</div>
+
+<div class="section">
+<h2>Hero Graph Chunks (15 chunks, 200.9 KiB total)</h2>
+<table>
+  <thead><tr><th>Chunk</th><th class="num">Gzip size</th></tr></thead>
+  <tbody><tr><td>three-core.V_QMjIXb.js</td><td class="num">123.5 KiB</td></tr>
+<tr><td>createScene.CXPvcJ6V.js</td><td class="num">43.1 KiB</td></tr>
+<tr><td>BlackHole.D8snTCYb.js</td><td class="num">6.7 KiB</td></tr>
+<tr><td>contextRegistry.72MjZtQt.js</td><td class="num">5.0 KiB</td></tr>
+<tr><td>three-post.CjpyKcsR.js</td><td class="num">4.8 KiB</td></tr>
+<tr><td>client.Dr0Y4fPM.js</td><td class="num">4.2 KiB</td></tr>
+<tr><td>HudNavigation.DVNq9Mmy.js</td><td class="num">3.6 KiB</td></tr>
+<tr><td>index.CO9X3OiW.js</td><td class="num">2.8 KiB</td></tr>
+<tr><td>cockpitGeometry.RmLyG8v0.js</td><td class="num">1.7 KiB</td></tr>
+<tr><td>config.C93jf-Wf.js</td><td class="num">1.7 KiB</td></tr>
+<tr><td>index.DQgKYfj8.js</td><td class="num">1.3 KiB</td></tr>
+<tr><td>presentationClock.CD1SOlL_.js</td><td class="num">1.0 KiB</td></tr>
+<tr><td>preload-helper.CVfkMyKi.js</td><td class="num">0.7 KiB</td></tr>
+<tr><td>constants.CQR0iThZ.js</td><td class="num">0.6 KiB</td></tr>
+<tr><td>warmThree.BRg6drB7.js</td><td class="num">0.1 KiB</td></tr></tbody>
+</table>
+</div>
+
+<div class="section">
+<h2>Reading Route JS Totals</h2>
+<table>
+  <thead><tr><th>Route</th><th class="num">Gzip size</th></tr></thead>
+  <tbody><tr><td>posts/memory-leak-search-and-destroy/index.html</td><td class="num">12.0 KiB</td></tr>
+<tr><td>posts/thanks-for-scrolling-to-the-bottom/index.html</td><td class="num">12.0 KiB</td></tr></tbody>
+</table>
+<p class="note">Reading routes ship no React islands and no Three.js — only the baseline Astro client runtime.</p>
+</div>
+
+<div class="section">
+<h2>Pre-hero Chunks (7 chunks, 13.0 KiB total)</h2>
+<table>
+  <thead><tr><th>Chunk</th><th class="num">Gzip size</th></tr></thead>
+  <tbody>
+    <tr><td>ClientRouter.astro_astro_type_script_index_0_lang.BGPm0vNV.js</td><td class="num">1.7 KiB</td></tr>
+    <tr><td>CustomCursor.astro_astro_type_script_index_0_lang.CY6SW7OM.js</td><td class="num">2.3 KiB</td></tr>
+    <tr><td>index.astro_astro_type_script_index_0_lang.CFmhruxA.js</td><td class="num">0.5 KiB</td></tr>
+    <tr><td>BaseLayout.astro_astro_type_script_index_2_lang.DLhqU9B1.js</td><td class="num">3.1 KiB</td></tr>
+    <tr><td>client.Dr0Y4fPM.js</td><td class="num">4.2 KiB</td></tr>
+    <tr><td>constants.CQR0iThZ.js</td><td class="num">0.6 KiB</td></tr>
+    <tr><td>preload-helper.CVfkMyKi.js</td><td class="num">0.7 KiB</td></tr>
+  </tbody>
+</table>
+</div>
+
+</body>
+</html>

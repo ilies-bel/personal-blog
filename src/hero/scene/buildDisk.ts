@@ -1,16 +1,16 @@
 // Accretion-disk GPU-particle rig (1.2M points; two lensed images share one geometry).
-import * as THREE from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, Scene, ShaderMaterial, Sphere, UniformsUtils, Vector3, Vector4 } from 'three';
 import { CFG, densityCompensation } from '../lib/config';
 import { simDimensions } from '../gravitySim';
 import { diskVertexShader, diskFragmentShader, DISK_ERUPT_SLOTS, DISK_TAIL_EPS } from '../shaders/disk.glsl';
 import type { Uniforms, UniformRig } from './types';
 
 export interface DiskRig extends UniformRig {
-  primary: THREE.ShaderMaterial; // bright crescent (primary lensed image)
-  secondary: THREE.ShaderMaterial; // lower grainy band (secondary image, sign -1)
-  primaryPts: THREE.Points; // the primary Points object (frame toggles .visible)
-  secondaryPts: THREE.Points; // the secondary Points object (.visible too)
-  geo: THREE.BufferGeometry;
+  primary: ShaderMaterial; // bright crescent (primary lensed image)
+  secondary: ShaderMaterial; // lower grainy band (secondary image, sign -1)
+  primaryPts: Points; // the primary Points object (frame toggles .visible)
+  secondaryPts: Points; // the secondary Points object (.visible too)
+  geo: BufferGeometry;
   uniforms: Uniforms; // shared uniform block (primary's; secondary clones it)
   // per-particle identity arrays — handed to the GPGPU collapse sim so its seed
   // pass reproduces the exact analytic nebula placement for these same particles.
@@ -20,7 +20,7 @@ export interface DiskRig extends UniformRig {
   count: number;
   dispose: () => void;
 }
-export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false): DiskRig {
+export function buildDisk(scene: Scene, particleCount: number, pixelRatio: number, lowTier = false): DiskRig {
   const N = Math.floor(particleCount);
   // Low-tier density compensation (no-op unless lowTier → high path + every high-tier
   // width bucket stay byte-identical; only the low fallback buckets are boosted). The
@@ -50,14 +50,14 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     aSimUV[i * 2 + 0] = ((i % sim.width) + 0.5) / sim.width;
     aSimUV[i * 2 + 1] = (Math.floor(i / sim.width) + 0.5) / sim.height;
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('aU', new THREE.BufferAttribute(aU, 1));
-  geo.setAttribute('aPhase', new THREE.BufferAttribute(aPhase, 1));
-  geo.setAttribute('aThickN', new THREE.BufferAttribute(aThickN, 1));
-  geo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
-  geo.setAttribute('aSimUV', new THREE.BufferAttribute(aSimUV, 2));
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e4);
+  const geo = new BufferGeometry();
+  geo.setAttribute('aU', new BufferAttribute(aU, 1));
+  geo.setAttribute('aPhase', new BufferAttribute(aPhase, 1));
+  geo.setAttribute('aThickN', new BufferAttribute(aThickN, 1));
+  geo.setAttribute('aSeed', new BufferAttribute(aSeed, 1));
+  geo.setAttribute('aSimUV', new BufferAttribute(aSimUV, 2));
+  geo.setAttribute('position', new BufferAttribute(new Float32Array(N * 3), 3));
+  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e4);
 
   const uniforms: Uniforms = {
     uTime: { value: 0 },
@@ -126,7 +126,7 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     //   the SAME value as transitions.ts' GIANT_RADIUS_SCALE (= 10.5/4.2), the single
     //   source shared with lifecycle's GIANT_FULL + createScene's RED_GIANT_RADIUS — keep
     //   in sync (left as the literal here so this uniform default reads at a glance).
-    uGiantCenter: { value: new THREE.Vector3(0, 0, 0) }, // centred; framing is a camera move
+    uGiantCenter: { value: new Vector3(0, 0, 0) }, // centred; framing is a camera move
     uGiantSpin: { value: 0 }, // axial spin angle (radians); driven per-frame from uTime
     uGranScale: { value: 26.0 }, // granulation cell frequency across the surface
     // --- baked red-giant granulation cubemap (scene/buildGranBake.ts) ---------
@@ -171,25 +171,25 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     // frame. NOTE: secondary = primary.clone() DEEP-clones these arrays (UniformsUtils),
     // so the render loop writes BOTH disk materials separately (as it does for uGiant
     // etc.) — see createScene's giant-eruption pool advance.
-    uErupt: { value: Array.from({ length: DISK_ERUPT_SLOTS }, () => new THREE.Vector4(0, 1, 0, 0)) },
+    uErupt: { value: Array.from({ length: DISK_ERUPT_SLOTS }, () => new Vector4(0, 1, 0, 0)) },
     uEruptAge: { value: Array.from({ length: DISK_ERUPT_SLOTS }, () => 0) },
   };
 
-  const primary = new THREE.ShaderMaterial({
+  const primary = new ShaderMaterial({
     uniforms,
     vertexShader: diskVertexShader,
     fragmentShader: diskFragmentShader,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
   const secondary = primary.clone();
-  secondary.uniforms = THREE.UniformsUtils.clone(uniforms);
+  secondary.uniforms = UniformsUtils.clone(uniforms);
   secondary.uniforms.uImageSign.value = -1.0;
 
-  const primaryPts = new THREE.Points(geo, primary);
-  const secondaryPts = new THREE.Points(geo, secondary);
+  const primaryPts = new Points(geo, primary);
+  const secondaryPts = new Points(geo, secondary);
   primaryPts.frustumCulled = false;
   secondaryPts.frustumCulled = false;
   scene.add(primaryPts);

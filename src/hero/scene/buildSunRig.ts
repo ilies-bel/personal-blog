@@ -1,5 +1,5 @@
 // Sun / red-giant mesh rig: textured photosphere, glow shell, corona, star dome, loops.
-import * as THREE from 'three';
+import { AdditiveBlending, BackSide, BufferAttribute, BufferGeometry, Color, Group, IcosahedronGeometry, Mesh, PlaneGeometry, Points, Scene, ShaderMaterial, Sphere, Vector3, Vector4 } from 'three';
 import {
   sunSurfaceVert, sunSurfaceFrag, sunGlowVert, sunGlowFrag,
   sunCoronaVert, sunCoronaFrag, sunStarVert, sunStarFrag, sunLoopVert, sunLoopFrag,
@@ -12,28 +12,28 @@ export const STAR_BACK_BASE_BRIGHT = 2.2;
 // SunRig is a plain Rig (no shared `uniforms` block): each mesh carries its own
 // material with its own uniforms, so there is no single block to widen to UniformRig.
 export interface SunRig extends Rig {
-  group: THREE.Group;
-  surfaceMat: THREE.ShaderMaterial;
+  group: Group;
+  surfaceMat: ShaderMaterial;
   // The photosphere mesh itself. Exposed so the render loop's click raycaster can
   // target ONLY the solid surface (clicks on the surrounding corona/loops shouldn't
   // erupt). Its live world transform is what the raycaster intersects.
-  surface: THREE.Mesh;
-  glowMat: THREE.ShaderMaterial;
-  coronaMat: THREE.ShaderMaterial;
-  loopMat: THREE.ShaderMaterial;
-  starMat: THREE.ShaderMaterial;
+  surface: Mesh;
+  glowMat: ShaderMaterial;
+  coronaMat: ShaderMaterial;
+  loopMat: ShaderMaterial;
+  starMat: ShaderMaterial;
   // The twinkling star backdrop dome. It is a SEPARATE scene object (NOT a child
   // of `group`) so the render loop can show it behind BOTH the yellow star and the
   // red giant (which is drawn by the point cloud, not this rig) and so the rig's
   // forming-scale never shrinks the far star field. Visibility is toggled on its
   // own (s.starBackVisible), independent of group.visible.
-  starBack: THREE.Points;
-  corona: THREE.Mesh;
+  starBack: Points;
+  corona: Mesh;
   /** The coronal-loop arcade Points (~67k sprites at uPS=150). Exposed so the
    *  render loop can gate its `.visible` when the atmosphere's uFade is exactly 0
    *  (the loop frag multiplies BOTH rgb and alpha by uFade, additive blending →
    *  zero contribution while every sprite still rasterizes at full fill cost). */
-  loops: THREE.Points;
+  loops: Points;
   dispose: () => void;
 }
 
@@ -42,8 +42,8 @@ export interface SunRig extends Rig {
 // scaled to `R` world units. Added to `scene` hidden; the render loop reveals it
 // only during the yellow stage and advances its uTime uniforms. `pixelRatio`
 // feeds the loop Points' size, matching the reference's gl_PointSize math.
-export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): SunRig {
-  const group = new THREE.Group();
+export function buildSunRig(scene: Scene, R: number, pixelRatio: number): SunRig {
+  const group = new Group();
   group.visible = false;
 
   // --- (A) photosphere mesh ---
@@ -53,13 +53,13 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
   // plus an age in seconds. All start idle (intensity 0). The render loop owns the
   // JS-side pool and copies it into these arrays each frame (it mutates the same
   // Vector4 / number entries in place, so there is no per-frame allocation).
-  const uEruptInit: THREE.Vector4[] = [];
+  const uEruptInit: Vector4[] = [];
   const uEruptAgeInit: number[] = [];
   for (let i = 0; i < SUN_ERUPT_SLOTS; i++) {
-    uEruptInit.push(new THREE.Vector4(0, 1, 0, 0)); // dir +Y, intensity 0 = idle
+    uEruptInit.push(new Vector4(0, 1, 0, 0)); // dir +Y, intensity 0 = idle
     uEruptAgeInit.push(0);
   }
-  const surfaceMat = new THREE.ShaderMaterial({
+  const surfaceMat = new ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
       // uMeshFade: yellow↔red swap cross-dissolve opacity (1 = fully present; <1 ONLY
@@ -95,23 +95,23 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     depthWrite: true,
     premultipliedAlpha: true,
   });
-  const surface = new THREE.Mesh(new THREE.IcosahedronGeometry(R, 24), surfaceMat);
+  const surface = new Mesh(new IcosahedronGeometry(R, 24), surfaceMat);
   group.add(surface);
 
   // --- (B) inner chromosphere glow (BackSide additive) ---
   // uColor is driven per frame (gold → dim red) so the glow cools with the star.
-  const glowMat = new THREE.ShaderMaterial({
+  const glowMat = new ShaderMaterial({
     // uFade: swap cross-dissolve presence (1 = full glow; the render loop drives it from
     // meshW so the chromosphere rim dissolves in with the photosphere). Default 1 → no-op.
-    uniforms: { uColor: { value: new THREE.Color(1.0, 0.55, 0.16) }, uFade: { value: 1 } },
+    uniforms: { uColor: { value: new Color(1.0, 0.55, 0.16) }, uFade: { value: 1 } },
     vertexShader: sunGlowVert,
     fragmentShader: sunGlowFrag,
-    side: THREE.BackSide,
+    side: BackSide,
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
   });
-  const glow = new THREE.Mesh(new THREE.IcosahedronGeometry(R * 1.08, 16), glowMat);
+  const glow = new Mesh(new IcosahedronGeometry(R * 1.08, 16), glowMat);
   group.add(glow);
 
   // --- (C) soft corona haze (camera-facing billboard) ---
@@ -122,16 +122,16 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
   // a smaller plane keeps uDiskFrac larger (disc fills more of the quad) so the
   // glow stays anchored right at the rim instead of floating out in dead space.
   const coronaHalf = R * 2.4;
-  const coronaMat = new THREE.ShaderMaterial({
+  const coronaMat = new ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uDiskFrac: { value: R / coronaHalf }, uRed: { value: 0 }, uFade: { value: 1 } },
     vertexShader: sunCoronaVert,
     fragmentShader: sunCoronaFrag,
     transparent: true,
     depthWrite: false,
     depthTest: false,
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
   });
-  const corona = new THREE.Mesh(new THREE.PlaneGeometry(coronaHalf * 2.0, coronaHalf * 2.0), coronaMat);
+  const corona = new Mesh(new PlaneGeometry(coronaHalf * 2.0, coronaHalf * 2.0), coronaMat);
   group.add(corona);
 
   // --- (D) coronal loops + footpoints + prominences (CPU build, ported) ---
@@ -400,23 +400,23 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     });
   }
 
-  const loopGeo = new THREE.BufferGeometry();
-  loopGeo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(POS), 3));
-  loopGeo.setAttribute('aColor', new THREE.BufferAttribute(Float32Array.from(COL), 3));
-  loopGeo.setAttribute('aSize', new THREE.BufferAttribute(Float32Array.from(SZ), 1));
-  loopGeo.setAttribute('aSeed', new THREE.BufferAttribute(Float32Array.from(SEED), 1));
-  loopGeo.setAttribute('aU', new THREE.BufferAttribute(Float32Array.from(UU), 1));
-  loopGeo.setAttribute('aBright', new THREE.BufferAttribute(Float32Array.from(BR), 1));
-  loopGeo.setAttribute('aSeedPos', new THREE.BufferAttribute(Float32Array.from(SEEDPOS), 3));
-  loopGeo.setAttribute('aLifeOff', new THREE.BufferAttribute(Float32Array.from(LOFF), 1));
-  loopGeo.setAttribute('aLifePer', new THREE.BufferAttribute(Float32Array.from(LPER), 1));
-  loopGeo.setAttribute('aOn', new THREE.BufferAttribute(Float32Array.from(LON), 1));
-  loopGeo.setAttribute('aSweep', new THREE.BufferAttribute(Float32Array.from(SWP), 1));
-  loopGeo.setAttribute('aSeq', new THREE.BufferAttribute(Float32Array.from(SEQ), 1));
+  const loopGeo = new BufferGeometry();
+  loopGeo.setAttribute('position', new BufferAttribute(Float32Array.from(POS), 3));
+  loopGeo.setAttribute('aColor', new BufferAttribute(Float32Array.from(COL), 3));
+  loopGeo.setAttribute('aSize', new BufferAttribute(Float32Array.from(SZ), 1));
+  loopGeo.setAttribute('aSeed', new BufferAttribute(Float32Array.from(SEED), 1));
+  loopGeo.setAttribute('aU', new BufferAttribute(Float32Array.from(UU), 1));
+  loopGeo.setAttribute('aBright', new BufferAttribute(Float32Array.from(BR), 1));
+  loopGeo.setAttribute('aSeedPos', new BufferAttribute(Float32Array.from(SEEDPOS), 3));
+  loopGeo.setAttribute('aLifeOff', new BufferAttribute(Float32Array.from(LOFF), 1));
+  loopGeo.setAttribute('aLifePer', new BufferAttribute(Float32Array.from(LPER), 1));
+  loopGeo.setAttribute('aOn', new BufferAttribute(Float32Array.from(LON), 1));
+  loopGeo.setAttribute('aSweep', new BufferAttribute(Float32Array.from(SWP), 1));
+  loopGeo.setAttribute('aSeq', new BufferAttribute(Float32Array.from(SEQ), 1));
   // large bound so the loops/prominences are never frustum-culled
-  loopGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), R * 8);
+  loopGeo.boundingSphere = new Sphere(new Vector3(0, 0, 0), R * 8);
 
-  const loopMat = new THREE.ShaderMaterial({
+  const loopMat = new ShaderMaterial({
     // uPS 70 -> 150: fatter points so consecutive samples along an arc overlap into a
     // continuous glowing filament instead of a bead-chain (the wire-whisk artifact).
     // At the production disc size (~200 px) the old 70 gave ~1 px beads.
@@ -426,9 +426,9 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     transparent: true,
     depthWrite: false,
     depthTest: true,
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
   });
-  const loops = new THREE.Points(loopGeo, loopMat);
+  const loops = new Points(loopGeo, loopMat);
   loops.frustumCulled = false;
   group.add(loops);
 
@@ -459,12 +459,12 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     // while the bulk still reads as a fine, populated field
     sbMag[i] = Math.pow(Math.random(), 2);
   }
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(sbPos, 3));
-  starGeo.setAttribute('aSeed', new THREE.BufferAttribute(sbSeed, 1));
-  starGeo.setAttribute('aMag', new THREE.BufferAttribute(sbMag, 1));
-  starGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), STAR_BACK_R * 1.3);
-  const starMat = new THREE.ShaderMaterial({
+  const starGeo = new BufferGeometry();
+  starGeo.setAttribute('position', new BufferAttribute(sbPos, 3));
+  starGeo.setAttribute('aSeed', new BufferAttribute(sbSeed, 1));
+  starGeo.setAttribute('aMag', new BufferAttribute(sbMag, 1));
+  starGeo.boundingSphere = new Sphere(new Vector3(0, 0, 0), STAR_BACK_R * 1.3);
+  const starMat = new ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
       uPixelRatio: { value: pixelRatio },
@@ -476,9 +476,9 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
     transparent: true,
     depthWrite: false, // additive points: don't occlude each other...
     depthTest: true, // ...but DO get occluded by the opaque photosphere
-    blending: THREE.AdditiveBlending,
+    blending: AdditiveBlending,
   });
-  const starBack = new THREE.Points(starGeo, starMat);
+  const starBack = new Points(starGeo, starMat);
   starBack.frustumCulled = false;
   starBack.visible = false; // shown by the render loop behind the yellow star + red giant
   scene.add(starBack);
