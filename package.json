@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "postbuild": "node --test \"test/metadata.test.mjs\"",
     "preview": "astro preview",
     "check": "astro check",
     "knip": "knip",

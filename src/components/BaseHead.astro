@@ -2,7 +2,13 @@
 // SEO-critical <head>. Everything here is rendered into the STATIC HTML at
 // build time so search crawlers see complete, correct metadata without
 // executing any of the client-side interrogation JavaScript.
-import { SITE_TITLE, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, SITE_LANG } from '../consts';
+import {
+  SITE_TITLE,
+  SITE_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  SITE_OG_LOCALE,
+  SITE_OWNER,
+} from '../consts';
 // Import the above-the-fold faces so Vite resolves their final fingerprinted,
 // base-prefixed URLs (?url guarantees the href can never drift from the URL
 // the bundled CSS references). Two preloads:
@@ -18,22 +24,38 @@ interface Props {
   description?: string;
   // Path of the OG image relative to /public, or an absolute URL.
   ogImage?: string;
+  // OG image dimensions in pixels (defaults: 1200×630, the standard card size).
+  // Pass explicit values when a page uses a non-standard image.
+  ogImageWidth?: number;
+  ogImageHeight?: number;
+  // Alt text for the OG / Twitter card image (used by screen readers and
+  // unfurlers that surface image descriptions).
+  ogImageAlt?: string;
   // 'website' for index/listing pages, 'article' for posts.
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
   // When true, emits `noindex, nofollow` so crawlers skip this page (e.g. 404).
   noindex?: boolean;
+  // Emit a Person schema block (home, about) alongside the default page schema.
+  withPerson?: boolean;
+  // Emit a CreativeWork schema block (projects page).
+  withCreativeWork?: boolean;
 }
 
 const {
   title,
   description = SITE_DESCRIPTION,
   ogImage = DEFAULT_OG_IMAGE,
+  ogImageWidth = 1200,
+  ogImageHeight = 630,
+  ogImageAlt,
   type = 'website',
   publishedTime,
   modifiedTime,
   noindex = false,
+  withPerson = false,
+  withCreativeWork = false,
 } = Astro.props;
 
 // Canonical URL resolved against `site` + `base` from astro.config.
@@ -46,6 +68,17 @@ const ogImageURL = ogImage.startsWith('http')
 
 const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
 
+// The site owner as a schema.org Person — reused as the author in BlogPosting
+// and as a standalone Person node on the home/about pages.
+// The canonical profile URL is the about page on the live site.
+const personNode = {
+  '@type': 'Person',
+  name: SITE_OWNER.name,
+  jobTitle: SITE_OWNER.jobTitle,
+  url: new URL('/about/', Astro.site).href,
+  sameAs: [...SITE_OWNER.sameAs],
+};
+
 // JSON-LD structured data: WebSite for general pages, BlogPosting for articles.
 const jsonLd =
   type === 'article'
@@ -57,6 +90,7 @@ const jsonLd =
         image: ogImageURL,
         datePublished: publishedTime?.toISOString(),
         dateModified: (modifiedTime ?? publishedTime)?.toISOString(),
+        author: personNode,
         mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalURL.href },
       }
     : {
@@ -66,6 +100,23 @@ const jsonLd =
         description: SITE_DESCRIPTION,
         url: canonicalURL.href,
       };
+
+// Optional Person schema (home + about pages).
+const personJsonLd = withPerson
+  ? { '@context': 'https://schema.org', ...personNode }
+  : null;
+
+// Optional CreativeWork schema (projects page).
+const creativeWorkJsonLd = withCreativeWork
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'CreativeWork',
+      name: fullTitle,
+      description,
+      url: canonicalURL.href,
+      author: personNode,
+    }
+  : null;
 ---
 
 <!-- Charset & viewport -->
@@ -108,8 +159,11 @@ const jsonLd =
 <meta property="og:description" content={description} />
 <meta property="og:url" content={canonicalURL} />
 <meta property="og:image" content={ogImageURL} />
+<meta property="og:image:width" content={String(ogImageWidth)} />
+<meta property="og:image:height" content={String(ogImageHeight)} />
+{ogImageAlt && <meta property="og:image:alt" content={ogImageAlt} />}
 <meta property="og:site_name" content={SITE_TITLE} />
-<meta property="og:locale" content={SITE_LANG} />
+<meta property="og:locale" content={SITE_OG_LOCALE} />
 {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
 {modifiedTime && <meta property="article:modified_time" content={modifiedTime.toISOString()} />}
 
@@ -118,9 +172,12 @@ const jsonLd =
 <meta name="twitter:title" content={fullTitle} />
 <meta name="twitter:description" content={description} />
 <meta name="twitter:image" content={ogImageURL} />
+{ogImageAlt && <meta name="twitter:image:alt" content={ogImageAlt} />}
 
 <!-- Structured data -->
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+{personJsonLd && <script type="application/ld+json" set:html={JSON.stringify(personJsonLd)} />}
+{creativeWorkJsonLd && <script type="application/ld+json" set:html={JSON.stringify(creativeWorkJsonLd)} />}
 
 <!-- Theme color + scheme: the blue-hour-terminal dark room (--bg). The site is
      dark everywhere, so the browser chrome is told to match the room. -->
