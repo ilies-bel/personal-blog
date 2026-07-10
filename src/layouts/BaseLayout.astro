@@ -542,5 +542,46 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
         }
       });
     </script>
+
+    {/* SPA NAVIGATION FOCUS MANAGEMENT — A11Y-006
+        After every ClientRouter swap move keyboard focus to the new page's first
+        h1 (or #main-content itself as a fallback) so screen-reader and keyboard
+        users start reading from the top of the incoming page instead of a stale
+        or now-detached trigger element.
+
+        Detection: the astro:before-swap handler stamps html[data-astro-nav] on
+        the INCOMING document, which swapRootAttributes copies to the live root
+        before astro:page-load fires.  The attribute is absent on a hard (non-SPA)
+        load, so the check below is exactly "is this a ClientRouter navigation?"
+        without any extra flags or counters.
+
+        Framed guard mirrors the resurface script: the Astro dev iframe pre-loads
+        client:only islands in a hidden same-origin frame that also runs this
+        event — the frame must never steal focus from the real page. */}
+    <script>
+      document.addEventListener('astro:page-load', () => {
+        if (window.self !== window.top) return;
+        // Absent on initial hard load; present on every SPA swap.
+        if (!document.documentElement.hasAttribute('data-astro-nav')) return;
+
+        const main = document.getElementById('main-content');
+        if (!main) return;
+
+        // Prefer the first heading so AT users get a meaningful announcement.
+        // Fall back to <main> itself when the page has no h1 (e.g. the 3-D home).
+        const h1 = main.querySelector<HTMLElement>('h1');
+        const target = h1 ?? main;
+
+        // tabindex="-1" makes a non-interactive element programmatically
+        // focusable without inserting it into the natural Tab sequence.
+        if (!target.hasAttribute('tabindex')) {
+          target.setAttribute('tabindex', '-1');
+        }
+
+        // rAF defers focus until after the current rendering frame so any
+        // pending view-transition snapshots and React flushes complete first.
+        requestAnimationFrame(() => target.focus({ preventScroll: false }));
+      });
+    </script>
   </body>
 </html>

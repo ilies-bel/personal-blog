@@ -612,6 +612,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       className="star-marker"
       href={resolveHref(base, placement.href)}
       aria-label={`${headline} ${body}`}
+      aria-expanded={locked}
       data-visible={visible}
       data-reduced={reduced}
       data-locked={locked}
