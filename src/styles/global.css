@@ -21,4 +21,5 @@
 @import './graveyard.css'; /* scene-journey graveyard treatment — specimen rows + reveal */
 @import './behind-the-build.css'; /* the Behind-the-Build case-study page (shader gallery, budget table, FPS meter, fallback ladder) */
 @import './about.css';    /* the about overlay panel */
+@import './route-materials.css'; /* EXP-035: named material tokens + visual rules scoped per route body class */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography (last — it retimes navigation moments across concerns) */

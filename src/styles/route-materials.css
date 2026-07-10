@@ -1,0 +1,212 @@
+/* Route Material System — EXP-035
+ *
+ * Named material roles as CSS custom properties, scoped to each route's body
+ * class (or page class). These tokens make the physical law governing each
+ * route visible in CSS without requiring any hardcoded values deeper in the
+ * component tree — every rule that touches surface, edge, or accent can call
+ * the named role rather than a raw OKLCH literal.
+ *
+ * Token vocabulary:
+ *   --mat-surface      primary panel/card background (opacity encodes materiality)
+ *   --mat-surface-alt  secondary background (nested panels, section fills)
+ *   --mat-edge         border/hairline color (character: warm / cool / absent)
+ *   --mat-accent       route-specific primary accent (link/hover/focus signal)
+ *   --mat-accent-dim   dimmed accent for metadata labels
+ *   --mat-column       max content column width (encodes density / orbital spread)
+ *   --mat-gap          inter-element gap multiplier (0.5 = sparse, 1.5 = dense)
+ *
+ * Route-to-law mapping (docs/specs/route-physical-laws.md § EXP-020):
+ *   projects-page    → Yellow Star / Sustained Orbit     → dense opaque panels, amber edge
+ *   writing-page     → Nebula / Dispersed Matter         → semi-transparent, teal, no box edges
+ *   graveyard-page   → White Dwarf / Thermal Decay       → matte cool, contracted, hairline
+ *   behind-the-build → Red Giant / Interior Layers       → warm strata, orange-red left edge
+ *   about-page       → Pale Blue Dot / Human Scale       → no surfaces, blue accent, sparse
+ *
+ * Downstream: EXP-036 (rhythm), EXP-037 (motion verbs). */
+
+/* ── 1. PROJECTS — Yellow Star / Sustained Orbit ──────────────────────────
+   Dense opaque panels — projects have mass, they do not float.
+   Desaturated amber pulled cool: the orbital system's stable heat.
+   Wide column encodes the lateral orbital spread.
+   Sharp edges: orbital paths have defined, non-feathered boundaries. */
+body.projects-page {
+  --mat-surface:     oklch(0.19 0.012 80);
+  --mat-surface-alt: oklch(0.16 0.009 80);
+  --mat-edge:        oklch(0.36 0.022 78);
+  --mat-accent:      oklch(0.72 0.09 75);
+  --mat-accent-dim:  oklch(0.55 0.06 78);
+  --mat-column:      68rem;
+  --mat-gap:         1.0;
+}
+
+/* Projects: apply material surface to entry panels.
+   The panel background gives each project physical mass in grayscale — a
+   visible filled surface, not a flat list row. */
+body.projects-page .projects-entry {
+  background: var(--mat-surface);
+  border-top-color: var(--mat-edge);
+  border-bottom-color: var(--mat-edge);
+}
+
+/* Projects: accent link and proof-statement border from orbital token. */
+body.projects-page .projects-link {
+  color: var(--mat-accent);
+}
+body.projects-page .projects-link:hover {
+  color: var(--fg);
+}
+body.projects-page .projects-proud {
+  border-color: var(--mat-edge);
+  background: color-mix(in oklch, var(--mat-surface-alt) 85%, transparent);
+}
+body.projects-page .projects-proud-label {
+  color: var(--mat-accent);
+}
+
+/* ── 2. WRITING — Nebula / Dispersed Matter Coalescing ───────────────────
+   Semi-transparent surfaces: articles in a nebula may have slight
+   translucency at cluster edges without obscuring content.
+   No drawn box borders — cluster boundaries are whitespace only.
+   Teal-indigo accent: the cool nebula gas temperature.
+   Variable-density clusters: tighter within a type-group, wider between. */
+body.writing-page {
+  --mat-surface:     color-mix(in oklch, oklch(0.20 0.022 220) 55%, transparent);
+  --mat-surface-alt: color-mix(in oklch, oklch(0.24 0.028 225) 38%, transparent);
+  --mat-edge:        color-mix(in oklch, oklch(0.36 0.018 220) 65%, transparent);
+  --mat-accent:      oklch(0.69 0.10 208);
+  --mat-accent-dim:  oklch(0.52 0.07 215);
+  --mat-column:      68rem;
+  --mat-gap:         0.75;
+}
+
+/* Writing: teal hover/focus accent rather than amber — nebula temperature. */
+body.writing-page .writing-row:hover .writing-row-title,
+body.writing-page .writing-row:focus-visible .writing-row-title {
+  color: var(--mat-accent);
+}
+body.writing-page .writing-row:hover,
+body.writing-page .writing-row:focus-visible {
+  border-bottom-color: color-mix(in oklch, var(--mat-accent) 28%, var(--mat-edge));
+  background: var(--mat-surface);
+}
+body.writing-page .writing-row::after {
+  color: var(--mat-accent);
+}
+
+/* Writing: type-group header — cool nebula tint replaces warm gold. */
+body.writing-page .writing-type-heading {
+  color: var(--mat-accent-dim);
+}
+
+/* ── 3. GRAVEYARD — White Dwarf / Thermal Decay ──────────────────────────
+   Near-black matte surface: a cooled stellar remnant at minimum luminance.
+   Hairline cool-gray borders: forensic rather than decorative.
+   Contracted column: a white dwarf has a smaller radius than its progenitor.
+   Cool indigo accent used ONLY for active/focus — never warm amber or gold.
+   One project at a time, democratic height, no horizontal scroll. */
+body.graveyard-page {
+  --mat-surface:     oklch(0.12 0.004 242);
+  --mat-surface-alt: oklch(0.10 0.003 242);
+  --mat-edge:        oklch(0.30 0.012 242);
+  --mat-accent:      oklch(0.58 0.07 252);
+  --mat-accent-dim:  oklch(0.42 0.05 250);
+  --mat-column:      38rem;
+  --mat-gap:         1.5;
+}
+
+/* Graveyard: contracted reading column — the white-dwarf radius constraint.
+   All content is pulled into the narrow column regardless of screen width. */
+body.graveyard-page .wrap {
+  max-width: calc(var(--mat-column) + 2 * var(--gutter));
+  margin-inline: auto;
+}
+
+/* Graveyard: cool-gray hairlines replace the warm global --line.
+   The boundary of a cooled remnant is precise; not warm, not decorative. */
+body.graveyard-page .graveyard-entry-specimen {
+  color: var(--mat-accent-dim);
+  border-top: 1px solid var(--mat-edge);
+  padding-top: 0.65rem;
+}
+body.graveyard-page .graveyard-entry-specimen-sep {
+  color: var(--mat-edge);
+  opacity: 1;
+}
+
+/* Graveyard: cool accent for hover/focus — single indigo signal, no warmth. */
+body.graveyard-page a:hover,
+body.graveyard-page a:focus-visible {
+  color: var(--mat-accent);
+  outline-color: var(--mat-accent);
+}
+
+/* ── 4. BEHIND THE BUILD — Red Giant / Interior Layers Exposed ───────────
+   Warm tinted surfaces: the red giant's heat showing through the anatomy.
+   Left-edge labels anchor each stratum in the cross-section reading direction.
+   Deep orange-red accent, desaturated: warm but not stable like the orbital amber.
+   Cut/stepped dividers: raw edges suggest a cross-section, not a finished facade.
+   Progressive density: sparse overview at top, dense implementation below. */
+body.behind-the-build {
+  --mat-surface:     oklch(0.17 0.013 52);
+  --mat-surface-alt: oklch(0.15 0.010 50);
+  --mat-edge:        oklch(0.33 0.040 50);
+  --mat-accent:      oklch(0.65 0.09 46);
+  --mat-accent-dim:  oklch(0.48 0.065 48);
+  --mat-column:      52rem;
+  --mat-gap:         0.9;
+}
+
+/* Behind the Build: warm stratum surface for the shader gallery.
+   The gallery is the densest layer — it sits deepest in the interior. */
+body.behind-the-build .btb-shader-gallery {
+  background: color-mix(in oklch, var(--mat-surface) 65%, transparent);
+  border-left: 2px solid var(--mat-edge);
+  padding-left: 1.5rem;
+}
+
+/* Behind the Build: orange-red accent for shader names — the exposed layer label. */
+body.behind-the-build .btb-shader-name {
+  color: var(--mat-accent);
+}
+body.behind-the-build .btb-shader-name code {
+  color: var(--mat-accent);
+}
+
+/* ── 5. ABOUT — Pale Blue Dot / Return to Human Scale ───────────────────
+   No intentional surfaces: the deep-blue backdrop shows through directly.
+   No drawn edges, no panels. Content floats over the void.
+   Maximum whitespace: the long intended dwell-time is here.
+   Pale blue/indigo accent marks the focal human point.
+   No warm colors on this route — the blue dot is the antithesis of amber. */
+.about-page {
+  --mat-surface:     transparent;
+  --mat-surface-alt: transparent;
+  --mat-edge:        transparent;
+  --mat-accent:      oklch(0.65 0.085 248);
+  --mat-accent-dim:  oklch(0.50 0.060 250);
+  --mat-column:      40rem;
+  --mat-gap:         0.55;
+}
+
+/* About: bracket corners in pale-blue accent rather than gold.
+   The brackets are the only framing element — their hue shift from amber
+   to blue signals the temperature change from the orbital system. */
+.about-page .about-panel::before,
+.about-page .about-panel::after {
+  border-color: color-mix(in oklch, var(--mat-accent) 28%, transparent);
+}
+
+/* About: contact links in pale-blue to stay within the blue-dot palette. */
+.about-page .about-contact-list a {
+  color: var(--mat-accent);
+  border-bottom-color: color-mix(in oklch, var(--mat-accent) 40%, transparent);
+}
+.about-page .about-contact-list a:hover {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+
+/* ── Reduced-motion guard ─────────────────────────────────────────────────
+   None of the material tokens carry animation values; they are static
+   surface/color declarations. No guard needed at this layer — the motion
+   verbs (EXP-037) gate their own transitions. */

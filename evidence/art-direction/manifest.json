@@ -1,0 +1,41 @@
+{
+  "capturedAt": "2026-07-10T13:36:59.057Z",
+  "routes": [
+    {
+      "slug": "grayscale-projects",
+      "path": "/projects/",
+      "law": "Yellow Star / Sustained Orbit — orbital cluster, dense panels, defined edges",
+      "file": "grayscale-projects.png"
+    },
+    {
+      "slug": "grayscale-writing",
+      "path": "/writing/",
+      "law": "Nebula / Dispersed Matter — variable-density clusters, teal accent, soft edges",
+      "file": "grayscale-writing.png"
+    },
+    {
+      "slug": "grayscale-graveyard",
+      "path": "/graveyard/",
+      "law": "White Dwarf / Thermal Decay — contracted column, hairlines, matte surface",
+      "file": "grayscale-graveyard.png"
+    },
+    {
+      "slug": "grayscale-behind-the-build",
+      "path": "/behind-the-build/",
+      "law": "Red Giant / Interior Layers — strata left-edge labels, progressive density",
+      "file": "grayscale-behind-the-build.png"
+    },
+    {
+      "slug": "grayscale-about",
+      "path": "/about/",
+      "law": "Pale Blue Dot / Human Scale — centered single column, no panels, maximum whitespace",
+      "file": "grayscale-about.png"
+    },
+    {
+      "slug": "grayscale-home",
+      "path": "/",
+      "law": "Home / Hero reference (not a route material, baseline comparison)",
+      "file": "grayscale-home.png"
+    }
+  ]
+}
