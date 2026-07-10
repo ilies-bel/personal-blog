@@ -55,14 +55,15 @@
   border-top: none;
 }
 
-/* One quiet mono section marker at the head of the panel. */
+/* One quiet label at the head of the panel — context already carried by the
+   nav's active state and the h1; this fades into the panel's breath without
+   the mono-caps scaffolding that the nav active state already provides. */
 .about-kicker {
   margin: 0 0 1.75rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--fg-chrome-faint);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  letter-spacing: var(--tracking-normal);
+  color: var(--fg-faint);
 }
 
 /* The lead sits larger and brighter; the body steps down to muted. It is the
