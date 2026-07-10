@@ -21,7 +21,7 @@
 // (aBeamAxis = the beam's local long axis, aHue = warm/cool offset, aStreak = streak
 // amount, aDepth = normalised depth of the frame this beam belongs to).
 
-export const tesseractBeamVert = /* glsl */ `
+const tesseractBeamVert = /* glsl */ `
   precision highp float;
 
   attribute vec3 aBeamAxis;   // unit local long axis of THIS beam, in object space
@@ -190,7 +190,7 @@ export const tesseractBeamFrag = /* glsl */ `
 // A fullscreen vanishing-point GLOW pass, composited additively AFTER the beam scene so
 // the centre of the tunnel reads as a bright leaking core (light pouring up the shaft)
 // independent of where the beams happen to land. Dimmed by the same uDim.
-export const tesseractGlowVert = /* glsl */ `
+const tesseractGlowVert = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
   void main() {
@@ -199,7 +199,7 @@ export const tesseractGlowVert = /* glsl */ `
   }
 `;
 
-export const tesseractGlowFrag = /* glsl */ `
+const tesseractGlowFrag = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
   uniform vec2 uLook;        // -1..1 pointer offset (the glow tracks the camera pan)

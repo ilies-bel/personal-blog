@@ -1,0 +1,151 @@
+{
+  "$schema": "../../docs/schemas/detector-resolution-report.schema.json",
+  "taskId": "ENG-011",
+  "title": "Detector and anti-pattern resolution report",
+  "generatedAt": "2026-07-10",
+  "summary": "Final cleanup pass after the art-direction wave (EXP-034–037, EXP-020). All confirmed anti-patterns were redesigned or removed; false positives are documented below with rationale.",
+
+  "heightTransitions": {
+    "description": "EXP-037 detector: no height-based CSS transitions; use transform or mask instead.",
+    "findings": [
+      {
+        "id": "height-transition-hud-rail",
+        "file": "src/styles/hud.css",
+        "selector": ".hud-nav::before",
+        "rule": "transition: height 0.45s var(--ease-out-quint)",
+        "verdict": "removed",
+        "reason": "Dead rule. The pseudo-element's height is auto-determined by `top: -1.5rem; bottom: -1.5rem;` positioning — no explicit `height` property is ever set, so the transition had no visible effect. The `--rail-revealed` CSS variable set by HudNavigation.tsx was intended to drive a height calc but the CSS consumer was never written. Removed the dead transition. If a row-reveal animation is desired in the future, it should use clip-path or mask-image (clamped at `--rail-revealed * --rail-row-pitch`).",
+        "commit": "ENG-011 cleanup"
+      }
+    ]
+  },
+
+  "sideStripeCallout": {
+    "description": "Decorative side-stripe (colored left border) callout pattern.",
+    "findings": [
+      {
+        "id": "side-stripe-prose-blockquote",
+        "file": "src/styles/prose.css",
+        "line": 138,
+        "verdict": "false-positive — already resolved",
+        "reason": "The `prose.css` comment explicitly documents the design decision: 'hairline — no colored side stripe'. The blockquote is styled with a full background panel and a plain border-top, not a colored left stripe. No CSS class named `.side-stripe`, `.callout`, or similar exists in the codebase. The anti-pattern was evaluated and rejected at design time; no change needed."
+      }
+    ]
+  },
+
+  "decorativeEyebrows": {
+    "description": "EXP-036 rule: no repeated mono-uppercase eyebrow scaffolding on routes; hierarchy through scale only.",
+    "findings": [
+      {
+        "id": "article-next-eyebrow",
+        "file": "src/styles/article.css (line 414), src/pages/posts/[...slug].astro (line 91)",
+        "selector": ".article-next-eyebrow",
+        "verdict": "false-positive — functional, not decorative scaffolding",
+        "reason": "The `.article-next-eyebrow` ('Next note') appears exactly once per article page, inside the `.article-next` continuation footer. It labels the 'next article' section for wayfinding — a specific UI component role. EXP-036 forbids 'repeated mono-uppercase eyebrow scaffolding' as route structure (e.g. section headers used as section-level navigation scaffolding across the page). A single functional label in a continuation component does not violate this rule. The star-marker HUD eyebrows (`star-marker-card-eyebrow`) live in the hero system and similarly serve a specific functional UI role, not structural page scaffolding."
+      },
+      {
+        "id": "hud-nav-button-before-dead-rules",
+        "file": "src/styles/hud.css (lines 178-195)",
+        "selector": ".hud-nav-button:hover::before, .hud-nav-button:focus-visible::before, .hud-nav-button[data-current='true']::before",
+        "verdict": "false-positive — intentionally kept dead per code comment",
+        "reason": "The `.hud-nav-button::before` pseudo-element is set to `content: none; display: none` as an explicit design decision (the connector tick was removed). The hover/current `::before` rules that set `width` and `background` are effectively no-ops. The code comment states: 'Kept as a display:none rule (rather than deleting) so the hover/current/active ::before rules below are harmless no-ops.' This preserves the rule structure and prevents future accidental regressions if the tick is re-enabled."
+      }
+    ]
+  },
+
+  "deadStyleRules": {
+    "description": "CSS rules with no reachable effect.",
+    "findings": [
+      {
+        "id": "height-transition-hud-rail",
+        "ref": "See heightTransitions.findings[0] above — same rule."
+      }
+    ]
+  },
+
+  "knipFindings": {
+    "description": "Findings from `npx knip` run on 2026-07-10.",
+    "resolved": [
+      {
+        "id": "knip-esbuild-ignoreDependencies",
+        "finding": "Configuration hint: remove esbuild from ignoreDependencies",
+        "verdict": "fixed",
+        "action": "Removed `esbuild` from `ignoreDependencies` in knip.json. `esbuild` is declared in `devDependencies` and does not need to be ignored."
+      },
+      {
+        "id": "knip-sharp-unlisted",
+        "finding": "Unlisted dependency: sharp (scripts/brighten.mjs, gen-favicons.mjs, inspect-joins.mjs, optimize-media.mjs, overlay-diff.mjs)",
+        "verdict": "fixed",
+        "action": "Added `sharp: \"*\"` to `devDependencies` in package.json. `sharp` was already listed in `pnpm.onlyBuiltDependencies` (for native build scripts) but not declared as a devDependency."
+      },
+      {
+        "id": "knip-lookOffsetX-lookOffsetY",
+        "finding": "Unused exports: lookOffsetX, lookOffsetY (src/hero/lib/config.ts:118-119)",
+        "verdict": "fixed",
+        "action": "Removed. These camera look-offset constants are not imported by any consumer. The actual camera offsets are set inline in the scene builder."
+      },
+      {
+        "id": "knip-prefersReducedMotion-config",
+        "finding": "Unused export: prefersReducedMotion function (src/hero/lib/config.ts:121)",
+        "verdict": "fixed",
+        "action": "Removed. Superseded by the richer `resolveMotionPreference()` in `src/lib/motionPreference.ts`, which also handles the manual override. The simpler OS-only version in config.ts was no longer imported."
+      },
+      {
+        "id": "knip-exploration-constants",
+        "finding": "Unused exports: EXPLORATION_TRIGGER_AT, EXPLORATION_REVEAL_DELAY_MS (src/hero/lib/constants.ts:185,187)",
+        "verdict": "fixed",
+        "action": "Removed. The comment on EXPLORATION_TRIGGER_AT already stated: 'NOTE: the HUD is now ALWAYS visible (see HeroIsland — explorationMode starts true), so nothing reads this anymore.' Both constants were dead."
+      },
+      {
+        "id": "knip-beat-constants",
+        "finding": "Unused exports: BEAT_HOLD, BEAT_FADE, BeatEdge (src/hero/lib/constants.ts:168,191,193)",
+        "verdict": "fixed",
+        "action": "Removed. These were intended for the beat opacity trapezoid calculation but sceneTable.ts uses hardcoded numeric values in each scene definition. No consumer imports them."
+      },
+      {
+        "id": "knip-resolve-function",
+        "finding": "Unused export: resolve function (src/hero/timeline.ts:236)",
+        "verdict": "fixed",
+        "action": "Removed. The `resolve()` function composed sceneTable walkers into one LifecyclePosition object but was never imported by any consumer. Also removed the now-orphaned `LifecyclePosition` interface."
+      },
+      {
+        "id": "knip-STAGE_COUNT-timeline",
+        "finding": "Unused export / duplicate: STAGE_COUNT (src/hero/timeline.ts:276)",
+        "verdict": "fixed",
+        "action": "Removed the re-export `STAGE_COUNT = SCROLL_SECTION_COUNT` from timeline.ts. `STAGE_COUNT` is already exported from `src/hero/scroll.ts:99`. No consumer imports `STAGE_COUNT` from timeline.ts; the canonical name used by importers is `SCROLL_SECTION_COUNT`."
+      },
+      {
+        "id": "knip-tesseract-unused-exports",
+        "finding": "Unused exports: tesseractBeamVert, tesseractGlowVert, tesseractGlowFrag (src/hero/shaders/tesseract.glsl.ts:24,193,202)",
+        "verdict": "fixed",
+        "action": "Removed the `export` keyword from these three shader strings. Only `tesseractBeamFrag` is imported (by `src/pages/behind-the-build.astro` to display a code excerpt). The vert/glow shaders are no longer used since the tesseract scene was removed from the live hero; `behind-the-build.astro` only excerpts the beam fragment shader for documentation."
+      }
+    ],
+    "falsePositives": [
+      {
+        "id": "knip-dev-blueprint",
+        "finding": "Unused file: src/_dev-pages/dev-blueprint.astro",
+        "verdict": "false-positive",
+        "reason": "Intentional dev-only page. Used by `scripts/shoot-blueprint.mjs` for visual regression tooling. Not reachable from production routing (ENG-003 verified this). Knip's entry-point analysis does not resolve Astro dev-route conventions."
+      },
+      {
+        "id": "knip-scripts-unused",
+        "finding": "Unused files: src/scripts/decodeHover.ts, src/scripts/sceneToggle.ts, src/scripts/warpTransition.ts",
+        "verdict": "false-positive",
+        "reason": "All three are imported in `src/layouts/BaseLayout.astro` via `<script>` module imports (`import '../scripts/decodeHover'` etc., lines 496/499/503). Astro's `<script>` tags are bundled by Vite and their imports are resolved correctly. Knip does not analyze Astro `<script>` block imports as TypeScript entry points; the files appear unused to Knip but are live at runtime."
+      },
+      {
+        "id": "knip-playwright-unlisted",
+        "finding": "Unlisted dependency: playwright (scripts/shoot-blueprint.mjs:1)",
+        "verdict": "false-positive",
+        "reason": "`scripts/shoot-blueprint.mjs` imports from `'playwright'`. The `playwright` module is provided as a direct sub-dependency of `@playwright/test` (declared in devDependencies). Since the script is a dev-only tool and the module is transitively available, this is acceptable. Declaring `playwright` separately would pin a second version and risk divergence from `@playwright/test`'s bundled version."
+      },
+      {
+        "id": "knip-storage-key-constants",
+        "finding": "Unused exports: HUD_SELECTED_STORAGE_KEY, REDUCED_MOTION_STORAGE_KEY, HUD_STATE_STORAGE_KEY (src/hero/lib/constants.ts)",
+        "verdict": "false-positive — intentional @public API",
+        "reason": "These are source-of-truth string literals for localStorage keys used in Astro inline scripts (`is:inline`) that cannot import TypeScript modules. The comment on HUD_STATE_STORAGE_KEY explicitly states: 'The inline script can't import this module — no bundler on an is:inline script — so it spells the SAME literal and MUST be kept in sync with this value.' Tagged `@public` in JSDoc so Knip's `['-public']` tag filter suppresses them."
+      }
+    ]
+  }
+}

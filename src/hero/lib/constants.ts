@@ -94,14 +94,18 @@ export const LOADER_MIN_MS = 2500;
  *  mode / disabled storage must never throw). Spelled here once and passed into
  *  the inline loader script via define:vars. */
 export const LOADER_SEEN_STORAGE_KEY = 'loader-seen';
-/** localStorage key persisting the chosen exploration-HUD target. */
+/** localStorage key persisting the chosen exploration-HUD target.
+ *  @public — used as a string literal in non-bundled inline scripts that cannot
+ *  import this module; kept exported so the value is spelled once and stays
+ *  consistent with those scripts. */
 export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
 /** localStorage key persisting the visitor's MANUAL reduced-motion override (a
  *  bare 'true'/'false' string). When present it WINS over the OS
  *  prefers-reduced-motion default and survives reloads + in-app navigations;
  *  when absent the OS preference is the source of truth. Written by the corner
  *  reduce-motion toggle (useReducedMotionPreference). Access is wrapped in
- *  try/catch (private mode / disabled storage must never throw). */
+ *  try/catch (private mode / disabled storage must never throw).
+ *  @public — string literal cross-reference for inline scripts. */
 export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
 /** localStorage flag (a bare 'true') recording that the one-time OS-driven
  *  reduced-motion EXPLANATION modal has been shown. The page never animates for an
@@ -121,7 +125,9 @@ export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained
  *  the decloak. Legacy blobs carried extra flags (`forced` / `userChosen` from
  *  the old scroll auto-boot); they are simply ignored — only `powered` is read.
  *  All access is wrapped in try/catch (private mode / disabled storage must
- *  never throw). */
+ *  never throw).
+ *  @public — string literal cross-reference for inline scripts that cannot import
+ *  this module (no bundler on is:inline); must stay in sync with BaseLayout. */
 export const HUD_STATE_STORAGE_KEY = 'hud-state';
 
 // --- cross-layer events ----------------------------------------------------
@@ -164,9 +170,6 @@ export type ScrollDirection = 'down' | 'up';
 export const SCROLL_DOWN: ScrollDirection = 'down';
 export const SCROLL_UP: ScrollDirection = 'up';
 
-/** Which outer edge of a beat's opacity trapezoid is pinned full-open. */
-export type BeatEdge = 'leading' | 'trailing';
-
 // --- scroll / chrome / exploration thresholds ------------------------------
 /** Ignore scroll deltas smaller than this so sub-pixel jitter never flips the
  *  big-line direction swap. */
@@ -179,18 +182,6 @@ export const CHROME_HIDE_AT = 0.015;
  *  is still in the opening hold and stays in plain SEEKING-SIGNAL scan; past it, a
  *  mid-transition idle band switches the compass to its SCROLL-BACK recovery cue. */
 export const SCROLL_HINT_DISMISS_AT = 0.035;
-/** Scroll fraction at which the final selected-work HUD would arm. NOTE: the HUD
- *  is now ALWAYS visible (see HeroIsland — explorationMode starts true), so nothing
- *  reads this anymore; kept for reference / a possible future re-gate. */
-export const EXPLORATION_TRIGGER_AT = 0.82;
-/** Delay before the HUD reveals after the trigger; kept scroll-immediate. */
-export const EXPLORATION_REVEAL_DELAY_MS = 0;
-
-// --- per-beat opacity trapezoid --------------------------------------------
-/** Half-width of a beat's fully-shown plateau. */
-export const BEAT_HOLD = 0.055;
-/** Ramp distance on each side of the plateau. */
-export const BEAT_FADE = 0.045;
 
 // --- debug capture hooks (window.__bh*) ------------------------------------
 // Capture scripts pin a held frame by setting these on window. Reads go through

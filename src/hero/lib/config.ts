@@ -114,15 +114,6 @@ export const CFG: Config = {
   //   rigidly rotated). ?rgbake=0 forces the analytic per-frame path for A/B.
 };
 
-// Fixed screen-space look offset.
-export const lookOffsetX = -0.82;
-export const lookOffsetY = 0.16;
-
-export function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
 // --- device tier ------------------------------------------------------------
 // A deliberately coarse 'high' | 'low' split, detected ONCE at mount from cheap
 // signals (cores / deviceMemory / mobile UA / a throwaway WebGL probe). 'high' is

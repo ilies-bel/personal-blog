@@ -2,7 +2,6 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": ["scripts/*.mjs"],
   "project": ["src/**/*.{ts,tsx,astro}", "scripts/**/*.mjs"],
-  "ignoreDependencies": ["esbuild"],
   "ignoreExportsUsedInFile": true,
   "tags": ["-public"]
 }
