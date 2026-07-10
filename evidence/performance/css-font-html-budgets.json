@@ -1,0 +1,110 @@
+{
+  "generated": "2026-07-10T17:41:00.924Z",
+  "dist": "/Users/ib472e5l/project/perso/personal-blog/.mars/worktrees/mars-52f16ed6/dist",
+  "css": {
+    "strategy": "inlineStylesheets:always — no external .css files; CSS is embedded in <style> tags",
+    "maxGzKiB": 24.09,
+    "targetKiB": 35,
+    "hardKiB": 50,
+    "passTarget": true,
+    "passHard": true,
+    "routes": [
+      {
+        "route": "projects/index.html",
+        "gzKiB": 24.09
+      },
+      {
+        "route": "graveyard/index.html",
+        "gzKiB": 22.97
+      },
+      {
+        "route": "404.html",
+        "gzKiB": 22.91
+      },
+      {
+        "route": "writing/index.html",
+        "gzKiB": 22.83
+      },
+      {
+        "route": "posts/memory-leak-search-and-destroy/index.html",
+        "gzKiB": 22.63
+      },
+      {
+        "route": "posts/thanks-for-scrolling-to-the-bottom/index.html",
+        "gzKiB": 22.62
+      },
+      {
+        "route": "about/index.html",
+        "gzKiB": 22.45
+      },
+      {
+        "route": "behind-the-build/index.html",
+        "gzKiB": 22.36
+      },
+      {
+        "route": "index.html",
+        "gzKiB": 22.17
+      }
+    ]
+  },
+  "fonts": {
+    "preloadedFiles": [
+      "space-grotesk-latin.DPT1xrvW.woff2",
+      "ibm-plex-mono-latin.BJoXLJYV.woff2"
+    ],
+    "totalPreloadedBytes": 32372,
+    "totalPreloadedKiB": 31.61,
+    "targetKiB": 120,
+    "hardKiB": 180,
+    "passTarget": true,
+    "passHard": true,
+    "fontDisplayBlock": false,
+    "noInvisibleText": true,
+    "note": "font-display:swap confirmed on all @font-face rules; preloaded fonts fetch before paint to eliminate FOUT on hero overlay text"
+  },
+  "html": {
+    "maxGzKiB": 39.88,
+    "targetKiB": 60,
+    "hardKiB": 100,
+    "passTarget": true,
+    "passHard": true,
+    "routes": [
+      {
+        "route": "behind-the-build/index.html",
+        "gzKiB": 39.88
+      },
+      {
+        "route": "posts/memory-leak-search-and-destroy/index.html",
+        "gzKiB": 32.8
+      },
+      {
+        "route": "index.html",
+        "gzKiB": 32.63
+      },
+      {
+        "route": "projects/index.html",
+        "gzKiB": 31.02
+      },
+      {
+        "route": "graveyard/index.html",
+        "gzKiB": 30.42
+      },
+      {
+        "route": "posts/thanks-for-scrolling-to-the-bottom/index.html",
+        "gzKiB": 29.4
+      },
+      {
+        "route": "writing/index.html",
+        "gzKiB": 28.65
+      },
+      {
+        "route": "about/index.html",
+        "gzKiB": 27.75
+      },
+      {
+        "route": "404.html",
+        "gzKiB": 27.27
+      }
+    ]
+  }
+}

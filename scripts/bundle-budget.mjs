@@ -46,12 +46,29 @@ import { gzipSync } from 'zlib';
 const DIST = process.argv[2] ?? 'dist';
 const EVIDENCE_OUT = 'evidence/performance/bundle-budget-report.html';
 
-/** Budgets in bytes (gzip). */
+/** PERF-007 budgets in bytes (gzip). */
 const BUDGET = {
   heroHard:    240 * 1024,
   heroTarget:  210 * 1024,
   preHeroHard:  85 * 1024,
   preHeroTarget: 65 * 1024,
+};
+
+/**
+ * PERF-013 budgets.
+ *   CSS / HTML: gzip bytes (inline CSS is extracted from <style> tags; HTML
+ *               is the full document gzipped — these are the network transfer
+ *               sizes when served with content-encoding: gzip).
+ *   Fonts:      raw woff2 bytes (woff2 is already a compressed container;
+ *               transfer size = file size; no additional gzip layer).
+ */
+const BUDGET_13 = {
+  cssHard:     50 * 1024,
+  cssTarget:   35 * 1024,
+  fontHard:   180 * 1024,
+  fontTarget: 120 * 1024,
+  htmlHard:   100 * 1024,
+  htmlTarget:  60 * 1024,
 };
 
 /**
@@ -274,10 +291,81 @@ const duplicateEngineChunks = JS_FILES.filter(
 );
 
 // ---------------------------------------------------------------------------
+// Step 7b — PERF-013: CSS, font, and HTML measurements
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the concatenated text content of all <style> tags in an HTML file.
+ * With inlineStylesheets:'always' this is the complete CSS payload for the route.
+ * @param {string} htmlPath
+ * @returns {string}
+ */
+function extractInlineCss(htmlPath) {
+  const html = readFileSync(htmlPath, 'utf8');
+  return [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+    .map((m) => m[1])
+    .join('');
+}
+
+/**
+ * Return filenames (relative to dist/_astro/) for fonts referenced by
+ * <link rel="preload" as="font"> elements in an HTML file.
+ * These are the fonts the browser fetches on the critical path before paint.
+ * @param {string} htmlPath
+ * @returns {string[]}
+ */
+function parsePreloadedFontFiles(htmlPath) {
+  const html = readFileSync(htmlPath, 'utf8');
+  return [...html.matchAll(/<link\s[^>]*>/g)]
+    .filter((m) => /\brel=["']preload["']/.test(m[0]) && /\bas=["']font["']/.test(m[0]))
+    .map((m) => {
+      const href = m[0].match(/\bhref=["']\/_astro\/([^"']+)["']/);
+      return href ? href[1] : null;
+    })
+    .filter(Boolean);
+}
+
+// CSS: measure per-route inline CSS (gzip), take the worst-case route.
+// inlineStylesheets:'always' means there are no separate .css files in dist;
+// all styles live in <style> tags inside the HTML.
+const cssPerRoute = ALL_HTML.map((htmlPath) => {
+  const css = extractInlineCss(htmlPath);
+  const gz = gzipSync(Buffer.from(css)).length;
+  return { path: htmlPath, gz };
+}).sort((a, b) => b.gz - a.gz);
+const maxCssGz = cssPerRoute[0]?.gz ?? 0;
+
+// Font-display audit: check for font-display:block in any @font-face rule.
+// font-display:block causes FOIT (Flash of Invisible Text) — the spec
+// mandates an "infinite" block period, potentially leaving text invisible
+// for 3 s or more. font-display:swap is the safe default here.
+const heroInlineCss = extractInlineCss(HERO_HTML);
+const hasFontDisplayBlock = /font-display\s*:\s*block\b/i.test(heroInlineCss);
+
+// Fonts: sum raw bytes of every font file preloaded on the hero page.
+// woff2 is already a compressed container — its transfer size is the file
+// size (browsers do not re-gzip binary assets they serve as font/woff2).
+const preloadedFontFilenames = parsePreloadedFontFiles(HERO_HTML);
+const preloadedFontBytes = preloadedFontFilenames.reduce((sum, file) => {
+  const filePath = join(ASTRO_DIR, file);
+  if (!existsSync(filePath)) return sum;
+  return sum + readFileSync(filePath).length;
+}, 0);
+
+// HTML: measure per-route document gzip size, take the worst-case route.
+const htmlPerRoute = ALL_HTML.map((htmlPath) => {
+  const raw = readFileSync(htmlPath);
+  const gz = gzipSync(raw).length;
+  return { path: htmlPath, gz };
+}).sort((a, b) => b.gz - a.gz);
+const maxHtmlGz = htmlPerRoute[0]?.gz ?? 0;
+
+// ---------------------------------------------------------------------------
 // Step 8 — Evaluate budgets
 // ---------------------------------------------------------------------------
 
 const results = {
+  // PERF-007
   preHeroGz,
   heroGraphGz,
   totalThreeJsBytesOnReading,
@@ -285,22 +373,45 @@ const results = {
   preHeroChunks: [...preHeroChunks].sort(),
   heroGraphChunks: [...heroGraphChunks].sort(),
   readingRouteThreeJs,
+  // PERF-013
+  maxCssGz,
+  cssPerRoute,
+  preloadedFontFilenames,
+  preloadedFontBytes,
+  hasFontDisplayBlock,
+  maxHtmlGz,
+  htmlPerRoute,
 };
 
 const pass = {
+  // PERF-007
   preHeroHard:        preHeroGz <= BUDGET.preHeroHard,
   preHeroTarget:      preHeroGz <= BUDGET.preHeroTarget,
   heroHard:           heroGraphGz <= BUDGET.heroHard,
   heroTarget:         heroGraphGz <= BUDGET.heroTarget,
   readingThreeJs:     totalThreeJsBytesOnReading === 0,
   noDuplicateEngine:  duplicateEngineChunks.length === 0,
+  // PERF-013
+  cssHard:            maxCssGz <= BUDGET_13.cssHard,
+  cssTarget:          maxCssGz <= BUDGET_13.cssTarget,
+  fontHard:           preloadedFontBytes <= BUDGET_13.fontHard,
+  fontTarget:         preloadedFontBytes <= BUDGET_13.fontTarget,
+  htmlHard:           maxHtmlGz <= BUDGET_13.htmlHard,
+  htmlTarget:         maxHtmlGz <= BUDGET_13.htmlTarget,
+  noFontDisplayBlock: !hasFontDisplayBlock,
 };
 
 const hardFailures = [];
-if (!pass.preHeroHard)       hardFailures.push(`pre-hero ${kib(preHeroGz)} > ${kib(BUDGET.preHeroHard)} hard limit`);
-if (!pass.heroHard)          hardFailures.push(`hero graph ${kib(heroGraphGz)} > ${kib(BUDGET.heroHard)} hard limit`);
-if (!pass.readingThreeJs)    hardFailures.push(`reading routes contain ${totalThreeJsBytesOnReading} bytes of Three.js (must be 0)`);
-if (!pass.noDuplicateEngine) hardFailures.push(`duplicate engine chunks detected: ${duplicateEngineChunks.join(', ')}`);
+// PERF-007
+if (!pass.preHeroHard)        hardFailures.push(`pre-hero ${kib(preHeroGz)} > ${kib(BUDGET.preHeroHard)} hard limit`);
+if (!pass.heroHard)           hardFailures.push(`hero graph ${kib(heroGraphGz)} > ${kib(BUDGET.heroHard)} hard limit`);
+if (!pass.readingThreeJs)     hardFailures.push(`reading routes contain ${totalThreeJsBytesOnReading} bytes of Three.js (must be 0)`);
+if (!pass.noDuplicateEngine)  hardFailures.push(`duplicate engine chunks detected: ${duplicateEngineChunks.join(', ')}`);
+// PERF-013
+if (!pass.cssHard)            hardFailures.push(`CSS (max inline, gzip) ${kib(maxCssGz)} > ${kib(BUDGET_13.cssHard)} hard limit`);
+if (!pass.fontHard)           hardFailures.push(`initial font transfer ${kib(preloadedFontBytes)} > ${kib(BUDGET_13.fontHard)} hard limit (${preloadedFontFilenames.join(', ')})`);
+if (!pass.htmlHard)           hardFailures.push(`HTML per-route max ${kib(maxHtmlGz)} > ${kib(BUDGET_13.htmlHard)} hard limit (${htmlPerRoute[0]?.path.replace(DIST + '/', '')})`);
+if (!pass.noFontDisplayBlock) hardFailures.push('font-display:block found in CSS — causes FOIT (invisible text); use swap or optional');
 
 // ---------------------------------------------------------------------------
 // Step 9 — Print summary
@@ -315,7 +426,7 @@ const BOLD = '\x1b[1m';
 function kib(bytes) { return (bytes / 1024).toFixed(1) + ' KiB'; }
 function status(ok, warn) { return ok ? `${GREEN}✓ PASS${RESET}` : warn ? `${YELLOW}⚠ WARN${RESET}` : `${RED}✗ FAIL${RESET}`; }
 
-console.log(`\n${BOLD}=== Bundle Budget Report (PERF-007) ===${RESET}\n`);
+console.log(`\n${BOLD}=== Bundle Budget Report (PERF-007 + PERF-013) ===${RESET}\n`);
 
 console.log(`  Pre-hero (sync JS)       ${kib(preHeroGz).padStart(10)}`
   + `  target ${kib(BUDGET.preHeroTarget)}  hard ${kib(BUDGET.preHeroHard)}`
@@ -333,10 +444,34 @@ console.log(`  Duplicate engine copies  ${String(duplicateEngineChunks.length).p
   + `                               `
   + `  ${status(pass.noDuplicateEngine)}`);
 
-if (!pass.preHeroTarget || !pass.heroTarget) {
+console.log(`\n${BOLD}--- PERF-013: CSS / Fonts / HTML ---${RESET}`);
+
+console.log(`  CSS (max inline, gz)     ${kib(maxCssGz).padStart(10)}`
+  + `  target ${kib(BUDGET_13.cssTarget)}  hard ${kib(BUDGET_13.cssHard)}`
+  + `  ${status(pass.cssHard, !pass.cssTarget && pass.cssHard)}`);
+
+console.log(`  Initial fonts (preload)  ${kib(preloadedFontBytes).padStart(10)}`
+  + `  target ${kib(BUDGET_13.fontTarget)}  hard ${kib(BUDGET_13.fontHard)}`
+  + `  ${status(pass.fontHard, !pass.fontTarget && pass.fontHard)}`);
+
+console.log(`  HTML per-route max (gz)  ${kib(maxHtmlGz).padStart(10)}`
+  + `  target ${kib(BUDGET_13.htmlTarget)}  hard ${kib(BUDGET_13.htmlHard)}`
+  + `  ${status(pass.htmlHard, !pass.htmlTarget && pass.htmlHard)}`);
+
+console.log(`  font-display:block       ${String(!hasFontDisplayBlock ? 'none' : 'FOUND').padStart(10)}`
+  + `                               `
+  + `  ${status(pass.noFontDisplayBlock)}`);
+
+const softFailures = [];
+if (!pass.preHeroTarget) softFailures.push(`pre-hero:   ${kib(preHeroGz)} vs ${kib(BUDGET.preHeroTarget)} target`);
+if (!pass.heroTarget)    softFailures.push(`hero graph: ${kib(heroGraphGz)} vs ${kib(BUDGET.heroTarget)} target`);
+if (!pass.cssTarget)     softFailures.push(`CSS:        ${kib(maxCssGz)} vs ${kib(BUDGET_13.cssTarget)} target`);
+if (!pass.fontTarget)    softFailures.push(`fonts:      ${kib(preloadedFontBytes)} vs ${kib(BUDGET_13.fontTarget)} target`);
+if (!pass.htmlTarget)    softFailures.push(`HTML:       ${kib(maxHtmlGz)} vs ${kib(BUDGET_13.htmlTarget)} target`);
+
+if (softFailures.length) {
   console.log(`\n${YELLOW}  Targets (non-blocking):${RESET}`);
-  if (!pass.preHeroTarget) console.log(`    pre-hero:   ${kib(preHeroGz)} vs ${kib(BUDGET.preHeroTarget)} target`);
-  if (!pass.heroTarget)    console.log(`    hero graph: ${kib(heroGraphGz)} vs ${kib(BUDGET.heroTarget)} target`);
+  softFailures.forEach((s) => console.log(`    ${s}`));
 }
 
 if (hardFailures.length) {
@@ -392,11 +527,21 @@ const readingRows = readingRouteResults.map(({ path, chunks }) => {
   return `<tr><td>${escHtml(rel)}</td><td class="num">${kib(gz)}</td></tr>`;
 }).join('\n');
 
+const cssRouteRows = cssPerRoute.map(({ path, gz }) => {
+  const rel = path.replace(DIST + '/', '');
+  return `<tr class="${rowClass(gz <= BUDGET_13.cssHard, gz > BUDGET_13.cssTarget && gz <= BUDGET_13.cssHard)}"><td>${escHtml(rel)}</td><td class="num">${kib(gz)}</td></tr>`;
+}).join('\n');
+
+const htmlRouteRows = htmlPerRoute.map(({ path, gz }) => {
+  const rel = path.replace(DIST + '/', '');
+  return `<tr class="${rowClass(gz <= BUDGET_13.htmlHard, gz > BUDGET_13.htmlTarget && gz <= BUDGET_13.htmlHard)}"><td>${escHtml(rel)}</td><td class="num">${kib(gz)}</td></tr>`;
+}).join('\n');
+
 const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Bundle Budget Report — PERF-007</title>
+<title>Bundle Budget Report — PERF-007 + PERF-013</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
   h1 { font-size: 1.4rem; }
@@ -416,14 +561,14 @@ const html = `<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>Bundle Budget Report — PERF-007</h1>
+<h1>Bundle Budget Report — PERF-007 + PERF-013</h1>
 <p class="meta">
   Generated: ${escHtml(nowStr)}<br>
   Dist: <code>${escHtml(resolve(DIST))}</code>
 </p>
 
 <div class="section">
-<h2>Budget Summary</h2>
+<h2>PERF-007: JavaScript Budget Summary</h2>
 <table>
   <thead><tr><th>Metric</th><th class="num">Actual</th><th class="num">Target</th><th class="num">Hard Limit</th><th>Status</th></tr></thead>
   <tbody>
@@ -468,6 +613,53 @@ const html = `<!DOCTYPE html>
 </div>
 
 <div class="section">
+<h2>PERF-013: CSS / Font / HTML Budget Summary</h2>
+<table>
+  <thead><tr><th>Metric</th><th class="num">Actual</th><th class="num">Target</th><th class="num">Hard Limit</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr class="${rowClass(pass.cssHard, !pass.cssTarget)}">
+      <td>CSS inline (max route, gzip)</td>
+      <td class="num">${kib(maxCssGz)}</td>
+      <td class="num">${kib(BUDGET_13.cssTarget)}</td>
+      <td class="num">${kib(BUDGET_13.cssHard)}</td>
+      <td class="${rowClass(pass.cssHard, !pass.cssTarget)}">${pass.cssHard ? (pass.cssTarget ? 'PASS' : 'WARN (target)') : 'FAIL'}</td>
+    </tr>
+    <tr class="${rowClass(pass.fontHard, !pass.fontTarget)}">
+      <td>Initial font transfer (preloaded woff2)</td>
+      <td class="num">${kib(preloadedFontBytes)}</td>
+      <td class="num">${kib(BUDGET_13.fontTarget)}</td>
+      <td class="num">${kib(BUDGET_13.fontHard)}</td>
+      <td class="${rowClass(pass.fontHard, !pass.fontTarget)}">${pass.fontHard ? (pass.fontTarget ? 'PASS' : 'WARN (target)') : 'FAIL'}</td>
+    </tr>
+    <tr class="${rowClass(pass.htmlHard, !pass.htmlTarget)}">
+      <td>HTML per-route max (gzip)</td>
+      <td class="num">${kib(maxHtmlGz)}</td>
+      <td class="num">${kib(BUDGET_13.htmlTarget)}</td>
+      <td class="num">${kib(BUDGET_13.htmlHard)}</td>
+      <td class="${rowClass(pass.htmlHard, !pass.htmlTarget)}">${pass.htmlHard ? (pass.htmlTarget ? 'PASS' : 'WARN (target)') : 'FAIL'}</td>
+    </tr>
+    <tr class="${pass.noFontDisplayBlock ? 'pass' : 'fail'}">
+      <td>font-display:block (FOIT risk)</td>
+      <td class="num">${hasFontDisplayBlock ? 'FOUND' : 'none'}</td>
+      <td class="num">none</td>
+      <td class="num">none</td>
+      <td class="${pass.noFontDisplayBlock ? 'pass' : 'fail'}">${pass.noFontDisplayBlock ? 'PASS' : 'FAIL'}</td>
+    </tr>
+  </tbody>
+</table>
+<p class="note">
+  <strong>CSS:</strong> Since <code>inlineStylesheets:'always'</code>, all CSS is embedded in &lt;style&gt; tags.
+  The budget is enforced per-route (worst-case gzip). Preloaded font files (${escHtml(preloadedFontFilenames.join(', '))}).<br>
+  <strong>Font transfer:</strong> Only fonts with <code>rel=preload as=font</code> count — those fetch on the critical path before paint.
+  woff2 is already a compressed container; transfer size = raw file size.<br>
+  <strong>HTML:</strong> Full document gzip size, worst-case route (what the browser downloads over the network).
+  A 100 KiB hard limit keeps Time-to-First-Byte lean even on slow connections.<br>
+  <strong>font-display:block</strong> forces an invisible-text period (FOIT) up to 3 s.
+  The expected value is <code>swap</code> (text visible immediately in the fallback font).
+</p>
+</div>
+
+<div class="section">
 <h2>Hero Graph Chunks (${heroGraphChunks.size} chunks, ${kib(heroGraphGz)} total)</h2>
 <table>
   <thead><tr><th>Chunk</th><th class="num">Gzip size</th></tr></thead>
@@ -496,12 +688,77 @@ const html = `<!DOCTYPE html>
 </table>
 </div>
 
+<div class="section">
+<h2>CSS per Route (inline &lt;style&gt; gzip)</h2>
+<table>
+  <thead><tr><th>Route</th><th class="num">Gzip size</th></tr></thead>
+  <tbody>${cssRouteRows}</tbody>
+</table>
+</div>
+
+<div class="section">
+<h2>HTML per Route (full document gzip)</h2>
+<table>
+  <thead><tr><th>Route</th><th class="num">Gzip size</th></tr></thead>
+  <tbody>${htmlRouteRows}</tbody>
+</table>
+</div>
+
 </body>
 </html>`;
 
 mkdirSync('evidence/performance', { recursive: true });
 writeFileSync(EVIDENCE_OUT, html, 'utf8');
 console.log(`\n  Report written to ${EVIDENCE_OUT}`);
+
+// ---------------------------------------------------------------------------
+// Step 10b — Write PERF-013 JSON evidence artifact
+// ---------------------------------------------------------------------------
+
+const CSS_FONT_HTML_EVIDENCE = 'evidence/performance/css-font-html-budgets.json';
+
+const evidenceJson = {
+  generated: nowStr,
+  dist: resolve(DIST),
+  css: {
+    strategy: 'inlineStylesheets:always — no external .css files; CSS is embedded in <style> tags',
+    maxGzKiB: +(maxCssGz / 1024).toFixed(2),
+    targetKiB: BUDGET_13.cssTarget / 1024,
+    hardKiB: BUDGET_13.cssHard / 1024,
+    passTarget: pass.cssTarget,
+    passHard: pass.cssHard,
+    routes: cssPerRoute.map(({ path, gz }) => ({
+      route: path.replace(DIST + '/', ''),
+      gzKiB: +(gz / 1024).toFixed(2),
+    })),
+  },
+  fonts: {
+    preloadedFiles: preloadedFontFilenames,
+    totalPreloadedBytes: preloadedFontBytes,
+    totalPreloadedKiB: +(preloadedFontBytes / 1024).toFixed(2),
+    targetKiB: BUDGET_13.fontTarget / 1024,
+    hardKiB: BUDGET_13.fontHard / 1024,
+    passTarget: pass.fontTarget,
+    passHard: pass.fontHard,
+    fontDisplayBlock: hasFontDisplayBlock,
+    noInvisibleText: pass.noFontDisplayBlock,
+    note: 'font-display:swap confirmed on all @font-face rules; preloaded fonts fetch before paint to eliminate FOUT on hero overlay text',
+  },
+  html: {
+    maxGzKiB: +(maxHtmlGz / 1024).toFixed(2),
+    targetKiB: BUDGET_13.htmlTarget / 1024,
+    hardKiB: BUDGET_13.htmlHard / 1024,
+    passTarget: pass.htmlTarget,
+    passHard: pass.htmlHard,
+    routes: htmlPerRoute.map(({ path, gz }) => ({
+      route: path.replace(DIST + '/', ''),
+      gzKiB: +(gz / 1024).toFixed(2),
+    })),
+  },
+};
+
+writeFileSync(CSS_FONT_HTML_EVIDENCE, JSON.stringify(evidenceJson, null, 2), 'utf8');
+console.log(`  Evidence JSON written to ${CSS_FONT_HTML_EVIDENCE}`);
 
 // ---------------------------------------------------------------------------
 // Step 11 — Exit

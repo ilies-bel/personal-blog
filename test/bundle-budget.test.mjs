@@ -1,7 +1,10 @@
-// Bundle budget test — PERF-007
+// Bundle budget test — PERF-007 + PERF-013
 //
-// Verifies that the production build meets the JS-size budgets defined in the
-// roadmap (docs/roadmaps/soty-readiness-backlog.md).
+// Verifies that the production build meets:
+//   PERF-007: JS-size budgets (hero graph, pre-hero, reading routes)
+//   PERF-013: CSS, font, and HTML delivery budgets
+//
+// Both are defined in docs/roadmaps/soty-readiness-backlog.md.
 //
 // REQUIRES a prior `npm run build`. When dist/_astro/ is absent (e.g. first
 // `npm test` in a fresh CI checkout before build), all tests are skipped.
@@ -174,6 +177,147 @@ describe('PERF-007 bundle budgets', { skip: !distExists && 'dist/_astro not foun
       [],
       `Three.js code found outside engine chunks: ${duplicateEngineChunks.join(', ')}`,
     );
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// PERF-013 — CSS, font, and HTML delivery budgets
+// ---------------------------------------------------------------------------
+
+/** PERF-013 budgets — must match scripts/bundle-budget.mjs */
+const BUDGET_13 = {
+  cssHard:     50 * 1024,
+  cssTarget:   35 * 1024,
+  fontHard:   180 * 1024,
+  fontTarget: 120 * 1024,
+  htmlHard:   100 * 1024,
+  htmlTarget:  60 * 1024,
+};
+
+function extractInlineCss(path) {
+  const html = readFileSync(path, 'utf8');
+  return [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+    .map((m) => m[1])
+    .join('');
+}
+
+function parsePreloadedFontFiles(path) {
+  const html = readFileSync(path, 'utf8');
+  return [...html.matchAll(/<link\s[^>]*>/g)]
+    .filter((m) => /\brel=["']preload["']/.test(m[0]) && /\bas=["']font["']/.test(m[0]))
+    .map((m) => {
+      const href = m[0].match(/\bhref=["']\/_astro\/([^"']+)["']/);
+      return href ? href[1] : null;
+    })
+    .filter(Boolean);
+}
+
+function walkHtml(dir) {
+  /** @type {string[]} */
+  const result = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) result.push(...walkHtml(full));
+    else if (entry.name.endsWith('.html')) result.push(full);
+  }
+  return result;
+}
+
+describe('PERF-013 CSS, font, and HTML budgets', { skip: !distExists && 'dist not found — run npm run build first' }, () => {
+
+  const allHtml = distExists ? walkHtml(DIST) : [];
+  const heroHtml = join(DIST, 'index.html');
+
+  test('inline CSS (per-route max) is within hard limit', () => {
+    assert.ok(allHtml.length > 0, 'expected at least one HTML file in dist/');
+    const worstGz = Math.max(...allHtml.map((p) => gzipSync(Buffer.from(extractInlineCss(p))).length));
+    assert.ok(
+      worstGz <= BUDGET_13.cssHard,
+      `inline CSS (worst route) ${(worstGz / 1024).toFixed(1)} KiB gz exceeds hard limit of ${BUDGET_13.cssHard / 1024} KiB gz`,
+    );
+  });
+
+  test('inline CSS (per-route max) is within target', () => {
+    const worstGz = Math.max(...allHtml.map((p) => gzipSync(Buffer.from(extractInlineCss(p))).length));
+    assert.ok(
+      worstGz <= BUDGET_13.cssTarget,
+      `inline CSS (worst route) ${(worstGz / 1024).toFixed(1)} KiB gz exceeds target of ${BUDGET_13.cssTarget / 1024} KiB gz`,
+    );
+  });
+
+  test('no @font-face rule uses font-display:block (FOIT guard)', () => {
+    // font-display:block causes an invisible-text period (FOIT) up to 3 s.
+    // swap is the correct value: text is immediately visible in the fallback.
+    assert.ok(existsSync(heroHtml), 'hero page dist/index.html must exist');
+    const css = extractInlineCss(heroHtml);
+    const hasFontDisplayBlock = /font-display\s*:\s*block\b/i.test(css);
+    assert.ok(
+      !hasFontDisplayBlock,
+      'found font-display:block in CSS — causes invisible text (FOIT); use font-display:swap or optional',
+    );
+  });
+
+  test('preloaded fonts are present and identified', () => {
+    assert.ok(existsSync(heroHtml), 'hero page dist/index.html must exist');
+    const preloaded = parsePreloadedFontFiles(heroHtml);
+    assert.ok(preloaded.length > 0, 'expected at least one <link rel=preload as=font> on the hero page');
+    // Verify the expected critical-path fonts are preloaded
+    const preloadedStr = preloaded.join(' ');
+    assert.ok(
+      preloaded.some((f) => f.startsWith('space-grotesk-latin.')),
+      `expected space-grotesk-latin to be preloaded; got: ${preloadedStr}`,
+    );
+    assert.ok(
+      preloaded.some((f) => f.startsWith('ibm-plex-mono-latin.')),
+      `expected ibm-plex-mono-latin to be preloaded; got: ${preloadedStr}`,
+    );
+  });
+
+  test('initial font transfer (preloaded woff2) is within hard limit', () => {
+    assert.ok(existsSync(heroHtml), 'hero page dist/index.html must exist');
+    const preloaded = parsePreloadedFontFiles(heroHtml);
+    const totalBytes = preloaded.reduce((sum, file) => {
+      const p = join(ASTRO_DIR, file);
+      return sum + (existsSync(p) ? readFileSync(p).length : 0);
+    }, 0);
+    assert.ok(
+      totalBytes <= BUDGET_13.fontHard,
+      `initial font transfer ${(totalBytes / 1024).toFixed(1)} KiB exceeds hard limit of ${BUDGET_13.fontHard / 1024} KiB (files: ${preloaded.join(', ')})`,
+    );
+  });
+
+  test('initial font transfer (preloaded woff2) is within target', () => {
+    const preloaded = parsePreloadedFontFiles(heroHtml);
+    const totalBytes = preloaded.reduce((sum, file) => {
+      const p = join(ASTRO_DIR, file);
+      return sum + (existsSync(p) ? readFileSync(p).length : 0);
+    }, 0);
+    assert.ok(
+      totalBytes <= BUDGET_13.fontTarget,
+      `initial font transfer ${(totalBytes / 1024).toFixed(1)} KiB exceeds target of ${BUDGET_13.fontTarget / 1024} KiB (files: ${preloaded.join(', ')})`,
+    );
+  });
+
+  test('all routes: HTML document is within hard limit (gzip)', () => {
+    assert.ok(allHtml.length > 0, 'expected at least one HTML file in dist/');
+    for (const htmlPath of allHtml) {
+      const gz = gzipSync(readFileSync(htmlPath)).length;
+      assert.ok(
+        gz <= BUDGET_13.htmlHard,
+        `${htmlPath.replace(DIST + '/', '')} HTML ${(gz / 1024).toFixed(1)} KiB gz exceeds hard limit of ${BUDGET_13.htmlHard / 1024} KiB gz`,
+      );
+    }
+  });
+
+  test('all routes: HTML document is within target (gzip)', () => {
+    for (const htmlPath of allHtml) {
+      const gz = gzipSync(readFileSync(htmlPath)).length;
+      assert.ok(
+        gz <= BUDGET_13.htmlTarget,
+        `${htmlPath.replace(DIST + '/', '')} HTML ${(gz / 1024).toFixed(1)} KiB gz exceeds target of ${BUDGET_13.htmlTarget / 1024} KiB gz`,
+      );
+    }
   });
 
 });
