@@ -65,6 +65,28 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
     const previouslyFocused = document.activeElement as HTMLElement | null;
     confirmRef.current?.focus();
 
+    // BACKGROUND INERT — make every body-level subtree outside this dialog
+    // inaccessible to assistive technology while the modal is open.
+    //
+    // `aria-modal="true"` tells well-behaved ATs to ignore the rest of the
+    // page, but the HTML `inert` attribute is the robust, author-controlled
+    // equivalent: it removes every inerted element from the AT tree AND the
+    // Tab sequence, regardless of AT implementation quality.
+    //
+    // Strategy: walk up from the dialog element to the direct child of
+    // <body> that contains it (the Astro island wrapper), then set `inert`
+    // on every OTHER direct body child.  We record which siblings were
+    // already inert so the cleanup only removes the attribute from the ones
+    // WE added it to — never stripping an attribute another actor set.
+    const dialog = dialogRef.current;
+    let container: Element | null = dialog;
+    while (container && container.parentElement !== document.body) {
+      container = container.parentElement;
+    }
+    const siblings = Array.from(document.body.children).filter(el => el !== container);
+    const wasInert = siblings.map(el => el.hasAttribute('inert'));
+    siblings.forEach(el => el.setAttribute('inert', ''));
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -72,9 +94,9 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
         return;
       }
       if (event.key !== 'Tab') return;
-      const dialog = dialogRef.current;
-      if (!dialog) return;
-      const focusable = dialog.querySelectorAll<HTMLElement>(
+      const dlg = dialogRef.current;
+      if (!dlg) return;
+      const focusable = dlg.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
@@ -93,6 +115,11 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      // Restore each sibling's inert state to exactly what it was before the
+      // modal opened — only remove the attribute from siblings WE added it to.
+      siblings.forEach((el, i) => {
+        if (!wasInert[i]) el.removeAttribute('inert');
+      });
       // Restore focus to whatever opened the modal (the corner toggle) on close.
       previouslyFocused?.focus?.();
     };
