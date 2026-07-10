@@ -50,6 +50,23 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     </div>
   </div>
 
+  {/* Skip experience — the persistent escape hatch from the cinematic opening.
+      An always-visible, always-reachable anchor that lets any visitor bypass the
+      scroll-driven stellar lifecycle and jump straight to the portfolio work.
+
+      Why <a> not <button>: it navigates cross-page, it is not a local action.
+      z-index 62 — sits above the intro loader (z-60) so it is tappable and
+      keyboard-focusable from the very first server render, before any JS runs.
+      Persists through every lifecycle phase (loading → scene-ready → mid-scroll).
+
+      Placement: bottom-right corner — clear of all existing HUD instruments
+      (compass: bottom-center; frame-readout: bottom-left; brand: top-left;
+      nav: top-right) and away from the browser's swipe-back gesture zone.
+
+      Label explains the outcome ("Skip experience"), not a cockpit metaphor.
+      Keyboard: Tab to focus, Enter to navigate — no mouse required. */}
+  <a href={href('projects')} class="skip-experience">Skip experience</a>
+
   {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout.
       A bundled <script> (no is:inline) re-runs on every ClientRouter swap back
       to '/' via astro:page-load (+ one direct call for the initial hard load):
