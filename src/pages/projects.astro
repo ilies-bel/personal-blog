@@ -355,6 +355,10 @@ const projects = (await getCollection('projects')).sort(
     color: var(--accent-strong);
     text-decoration: none;
     transition: color 0.16s ease;
+    /* URLs have no natural break points (no spaces). Allow them to break at
+       any character so they never push the document wider than the viewport
+       on narrow mobile viewports or at high zoom levels (EXP-012). */
+    overflow-wrap: break-word;
   }
 
   .projects-link:hover {
@@ -371,6 +375,9 @@ const projects = (await getCollection('projects')).sort(
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    /* Package names (e.g. @scope/package) contain no natural break points.
+       Allow breaking at any character to prevent viewport overflow (EXP-012). */
+    overflow-wrap: break-word;
   }
 
   .projects-pkg-label {

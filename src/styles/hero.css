@@ -1309,3 +1309,14 @@ body.warp-active .hud-compass:not(.warp-readout) {
     animation: none;
   }
 }
+
+/* ≤ 14rem (224 px) — 200 % zoom equivalents of the narrowest phone viewports.
+   "BELDJILALI" at the 1.1rem minimum font-size sits within a very small margin
+   of the ~112 px content area at 160 px viewport (200 % zoom of 320 px phone).
+   Allow an emergency character break to prevent rounding-induced horizontal
+   overflow (EXP-012). */
+@media (max-width: 14rem) {
+  .bh-identity-name {
+    overflow-wrap: break-word;
+  }
+}

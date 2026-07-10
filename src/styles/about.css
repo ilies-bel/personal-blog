@@ -201,6 +201,16 @@
   }
 }
 
+/* ≤ 14rem (224 px) — 200 % zoom equivalents of the narrowest phone viewports.
+   The signature name has a large minimum font-size (2.4 rem) that can exceed
+   the content column width at these extreme viewport widths. Allowing a hard
+   character break prevents horizontal document overflow (EXP-012). */
+@media (max-width: 14rem) {
+  .about-signature-name {
+    overflow-wrap: break-word;
+  }
+}
+
 /* Generous separation marks the gear-change from voice to action. */
 .about-contact {
   margin-top: clamp(2.5rem, 7vh, 4rem);

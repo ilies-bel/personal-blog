@@ -232,7 +232,10 @@
 }
 .site-footer-links {
   display: flex;
-  gap: 1.6rem;
+  /* Allow links to wrap onto new rows at narrow viewports so the footer never
+     pushes the document wider than the viewport (EXP-012). */
+  flex-wrap: wrap;
+  gap: 0.75rem 1.6rem;
 }
 
 .site-footer a {
@@ -312,5 +315,18 @@
      divider; pull the socials in line with the labels' left padding. */
   .subnav-socials {
     margin-left: 0;
+  }
+}
+
+/* ≤ 14rem (224 px) — 200 % zoom equivalents of the narrowest phone viewports.
+   The standard subnav layout holds down to 20 rem (320 px / 100 % zoom); below
+   that each label must be allowed to wrap so a single nav item with white-space:
+   nowrap never causes horizontal document overflow (EXP-012). Reduced padding
+   keeps the tap target proportionate at these extreme viewport widths. */
+@media (max-width: 14rem) {
+  .subnav-link {
+    padding: 0.25rem 0.4rem;
+    white-space: normal;
+    word-break: break-word;
   }
 }

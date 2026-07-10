@@ -284,6 +284,9 @@ const specimens = (await getCollection('graveyard')).sort(
     color: var(--fg-faint);
     text-decoration: none;
     transition: color 0.16s ease;
+    /* Domain-name URLs have no natural break points. Allow breaking at any
+       character to prevent viewport overflow at narrow/zoomed widths (EXP-012). */
+    overflow-wrap: break-word;
   }
 
   .graveyard-link:hover {
