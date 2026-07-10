@@ -1,14 +1,15 @@
 // The manifesto overlay: sparse text beats pinned over the canvas, each shown at
 // full bone across its scroll band (no fade, no direction swap, no opening intro).
 // Copy + timing live colocated per scene in ../sceneTable (shared with index.astro's SSR fallback).
-import { BEATS } from '../sceneTable';
+import { BEATS, SCENES } from '../sceneTable';
 import { band } from '../scroll';
 import { lifecycleProgress } from '../timeline';
+import { resolveHref } from '../lib/url';
 import FinaleLedger from './FinaleLedger';
 import { useSceneState } from './SceneStateContext';
 
 export default function ManifestoOverlay() {
-  const { progress, reduced, explorationMode } = useSceneState();
+  const { progress, reduced, explorationMode, base } = useSceneState();
 
   return (
     <div
@@ -77,6 +78,24 @@ export default function ManifestoOverlay() {
               {beat.whisper}
             </p>
 
+            {/* Reduced-motion edition: a contextual destination link per beat (except
+                the finale, which already exposes all sections via FinaleLedger).
+                Provides "same destinations" parity with the star markers on the live
+                path — each beat's section destination is reachable in-context at the
+                matching scroll position, not only via the HUD rail. Inert while
+                outside the band (tabIndex -1, aria-hidden) so it never adds stray
+                focus stops or invisible hit targets. */}
+            {reduced && !isFinale && (
+              <a
+                href={resolveHref(base, SCENES[i].hud.href)}
+                className="bh-beat-destination"
+                tabIndex={visible ? 0 : -1}
+                aria-hidden={!visible}
+              >
+                {SCENES[i].hud.destination}
+                <span aria-hidden="true"> →</span>
+              </a>
+            )}
             {/* The finale's payoff: the site index, pinned to the bottom of the
                 finale column. Shares this beat's exact visibility band (live
                 hard-cut AND the reduced-motion gapless regime) via `visible`;

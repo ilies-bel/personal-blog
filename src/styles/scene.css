@@ -524,6 +524,28 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
    absent). The flow-based rule wins whenever the button is actually inside the row. */
 .overlay-blog-motion {
   order: 0;  /* flex order 0 → sits just left of the power button (order: 1) */
+  /* Extend the fixed-circle layout (.overlay-blog-power: grid, 2.1rem square) to a
+     pill that can hold both the icon and the visible state label. Override display +
+     width so the ring scales to the content, keeping the same height (2.1rem). */
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  width: auto;
+  padding: 0 0.55rem 0 0.4rem;
+}
+/* The visible state label: "STILL" in reduced mode, "MOTION" in live mode.
+   Mono caps at the HUD's instrument-rung size so it reads as a status indicator,
+   not decorative copy. Inherits the button's current color so it shares the gold
+   lit-state automatically (the [aria-pressed='true'] rule on .overlay-blog-power
+   flips color to var(--accent-strong), which this span picks up). */
+.overlay-blog-motion-label {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: inherit;
+  user-select: none;
 }
 /* Separate the two GROUPS in the row: the social links (GitHub/X) on the left and the
    command buttons (reduced-motion + power) on the right. The reduced-motion toggle is

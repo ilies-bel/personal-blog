@@ -58,6 +58,8 @@ export default function ReducedMotionToggle() {
 
   // The aria-label names what the CLICK does (the opposite of the current state), so a
   // screen reader announces the action. aria-pressed carries the current reduced state.
+  // The visible .overlay-blog-motion-label shows the CURRENT STATE ("STILL" / "MOTION")
+  // so sighted users can read the mode without relying on color alone.
   const label = reduced ? 'Enable motion' : 'Reduce motion';
 
   const button = (
@@ -84,6 +86,12 @@ export default function ReducedMotionToggle() {
         <path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2" />
         <path d="m2 2 20 20" />
       </svg>
+      {/* Visible state label — named the CURRENT MODE ("STILL" / "MOTION") so the
+          control's state is legible to sighted users without hover or inspection.
+          aria-hidden so screen readers hear the action label above, not a duplicate. */}
+      <span className="overlay-blog-motion-label" aria-hidden="true">
+        {reduced ? 'Still' : 'Motion'}
+      </span>
     </button>
   );
 

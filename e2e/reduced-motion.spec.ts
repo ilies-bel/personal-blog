@@ -142,3 +142,218 @@ test.describe('A11Y-001 reduced-motion boot', () => {
     },
   )
 })
+
+/**
+ * EXP-002 — Deliberate reduced-motion edition
+ *
+ * Verifies that the still-poster path delivers the same message, information
+ * architecture, and destinations as the live WebGL edition:
+ *   1. All 5 manifesto beat texts are present in the accessibility tree.
+ *   2. All 5 section destinations are reachable via links.
+ *   3. The manual motion toggle shows a visible state label (legible current state).
+ *   4. The toggle is reversible without a page reload.
+ *   5. The manual preference persists across a page reload.
+ */
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Scroll the page to a raw-progress fraction (0 = top, 1 = bottom). */
+async function scrollToProgress(page: import('@playwright/test').Page, raw: number): Promise<void> {
+  await page.evaluate((frac) => {
+    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight)
+    window.scrollTo({ top: frac * max, behavior: 'instant' })
+  }, raw)
+  // Give the ScrollTracker + React a short tick to reflect the new position.
+  await page.waitForTimeout(150)
+}
+
+/** Wait for the hero island to finish its reduced-motion mount. */
+async function waitForReducedMount(page: import('@playwright/test').Page): Promise<void> {
+  await page.waitForSelector(`body.${SCENE_READY_BODY_CLASS}`, { timeout: 15_000 })
+  // Ensure the React island has hydrated and the toggle has portalled into the nav.
+  await page.waitForSelector('button.overlay-blog-motion', { state: 'attached', timeout: 8_000 })
+}
+
+// ---------------------------------------------------------------------------
+// Beat texts — directly from sceneTable BEATS (mirrored here to avoid a
+// build-time import; must stay in sync if manifesto copy changes).
+// ---------------------------------------------------------------------------
+const BEAT_TEXTS = [
+  'Under pressure, structure remains.',          // black hole  (top of page, raw ~0.06)
+  'Complexity expands. My work is to keep the center readable.', // red giant (~0.26)
+  'Systems grow. Interfaces drift. Complexity compounds.', // yellow star (~0.42)
+  'One clear boundary can save a thousand future decisions.', // nebula (~0.625)
+  'What remains is the work.',                   // pale blue dot (bottom, raw ~0.95)
+]
+
+// ---------------------------------------------------------------------------
+// Section destination hrefs — must stay in sync with sceneTable SCENES.
+// ---------------------------------------------------------------------------
+const SECTION_HREFS = [
+  'about',
+  'writing',
+  'projects',
+  'graveyard',
+  'posts/thanks-for-scrolling-to-the-bottom',
+]
+
+// Raw-scroll positions that put each non-finale beat into its visible band.
+// These are approximate mid-band values (lifecycle p → raw = 1 − p):
+const BEAT_SCROLL_POSITIONS: Record<string, number> = {
+  'Under pressure, structure remains.': 0.05,     // lifecycle ~0.95 → raw 0.05
+  'Complexity expands. My work is to keep the center readable.': 0.26, // lifecycle 0.74 → raw 0.26
+  'Systems grow. Interfaces drift. Complexity compounds.': 0.42, // lifecycle 0.58 → raw 0.42
+  'One clear boundary can save a thousand future decisions.': 0.625, // lifecycle 0.375 → raw 0.625
+}
+
+test.describe('EXP-002 reduced-motion edition', () => {
+  test(
+    'all 5 beat texts are present in the DOM under reduced motion',
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.goto('/')
+      await waitForReducedMount(page)
+
+      // Under reduced motion ManifestoOverlay keeps ALL beats in the accessibility
+      // tree at all times (aria-hidden is never true in reduced mode), so every beat
+      // text is queryable even when another beat's band is active.
+      for (const text of BEAT_TEXTS) {
+        await expect(
+          page.locator(`.bh-beat-big`).filter({ hasText: text }).first(),
+          `Beat text "${text.slice(0, 40)}…" not found in DOM`,
+        ).toBeAttached()
+      }
+    },
+  )
+
+  test(
+    'all 5 section destinations are reachable via links',
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.goto('/')
+      await waitForReducedMount(page)
+
+      // Each section href must be reachable through at least one <a> in the page —
+      // either the HUD rail, a contextual beat-destination chip, or the FinaleLedger.
+      for (const href of SECTION_HREFS) {
+        await expect(
+          page.locator(`a[href*="${href}"]`).first(),
+          `Section link for "${href}" not found in DOM`,
+        ).toBeAttached()
+      }
+    },
+  )
+
+  test(
+    'contextual destination links are operable at each non-finale beat position',
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.goto('/')
+      await waitForReducedMount(page)
+
+      // For each non-finale beat, scroll to its band and assert the contextual
+      // destination chip is present and its aria-hidden is NOT 'true' (meaning it is
+      // in the active visible band). Playwright's toBeVisible() does not check CSS
+      // opacity, so we check the aria-hidden attribute which ManifestoOverlay sets
+      // based on the same `visible` flag that drives CSS opacity.
+      for (const [text, rawPos] of Object.entries(BEAT_SCROLL_POSITIONS)) {
+        await scrollToProgress(page, rawPos)
+        // Find the beat block by its headline text (substring match is sufficient).
+        const beatBlock = page
+          .locator('.bh-beat')
+          .filter({ has: page.locator('.bh-beat-big').filter({ hasText: text.slice(0, 30) }) })
+          .first()
+        const destLink = beatBlock.locator('.bh-beat-destination')
+        await expect(
+          destLink,
+          `Destination link missing for beat "${text.slice(0, 40)}…"`,
+        ).toBeAttached()
+        // aria-hidden is absent or 'false' when the beat is in its visible band;
+        // 'true' when it is outside. At the correct scroll position the beat owns
+        // the screen, so aria-hidden must NOT be 'true'.
+        await expect(
+          destLink,
+          `Destination link is aria-hidden='true' at raw-scroll ${rawPos} (beat should be visible)`,
+        ).not.toHaveAttribute('aria-hidden', 'true')
+      }
+    },
+  )
+
+  test(
+    'motion toggle shows a visible state label reflecting the current mode',
+    async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.goto('/')
+      await waitForReducedMount(page)
+
+      const toggle = page.locator('button.overlay-blog-motion')
+      await expect(toggle).toBeVisible()
+
+      // The label inside the button must show "Still" when reduced motion is active.
+      const label = toggle.locator('.overlay-blog-motion-label')
+      await expect(label).toBeVisible()
+      await expect(label).toHaveText(/still/i)
+
+      // aria-pressed='true' confirms the machine state matches the label.
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    },
+  )
+
+  test(
+    'motion toggle is reversible without a page reload',
+    async ({ page }) => {
+      // Start in live mode so we can test the full round-trip.
+      await page.goto('/')
+      await page.waitForSelector(`body.${SCENE_READY_BODY_CLASS}`, { timeout: 15_000 })
+      await page.waitForSelector('button.overlay-blog-motion', { state: 'attached', timeout: 8_000 })
+
+      const toggle = page.locator('button.overlay-blog-motion')
+      await expect(toggle).toBeVisible()
+
+      // Live mode: label shows "Motion", aria-pressed is false.
+      await expect(toggle.locator('.overlay-blog-motion-label')).toHaveText(/motion/i)
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+      // Click to enter reduced motion → confirm modal opens.
+      await toggle.click()
+      const modal = page.locator('[role="dialog"]')
+      await expect(modal).toBeVisible()
+
+      // Confirm — click the primary "Continue" button.
+      await modal.locator('button').filter({ hasText: /continue/i }).click()
+      await expect(modal).not.toBeVisible()
+
+      // Now in reduced mode: label shows "Still", aria-pressed is true.
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      await expect(toggle.locator('.overlay-blog-motion-label')).toHaveText(/still/i)
+
+      // Click again to exit reduced motion — no modal, instant flip.
+      await toggle.click()
+      await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+      await expect(toggle.locator('.overlay-blog-motion-label')).toHaveText(/motion/i)
+    },
+  )
+
+  test(
+    'manual reduced-motion preference persists across a page reload',
+    async ({ page }) => {
+      // Seed the persisted manual override before navigation.
+      await page.addInitScript(() => {
+        try {
+          localStorage.setItem('bh:reduced-motion', 'true')
+        } catch {
+          // Private-mode safe.
+        }
+      })
+      await page.goto('/')
+      await waitForReducedMount(page)
+
+      // Returning visitor: override survived the reload.
+      const toggle = page.locator('button.overlay-blog-motion')
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      await expect(toggle.locator('.overlay-blog-motion-label')).toHaveText(/still/i)
+    },
+  )
+})

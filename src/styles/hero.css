@@ -795,6 +795,40 @@ body.scene-ready.at-opening .bh-focus-dot {
   text-wrap: pretty;
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
 }
+/* Reduced-motion edition: per-beat destination link. Appears after the whisper on
+   each non-finale beat when the visitor is in the still-poster path. Provides the
+   same contextual "go here" affordance as the star markers on the live path — the
+   section's name + an arrow, styled as a mono CTA in the accent gold so it reads as
+   an authored invitation rather than a fallback label. Pointer-events are on (the
+   parent .bh-overlay is pointer-events:none, but this link restores them explicitly
+   so clicking still works). Inert while aria-hidden. */
+.bh-beat-destination {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1.1rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  pointer-events: auto;
+  transition: color 0.15s ease;
+}
+.bh-beat-destination:hover,
+.bh-beat-destination:focus-visible {
+  color: var(--accent-strong);
+}
+.bh-beat-destination:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bh-beat-destination { transition: none; }
+}
 @media (max-width: 34rem) {
   /* Only the placement tightens on narrow widths now — the type tokens (--text-hero
      for the line, --text-subtitle for the name) are fluid clamps that already scale
