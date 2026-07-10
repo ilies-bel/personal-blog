@@ -1,0 +1,302 @@
+/* A11Y-007 — Zoom, text-spacing, forced-colors, and high-contrast compatibility.
+   Imported LAST in global.css so these rules win over the design tokens without
+   requiring !important, except where explicitly noted.
+
+   The three concerns addressed here are intentionally separated so each can be
+   audited and updated independently.
+
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ============================================================================
+   1. TEXT-SPACING RESILIENCE (WCAG SC 1.4.12)
+
+   The WCAG "text-spacing" bookmarklet (Alastair Campbell) sets:
+     line-height:    1.5  !important  on all elements
+     letter-spacing: 0.12em !important on all elements
+     word-spacing:   0.16em !important on all elements
+     margin-bottom:  2em   !important on <p> elements
+
+   Content or functionality must not be lost when those overrides are applied.
+   Audit findings (reading-page chrome and navigation):
+
+   • .subnav  — min-height:4.25rem  (min-height, not height → can expand) ✓
+   • .subnav-link — padding-based, no explicit height → expands with content ✓
+   • .site-footer — flex-wrap layout, no explicit height → expands with content ✓
+   • .skip-link   — padding-based, no explicit height → expands with content ✓
+   • .sr-only     — intentionally hidden; overflow:hidden is by design ✓
+   • .overlay-blog labels — line-height:1, decorative canvas overlay,
+                            content redundantly available via .subnav ✓
+   • .hud-nav-button  — height:var(--rail-row-h) FIXED, overflow:visible
+                        with inner .hud-nav-copy overflow:hidden.  This is a
+                        canvas overlay and progressive enhancement; the
+                        .subnav/.overlay-blog-link serves as the primary nav.
+                        White-space:nowrap prevents wrapping; only baseline
+                        shifts in the fixed-height cell under 1.5× line-height.
+                        Accepted as decorative. ✓ (non-essential)
+
+   No CSS changes required for the reading-page chrome under 1.4.12.
+   ============================================================================ */
+
+
+/* ============================================================================
+   2. FORCED-COLORS MODE (WCAG SC 1.4.11 / A11Y-007)
+      Windows High Contrast Mode / Forced Colors
+
+   In forced-colors mode, the browser:
+     • Replaces OKLCH custom-property colors with system color keywords
+     • Removes background-image gradients (they become transparent/Canvas)
+     • Removes box-shadow and backdrop-filter
+     • Retains explicit border / outline widths
+
+   Risk areas in this design:
+     • .skip-link    — accent background becomes ButtonFace with no border → pill
+                       shape invisible against Canvas
+     • .subnav       — gradient + backdrop-filter vanish → bar is colorless;
+                       --hud-line color-mix has transparency so border may vanish
+     • .subnav-label — gradient underline sweep invisible → current-page state
+                       conveyed by color alone
+     • .site-footer  — --hud-line border has transparency → top rule may vanish
+     • .overlay-blog-link — color-only state, gradient label underline vanishes
+     • .hud-nav-button   — border:0 in default; interactive shape invisible
+
+   Strategy:
+     1. Add borders to controls that rely on color/background for shape
+     2. Use system color keywords (Canvas, ButtonText, CanvasText, Highlight,
+        HighlightText, LinkText, ButtonFace) where UA substitution would break state
+     3. Replace gradient text-decoration with real text-underline
+     4. Hide purely decorative elements (corner bracket ticks)
+     5. forced-color-adjust:none ONLY on the WebGL canvas (decorative, author-drawn)
+   ============================================================================ */
+
+@media (forced-colors: active) {
+
+  /* ── Skip link ────────────────────────────────────────────────────────── */
+  /* The accent-background pill vanishes against Canvas without a border. */
+  .skip-link {
+    background: ButtonFace;
+    color: ButtonText;
+    border: 2px solid ButtonText;
+  }
+  .skip-link:focus {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  /* ── Reading-page subnav ──────────────────────────────────────────────── */
+  /* Gradient + backdrop-filter disappear → add solid Canvas backing and a
+     visible ButtonText border so the bar is a perceivable region. */
+  .subnav {
+    background: Canvas;
+    border-bottom-color: ButtonText;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .subnav-link {
+    color: LinkText;
+  }
+  .subnav-link:hover,
+  .subnav-link:focus-visible {
+    color: LinkText;
+  }
+  .subnav-link:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  /* Replace gradient underline sweep with a real underline so current-page
+     state is conveyed by shape, not color. */
+  .subnav-label {
+    background-image: none;
+  }
+  .subnav-link[aria-current='page'] .subnav-label {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+  /* Current-page link: Highlight background so it is visually distinguished
+     from resting links even when all link colors collapse to LinkText. */
+  .subnav-link[aria-current='page'] {
+    color: HighlightText;
+    background: Highlight;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Decorative corner-bracket ticks convey nothing in forced-colors → hide. */
+  .subnav-tick,
+  .subnav-lock {
+    display: none;
+  }
+
+  /* ── Site footer ──────────────────────────────────────────────────────── */
+  /* --hud-line has transparency → border-top may vanish → use ButtonText. */
+  .site-footer {
+    color: CanvasText;
+    border-top-color: ButtonText;
+  }
+  .site-footer a {
+    color: LinkText;
+  }
+  .site-footer a:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .site-footer a[aria-current='page'] {
+    color: HighlightText;
+    background: Highlight;
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.3em;
+  }
+  .site-footer-label {
+    background-image: none;
+  }
+  .site-footer a[aria-current='page'] .site-footer-label {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  /* ── Bare-page corner overlay nav (.overlay-blog, home + about) ───────── */
+  /* The overlay nav floats over the WebGL canvas.  Current-page state is
+     color-only in the default theme; add Highlight background here. */
+  .overlay-blog-link {
+    color: LinkText;
+  }
+  .overlay-blog-link:hover,
+  .overlay-blog-link:focus-visible {
+    color: LinkText;
+  }
+  .overlay-blog-link:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+  .overlay-blog-link[aria-current='page'] {
+    color: HighlightText;
+    background: Highlight;
+    border-radius: var(--radius-sm);
+  }
+  /* Gradient label underline invisible → use real text-decoration. */
+  .overlay-blog-label {
+    background-image: none;
+  }
+  .overlay-blog-link[aria-current='page'] .overlay-blog-label {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+  /* Decorative corner ticks → hide. */
+  .overlay-blog-tick,
+  .overlay-blog-lock {
+    display: none;
+  }
+
+  /* ── HUD navigation buttons (canvas overlay, home page) ────────────────── */
+  /* border:0 in default theme → interactive shape invisible → add ButtonText
+     border so each button row reads as a control, not just colored text. */
+  .hud-nav-button {
+    border: 1px solid ButtonText;
+    color: ButtonText;
+  }
+  .hud-nav-button:hover,
+  .hud-nav-button:focus-visible {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .hud-nav-button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  /* Rail connector line: gradient-masked 1px rule may become invisible →
+     replace with a plain ButtonText line (no mask) at low opacity. */
+  .hud-nav::before {
+    background: ButtonText;
+    mask-image: none;
+    opacity: 0.4;
+  }
+
+  /* ── WebGL canvas: decorative, author-drawn ─────────────────────────────── */
+  /* forced-color-adjust:none prevents the browser from overriding canvas pixels.
+     The canvas is purely decorative; all navigation is in text overlays. */
+  canvas {
+    forced-color-adjust: none;
+  }
+
+  /* ── Generic focus ring reinforcement ──────────────────────────────────── */
+  /* All focus rings use var(--accent) which maps to a system color; Highlight
+     is the semantic system keyword for focused interactive elements. */
+  :focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+
+/* ============================================================================
+   3. INCREASED CONTRAST (prefers-contrast: more / A11Y-007)
+
+   Raises dim / faint text tokens and thickens hairlines for users who
+   request increased contrast without the full forced-colors replacement
+   (e.g. macOS "Increase Contrast", some Linux desktop settings).
+   ============================================================================ */
+
+@media (prefers-contrast: more) {
+  :root {
+    /* Lift dim/faint text rungs toward the primary foreground */
+    --fg-dim:            oklch(0.91 0.018 80.1);   /* was 0.777 */
+    --fg-faint:          oklch(0.82 0.018 78.2);   /* was 0.62  */
+    --fg-chrome-dim:     oklch(0.88 0.01 250);     /* was 0.75  */
+    --fg-chrome-faint:   oklch(0.76 0.01 250);     /* was 0.59  */
+    --hud-rail-dim-text: oklch(0.82 0.012 78);     /* was 0.66  */
+    --hud-rail-dim-sub:  oklch(0.70 0.012 78);     /* was 0.43  */
+
+    /* Heavier hairlines */
+    --line:     oklch(0.55 0.02 80);
+    --hud-line: color-mix(in oklch, var(--fg) 70%, transparent);
+  }
+
+  /* Thicker nav / footer boundary lines */
+  .subnav      { border-bottom-width: 2px; }
+  .site-footer { border-top-width: 2px; }
+
+  /* Skip link: stronger accent and a reinforcing outline */
+  .skip-link {
+    background: var(--accent-strong);
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
+  }
+
+  /* Wider focus rings sitewide */
+  :focus-visible { outline-width: 3px; }
+}
+
+
+/* ============================================================================
+   4. ZOOM / REFLOW SAFETY (WCAG SC 1.4.10 — 200 %–400 % zoom)
+
+   Browser zoom halves (200%) or quarters (400%) the CSS pixel viewport.
+   A 1 280 px desktop at 400 % presents 320 CSS pixels — the WCAG SC 1.4.10
+   reference width.  A 320 px phone at 400 % presents 80 CSS pixels.
+
+   Existing breakpoints already handle most zoom cases:
+     @media (max-width: 40rem)  — compact subnav (wraps brand + rail)
+     @media (max-width: 14rem)  — 200 % zoom of narrowest phone (224 px)
+                                   subnav links allow wrap + word-break
+
+   The gap is 80–224 px (400 % on narrow phones). The same rules that ensure
+   a 14 rem viewport survive also cover 8 rem since they allow full wrapping.
+   No additional breakpoints are needed; the existing cascade is correct.
+
+   Any remaining overflow / overlap issues at 200 %–400 % are covered by the
+   reflow-matrix.spec.ts E2E suite (EXP-012).
+   ============================================================================ */
+
+/* Extra-narrow safe-harbour: at viewport widths below 8 rem (128 px, which is
+   400 % zoom on a 512 px screen or 200 % on a 256 px screen), ensure no
+   fixed-width inline element forces a wider document. */
+@media (max-width: 8rem) {
+  /* Allow any element that was white-space:nowrap to wrap so it never
+     creates unintended document-level overflow. */
+  .subnav-link,
+  .overlay-blog-label,
+  .site-footer-label {
+    white-space: normal;
+    word-break: break-word;
+  }
+}

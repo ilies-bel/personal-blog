@@ -25,3 +25,4 @@
 @import './route-typography.css'; /* EXP-036: per-route typographic rhythm tokens (scale, leading, measure, density) */
 @import './transitions.css'; /* SPA view-transitions + entrance choreography */
 @import './motion-verbs.css'; /* EXP-037: named route motion verbs + shared physics grammar (last — overrides generic page-enter per route) */
+@import './a11y.css';         /* A11Y-007: forced-colors, prefers-contrast, text-spacing, zoom resilience (last — overrides design tokens) */
