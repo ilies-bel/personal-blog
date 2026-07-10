@@ -248,7 +248,7 @@ const projects = (await getCollection('projects')).sort(
             {project.data.body.map((paragraph) => <p>{paragraph}</p>)}
             {project.data.proofStatement && (
               <p class="projects-proud">
-                <span class="projects-proud-label">{project.data.proofLabel ?? 'What I am proud of'}:</span>{' '}
+                <span class="projects-proud-label">{project.data.proofLabel ?? 'Built and shipped'}:</span>{' '}
                 {project.data.proofStatement}
               </p>
             )}
