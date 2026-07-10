@@ -1,0 +1,92 @@
+element,selector,route,lifecycle_state,viewport,role,text_size,font_size_px,fg_rgb,bg_rgb,contrast_ratio,wcag_aa_required,wcag_aa_pass,target_w_px,target_h_px,target_size_pass
+identity-name,.bh-identity-name,/,Black Hole (opening),1440x900,text,large,20,"rgb(223,229,236)","rgb(36,38,42)",11.95,3.0,PASS,N/A,N/A,N/A
+identity-role,.bh-identity-role,/,Black Hole (opening),1440x900,text,small,11,"rgb(141,133,121)","rgb(54,53,50)",3.37,4.5,FAIL,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Black Hole (opening),1440x900,heading,large,64,"rgb(223,229,236)","rgb(8,9,11)",15.70,3.0,PASS,N/A,N/A,N/A
+manifesto-whisper,.bh-beat-whisper,/,Black Hole (opening),1440x900,text,body,14,"rgb(223,229,236)","rgb(4,5,7)",16.08,4.5,PASS,N/A,N/A,N/A
+scene-nav-label,.overlay-blog-label,/,Black Hole (opening),1440x900,text,small,13,"rgb(150,145,138)","rgb(20,21,24)",5.84,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Black Hole (opening),1440x900,interactive,small,17,"rgb(150,145,138)","rgb(20,21,24)",5.84,3.0,PASS,83,19,FAIL
+hud-power-btn,.overlay-blog-power,/,Black Hole (opening),1440x900,button,n/a,13,"rgb(189,181,170)","rgb(8,8,9)",9.87,3.0,PASS,34,34,FAIL
+compass-label,.hud-compass-label,/,Black Hole (opening),1440x900,text,small,17,"rgb(216,208,195)","rgb(11,13,18)",12.71,4.5,PASS,N/A,N/A,N/A
+identity-name,.bh-identity-name,/,Black Hole,1440x900,text,large,20,"rgb(223,229,236)","rgb(36,38,42)",11.95,3.0,PASS,N/A,N/A,N/A
+identity-role,.bh-identity-role,/,Black Hole,1440x900,text,small,11,"rgb(141,133,121)","rgb(54,53,50)",3.37,4.5,FAIL,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Black Hole,1440x900,heading,large,64,"rgb(223,229,236)","rgb(8,9,11)",15.70,3.0,PASS,N/A,N/A,N/A
+manifesto-whisper,.bh-beat-whisper,/,Black Hole,1440x900,text,body,14,"rgb(223,229,236)","rgb(4,5,7)",16.08,4.5,PASS,N/A,N/A,N/A
+scene-nav-label,.overlay-blog-label,/,Black Hole,1440x900,text,small,13,"rgb(150,145,138)","rgb(22,22,26)",5.77,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Black Hole,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(22,22,26)",5.77,3.0,PASS,83,19,FAIL
+hud-power-btn,.overlay-blog-power,/,Black Hole,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(9,8,9)",9.86,3.0,PASS,34,34,FAIL
+compass-label,.hud-compass-label,/,Black Hole,1440x900,text,small,17,"rgb(178,170,157)","rgb(37,36,37)",6.72,4.5,PASS,N/A,N/A,N/A
+identity-name,.bh-identity-name,/,Red Giant,1440x900,text,large,20,"rgb(223,229,236)","rgb(47,43,38)",11.08,3.0,PASS,N/A,N/A,N/A
+identity-role,.bh-identity-role,/,Red Giant,1440x900,text,small,11,"rgb(86,82,75)","rgb(47,39,31)",1.89,4.5,FAIL,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Red Giant,1440x900,heading,large,64,"rgb(223,229,236)","rgb(27,20,11)",14.38,3.0,PASS,N/A,N/A,N/A
+manifesto-whisper,.bh-beat-whisper,/,Red Giant,1440x900,text,body,14,"rgb(223,229,236)","rgb(14,10,5)",15.56,4.5,PASS,N/A,N/A,N/A
+scene-nav-label,.overlay-blog-label,/,Red Giant,1440x900,text,small,13,"rgb(150,145,138)","rgb(41,32,21)",5.12,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Red Giant,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(41,32,21)",5.12,3.0,PASS,83,19,FAIL
+hud-power-btn,.overlay-blog-power,/,Red Giant,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(16,12,7)",9.61,3.0,PASS,34,34,FAIL
+compass-label,.hud-compass-label,/,Red Giant,1440x900,text,small,17,"rgb(178,170,157)","rgb(53,46,37)",5.82,4.5,PASS,N/A,N/A,N/A
+identity-name,.bh-identity-name,/,Yellow Star,1440x900,text,large,20,"rgb(223,229,236)","rgb(29,30,31)",13.16,3.0,PASS,N/A,N/A,N/A
+identity-role,.bh-identity-role,/,Yellow Star,1440x900,text,small,11,"rgb(141,133,121)","rgb(48,46,41)",3.72,4.5,FAIL,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Yellow Star,1440x900,heading,large,64,"rgb(223,229,236)","rgb(2,2,3)",16.35,3.0,PASS,N/A,N/A,N/A
+manifesto-whisper,.bh-beat-whisper,/,Yellow Star,1440x900,text,body,14,"rgb(223,229,236)","rgb(1,1,1)",16.46,4.5,PASS,N/A,N/A,N/A
+scene-nav-label,.overlay-blog-label,/,Yellow Star,1440x900,text,small,13,"rgb(150,145,138)","rgb(17,15,15)",6.11,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Yellow Star,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(17,15,15)",6.11,3.0,PASS,83,19,FAIL
+hud-power-btn,.overlay-blog-power,/,Yellow Star,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(7,6,4)",9.99,3.0,PASS,34,34,FAIL
+compass-label,.hud-compass-label,/,Yellow Star,1440x900,text,small,17,"rgb(216,200,176)","rgb(4,4,4)",12.50,4.5,PASS,N/A,N/A,N/A
+identity-name,.bh-identity-name,/,Nebula,1440x900,text,large,20,"rgb(223,229,236)","rgb(29,30,31)",13.16,3.0,PASS,N/A,N/A,N/A
+identity-role,.bh-identity-role,/,Nebula,1440x900,text,small,11,"rgb(141,133,121)","rgb(48,46,41)",3.72,4.5,FAIL,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Nebula,1440x900,heading,large,64,"rgb(223,229,236)","rgb(1,1,1)",16.46,3.0,PASS,N/A,N/A,N/A
+manifesto-whisper,.bh-beat-whisper,/,Nebula,1440x900,text,body,14,"rgb(223,229,236)","rgb(1,1,1)",16.46,4.5,PASS,N/A,N/A,N/A
+scene-nav-label,.overlay-blog-label,/,Nebula,1440x900,text,small,13,"rgb(150,145,138)","rgb(14,15,17)",6.13,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Nebula,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(14,15,17)",6.13,3.0,PASS,83,19,FAIL
+hud-power-btn,.overlay-blog-power,/,Nebula,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(6,6,5)",9.99,3.0,PASS,34,34,FAIL
+compass-label,.hud-compass-label,/,Nebula,1440x900,text,small,17,"rgb(216,200,176)","rgb(4,4,6)",12.49,4.5,PASS,N/A,N/A,N/A
+identity-name,.bh-identity-name,/,Pale Blue Dot,1440x900,text,large,20,"rgb(223,229,236)","rgb(30,32,34)",12.89,3.0,PASS,N/A,N/A,N/A
+identity-role,.bh-identity-role,/,Pale Blue Dot,1440x900,text,small,11,"rgb(141,133,121)","rgb(49,47,43)",3.67,4.5,FAIL,N/A,N/A,N/A
+manifesto-headline,.bh-beat-line,/,Pale Blue Dot,1440x900,heading,large,64,"rgb(223,229,236)","rgb(223,229,236)",1.00,3.0,FAIL,N/A,N/A,N/A
+manifesto-whisper,.bh-beat-whisper,/,Pale Blue Dot,1440x900,text,body,14,"rgb(223,229,236)","rgb(3,4,5)",16.18,4.5,PASS,N/A,N/A,N/A
+scene-nav-label,.overlay-blog-label,/,Pale Blue Dot,1440x900,text,small,13,"rgb(150,145,138)","rgb(14,13,15)",6.20,4.5,PASS,N/A,N/A,N/A
+scene-nav-link,.overlay-blog-link,/,Pale Blue Dot,1440x900,interactive,small,17,"rgb(150,145,138)","rgb(14,13,15)",6.20,3.0,PASS,83,19,FAIL
+hud-power-btn,.overlay-blog-power,/,Pale Blue Dot,1440x900,button,n/a,13,"rgb(189,181,170)","rgb(6,6,5)",9.99,3.0,PASS,34,34,FAIL
+compass-label,.hud-compass-label,/,Pale Blue Dot,1440x900,text,small,17,"rgb(178,170,157)","rgb(33,31,30)",7.14,4.5,PASS,N/A,N/A,N/A
+page-h1,h1,/writing/,n/a,1440x900,heading,large,64,"rgb(216,208,195)","rgb(7,6,5)",13.24,3.0,PASS,N/A,N/A,N/A
+page-h2,h2,/writing/,n/a,1440x900,heading,large,11,"rgb(169,175,180)","rgb(11,10,10)",8.92,3.0,PASS,N/A,N/A,N/A
+subnav-link,.subnav-link,/writing/,n/a,1440x900,interactive,small,13,"rgb(169,175,180)","rgb(9,6,5)",9.11,3.0,PASS,107,29,FAIL
+subnav-label,.subnav-label,/writing/,n/a,1440x900,text,small,13,"rgb(169,175,180)","rgb(9,6,5)",9.11,4.5,PASS,N/A,N/A,N/A
+page-button,button,/writing/,n/a,1440x900,button,small,13,"rgb(169,175,180)","rgb(168,174,179)",1.01,3.0,FAIL,34,34,FAIL
+page-h1,h1,/about/,n/a,1440x900,heading,large,42,"rgb(216,208,195)","rgb(25,27,31)",11.27,3.0,PASS,N/A,N/A,N/A
+body-text,p,/about/,n/a,1440x900,text,body,11,"rgb(121,126,131)","rgb(17,18,21)",4.57,4.5,PASS,N/A,N/A,N/A
+article-link,article a,/about/,n/a,1440x900,link,body,16,"rgb(201,160,96)","rgb(64,51,31)",5.07,3.0,PASS,108,21,FAIL
+page-button,button,/about/,n/a,1440x900,button,small,13,"rgb(169,175,180)","rgb(168,174,179)",1.01,3.0,FAIL,34,34,FAIL
+page-h1,h1,/projects/,n/a,1440x900,heading,large,64,"rgb(216,208,195)","rgb(11,9,5)",13.01,3.0,PASS,N/A,N/A,N/A
+page-h2,h2,/projects/,n/a,1440x900,heading,large,42,"rgb(216,208,195)","rgb(34,32,26)",10.65,3.0,PASS,N/A,N/A,N/A
+body-text,p,/projects/,n/a,1440x900,text,body,20,"rgb(189,181,170)","rgb(12,10,6)",9.75,4.5,PASS,N/A,N/A,N/A
+subnav-link,.subnav-link,/projects/,n/a,1440x900,interactive,small,13,"rgb(223,229,236)","rgb(9,6,4)",15.93,3.0,PASS,107,29,FAIL
+subnav-label,.subnav-label,/projects/,n/a,1440x900,text,small,13,"rgb(223,229,236)","rgb(9,6,4)",15.93,4.5,PASS,N/A,N/A,N/A
+article-link,article a,/projects/,n/a,1440x900,link,body,12,"rgb(230,190,114)","rgb(9,7,5)",11.47,3.0,PASS,208,21,FAIL
+page-button,button,/projects/,n/a,1440x900,button,small,13,"rgb(169,175,180)","rgb(168,174,179)",1.01,3.0,FAIL,34,34,FAIL
+page-h1,h1,/graveyard/,n/a,1440x900,heading,large,64,"rgb(216,208,195)","rgb(51,57,62)",7.65,3.0,PASS,N/A,N/A,N/A
+page-h2,h2,/graveyard/,n/a,1440x900,heading,large,42,"rgb(216,208,195)","rgb(15,16,20)",12.43,3.0,PASS,N/A,N/A,N/A
+body-text,p,/graveyard/,n/a,1440x900,text,body,20,"rgb(189,181,170)","rgb(127,123,116)",2.08,4.5,FAIL,N/A,N/A,N/A
+subnav-link,.subnav-link,/graveyard/,n/a,1440x900,interactive,small,13,"rgb(169,175,180)","rgb(9,7,7)",9.07,3.0,PASS,107,29,FAIL
+subnav-label,.subnav-label,/graveyard/,n/a,1440x900,text,small,13,"rgb(169,175,180)","rgb(9,7,7)",9.07,4.5,PASS,N/A,N/A,N/A
+article-link,article a,/graveyard/,n/a,1440x900,link,body,12,"rgb(141,133,121)","rgb(30,29,28)",4.62,3.0,PASS,144,21,FAIL
+page-button,button,/graveyard/,n/a,1440x900,button,small,13,"rgb(169,175,180)","rgb(168,174,179)",1.01,3.0,FAIL,34,34,FAIL
+page-h1,h1,/behind-the-build/,n/a,1440x900,heading,large,64,"rgb(216,208,195)","rgb(48,47,47)",8.73,3.0,PASS,N/A,N/A,N/A
+page-h2,h2,/behind-the-build/,n/a,1440x900,heading,large,24,"rgb(216,208,195)","rgb(216,208,195)",1.00,3.0,FAIL,N/A,N/A,N/A
+body-text,p,/behind-the-build/,n/a,1440x900,text,body,11,"rgb(169,175,180)","rgb(12,12,11)",8.83,4.5,PASS,N/A,N/A,N/A
+subnav-link,.subnav-link,/behind-the-build/,n/a,1440x900,interactive,small,13,"rgb(169,175,180)","rgb(9,6,5)",9.11,3.0,PASS,107,29,FAIL
+subnav-label,.subnav-label,/behind-the-build/,n/a,1440x900,text,small,13,"rgb(169,175,180)","rgb(9,6,5)",9.11,4.5,PASS,N/A,N/A,N/A
+page-button,button,/behind-the-build/,n/a,1440x900,button,small,13,"rgb(169,175,180)","rgb(168,174,179)",1.01,3.0,FAIL,34,34,FAIL
+scene-nav-link,.overlay-blog-link,/,Black Hole,375x812,interactive,small,17,"rgb(150,145,138)","rgb(15,17,22)",6.04,3.0,PASS,21,21,FAIL
+hud-power-btn,.overlay-blog-power,/,Black Hole,375x812,button,n/a,13,"rgb(189,181,170)","rgb(11,11,12)",9.70,3.0,PASS,34,34,FAIL
+hud-nav-btn,.hud-nav-button,/,Black Hole,375x812,interactive,small,17,"rgb(223,229,236)","rgb(21,22,20)",14.31,3.0,PASS,39,41,FAIL
+subnav-link,.subnav-link,/writing/,n/a,375x812,interactive,small,13,"rgb(169,175,180)","rgb(20,20,17)",8.33,3.0,PASS,99,27,FAIL
+page-button,button,/writing/,n/a,375x812,button,small,13,"rgb(169,175,180)","rgb(28,28,27)",7.70,3.0,PASS,34,34,FAIL
+page-button,button,/about/,n/a,375x812,button,small,13,"rgb(169,175,180)","rgb(30,29,29)",7.59,3.0,PASS,34,34,FAIL
+subnav-link,.subnav-link,/projects/,n/a,375x812,interactive,small,13,"rgb(223,229,236)","rgb(26,25,23)",13.85,3.0,PASS,99,27,FAIL
+article-link,article a,/projects/,n/a,375x812,link,body,12,"rgb(230,190,114)","rgb(13,10,7)",11.26,3.0,PASS,208,21,FAIL
+page-button,button,/projects/,n/a,375x812,button,small,13,"rgb(169,175,180)","rgb(28,28,27)",7.70,3.0,PASS,34,34,FAIL
+subnav-link,.subnav-link,/graveyard/,n/a,375x812,interactive,small,13,"rgb(169,175,180)","rgb(23,24,23)",8.04,3.0,PASS,99,27,FAIL
+article-link,article a,/graveyard/,n/a,375x812,link,body,12,"rgb(141,133,121)","rgb(35,34,33)",4.36,3.0,PASS,144,21,FAIL
+page-button,button,/graveyard/,n/a,375x812,button,small,13,"rgb(169,175,180)","rgb(29,29,29)",7.61,3.0,PASS,34,34,FAIL
+subnav-link,.subnav-link,/behind-the-build/,n/a,375x812,interactive,small,13,"rgb(169,175,180)","rgb(22,21,19)",8.24,3.0,PASS,99,27,FAIL
+page-button,button,/behind-the-build/,n/a,375x812,button,small,13,"rgb(169,175,180)","rgb(28,28,27)",7.70,3.0,PASS,34,34,FAIL
