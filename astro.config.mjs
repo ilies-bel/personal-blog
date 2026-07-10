@@ -21,15 +21,42 @@ import sitemap from '@astrojs/sitemap';
 const SITE = 'https://ilies-bel.dev';
 const BASE = '/';
 
+// ---------------------------------------------------------------------------
+// Dev-only route injection
+//
+// src/_dev-pages/dev-blueprint.astro is a measuring bench for cockpit geometry
+// that must never ship in production.  It lives OUTSIDE src/pages/ so the
+// production build never processes it (no HTML emitted, no sitemap entry, no
+// asset shipped).  During `astro dev` the integration below injects it back as
+// a live route so the page is reachable at /dev-blueprint.
+// ---------------------------------------------------------------------------
+/** @type {() => import('astro').AstroIntegration} */
+const devOnlyRoutes = () => ({
+  name: 'dev-only-routes',
+  hooks: {
+    'astro:config:setup': ({ injectRoute, command }) => {
+      if (command === 'dev') {
+        injectRoute({
+          pattern: '/dev-blueprint',
+          entrypoint: 'src/_dev-pages/dev-blueprint.astro',
+        });
+      }
+    },
+  },
+});
+
 // https://astro.build/config
 export default defineConfig({
   site: SITE,
   base: BASE,
   trailingSlash: 'ignore',
   integrations: [
+    devOnlyRoutes(),
     mdx(),
     react(),
-    sitemap(),
+    // Belt-and-suspenders: even if /dev-blueprint were somehow built, exclude
+    // it from the sitemap so search engines never see it.
+    sitemap({ filter: (page) => !page.includes('/dev-blueprint') }),
   ],
   build: {
     // Emit clean directory-style URLs (/posts/foo/ -> /posts/foo/index.html)

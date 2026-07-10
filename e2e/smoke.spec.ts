@@ -117,3 +117,22 @@ test('unknown path — HTTP 404', async ({ page }) => {
     'Expected HTTP 404 for an unknown path'
   ).toBe(404)
 })
+
+// ---------------------------------------------------------------------------
+// ENG-003: dev-only route guard
+//
+// /dev-blueprint is a dev measuring bench that must never appear in the
+// production build output.  The page lives in src/_dev-pages/ (outside
+// src/pages/) and is injected as a route only during `astro dev`.
+// This test exercises the production preview server (built by `astro build`)
+// and asserts the route is structurally absent — not just hidden behind a
+// host-level redirect.
+// ---------------------------------------------------------------------------
+
+test('dev-blueprint — absent from production build (HTTP 404)', async ({ page }) => {
+  const response = await page.goto('/dev-blueprint')
+  expect(
+    response?.status(),
+    '/dev-blueprint must not exist in the production build'
+  ).toBe(404)
+})

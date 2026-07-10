@@ -5,9 +5,10 @@
 // centrelines + translucent magenta band widths over the amber reference
 // lines. Iterate until every cyan line sits on an amber one.
 //
-// DEV-ONLY: the production build emits an empty shell (the reference PNG is
-// read from the worktree root at render time and inlined as base64 — it never
-// enters the built asset graph).
+// DEV-ONLY: this file lives outside src/pages/ and is injected as a route
+// only when `astro dev` runs (command === 'dev' in the Astro integration).
+// Production builds never process this file, so no HTML is emitted, no
+// sitemap entry is created, and no asset is shipped.
 import { readFileSync } from 'node:fs';
 import {
   COCKPIT_BEAMS,
