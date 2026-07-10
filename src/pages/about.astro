@@ -57,7 +57,9 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         and left readable, because owning the dead ends is part of the craft.
       </p>
 
-      <div class="about-principles" aria-label="Working principles">
+      {/* role="group" makes the aria-label valid (a bare div can't carry one)
+          and announces the trio as one named cluster. */}
+      <div class="about-principles" role="group" aria-label="Working principles">
         <div>
           <span>Fast by default</span>
           <p>Interactivity earns its bytes, and text should not wait for JavaScript.</p>
@@ -78,7 +80,11 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
          itself in; under prefers-reduced-motion or no-JS, both render statically
          from the first frame — same composition, no movement. The screen-reader
          label flattens it to "Signed, Iliès" so it isn't read as a stray word. */}
-      <p class="about-signature" aria-label="Signed, Iliès">
+      {/* A paragraph can't carry aria-label; the sr-only span provides the
+          flattened reading ("Signed, Iliès") while the visual name + flourish
+          stay aria-hidden. */}
+      <p class="about-signature">
+        <span class="sr-only">Signed, Iliès</span>
         <span class="about-signature-name" aria-hidden="true">Iliès</span>
         <svg
           class="about-signature-flourish"

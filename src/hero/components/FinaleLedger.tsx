@@ -56,7 +56,16 @@ export default function FinaleLedger({ visible }: FinaleLedgerProps) {
         DIRECTORY
       </span>
       {ROWS.map((row) => (
-        <a key={row.href} className="bh-finale-ledger-row" href={resolveHref(base, row.href)}>
+        <a
+          key={row.href}
+          className="bh-finale-ledger-row"
+          href={resolveHref(base, row.href)}
+          // Belt-and-braces with the visibility gate: while the finale band is
+          // inactive the row must also be un-Tab-able in the STATIC HTML (the
+          // beat above carries aria-hidden, and a focusable element inside an
+          // aria-hidden ancestor is an a11y defect until CSS loads).
+          tabIndex={visible ? undefined : -1}
+        >
           <span className="bh-finale-ledger-label">{row.label}</span>
           <span className="bh-finale-ledger-note">{row.note}</span>
         </a>

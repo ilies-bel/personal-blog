@@ -4,9 +4,19 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // `webServer` builds the static site and serves it with `astro preview` before
 // the tests run, so E2E always exercises the real production output (the same
-// thing GitHub Pages serves) rather than the dev server. The site is served
-// under the GitHub Pages base path (/personal-blog), so baseURL includes it.
+// thing GitHub Pages serves) rather than the dev server. The site lives at the
+// root of the custom domain (base '/'), so baseURL has no path prefix.
+//
+// Local sandboxes that can't download browsers can point the chromium-based
+// projects at a preinstalled binary via PW_CHROMIUM_EXECUTABLE; CI installs
+// the full browser set with `npx playwright install --with-deps` and leaves
+// the variable unset.
 const PORT = 4321;
+
+const chromiumExecutable = process.env.PW_CHROMIUM_EXECUTABLE;
+const chromiumLaunch = chromiumExecutable
+  ? { launchOptions: { executablePath: chromiumExecutable } }
+  : {};
 
 export default defineConfig({
   testDir: './e2e',
@@ -15,22 +25,31 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [['html', { open: 'never' }], ['list']] : 'list',
 
+  // Screenshot baselines are committed per-platform from Linux (the CI runner
+  // OS); keep the suffix stable so local Linux runs and CI share baselines.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}',
+
   use: {
-    // Trailing slash matters: with it, relative goto('posts/x/') resolves UNDER
-    // the GitHub Pages base path. Without it, goto('/') would hit the server
-    // root (404), since the site lives at /personal-blog/.
-    baseURL: `http://localhost:${PORT}/personal-blog/`,
+    baseURL: `http://localhost:${PORT}/`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], ...chromiumLaunch } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    // Real device profiles for the mobile matrix. Pixel 7 runs on chromium
+    // (usable in the local sandbox); iPhone runs on webkit (CI only).
+    { name: 'mobile-chrome', use: { ...devices['Pixel 7'], ...chromiumLaunch } },
+    { name: 'mobile-safari', use: { ...devices['iPhone 14'] } },
+  ],
 
   webServer: {
-    command: `npm run build && npm run preview -- --port ${PORT}`,
-    url: `http://localhost:${PORT}/personal-blog/`,
+    command: `pnpm build && pnpm preview --port ${PORT}`,
+    url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });

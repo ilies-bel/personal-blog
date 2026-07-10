@@ -24,7 +24,8 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     <p>Tools I built, shipped, and still stand behind.</p>
   </section>
 
-  <div class="projects-list" aria-label="Shipped projects">
+  {/* role="group" legitimizes the aria-label (a bare div can't carry one). */}
+  <div class="projects-list" role="group" aria-label="Shipped projects">
 
     <article class="projects-entry" id="fleet">
       <header class="projects-entry-header">

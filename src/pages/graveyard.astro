@@ -84,13 +84,15 @@ const specimens: readonly Specimen[] = [
     <p>Not everything I start makes it. Here is what didn't, and what it taught me.</p>
   </section>
 
-  <div class="graveyard-list" aria-label="Failed and abandoned projects">
+  {/* role="group" legitimizes the aria-label (a bare div can't carry one). */}
+  <div class="graveyard-list" role="group" aria-label="Failed and abandoned projects">
     {specimens.map((s) => (
       <article class="graveyard-entry" id={s.id}>
         {/* SPECIMEN DRAWER LABEL — the mono-caps record row above the headline,
             reading like the label slot on a cabinet drawer. Carries the real
             record (year of death, cause) — content, not a page counter. */}
-        <p class="graveyard-entry-specimen" aria-label="Specimen record">
+        <p class="graveyard-entry-specimen">
+          <span class="sr-only">Specimen record: </span>
           <span>INTERRED {s.interred}</span>
           <span class="graveyard-entry-specimen-sep" aria-hidden="true">·</span>
           <span>CAUSE: {s.cause}</span>

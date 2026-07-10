@@ -83,6 +83,15 @@ body.behind-the-build .btb-shader-source-note {
   color: var(--fg-faint);
   text-transform: none;
 }
+/* The full-source link row inside the opened drawer (moved out of <summary>
+   so the link isn't a nested interactive control). */
+body.behind-the-build .btb-shader-source-link {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+}
 body.behind-the-build .btb-shader-code {
   margin: 0;
   padding: 0.9rem 1rem;

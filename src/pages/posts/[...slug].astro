@@ -69,7 +69,8 @@ const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
       <h1 transition:name={`post-title-${post.id}`}>{post.data.title}</h1>
       <p class="article-description">{post.data.description}</p>
       {post.data.tags.length > 0 && (
-        <p class="article-tags" aria-label="Tags">
+        <p class="article-tags">
+          <span class="sr-only">Tags: </span>
           {post.data.tags.map((tag) => <span>{tag}</span>)}
         </p>
       )}

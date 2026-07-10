@@ -341,15 +341,26 @@ const FALLBACKS: readonly FallbackRow[] = [
             />
             <p class="btb-shader-desc">{shader.description}</p>
             <details class="btb-shader-source">
+              {/* The "full source" link must NOT live inside <summary> — an
+                  <a> nested in an interactive summary is a serious axe
+                  violation (nested-interactive) and unreachable by keyboard.
+                  The note stays on the summary line; the link moves into the
+                  revealed body, above the excerpt. */}
               <summary>
                 View GLSL
                 {shader.excerptIsHead && shader.excerptLines && shader.totalLines && (
                   <span class="btb-shader-source-note">
-                    {' '}— first {shader.excerptLines} of {shader.totalLines} lines (
-                    <a href={`${REPO}/${shader.file}`} rel="noopener noreferrer">full source</a>)
+                    {' '}— first {shader.excerptLines} of {shader.totalLines} lines
                   </span>
                 )}
               </summary>
+              {shader.excerptIsHead && shader.excerptLines && shader.totalLines && (
+                <p class="btb-shader-source-note btb-shader-source-link">
+                  <a href={`${REPO}/${shader.file}`} rel="noopener noreferrer">
+                    Full source ({shader.totalLines} lines) on GitHub
+                  </a>
+                </p>
+              )}
               <pre class="btb-shader-code"><code>{shader.excerpt}</code></pre>
             </details>
           </div>
