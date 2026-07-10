@@ -49,6 +49,9 @@ jobs:
       - name: Asset size gate
         run: node scripts/check-asset-sizes.mjs dist
 
+      - name: Figure capture staleness gate
+        run: node scripts/check-figure-staleness.mjs
+
       - name: HTML validation
         run: npx html-validate "dist/**/*.html"
 

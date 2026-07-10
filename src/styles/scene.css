@@ -87,6 +87,12 @@ html:not(.js) .scene-track,
 html:not(.js) .bh-root {
   display: none;
 }
+/* EXCEPT the ambient poster backdrop (AmbientBackdrop.astro): it is pure
+   HTML/CSS — no engine to mount, nothing opaque to strand — so the no-JS
+   reading pages keep their designed atmosphere instead of a bare room. */
+html:not(.js) .bh-root.ambient-backdrop {
+  display: block;
+}
 html.js .static-edition {
   display: none;
 }

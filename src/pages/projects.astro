@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import BlackHole from '../hero/BlackHole.tsx';
+import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import { SITE_TITLE } from '../consts';
 
 const base = import.meta.env.BASE_URL;
@@ -13,11 +13,11 @@ const img = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   type="website"
   bodyClass="projects-page"
 >
-  {/* Static celestial backdrop — the scene frozen at the YELLOW STAR frame
-      (stage 2.9, Projects' own celestial body in the nav model), heavily dimmed
-      behind the ledger. client:only: the page reads fully without JS; the corner
-      scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
-  <BlackHole client:only="react" backdrop backdropStage={2.9} />
+  {/* Static celestial backdrop — the YELLOW STAR frame (stage 2.9, Projects'
+      own celestial body in the nav model) as a build-time capture of the live
+      engine, heavily dimmed behind the ledger. Zero JS, zero WebGL (P4); the
+      corner scene-toggle circle still switches it off (body.backdrop-off). */}
+  <AmbientBackdrop variant="star" />
 
   <section class="projects-hero" aria-labelledby="projects-title">
     <h1 id="projects-title">The work that held.</h1>

@@ -8,7 +8,7 @@
 // decode-hover convention on its title.
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import BlackHole from '../hero/BlackHole.tsx';
+import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 import { SITE_TITLE } from '../consts';
 
@@ -47,11 +47,11 @@ const origins: Record<string, string> = {
   type="website"
   bodyClass="writing-page"
 >
-  {/* Static celestial backdrop — the signature scene frozen at the NEBULA frame
-      (stage 3.5, Writing's own celestial body in the nav model), heavily dimmed
-      behind the index. client:only: the page reads fully without JS; the corner
-      scene-toggle circle can switch it off (body.backdrop-off, hero.css). */}
-  <BlackHole client:only="react" backdrop backdropStage={3.5} />
+  {/* Static celestial backdrop — the NEBULA frame (stage 3.5, Writing's own
+      celestial body in the nav model) as a graded still, heavily dimmed behind
+      the index. Zero JS, zero WebGL (P4 — same swap as about/projects); the
+      corner scene-toggle circle still switches it off (body.backdrop-off). */}
+  <AmbientBackdrop variant="nebula" />
 
   {/* Page header — h1 only. The kicker/designation row is gone on purpose: the
       headline and the nav's active state carry the context, and this page keeps

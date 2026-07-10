@@ -216,10 +216,13 @@ body.article-page .prose[data-scene-journey] {
 }
 
 /* ===========================================================================
-   MDX FIGURE: <SceneFigure/> — an inline mini-canvas pinning one lifecycle beat.
-   The contained version of the hero engine, at reading scale, framed like a plate.
+   MDX FIGURE: <SceneFigure/> — one lifecycle beat pinned inside the prose.
+   P4: a BUILD-TIME CAPTURE of the engine frame by default (an <img>, zero
+   WebGL), with an opt-in "Run live" chip that mounts the real engine into the
+   same plate under the GL governor's 2-context budget. Framed like a plate.
    =========================================================================== */
 .scene-figure {
+  position: relative; /* anchors the Run-live chip over the plate's corner */
   margin: 2.25rem 0;
 }
 .scene-figure-stage {
@@ -229,7 +232,29 @@ body.article-page .prose[data-scene-journey] {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+  /* Quiet starfield placeholder underneath everything, so a figure whose capture
+     has not been generated yet (or failed to load) is never an empty black box. */
+  background:
+    radial-gradient(1px 1px at 20% 30%, var(--fg-faint), transparent),
+    radial-gradient(1px 1px at 70% 60%, var(--fg-faint), transparent),
+    radial-gradient(1px 1px at 45% 80%, var(--hud-rail-dim), transparent),
+    radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+}
+/* The build-time capture: the same engine frame, shot by scripts/capture-figures.mjs
+   at this plate's own aspect. Fills the frame; sits UNDER the live canvas so the
+   live → still swap never flashes an empty plate. */
+.scene-figure-capture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+/* The live host (mounted only while a governor token is held) covers the capture. */
+.scene-figure-live {
+  position: absolute;
+  inset: 0;
 }
 /* The engine appends its own <canvas> into the stage host; pin it to fill the frame. */
 .scene-figure-stage canvas {
@@ -238,15 +263,42 @@ body.article-page .prose[data-scene-journey] {
   width: 100% !important;
   height: 100% !important;
 }
-/* Idle / static (reduced motion or no WebGL): a quiet starfield placeholder so the
-   plate is never an empty black box. */
-.scene-figure[data-mode='static'] .scene-figure-stage,
-.scene-figure[data-mode='idle'] .scene-figure-stage {
-  background:
-    radial-gradient(1px 1px at 20% 30%, var(--fg-faint), transparent),
-    radial-gradient(1px 1px at 70% 60%, var(--fg-faint), transparent),
-    radial-gradient(1px 1px at 45% 80%, var(--hud-rail-dim), transparent),
-    radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+/* The Run-live chip — a small instrument-language control on the plate's top-right.
+   A real <button> OUTSIDE the aria-hidden stage (keyboard + SR reachable), floated
+   over the plate corner. Mono caps like every other HUD affordance. */
+.scene-figure-run {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 1;
+  padding: 0.3rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  background: color-mix(in oklch, var(--bg) 78%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: color 0.3s var(--ease-out-quint), border-color 0.3s var(--ease-out-quint);
+}
+.scene-figure-run:hover {
+  color: var(--fg);
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
+}
+.scene-figure-run:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* While live, the chip reads as the active state (aria-pressed drives it). */
+.scene-figure-run[aria-pressed='true'] {
+  color: var(--accent-strong);
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--line));
+}
+/* The quiet status note ("live view busy…") appended inside the caption. */
+.scene-figure-note {
+  color: var(--fg-faint);
 }
 .prose .scene-figure-caption {
   margin: 0.75rem 0 0;

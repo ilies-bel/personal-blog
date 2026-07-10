@@ -306,6 +306,29 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     const owner = placement.id;
     const anchored = placement.anchored === true;
 
+    // LAYOUT-THRASH FIX: the marker box width used to be measured with
+    // getBoundingClientRect() INSIDE tick(), immediately after the left/top style
+    // writes — an unconditional write-then-read that forced a synchronous layout
+    // every frame, for every marker (~7 live at once). The box only actually
+    // changes on viewport/style changes, so it is measured ONCE here and then
+    // kept fresh by a ResizeObserver on the element (borderBoxSize arrives with
+    // the observation — no layout read even in the callback). tick() below now
+    // does ALL its reads before ALL its writes, so the frame never forces layout.
+    const measureEl = elRef.current;
+    let boxWidth = measureEl ? measureEl.getBoundingClientRect().width : 0;
+    let resizeObserver: ResizeObserver | null = null;
+    if (measureEl && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[entries.length - 1];
+        if (!entry) return;
+        const size = entry.borderBoxSize?.[0];
+        // borderBoxSize is the layout-free fast path; the rect fallback runs at
+        // resize cadence only (never per frame), so it stays thrash-free.
+        boxWidth = size ? size.inlineSize : entry.target.getBoundingClientRect().width;
+      });
+      resizeObserver.observe(measureEl);
+    }
+
     function tick() {
       rafId = requestAnimationFrame(tick);
       const frame = markerFrameRef.current;
@@ -332,24 +355,11 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // onClick reads screenRef, converts to NDC, and passes it as the dive aim point).
       screenRef.current = { x, y };
 
-      // Update position directly on the DOM element (no setState, no re-render).
       const el = elRef.current;
-      if (el) {
-        el.style.left = `${x.toFixed(1)}px`;
-        el.style.top = `${y.toFixed(1)}px`;
-        // Publish the marker's viewport x in px as a CSS var so the TOUCH card can
-        // anchor itself to the VIEWPORT (centre it horizontally) instead of to the
-        // marker's side. The card is position:fixed but its containing block is this
-        // transformed <a> (translate -50% -50% makes it the fixed CB), so its left:0
-        // maps to the marker box's on-screen left edge, NOT the viewport's. Knowing
-        // x lets the coarse-pointer CSS offset the card back to the viewport origin
-        // (see hud.css `--marker-x`). Desktop never reads this var. Written every
-        // frame alongside left/top (no setState). `--marker-y` is the twin for the
-        // vertical axis so the touch sheet can pin to the viewport BOTTOM (not the
-        // marker's mid-line) the same way.
-        el.style.setProperty('--marker-x', `${x.toFixed(1)}px`);
-        el.style.setProperty('--marker-y', `${y.toFixed(1)}px`);
-      }
+      // NOTE — read/write discipline: every DOM WRITE of this frame (el.style
+      // left/top/vars, the __bhMarkerLock publish) now happens at the END of
+      // tick(), after all state is computed, so no read below ever runs against
+      // freshly-dirtied style and forces a synchronous layout.
 
       // Proximity / focus / touch lock. Computed against this marker's CURRENT
       // x/y, with hysteresis so it doesn't chatter at the boundary. Keyboard focus
@@ -366,9 +376,8 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // which also resets touchLockedRef so a re-entry starts clean.
       // Geometry shared by the lock AND the new hover/active tiers: the engage
       // radius is the hexagon's on-screen peak (circumradius); the tier radii fan
-      // out from it. Measured once per frame so both the lock and the tier logic
-      // read the same numbers (and the tier work below never re-measures).
-      const boxWidth = el ? el.getBoundingClientRect().width : 0;
+      // out from it. `boxWidth` is the CACHED measurement (mount + ResizeObserver
+      // above) — never a per-frame getBoundingClientRect.
       const engageRadius = boxWidth * HEX_PEAK_RATIO;
       // Live pointer distance (squared) to this marker, or -1 when no pointer.
       const p = pointerRef.current;
@@ -460,17 +469,38 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         nextSide = x > window.innerWidth * CARD_FLIP_FRACTION ? 'left' : 'right';
       }
 
+      // --- WRITES: everything below only mutates (styles, the cursor global,
+      // React state) — all reads for this frame are done. ---------------------
+
+      // Update position directly on the DOM element (no setState, no re-render).
+      if (el) {
+        el.style.left = `${x.toFixed(1)}px`;
+        el.style.top = `${y.toFixed(1)}px`;
+        // Publish the marker's viewport x in px as a CSS var so the TOUCH card can
+        // anchor itself to the VIEWPORT (centre it horizontally) instead of to the
+        // marker's side. The card is position:fixed but its containing block is this
+        // transformed <a> (translate -50% -50% makes it the fixed CB), so its left:0
+        // maps to the marker box's on-screen left edge, NOT the viewport's. Knowing
+        // x lets the coarse-pointer CSS offset the card back to the viewport origin
+        // (see hud.css `--marker-x`). Desktop never reads this var. Written every
+        // frame alongside left/top (no setState). `--marker-y` is the twin for the
+        // vertical axis so the touch sheet can pin to the viewport BOTTOM (not the
+        // marker's mid-line) the same way.
+        el.style.setProperty('--marker-x', `${x.toFixed(1)}px`);
+        el.style.setProperty('--marker-y', `${y.toFixed(1)}px`);
+      }
+
       // Publish the lock to the sitewide cursor every frame it's locked so the
       // cursor docks to THIS marker's centre. Half the marker box is the hexRadius
-      // the cursor uses to size its gold inner hex inside the white one. On release,
-      // clear the global ONLY if we still own it — never stomp another marker's lock
-      // (markers' peak-radius hitboxes never overlap, so a stale owner can only
-      // appear if a far marker's release frame runs after a near one engaged; the
-      // ownership compare keeps that correct anyway).
+      // the cursor uses to size its gold inner hex inside the white one (the same
+      // cached boxWidth the engage radius derives from — one box, one measure). On
+      // release, clear the global ONLY if we still own it — never stomp another
+      // marker's lock (markers' peak-radius hitboxes never overlap, so a stale
+      // owner can only appear if a far marker's release frame runs after a near
+      // one engaged; the ownership compare keeps that correct anyway).
       const w = markerLockWindow();
       if (nextLocked) {
-        const hexRadius = el ? el.getBoundingClientRect().width / 2 : 0; // px
-        w.__bhMarkerLock = { active: true, x, y, hexRadius, owner };
+        w.__bhMarkerLock = { active: true, x, y, hexRadius: boxWidth / 2, owner };
       } else if (lastLocked) {
         const current = w.__bhMarkerLock;
         if (!current || current.owner === owner) {
@@ -502,6 +532,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
+      resizeObserver?.disconnect();
       // Drop any held touch lock so a re-mount (Strict-Mode double-invoke, route
       // change) starts unlocked rather than inheriting a stale tap.
       touchLockedRef.current = false;

@@ -366,6 +366,82 @@ body.backdrop-off .bh-poster-slideshow {
   display: none;
 }
 
+/* ===========================================================================
+   AMBIENT BACKDROP (AmbientBackdrop.astro) — the zero-JS wallpaper for reading
+   routes. A still poster/capture of the engine's own frame + a variant palette
+   grade + a slow transform-only drift. It sits INSIDE the same .bh-backdrop
+   element the live layer used, so every page-scoped dim/vignette/scrim above
+   (and the body.backdrop-off toggle) applies to it unchanged. P9 art direction
+   builds per-route variants on this base.
+   =========================================================================== */
+.ambient-backdrop-stage {
+  overflow: hidden;
+  background: var(--bg); /* the room colour under the poster while it loads */
+}
+/* The poster: oversized + centre-anchored so the drift never exposes an edge,
+   with a whisper of blur so a scaled still reads as deep atmosphere rather than
+   a photograph pasted behind the copy. */
+.ambient-backdrop-poster {
+  position: absolute;
+  inset: -3%;
+  width: 106%;
+  height: 106%;
+  object-fit: cover;
+  filter: blur(2px);
+  user-select: none;
+  will-change: transform;
+}
+/* Slow ambient drift — transform-only (compositor path, zero layout/paint) and
+   STRICTLY gated on full motion. Under html[data-motion='reduced'] the poster
+   simply holds still: the same composition, no movement. */
+@keyframes ambient-backdrop-drift {
+  from { transform: translate3d(-0.5%, -0.35%, 0) scale(1.02); }
+  to   { transform: translate3d(0.5%, 0.4%, 0) scale(1.07); }
+}
+html[data-motion='full'] .ambient-backdrop-poster {
+  animation: ambient-backdrop-drift 110s ease-in-out infinite alternate;
+}
+/* The palette grade: variant-tinted light pools over the poster, under the
+   page-scoped vignette/scrim pseudo-elements. Keeps the room in the site's
+   graphite-and-gold register so the still reads as designed atmosphere. */
+.ambient-backdrop-grade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* NEBULA (about / writing): a cool smoky pool off-centre where the gas sits,
+   cooled edges, and a soft floor so list rows ground on the room colour. */
+.ambient-backdrop[data-variant='nebula'] .ambient-backdrop-grade {
+  background:
+    radial-gradient(58% 46% at 66% 38%,
+      oklch(0.36 0.045 250 / 0.16) 0%,
+      transparent 68%),
+    radial-gradient(80% 60% at 30% 78%,
+      oklch(0.22 0.03 260 / 0.22) 0%,
+      transparent 75%),
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--bg) 45%, transparent) 0%,
+      transparent 30%,
+      transparent 72%,
+      color-mix(in oklch, var(--bg) 72%, transparent) 100%);
+}
+/* STAR (projects): the settled gold photosphere — a warm pool where the star
+   sits, an ember rim low in the frame, and the same grounding floor. */
+.ambient-backdrop[data-variant='star'] .ambient-backdrop-grade {
+  background:
+    radial-gradient(52% 44% at 50% 40%,
+      oklch(0.62 0.11 78 / 0.14) 0%,
+      transparent 66%),
+    radial-gradient(90% 55% at 50% 96%,
+      oklch(0.35 0.06 55 / 0.20) 0%,
+      transparent 70%),
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--bg) 45%, transparent) 0%,
+      transparent 30%,
+      transparent 72%,
+      color-mix(in oklch, var(--bg) 74%, transparent) 100%);
+}
+
 /* Article variant: the SAME pinned scene but at the BLACK-HOLE frame, whose
    photon ring is a bright full-width white band — far hotter than About's smoky
    nebula. The goal here is NOT to bury it but to make the article read as the

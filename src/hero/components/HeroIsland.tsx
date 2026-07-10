@@ -49,6 +49,14 @@ import {
 // initial bundle and block first paint. Only the TYPE is imported eagerly (types
 // are erased at build time, so this costs nothing at runtime). See the effect.
 import { isWebGLUnavailableError, type SceneHandle, type MarkerFrame } from '../scene/types';
+// The sitewide 2-context WebGL budget (see glGovernor.ts). BOTH construction
+// sites in this island acquire a token BEFORE the engine chunk is imported:
+// the live hero at PRIORITY_HERO (never evicted in practice — nothing on the
+// site outranks it) and the pinned backdrop branch at PRIORITY_AMBIENT (one
+// ambient layer per reading page). Tokens are released on the same cleanup
+// paths that dispose the renderer; a lost-then-restored GL context keeps its
+// token (the restore path revives the same renderer).
+import { glGovernor, PRIORITY_HERO, PRIORITY_AMBIENT } from '../lib/glGovernor';
 import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
@@ -233,6 +241,21 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // Backdrop mode: no scroll, no morph timeline. The scene is pinned to a fixed
     // lifecycle frame and rendered as a static, dimmed atmosphere behind page copy.
     if (backdrop) {
+      // One ambient context per page, budgeted. A denied grant simply leaves
+      // this layer blank — the page's own CSS backdrop treatment stands, same
+      // as the no-WebGL path below.
+      const glToken = glGovernor.acquire({
+        priority: PRIORITY_AMBIENT,
+        onEvict: () => {
+          // Bumped by a higher-priority holder: dispose the renderer now (the
+          // token is already released by the governor) and cancel any boot
+          // still in flight so a late handle can never mount tokenless.
+          cancelled = true;
+          disposeRef?.();
+          disposeRef = null;
+        },
+      });
+      if (!glToken) return;
       const fallback = Math.min(BUILT_STAGES, Math.max(0, backdropStage));
       // window.__bhBackdropStage lets a capture script A/B the pinned frame live
       // (mirrors the home's __bhMorph debug hook). Defaults to the prop.
@@ -270,6 +293,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         cancelled = true;
         window.clearTimeout(engineKickoff);
         disposeRef?.();
+        disposeRef = null;
+        glGovernor.release(glToken);
       };
     }
 
@@ -407,6 +432,37 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       };
     }
 
+    // GL BUDGET: the live hero claims its context slot BEFORE the engine chunk
+    // is even requested. PRIORITY_HERO outranks every other holder on the site,
+    // so this either grants immediately or (when the page is somehow full at
+    // equal-or-higher priority — not reachable with today's priority table)
+    // falls back exactly like a no-WebGL device: reveal the scroll-driven DOM.
+    const glToken = glGovernor.acquire({
+      priority: PRIORITY_HERO,
+      onEvict: () => {
+        // Honour the contract even though nothing outranks the hero today: the
+        // governor has already released the token; cancel any in-flight boot,
+        // dispose the renderer and reveal the no-canvas fallback so the page
+        // stays usable.
+        cancelled = true;
+        disposeRef?.();
+        disposeRef = null;
+        sceneHandleRef.current = null;
+        revealWithoutWebgl();
+      },
+    });
+    if (!glToken) {
+      revealWithoutWebgl();
+      return () => {
+        cancelled = true;
+        unsubClock();
+        clock.stop();
+        unsub();
+        tracker.stop();
+        document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
+      };
+    }
+
     // Pull in the three.js engine asynchronously, THEN build the scene. The scroll
     // tracker above is pure JS and stays synchronous, so scroll is wired the instant
     // the island hydrates; only the heavy GPU scene waits for its own chunk. The
@@ -515,6 +571,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // (We dispose via disposeRef, not a `dispose` local, because createScene now
       // resolves inside the dynamic import's .then() and is out of scope here.)
       disposeRef?.();
+      disposeRef = null;
+      // Return the context slot to the sitewide budget (idempotent — an evicted
+      // token was already released by the governor).
+      glGovernor.release(glToken);
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
       // ONLY the island-owned chrome class (is-scrolled). We deliberately do NOT
       // touch hud-active / hud-booting / hud-shutting-down: those are owned by the

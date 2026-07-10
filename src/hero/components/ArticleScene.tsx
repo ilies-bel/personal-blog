@@ -20,6 +20,12 @@ import { ScrollTracker, clamp01 } from '../scroll';
 import { BUILT_STAGES } from '../timeline';
 import { PresentationClock } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
+// The sitewide 2-context WebGL budget: this island is a page's ONE ambient live
+// layer (PRIORITY_AMBIENT). It acquires before the engine chunk is imported and
+// releases on the same cleanup that disposes the renderer, so an inline figure's
+// opt-in live run (PRIORITY_FIGURE) can never crowd it out — and a page at rest
+// holds at most this one context.
+import { glGovernor, PRIORITY_AMBIENT, type GovernorToken } from '../lib/glGovernor';
 import { isWebGLUnavailableError, type SceneHandle } from '../scene/types';
 import { PosterSlideshow, resolveReducedMotionNow } from './reduced-motion';
 
@@ -138,6 +144,13 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     };
     const unsubClock = clock.subscribe(() => broadcast());
 
+    // The governor token held while the canvas branch runs (null on the poster/
+    // reduced branches and when the budget denies). Declared up here so the
+    // scroll subscription below can `touch` it — an actively-scrolled backdrop
+    // is FRESH under the governor's LRU tie-break, so an equal-priority
+    // requester elsewhere would bump a stale holder before this one.
+    let glToken: GovernorToken | null = null;
+
     // The scroll tracker is pure JS, so it is wired the instant this island hydrates;
     // only the heavy GPU engine waits for its own dynamic chunk. stageCount is
     // irrelevant here (we map progress ourselves), so pass 1.
@@ -146,6 +159,7 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
       progressRef.current = s.progress;
       // New target: the clock eases toward it and re-broadcasts as it moves.
       clock.wake();
+      if (glToken) glGovernor.touch(glToken);
     });
     const initial = tracker.start();
     progressRef.current = initial.progress;
@@ -185,6 +199,31 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
 
     let cancelled = false;
     let dispose: SceneHandle | null = null;
+
+    // GL BUDGET: claim the page's ambient slot BEFORE the engine chunk is
+    // requested. A denied grant (both slots held at equal/higher priority — not
+    // reachable from a cold page load) leaves the CSS dim wash standing alone
+    // while the scroll/broadcast chrome above keeps working, mirroring the
+    // no-WebGL fallback below.
+    glToken = glGovernor.acquire({
+      priority: PRIORITY_AMBIENT,
+      onEvict: () => {
+        // Bumped by a higher-priority holder (the governor already released the
+        // token): dispose the renderer; the dim CSS layer stands.
+        cancelled = true;
+        dispose?.();
+        dispose = null;
+        glToken = null;
+      },
+    });
+    if (!glToken) {
+      return () => {
+        unsubClock();
+        clock.stop();
+        unsub();
+        tracker.stop();
+      };
+    }
     // Off-screen gate: createScene loads via dynamic import, so the IntersectionObserver
     // can already have fired pause-while-out-of-view before `dispose` exists. We latch
     // the desired state here and apply it the moment the handle resolves, so the loop
@@ -279,6 +318,11 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
       unsub();
       tracker.stop();
       dispose?.();
+      dispose = null;
+      // Return the ambient slot to the sitewide budget (idempotent — an evicted
+      // token was already released by the governor).
+      glGovernor.release(glToken);
+      glToken = null;
     };
   }, [journey, renderMode]);
 
