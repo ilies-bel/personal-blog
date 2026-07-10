@@ -72,13 +72,24 @@ export interface ReducedMotionPreference {
  */
 export function useReducedMotionPreference(): ReducedMotionPreference {
   // Track the manual override and the live OS preference separately so the
-  // resolved value (override ?? os) recomputes cleanly when either moves. Both are
-  // SSR-safe (default to null / false on the server, then reconcile after mount).
-  const [override, setOverride] = useState<boolean | null>(() => readManualOverride());
-  const [osReduced, setOsReduced] = useState<boolean>(() => prefersReducedMotion());
+  // resolved value (override ?? os) recomputes cleanly when either moves.
+  //
+  // HYDRATION-STABLE BOOT: both states are initialised to the server-safe
+  // defaults (null / false) rather than reading from localStorage / matchMedia
+  // via a lazy initialiser. The lazy-initialiser form ran on the client's
+  // hydration render and returned real values (e.g. true for an OS
+  // prefers-reduced-motion: reduce visitor), which disagreed with the
+  // server-rendered markup (always null / false) and triggered React hydration
+  // error #418. Using static defaults makes the first client render
+  // byte-identical to the server render; the reconciliation useEffect below
+  // syncs the real preference immediately after hydration completes.
+  const [override, setOverride] = useState<boolean | null>(null);
+  const [osReduced, setOsReduced] = useState<boolean>(false);
 
-  // Reconcile after hydration: the server rendered with override=null / os=false,
-  // but the real localStorage + OS values are only readable on the client.
+  // Reconcile after hydration: read the real localStorage override and the live
+  // OS media query now that we are in a client-only execution context. This
+  // fires once, immediately after the first paint, so the resolved value
+  // reaches its true state before any user interaction.
   useEffect(() => {
     setOverride(readManualOverride());
     setOsReduced(prefersReducedMotion());
