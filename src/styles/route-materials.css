@@ -93,9 +93,15 @@ body.writing-page .writing-row::after {
   color: var(--mat-accent);
 }
 
-/* Writing: type-group header — cool nebula tint replaces warm gold. */
+/* Writing: type-group header — uses --fg-dim rather than --mat-accent-dim.
+   EXP-013 (WCAG): --mat-accent-dim at oklch(0.52 0.07 215) resolves to
+   rgb(49,115,130) which gives only 2.66:1 against the dark nebula backdrop
+   (bg ≈ rgb(42,42,46), L≈0.026) — below the 4.5:1 AA threshold.  --fg-dim
+   (oklch 0.777, WCAG L≈0.47) clears 4.5:1 at worst-case bg rgb(65,L≈0.059):
+   0.523/0.109 = 4.8:1.  The heading still reads as secondary (below --fg
+   section titles) while meeting WCAG. */
 body.writing-page .writing-type-heading {
-  color: var(--mat-accent-dim);
+  color: var(--fg-dim);
 }
 
 /* ── 3. GRAVEYARD — White Dwarf / Thermal Decay ──────────────────────────

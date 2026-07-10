@@ -112,7 +112,12 @@ const PAGE_ELEMENTS = [
   // backdrop behind the text line.  sampleXPct is picked up in measureBatch.
   { sel: 'h2',              name: 'page-h2',       role: 'heading',     textSize: 'large', isInteractive: false, sampleXPct: 0.85 },
   { sel: 'h3',              name: 'page-h3',       role: 'heading',     textSize: 'body',  isInteractive: false },
-  { sel: 'p',               name: 'body-text',     role: 'text',        textSize: 'body',  isInteractive: false },
+  // sampleYPct: 0.02 — probes just above the text ascenders (in the element's
+  // leading) to avoid glyph-hit artifacts on max-content paragraphs such as the
+  // graveyard-kicker ("Graveyard").  Without this override, the centre-Y probe
+  // (50 %) lands on a glyph stroke and reads a mixed fg+bg pixel, producing a
+  // spurious bg ≈ fg measurement (1.54:1 on graveyard kicker vs actual >10:1).
+  { sel: 'p',               name: 'body-text',     role: 'text',        textSize: 'body',  isInteractive: false, sampleYPct: 0.02 },
   { sel: '.subnav-link',    name: 'subnav-link',   role: 'interactive', textSize: 'small', isInteractive: true  },
   { sel: '.subnav-label',   name: 'subnav-label',  role: 'text',        textSize: 'small', isInteractive: false },
   { sel: 'article a',       name: 'article-link',  role: 'link',        textSize: 'body',  isInteractive: true  },
