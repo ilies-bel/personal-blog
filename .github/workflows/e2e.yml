@@ -1,15 +1,19 @@
 name: E2E Tests
 
 # ---------------------------------------------------------------------------
-# Runs the Playwright smoke suite on every push to main and on every PR
-# targeting main.  This catches regressions before they reach a tag/deploy.
+# Runs the Playwright smoke suite on every PR targeting main.  This is the
+# pre-merge gate: it catches regressions before they land on main.
+#
+# Push-to-main coverage is handled by the deploy workflow (deploy.yml), which
+# gates the deploy job on the same E2E suite.  Running both workflows on push
+# would duplicate the work; scope them so they compose rather than overlap:
+#   - PR → e2e.yml (pre-merge gate, no deploy)
+#   - push to main → deploy.yml (build + E2E gate → deploy)
 #
 # The suite builds the static bundle fresh with `astro build` and serves it
 # via `astro preview`, so tests always exercise the real SSG output.
 # ---------------------------------------------------------------------------
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
