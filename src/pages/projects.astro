@@ -287,6 +287,8 @@ const projects = (await getCollection('projects')).sort(
                 </g>
               </svg>
             ) : (
+              /* Responsive picture: AVIF → WebP → JPEG from optimize-media.mjs.
+                 Intrinsic width/height prevent CLS (PERF-005). */
               <picture>
                 <source
                   type="image/avif"
