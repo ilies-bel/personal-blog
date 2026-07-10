@@ -14,6 +14,17 @@ const posts = defineCollection({
     // Relative to /public, e.g. "og-mypost.png". Optional; falls back to default.
     ogImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
+    // Editorial classification — readers use this to orient at a glance.
+    // Required on every post: forces explicit classification at authoring time.
+    //   investigation — a live debugging or research case study ("I found X and here is how")
+    //   build-note    — construction diary / technical decisions behind a shipped thing
+    //   essay         — reflection, philosophy, or long-form argument
+    //   failure       — a project or approach that didn't survive; kept and owned
+    type: z.enum(['investigation', 'build-note', 'essay', 'failure']),
+    // Subject-matter facets exposed on the writing index for orientation.
+    // Distinct from tags (which are legacy / SEO-facing): topics are the handful
+    // of concepts a reader would use to decide "is this for me?"
+    topics: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
     // Optional per-post backdrop override. When set, the post layout swaps the
     // default dimmed live <BlackHole backdrop> photon-ring scene for a bespoke

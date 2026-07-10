@@ -1,6 +1,9 @@
 ---
 // WRITING — a sectioned index, not a prose menu. Three quiet shelves:
-//   · Articles        → the on-site posts (a real archive list that scales)
+//   · Articles        → the on-site posts, grouped by type (investigation /
+//                       build-note / essay / failure) so a reader can orient
+//                       at a glance: what kind of thing is this, and how long
+//                       will it take? (EXP-016: no HUD decoding required)
 //   · The graveyard   → dead projects, kept and owned
 //   · About this site → the Inspiration essay + the Behind the Build case study
 // The h1 and the nav active state carry the page's context — no kicker row, no
@@ -39,6 +42,28 @@ const readMinutes = (body: string | undefined) =>
 const origins: Record<string, string> = {
   'memory-leak-search-and-destroy': 'First published on Medium, in French',
 };
+
+// ---- Orientation grouping (EXP-016) ----------------------------------------
+// Articles are grouped by their editorially-assigned type so a reader can see
+// at a glance what kind of thing they are about to read. Defined order sets the
+// canonical shelf sequence: narrative first, then investigative, then meta.
+type PostType = 'investigation' | 'build-note' | 'essay' | 'failure';
+
+const TYPE_ORDER: readonly PostType[] = ['investigation', 'build-note', 'essay', 'failure'];
+
+// Human-readable plural heading for each type group (shown as h3 under the
+// Articles h2 — no instrument numbering, plain-language vocabulary).
+const TYPE_LABELS: Record<PostType, string> = {
+  'investigation': 'Investigations',
+  'build-note':    'Build notes',
+  'essay':         'Essays',
+  'failure':       'Failures',
+};
+
+// Only emit groups that have at least one entry; the empty type rows are silence.
+const articlesByType: [PostType, typeof articles][] = TYPE_ORDER
+  .map((t) => [t, articles.filter((p) => p.data.type === t)] as [PostType, typeof articles])
+  .filter(([, posts]) => posts.length > 0);
 ---
 
 <BaseLayout
@@ -63,23 +88,42 @@ const origins: Record<string, string> = {
 
   <section class="writing-section" aria-labelledby="articles-title">
     <h2 class="writing-section-title" id="articles-title">Articles</h2>
-    <div class="writing-list">
-      {articles.map((post) => (
-        <a class="writing-row" href={href(`posts/${post.id}/`)}>
-          <span class="writing-row-left">
-            <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
-            <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
-          </span>
-          <span class="writing-row-copy">
-            {/* Per-post shared-element name → the article h1 (posts/[...slug]),
-                so the clicked title physically travels into the headline. */}
-            <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
-            <span class="writing-row-description">{post.data.description}</span>
-            {origins[post.id] && <span class="writing-row-origin">{origins[post.id]}</span>}
-          </span>
-        </a>
-      ))}
-    </div>
+
+    {articlesByType.map(([type, posts]) => (
+      <div class="writing-type-group">
+        {/* Type group heading — plain vocabulary (no codes, no instrument
+            language). Announces the form before the entry: readers know they
+            are looking at an Investigation, Build note, Essay, or Failure
+            before committing to a click. */}
+        <h3 class="writing-type-heading" id={`type-${type}`}>{TYPE_LABELS[type]}</h3>
+        <div class="writing-list">
+          {posts.map((post) => (
+            <a
+              class="writing-row"
+              href={href(`posts/${post.id}/`)}
+              data-entry-type={post.data.type}
+            >
+              <span class="writing-row-left">
+                <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+                <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
+              </span>
+              <span class="writing-row-copy">
+                {/* Per-post shared-element name → the article h1 (posts/[...slug]),
+                    so the clicked title physically travels into the headline. */}
+                <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
+                <span class="writing-row-description">{post.data.description}</span>
+                {post.data.topics.length > 0 && (
+                  <span class="writing-row-topics">
+                    {post.data.topics.join(' · ')}
+                  </span>
+                )}
+                {origins[post.id] && <span class="writing-row-origin">{origins[post.id]}</span>}
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+    ))}
   </section>
 
   <section class="writing-section" aria-labelledby="graveyard-title">
