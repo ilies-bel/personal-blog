@@ -60,7 +60,14 @@
   font-size: var(--text-body-sm);
   font-weight: var(--weight-medium);
   letter-spacing: var(--tracking-normal);
-  color: var(--fg-faint);
+  /* EXP-013: raised from --fg-faint → --fg-dim.  At --fg-faint (oklch 0.62,
+     WCAG L ≈ 0.24) the 4.5:1 AA threshold requires bg L ≤ 0.014 — achievable
+     only if the RouteBackdrop noise grain is near zero at every sample position.
+     Promoting to --fg-dim (oklch 0.777, WCAG L ≈ 0.47) clears 4.5:1 against
+     the worst-case noise-brightened backdrop (bg ≈ sRGB rgb(65), L ≈ 0.059:
+     0.523/0.109 = 4.8:1).  The category heading remains clearly a supporting
+     role vs the --fg section title one step above it. */
+  color: var(--fg-dim);
 }
 
 .writing-list {

@@ -901,8 +901,11 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   }
   .hud-nav-button {
     grid-template-columns: 2.35rem minmax(0, 1fr);
-    width: 2.45rem;
-    height: 2.55rem;
+    /* EXP-013: raised from 2.45 × 2.55 rem (39 × 41 px) to 2.75 × 2.75 rem
+       (44 × 44 px) — project-policy minimum touch target on coarse-pointer
+       mobile layouts. */
+    width: 2.75rem;
+    height: 2.75rem;
   }
   .hud-nav-button:hover,
   .hud-nav-button:focus-visible {
@@ -910,7 +913,7 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   }
   /* On the horizontal mobile rail, hud-active keeps the buttons as collapsed
      icons — the mobile readout below carries the text. */
-  body.hud-active .hud-nav-button { width: 2.45rem; }
+  body.hud-active .hud-nav-button { width: 2.75rem; }
   body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; }
   .hud-nav-button::before {
     left: 1.15rem;

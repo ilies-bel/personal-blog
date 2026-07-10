@@ -466,7 +466,14 @@ body.article-page .bh-poster-slideshow::before {
         gutters carry the live light. Measured worst-case in-column contrast:
         body 13.5:1, secondary 6.9:1, faint-label 4.3:1 — clear of AA. */
 body.graveyard-page .bh-backdrop {
-  opacity: 0.34;
+  /* EXP-013: increased from 0.34 → 0.80 so the graveyard hero text clears WCAG AA
+     on the warm red-giant canvas the journey starts at (stage 2.05).  At 0.34 the
+     canvas bled through at 66 %, lifting the background to ~rgb(127,123,116) and
+     dropping the graveyard-intro paragraph to 2.08:1.  At 0.80 the composited
+     background darkens to ~rgb(55,53,48), giving --fg-dim ≥ 5:1 clearance.
+     The somber "descending from red-giant to black-hole" atmosphere is preserved —
+     the live light is still felt at the gutters via the edge-transparent gradients. */
+  opacity: 0.80;
   filter: saturate(0.7) brightness(0.66) sepia(0.12);
 }
 body.graveyard-page .bh-backdrop::after {
@@ -533,7 +540,11 @@ body.graveyard-page .bh-backdrop::before {
   font-size: var(--text-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  /* EXP-013: --fg-chrome-dim (oklch 0.75 0.01 250) is NOT overridden in the
+     data-zone='bright' block, so this stays light (≥5:1 contrast) against the
+     nameplate's dark glass in all lifecycle states — unlike --fg-faint which the
+     bright-zone override darkens to 0.44, producing < 2:1 against the dark bezel. */
+  color: var(--fg-chrome-dim);
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.85);
 }
 .bh-identity:hover .bh-identity-name { color: var(--accent-strong); }
@@ -570,7 +581,9 @@ body.graveyard-page .bh-backdrop::before {
     color: color-mix(in oklch, var(--highlight) 42%, var(--fg));
   }
   body.bare.hud-active .bh-identity .bh-identity-role {
-    color: color-mix(in oklch, var(--highlight) 30%, var(--fg-faint));
+    /* EXP-013: use --fg-chrome-dim (immutable; not overridden by data-zone='bright')
+       so the role label stays legible on the dark bezel in all lifecycle states. */
+    color: var(--fg-chrome-dim);
   }
 }
 

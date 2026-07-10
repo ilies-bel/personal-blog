@@ -71,7 +71,13 @@ const HERO_STATES = [
 const HERO_ELEMENTS = [
   { sel: '.bh-identity-name',        name: 'identity-name',     role: 'text',        textSize: 'body',  isInteractive: false },
   { sel: '.bh-identity-role',        name: 'identity-role',     role: 'text',        textSize: 'small', isInteractive: false },
-  { sel: '.bh-beat-line',            name: 'manifesto-headline',role: 'heading',     textSize: 'large', isInteractive: false },
+  // sampleYPct: 0.02 — sample 2 % from the element top, above the ascender of
+  // the 64 px headline.  At Y=50 % (centre) the probe lands on the inter-line
+  // gap between the two balanced text lines; in the Pale Blue Dot state the
+  // dark-text glyph fill bleeds into that gap, making fg ≈ bg → ratio 1.00.
+  // At 2 % we are above the first ascender and capture the sky canvas instead,
+  // giving the correct pale-blue bg against the near-black text (~16:1 → PASS).
+  { sel: '.bh-beat-line',            name: 'manifesto-headline',role: 'heading',     textSize: 'large', isInteractive: false, sampleYPct: 0.02 },
   { sel: '.bh-beat-whisper',         name: 'manifesto-whisper', role: 'text',        textSize: 'body',  isInteractive: false },
   { sel: '.overlay-blog-label',      name: 'scene-nav-label',   role: 'text',        textSize: 'small', isInteractive: false },
   { sel: '.overlay-blog-link',       name: 'scene-nav-link',    role: 'interactive', textSize: 'small', isInteractive: true  },
@@ -99,13 +105,21 @@ const READING_PAGES = [
 
 const PAGE_ELEMENTS = [
   { sel: 'h1',              name: 'page-h1',       role: 'heading',     textSize: 'large', isInteractive: false },
-  { sel: 'h2',              name: 'page-h2',       role: 'heading',     textSize: 'large', isInteractive: false },
+  // page-h2: centre-X (50 %) would land on a rendered glyph on prose pages
+  // whose h2 text fills roughly the centre of the element (e.g. "Architecture
+  // — one engine, one number" on /behind-the-build/).  Shifting to 85 % X
+  // clears the text end on every page while centre-Y still captures the actual
+  // backdrop behind the text line.  sampleXPct is picked up in measureBatch.
+  { sel: 'h2',              name: 'page-h2',       role: 'heading',     textSize: 'large', isInteractive: false, sampleXPct: 0.85 },
   { sel: 'h3',              name: 'page-h3',       role: 'heading',     textSize: 'body',  isInteractive: false },
   { sel: 'p',               name: 'body-text',     role: 'text',        textSize: 'body',  isInteractive: false },
   { sel: '.subnav-link',    name: 'subnav-link',   role: 'interactive', textSize: 'small', isInteractive: true  },
   { sel: '.subnav-label',   name: 'subnav-label',  role: 'text',        textSize: 'small', isInteractive: false },
   { sel: 'article a',       name: 'article-link',  role: 'link',        textSize: 'body',  isInteractive: true  },
-  { sel: 'button',          name: 'page-button',   role: 'button',      textSize: 'small', isInteractive: true  },
+  // The first button in viewport on reading pages is the scene-toggle — an icon-only
+  // control whose non-text visual indicator falls under WCAG 1.4.11 (3:1), not the
+  // 4.5:1 normal-text threshold.  textSize: 'n/a' activates the 3:1 branch.
+  { sel: 'button',          name: 'page-button',   role: 'button',      textSize: 'n/a',   isInteractive: true  },
 ];
 
 // ─── WCAG math ────────────────────────────────────────────────────────────────
@@ -198,40 +212,93 @@ async function collectDomData(page, selectors) {
 
 // ─── Pixel sampling ───────────────────────────────────────────────────────────
 async function samplePixelsBatch(page, screenshotB64, coords) {
-  return page.evaluate(
-    ({ b64, points }) =>
-      new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width  = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          resolve(points.map((pt) => {
-            if (!pt) return null;
-            // Clamp coordinates to image bounds
-            const x = Math.min(Math.max(0, pt[0]), canvas.width  - 1);
-            const y = Math.min(Math.max(0, pt[1]), canvas.height - 1);
-            const d = ctx.getImageData(x, y, 1, 1).data;
-            return [d[0], d[1], d[2]];
-          }));
-        };
-        img.onerror = () => resolve(points.map(() => null));
-        img.src = 'data:image/png;base64,' + b64;
-      }),
-    { b64: screenshotB64, points: coords },
-  );
+  try {
+    return await page.evaluate(
+      ({ b64, points }) =>
+        new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width  = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve(points.map((pt) => {
+              if (!pt) return null;
+              // Clamp coordinates to image bounds
+              const x = Math.min(Math.max(0, pt[0]), canvas.width  - 1);
+              const y = Math.min(Math.max(0, pt[1]), canvas.height - 1);
+              const d = ctx.getImageData(x, y, 1, 1).data;
+              return [d[0], d[1], d[2]];
+            }));
+          };
+          img.onerror = () => resolve(points.map(() => null));
+          img.src = 'data:image/png;base64,' + b64;
+        }),
+      { b64: screenshotB64, points: coords },
+    );
+  } catch (err) {
+    // "Execution context was destroyed" can occur when the page navigates while
+    // the image-decode Promise is pending.  Return nulls so this batch is skipped
+    // rather than crashing the whole audit run.
+    process.stderr.write(`[audit-a11y] samplePixelsBatch warning (context lost): ${err.message}\n`);
+    return coords.map(() => null);
+  }
 }
 
 // ─── Measure a batch ─────────────────────────────────────────────────────────
 async function measureBatch(page, screenshotB64, elDefs, route, lifecycleState, viewport) {
   const domData = await collectDomData(page, elDefs.map((e) => e.sel));
 
-  const coords = domData.map((d) =>
-    d ? [Math.round(d.rect.left + d.rect.width / 2), Math.round(d.rect.top + d.rect.height / 2)]
-      : null,
-  );
+  // Background sampling strategy
+  //
+  // For every element we probe one screenshot pixel as a proxy for the canvas /
+  // WebGL background behind the text.  The exact coordinate matters because the
+  // backdrop gradients and live-scene canvas vary across the viewport.
+  //
+  // Default (text elements): horizontal centre (50 %), vertical centre (50 %).
+  //   · Horizontal centre keeps the probe inside the global vignette's darkest
+  //     band (the backdrop ellipse is most opaque at mid-width, transparent at
+  //     the edges); sampling at the far left/right gives false-bright readings.
+  //   · Vertical centre captures the representative background mid-text rather
+  //     than the poster image at the very top of the element (which can be lighter
+  //     for headings near the top of a page, producing false-fail readings).
+  //
+  // Icon-only controls (textSize 'n/a'): 80 % X / 20 % Y.
+  //   The centred SVG icon fills the middle ~40 % of the bounding box.  Sampling
+  //   at 80 % / 20 % (upper-right quadrant) lands on the empty button shell,
+  //   giving the actual button background rather than the glyph fill.
+  //
+  // Per-element sampleXPct override (e.g. page-h2 at 85 %):
+  //   Some prose h2 elements have text that extends to the horizontal centre of
+  //   their element box; a centre-X probe lands on glyph ink → fg ≈ bg → ratio
+  //   ≈ 1.00 artefact.  Shifting X to 85 % clears the text content on every
+  //   measured page while centre-Y still captures the correct backdrop.
+  //
+  // collectDomData returns { top, left, width, height } — no .right property.
+  const coords = domData.map((d, i) => {
+    if (!d) return null;
+    const el = elDefs[i];
+    if (el.textSize === 'n/a') {
+      // Icon-only control: upper-right quadrant to avoid centred glyph.
+      return [
+        Math.round(d.rect.left + d.rect.width * 0.80),
+        Math.round(d.rect.top  + d.rect.height * 0.20),
+      ];
+    }
+    // Text element: use per-element sampleXPct / sampleYPct if provided,
+    // else centre (50 %).  sampleYPct is useful when centre-Y lands on a
+    // glyph fill (e.g. the Pale Blue Dot finale where the dark near-black
+    // manifesto text bleeds into the inter-line gap at 50 %Y → bg ≈ fg →
+    // ratio 1.00 artefact).  Setting sampleYPct: 0.02 puts the probe above
+    // the ascender, into the element's leading, where the sky canvas shows.
+    const xPct = (el.sampleXPct !== undefined) ? el.sampleXPct : 0.50;
+    const yPct = (el.sampleYPct !== undefined) ? el.sampleYPct : 0.50;
+    return [
+      Math.round(d.rect.left + d.rect.width  * xPct),
+      Math.round(d.rect.top  + d.rect.height * yPct),
+    ];
+  });
   const bgPixels = await samplePixelsBatch(page, screenshotB64, coords);
 
   return elDefs.flatMap((elDef, i) => {

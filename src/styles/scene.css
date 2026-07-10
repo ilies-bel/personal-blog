@@ -346,6 +346,8 @@ body.at-opening:not(.hud-active) .overlay-blog {
 .overlay-blog-link {
   display: inline-flex;
   align-items: center;
+  /* EXP-013: 44 px minimum touch target height (project policy). */
+  min-height: 2.75rem;
   color: var(--hud-rail-dim-text);
   text-decoration: none;
   transition:
@@ -479,7 +481,14 @@ body.bare.hud-active .overlay-blog {
    hover instead: the glyph lifts + scales a touch and lights up with a gold
    glow, so the brand mark itself reacts. Scoped to .overlay-blog-social so the
    Power/ReducedMotion control glyphs (also .overlay-blog-icon) are untouched.
-   transform-box keeps the scale anchored to the glyph's own centre. */
+   transform-box keeps the scale anchored to the glyph's own centre.
+   EXP-013: min-width 2.75 rem (44 px) ensures the icon link meets the project
+   minimum touch-target policy on coarse-pointer layouts; justify-content: center
+   keeps the glyph centred within the expanded hit area. */
+.overlay-blog-social {
+  min-width: 2.75rem;
+  justify-content: center;
+}
 .overlay-blog-social .overlay-blog-icon {
   transform-origin: center;
   transition:
@@ -546,8 +555,10 @@ body.bare.hud-active .overlay-blog {
   -webkit-appearance: none;
   margin: 0;
   padding: 0;
-  width: 2.1rem;
-  height: 2.1rem;
+  /* EXP-013: raised from 2.1rem (33.6 px) to 2.75rem (44 px) — project policy
+     minimum touch target. */
+  width: 2.75rem;
+  height: 2.75rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: color-mix(in oklch, var(--bg) 55%, transparent);
@@ -790,8 +801,10 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
   -webkit-appearance: none;
   margin: 0;
   padding: 0;
-  width: 2.1rem;
-  height: 2.1rem;
+  /* EXP-013: raised from 2.1rem (33.6 px) to 2.75rem (44 px) — project policy
+     minimum touch target. */
+  width: 2.75rem;
+  height: 2.75rem;
   flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: 999px;

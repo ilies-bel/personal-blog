@@ -124,6 +124,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  /* EXP-013: min-height 2.75rem (44 px) satisfies the project touch-target policy
+     without forcing a fixed height on the subnav strip — the flex container
+     expands to fit. Horizontal padding kept at 0.95rem for the lock-frame geometry. */
+  min-height: 2.75rem;
   padding: 0.5rem 0.95rem;
   /* Chrome ramp (cool-neutral bone) — the same temperature the hero's chrome
      reads over the void, so the reading nav is the same instrument. */

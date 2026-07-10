@@ -57,7 +57,20 @@ const { variant = 'dark' } = Astro.props;
         result="noise"
       />
       <feColorMatrix type="saturate" values="0" in="noise" result="grey" />
-      <feBlend in="SourceGraphic" in2="grey" mode="screen" result="blended" />
+      <!-- EXP-013: clip noise to 8 % amplitude before the screen blend.
+           The unclipped noise (linearRGB ≈ 0.28–0.43 at mid-value grains) raised
+           the near-black nebula/star backdrop to sRGB rgb(118–166) at heading
+           sample positions, dropping list-page headings below the WCAG AA 3:1 floor.
+           At 8 % amplitude the worst-case grain yields ≈ sRGB rgb(65), clearing
+           the ≥ 4.5:1 threshold for --fg-dim and ≥ 3:1 for --fg on these pages.
+           The texture grain is still visually present — just kept "deliberately
+           subtle" as the original comment intended. -->
+      <feComponentTransfer in="grey" result="dimgrey">
+        <feFuncR type="linear" slope="0.08"/>
+        <feFuncG type="linear" slope="0.08"/>
+        <feFuncB type="linear" slope="0.08"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" in2="dimgrey" mode="screen" result="blended" />
       <feComposite in="blended" in2="SourceGraphic" operator="in" />
     </filter>
   </defs>

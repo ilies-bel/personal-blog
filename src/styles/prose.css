@@ -132,6 +132,24 @@
 .prose h2 { font-size: var(--text-title); margin: 2.75rem 0 1rem; }
 .prose h3 { font-size: var(--text-subtitle); margin: 2rem 0 0.75rem; }
 .prose a { font-weight: 600; }
+/* EXP-013: 44-px accessible touch target for inline article links.
+   display: inline-block lets padding-block register in getBoundingClientRect()
+   height; negative margin-block holds surrounding text flow in place.
+   At 12 px text (0.9 rem pad each side): 14.4 + 20.4 + 14.4 ≈ 49 px.
+   At 16 px text: 14.4 + 27.2 + 14.4 ≈ 56 px.  Both clear the 44 px minimum.
+   .article-back and other classed links opt out below via their own display rule. */
+article a {
+  display: inline-block;
+  padding-block: 0.9rem;
+  margin-block: -0.9rem;
+}
+/* article-back is a standalone navigation link — it sets its own layout and must
+   not inherit the touch-target padding expansion. */
+.article-back {
+  display: inline-flex;
+  padding-block: 0;
+  margin-block-start: 0;
+}
 .prose ul, .prose ol { padding-left: 1.4rem; }
 .prose li { margin: 0.4rem 0; }
 /* A quiet full-border panel on the panel tint, set apart by background + a

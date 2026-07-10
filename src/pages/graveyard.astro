@@ -281,16 +281,29 @@ const specimens = (await getCollection('graveyard')).sort(
   }
 
   .graveyard-link {
-    color: var(--fg-faint);
+    /* EXP-013: --fg-chrome-dim (oklch 0.75 0.01 250) is immune to the
+       data-zone='bright' token swap, giving ≥ 6:1 contrast on the graveyard's
+       dark composited background in all lifecycle states (was --fg-faint at
+       4.36:1 on mobile — a WCAG AA failure). */
+    color: var(--fg-chrome-dim);
     text-decoration: none;
     transition: color 0.16s ease;
     /* Domain-name URLs have no natural break points. Allow breaking at any
        character to prevent viewport overflow at narrow/zoomed widths (EXP-012). */
     overflow-wrap: break-word;
+    /* EXP-013: minimum 44-px touch target.  The link lives in a flex row so
+       min-height expands the hit area; display: flex aligns the label centrally.
+       padding-block/margin-block are reset here to cancel the global article a
+       expansion from prose.css (the flex min-height takes over). */
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding-block: 0;
+    margin-block: 0;
   }
 
   .graveyard-link:hover {
-    color: var(--fg-dim);
+    color: var(--fg);
     text-decoration: underline;
   }
 

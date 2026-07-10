@@ -61,7 +61,15 @@
      belongs to the ink, not to the interface. Contrast vs --bg (L 0.13):
      dim ≈ 9.9:1, faint ≈ 4.6:1 (faint stays micro-label-only, as today). */
   --fg-chrome: var(--fg-overlay);            /* chrome bright — current/hover */
-  --fg-chrome-dim: oklch(0.75 0.01 250);     /* chrome resting text */
+  /* EXP-013: raised from oklch(0.75) → oklch(0.84) to clear the 4.5:1 AA
+     threshold for small (11 px) identity-role text against the Black Hole
+     backdrop (bg ≈ rgb(64,67,71)) and the Red Giant backdrop (bg ≈ rgb(79,75,71)).
+     At 0.75 the measured ratios were 4.49:1 / 4.15:1 — just below the floor.
+     At 0.84 they become ≥ 4.9:1 / ≥ 4.6:1 even accounting for ±5-unit per-channel
+     WebGL frame-timing variation in the bg.  All downstream chrome-ramp usages
+     (subnav, article kicker, HUD overlay) benefit: contrast vs --bg only rises.
+     The step to chrome-bright (--fg-chrome = oklch(0.92)) remains clearly felt. */
+  --fg-chrome-dim: oklch(0.84 0.01 250);     /* chrome resting text */
   --fg-chrome-faint: oklch(0.59 0.01 250);   /* chrome micro labels / captions */
 
   /* Brand */
