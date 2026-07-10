@@ -19,7 +19,9 @@ Jury-dependent rows require the owner-side sessions in `docs/INPUTS-NEEDED.md` (
 
 1. `astro check` — 0 errors
 2. `pnpm test` — all unit tests (node --test)
-3. `pnpm knip` — no unused files/dependencies (export-level findings warn until P11)
+3. `pnpm knip` — no unused files/exports/types/dependencies (P11 retired the
+   export-level warn downgrade: the dead exports were deleted and the rules
+   block removed, so everything is error-level again)
 4. `pnpm build` — clean production build
 5. `node scripts/check-links.mjs dist` — no broken internal refs, no protocol-relative URLs
 6. `node scripts/check-asset-sizes.mjs dist` — no raster >500KB (target ≤250KB), every `<img>` dimensioned, duplicate-payload warnings
@@ -46,7 +48,14 @@ Jury-dependent rows require the owner-side sessions in `docs/INPUTS-NEEDED.md` (
     (owner input #8 real-device lane) — payload truth is meanwhile hard-gated
     by the deterministic bundle budgets above.
 12. `npx html-validate "dist/**/*.html"` — 0 errors
-13. Playwright matrix (chromium/firefox/webkit/Pixel 7/iPhone 14): smoke, no-js,
+13. `node scripts/gen-csp-hashes.mjs --check dist` (P11) — CSP staleness gate:
+    the sha256 inline-script hashes recorded in `docs/SECURITY-HEADERS.md`
+    (the value pasted into the Cloudflare Response Header Transform rule)
+    must match the inline scripts in the just-built dist. Fires whenever the
+    BaseHead pre-paint script changes, Astro/Vite is upgraded, or an island
+    directive is added/removed. Fix: `pnpm build &&
+    node scripts/gen-csp-hashes.mjs`, commit the doc, re-paste the rule.
+14. Playwright matrix (chromium/firefox/webkit/Pixel 7/iPhone 14): smoke, no-js,
     reduced-motion (incl. mid-session flip + zero-engine-chunks), loader honesty,
     axe WCAG 2.2 AA (serious/critical fail), reflow 320–430px, visual baselines
     (static edition + 404), WebGL governance (≤2 contexts, zero three.js on
@@ -96,6 +105,15 @@ run, quoted in the commit body, and reverted before commit.
 - P10 → real-hardware follow-up: promote LCP/TBT/byte-weight Lighthouse
   assertions from warn to error; re-baseline e2e/perf-baseline.json on the
   real CI runner.
-- P11: CSP hash validation, scheduled production crawl (links + headers +
-  uptime) against the live domain
+- ~~P11~~ landed: standing gate 13 (CSP staleness) above, plus the scheduled
+  production crawl `.github/workflows/prod-crawl.yml` (weekly cron +
+  manual dispatch against https://ilies-bel.dev: apex 200, http→https,
+  www-redirect state, key routes 200, honest 404, sitemap reachable +
+  every sitemap URL 200, security headers). The security-header step is
+  WARN-ONLY until the owner applies the Cloudflare rules from
+  `docs/SECURITY-HEADERS.md` (INPUTS-NEEDED #9) — then set
+  `WARN_ONLY_HEADERS: 'false'` in prod-crawl.yml to promote it to an error.
+  Release discipline itself (freeze schedule T−14/T−7/T−3, the RC checklist,
+  the three-clean-RC rule, post-launch monitoring, archive procedure) is
+  codified in `docs/RUNBOOK.md`.
 - P14: full-matrix RC run tied to one SHA + RC dossier in `docs/rc/`

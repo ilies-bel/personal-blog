@@ -84,6 +84,36 @@ those two values.
 > If you ever see that base path in docs, configs, or scripts, it is stale —
 > `playwright.config.ts` and this file carried it for a while after the move.
 
+## Staging (recommendation — owner-actioned, not yet set up)
+
+There is currently no staging environment: tags deploy straight to
+production. The recommended staging setup is **Cloudflare Pages preview
+deployments** — the DNS already lives at Cloudflare, previews are free, and
+each one gets an isolated URL with production-like edge behaviour (including
+the Response Header Transform rules if scoped to the zone). Outline
+(dashboard actions, tracked as part of `docs/INPUTS-NEEDED.md` #9):
+
+1. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to
+   Git** → select the `personal-blog` repo.
+2. Build settings: framework preset **Astro**, build command `pnpm build`,
+   output directory `dist`, environment variable `NODE_VERSION=22` (and
+   nothing else — the build is self-contained).
+3. **Production branch**: set it to a branch that never advances (e.g. a
+   dedicated `cf-pages-prod` placeholder) so Cloudflare Pages never competes
+   with GitHub Pages for "production" — you only want the *preview*
+   deployments, one per pushed branch/PR, at
+   `https://<hash>.<project>.pages.dev`.
+4. Review flow: push a branch → CI runs the gates → open the Pages preview
+   URL for visual/manual review on real devices → merge → cut a tag when
+   ready (production deploy stays the tag-triggered GitHub Pages workflow).
+5. Caveats: preview URLs run under `*.pages.dev` (not the custom domain), so
+   absolute-URL features (canonical, OG images, JSON-LD `@id`s) will point at
+   production — correct for review purposes, just don't index previews
+   (Cloudflare Pages sends `X-Robots-Tag: noindex` on previews by default).
+   The security headers from `docs/SECURITY-HEADERS.md` are zone-scoped
+   transform rules and do NOT apply on `pages.dev`; header verification
+   happens against production (the weekly prod-crawl workflow).
+
 ## Watching a deploy
 
 ```sh

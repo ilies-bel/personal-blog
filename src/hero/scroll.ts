@@ -62,16 +62,6 @@ export function band(progress: number, start: number, end: number): number {
   return progress >= start && progress <= end ? 1 : 0;
 }
 
-export function fadeInOut(
-  progress: number,
-  inStart: number,
-  inEnd: number,
-  outStart: number,
-  outEnd: number,
-): number {
-  return segment(progress, inStart, inEnd) * (1 - segment(progress, outStart, outEnd));
-}
-
 /**
  * Tracks window scroll progress and notifies subscribers on a rAF-throttled
  * basis. One instance per page is plenty; the BlackHole island owns it.

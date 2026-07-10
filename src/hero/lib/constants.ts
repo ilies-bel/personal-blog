@@ -97,11 +97,12 @@ export const LOADER_MIN_MS = 900;
  *  mode / disabled storage must never throw). Spelled here once and passed into
  *  the inline loader script via define:vars. */
 export const LOADER_SEEN_STORAGE_KEY = 'loader-seen';
-/** localStorage key persisting the chosen exploration-HUD target. */
-export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
 /* The manual reduced-motion override key ('bh:reduced-motion') is owned by the
  * sitewide motion module — see src/lib/motion.ts (and its pre-paint twin in
- * BaseHead.astro). */
+ * BaseHead.astro).
+ * The HUD power-state key ('hud-state') is owned by the inline power FSM in
+ * BaseLayout.astro — an is:inline script can't import this module, so the
+ * literal lives there (with its semantics documented at the spelling site). */
 /** localStorage flag (a bare 'true') recording that the one-time OS-driven
  *  reduced-motion EXPLANATION modal has been shown. The page never animates for an
  *  OS reduced-motion visitor, so this explanatory modal ("you're seeing the still
@@ -110,18 +111,6 @@ export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
  *  separate and always shows on the click. Access wrapped in try/catch (private mode
  *  / disabled storage must never throw). */
 export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
-/** localStorage key persisting the HUD power state across reloads. The power FSM
- *  writes a small JSON blob `{ powered: boolean }` here on every transition and
- *  restores it on init, so a returning visitor finds the HUD lit (or dark) exactly
- *  as they left it. The HUD is OFF BY DEFAULT: absence of a stored blob (a
- *  first-time visitor, or a private-mode visitor whose read throws) is read as
- *  un-powered, so only an explicit stored `{ powered: true }` lights the HUD on
- *  load — the visitor meets the bare spectacle and the first power press plays
- *  the decloak. Legacy blobs carried extra flags (`forced` / `userChosen` from
- *  the old scroll auto-boot); they are simply ignored — only `powered` is read.
- *  All access is wrapped in try/catch (private mode / disabled storage must
- *  never throw). */
-export const HUD_STATE_STORAGE_KEY = 'hud-state';
 
 // --- cross-layer events ----------------------------------------------------
 /** The window CustomEvent the scene dispatches ONCE, after its first frame has
@@ -138,9 +127,6 @@ export type ScrollDirection = 'down' | 'up';
 export const SCROLL_DOWN: ScrollDirection = 'down';
 export const SCROLL_UP: ScrollDirection = 'up';
 
-/** Which outer edge of a beat's opacity trapezoid is pinned full-open. */
-export type BeatEdge = 'leading' | 'trailing';
-
 // --- scroll / chrome / exploration thresholds ------------------------------
 /** Ignore scroll deltas smaller than this so sub-pixel jitter never flips the
  *  big-line direction swap. */
@@ -153,18 +139,6 @@ export const CHROME_HIDE_AT = 0.015;
  *  is still in the opening hold and stays in plain SEEKING-SIGNAL scan; past it, a
  *  mid-transition idle band switches the compass to its SCROLL-BACK recovery cue. */
 export const SCROLL_HINT_DISMISS_AT = 0.035;
-/** Scroll fraction at which the final selected-work HUD would arm. NOTE: the HUD
- *  is now ALWAYS visible (see HeroIsland — explorationMode starts true), so nothing
- *  reads this anymore; kept for reference / a possible future re-gate. */
-export const EXPLORATION_TRIGGER_AT = 0.82;
-/** Delay before the HUD reveals after the trigger; kept scroll-immediate. */
-export const EXPLORATION_REVEAL_DELAY_MS = 0;
-
-// --- per-beat opacity trapezoid --------------------------------------------
-/** Half-width of a beat's fully-shown plateau. */
-export const BEAT_HOLD = 0.055;
-/** Ramp distance on each side of the plateau. */
-export const BEAT_FADE = 0.045;
 
 // --- debug capture hooks (window.__bh*) ------------------------------------
 // Capture scripts pin a held frame by setting these on window. Reads go through

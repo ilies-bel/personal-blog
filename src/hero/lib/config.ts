@@ -6,7 +6,6 @@
 // sits at the world origin). Brightness-related values are lifted above the moody
 // reference still so the hero reads as clearly luminous (see exposure / bloomStr /
 // disk brightness).
-import { getMotion } from '../../lib/motion';
 import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugString } from './constants';
 
 export interface Config {
@@ -114,16 +113,6 @@ export const CFG: Config = {
   //   the bake replaces it with one cubemap fetch of the spun direction — identical pattern,
   //   rigidly rotated). ?rgbake=0 forces the analytic per-frame path for A/B.
 };
-
-// Fixed screen-space look offset.
-export const lookOffsetX = -0.82;
-export const lookOffsetY = 0.16;
-
-/** Resolved reduced-motion preference (manual override ?? OS) — delegates to the
- *  sitewide motion module's <html data-motion> attribute. SSR-safe (false). */
-export function prefersReducedMotion(): boolean {
-  return getMotion() === 'reduced';
-}
 
 // --- device tier ------------------------------------------------------------
 // A deliberately coarse 'high' | 'low' split, detected ONCE at mount from cheap

@@ -210,7 +210,11 @@ const routeId = (() => {
               // restored from an old session can't wedge mid-sequence.
               const BOOTING_CLASS = 'hud-booting';
               const SHUTDOWN_CLASS = 'hud-shutting-down';
-              const STATE_KEY = 'hud-state'; // HUD_STATE_STORAGE_KEY
+              // localStorage key persisting the HUD power state across reloads: a
+              // small JSON blob `{ powered: boolean }` written on every transition
+              // and restored on init. This inline script OWNS the literal (it can't
+              // import src/hero/lib/constants.ts — no bundler on is:inline).
+              const STATE_KEY = 'hud-state';
 
               // RE-QUERY the per-swap DOM each init. body / btn are replaced when
               // ClientRouter swaps the document, so capturing them once (the old

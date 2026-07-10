@@ -71,6 +71,17 @@ jobs:
       - name: Figure capture staleness gate
         run: node scripts/check-figure-staleness.mjs
 
+      - name: CSP hash staleness gate
+        # The CSP documented in docs/SECURITY-HEADERS.md (pasted into the
+        # Cloudflare Response Header Transform rule) allows each inline script
+        # by sha256 hash. Those hashes change whenever an inline script's bytes
+        # change (BaseHead pre-paint script edits, Astro upgrades, island
+        # directive changes) — this gate fails when the committed doc no longer
+        # matches the built dist. Fix locally: pnpm build &&
+        # node scripts/gen-csp-hashes.mjs, commit the doc, and re-paste the
+        # updated CSP into the Cloudflare rule (see the doc's instructions).
+        run: node scripts/gen-csp-hashes.mjs --check dist
+
       - name: HTML validation
         run: npx html-validate "dist/**/*.html"
 

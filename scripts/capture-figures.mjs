@@ -275,7 +275,12 @@ try {
       return typeof s === 'number' && Math.abs(s - target) < 0.03;
     },
     STAR_STAGE,
-    { timeout: 120_000, polling: 500 },
+    // 6 minutes, not 2: the presentation clock glides to the pinned beat at
+    // real frame cadence, and on software renderers (SwiftShader CI/sandbox
+    // boxes) that glide alone can exceed 120s — the P9 carried note ("the
+    // behind-the-build live ArticleScene boots slowly on software renderers;
+    // keep capture scripts' long timeouts") applies to this settle wait too.
+    { timeout: 360_000, polling: 500 },
   );
   await bpage.waitForTimeout(2500); // settle frames at the pinned beat
   const backdropCanvas = bpage.locator('.bh-backdrop canvas');

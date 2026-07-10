@@ -2337,6 +2337,6 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
 //
 //  The copy itself (the ManifestoBeat shape + the BEATS array) lives colocated
 //  per scene in ./sceneTable, and the scroll-track geometry (SCROLL_SECTION_COUNT
-//  / STAGE_COUNT / BUILT_STAGES) in ./timeline, so the SSR fallback and scroll
+//  / BUILT_STAGES) in ./timeline, so the SSR fallback and scroll
 //  track in index.astro share one source of truth with this live overlay.
 // ---------------------------------------------------------------------------

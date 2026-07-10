@@ -15,11 +15,6 @@
   "tags": [
     "-public"
   ],
-  "rules": {
-    "exports": "warn",
-    "types": "warn",
-    "duplicates": "warn"
-  },
   "ignoreDependencies": [
     "tslib"
   ]

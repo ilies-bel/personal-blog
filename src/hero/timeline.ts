@@ -8,21 +8,17 @@ import {
 import {
   cameraBaseForLifecycleP,
   DOT_HOLD_END,
-  dwellForScene,
   HUD_NAV_ITEMS,
   legacyStageForProgressFromTable,
   NEBULA_GROW_END,
   RED_HOLD_END,
   RED_HOLD_START,
-  sceneForProgress,
-  settledIdForStage,
   smoothstep,
   STAR_IGNITION_START,
   YELLOW_HOLD_END,
   YELLOW_SETTLE_END,
   type HudNavItem,
   type HudTargetId,
-  type Phase,
 } from './sceneTable';
 
 // ===========================================================================
@@ -194,58 +190,10 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
 }
 
 // ===========================================================================
-// LIFECYCLE POSITION — "where am I on the lifecycle, and how far through it?"
-//
-// Formerly lifecycleMachine.ts. resolve() is a pure COMPOSITION of the sceneTable
-// walkers (sceneForProgress + legacyStageForProgress + settledIdForStage); it adds
-// NO new math, so it returns exactly what the four scattered reads returned, in one
-// object. hudIdForStage() is the single scroll-spy implementation. Both live here —
-// the choreography facade — so callers learn ONE module instead of choosing between
-// the raw table walkers and a separate machine layer.
+// SCROLL-SPY — hudIdForStage() is the single scroll-spy implementation, living
+// here (the choreography facade) so callers learn ONE module instead of choosing
+// between the raw sceneTable walkers and a separate machine layer.
 // ===========================================================================
-
-/** The lifecycle state granularity is the existing scene id set
- *  ('beginning' | 'nebula' | 'yellow' | 'red' | 'end'). */
-export type LifecycleState = HudTargetId;
-
-/** The full position on the lifecycle for a raw scroll value, composed once from
- *  the sceneTable walkers. Every field equals what its old standalone reader
- *  returned for the same input. */
-export interface LifecyclePosition {
-  /** Which lifecycle scene the scroll value is on (the active SEGMENT's scene). */
-  state: LifecycleState;
-  /** Idle hold vs. moving transition for the active segment. */
-  phase: Phase;
-  /** Position within the active segment (0..1, after the segment() clamp). */
-  localT: number;
-  /** The settled-hold scene for `stage`, or null mid-transition (marker gate). */
-  settledId: LifecycleState | null;
-  /** The shader-stage coordinate (0..5) for this progress. */
-  stage: number;
-  /** The raw scroll value passed in (0..1), echoed back. */
-  progress: number;
-  /** The active scene's dwell STRENGTH (0..1), 0 when the scene declares none. */
-  dwell: number;
-}
-
-/**
- * Resolve the full lifecycle position for a RAW scroll value. A pure COMPOSITION of
- * the sceneTable walkers — no new thresholds, no new math — so it returns exactly
- * what the four scattered reads returned, in one object.
- */
-export function resolve(progress: number): LifecyclePosition {
-  const scene = sceneForProgress(progress);
-  const stage = legacyStageForProgressFromTable(progress);
-  return {
-    state: scene.sceneId,
-    phase: scene.phase,
-    localT: scene.localT,
-    settledId: settledIdForStage(stage),
-    stage,
-    progress,
-    dwell: dwellForScene(scene.sceneId),
-  };
-}
 
 // HUD nav rows in ascending `stage` order. The source list is authored in this
 // order, but the scroll-spy depends on it, so the contract is made explicit.
@@ -273,7 +221,6 @@ export function hudIdForStage(stage: number): HudTargetId {
 // <noscript> and ManifestoOverlay import it from there directly.)
 // ---------------------------------------------------------------------------
 export const SCROLL_SECTION_COUNT = 6;
-export const STAGE_COUNT = SCROLL_SECTION_COUNT;
 export const BUILT_STAGES = 3.5;
 
 // ---------------------------------------------------------------------------
