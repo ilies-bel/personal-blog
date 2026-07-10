@@ -1,21 +1,20 @@
 name: Deploy to GitHub Pages
 
 # ---------------------------------------------------------------------------
-# Deploys ONLY on version tags (v1.0.0, v2.3.1, …), not on every push to main.
-# Day-to-day commits to main no longer burn CI minutes; a deploy is an explicit
-# act — you cut a tag when you want the site to go live. `workflow_dispatch`
-# keeps a manual "Run workflow" button in the Actions tab as an escape hatch.
+# Deploys on every push to main (after build + E2E gates pass) and on manual
+# dispatch.  `workflow_dispatch` keeps a "Run workflow" button in the Actions
+# tab as an escape hatch.
 #
-#   # cut a release and publish it:
-#   git tag v1.0.0
-#   git push origin v1.0.0
+# The deploy job is gated on both the build job and the e2e job, so a broken
+# build or failing smoke tests will block the deploy without wasting a Pages
+# slot.
 #
 # See docs/DEPLOY.md for the full runbook.
 # ---------------------------------------------------------------------------
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
   workflow_dispatch:
 
 # Allow the workflow to publish to Pages.
