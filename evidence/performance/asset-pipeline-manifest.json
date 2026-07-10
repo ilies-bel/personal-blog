@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-10T12:23:41.569Z",
+  "generated": "2026-07-10T12:31:43.793Z",
   "version": 1,
   "sources": [
     {
@@ -24,44 +24,28 @@
           "contentHash": "sha256:7c7b438fdcbd4fb65ea6faf7d89873f648182e452f54accea5f3e39ca661fe21"
         },
         {
-          "path": "opt/inspirations/voyager-golden-record-768.avif",
+          "path": "opt/inspirations/voyager-golden-record-680.avif",
           "format": "avif",
-          "width": 768,
-          "height": 768,
-          "sizeBytes": 83094,
-          "contentHash": "sha256:6b193d6a600e1aee5d2e12d5ba1b307c5db94e712e00cea15fd668c0d278811a"
+          "width": 680,
+          "height": 680,
+          "sizeBytes": 65470,
+          "contentHash": "sha256:bd1a53c95944778eab9361ae8af92052be99288be129ef2c7b1a7b9605050703"
         },
         {
-          "path": "opt/inspirations/voyager-golden-record-768.webp",
+          "path": "opt/inspirations/voyager-golden-record-680.webp",
           "format": "webp",
-          "width": 768,
-          "height": 768,
-          "sizeBytes": 96146,
-          "contentHash": "sha256:e5bbc9f9e065196abf6c8ab2abcefb1e9e2e6351d40b130360c73ecf5b0e396a"
+          "width": 680,
+          "height": 680,
+          "sizeBytes": 76046,
+          "contentHash": "sha256:5cc5664fb97a20fb8b3adb94d024cae838ea86563d38e032623cd9af59176eff"
         },
         {
-          "path": "opt/inspirations/voyager-golden-record-1280.avif",
-          "format": "avif",
-          "width": 1280,
-          "height": 1280,
-          "sizeBytes": 185748,
-          "contentHash": "sha256:3bcea4809bade400ba83d9deaae63e532a4336de6b2c40902df441622960e7b4"
-        },
-        {
-          "path": "opt/inspirations/voyager-golden-record-1280.webp",
-          "format": "webp",
-          "width": 1280,
-          "height": 1280,
-          "sizeBytes": 228384,
-          "contentHash": "sha256:6e68bffa9225bc4e0fa6f5e6b286dd2fa5988e7d4949b088024b7e107b9cad35"
-        },
-        {
-          "path": "opt/inspirations/voyager-golden-record-1280.jpg",
+          "path": "opt/inspirations/voyager-golden-record-680.jpg",
           "format": "jpeg",
-          "width": 1280,
-          "height": 1280,
-          "sizeBytes": 270866,
-          "contentHash": "sha256:ee8d68f38a37c4e4be8455047dc76891b3c3de95db0367be514a9adbef6ef958"
+          "width": 680,
+          "height": 680,
+          "sizeBytes": 84632,
+          "contentHash": "sha256:a84ea72df6ae1941ee231a5a8e123b49d174d4c56d563f57236d0f3664088032"
         }
       ]
     },

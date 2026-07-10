@@ -1,0 +1,93 @@
+{
+  "generated": "2026-07-10T12:32:00.000Z",
+  "description": "PERF-004 — Responsive Golden Record media set",
+  "source": "media-source/inspirations/voyager-golden-record.jpg",
+  "sourceSizeBytes": 4073030,
+  "proseColumnMaxWidthPx": 680,
+  "deliveredWidthsPx": [
+    480,
+    680
+  ],
+  "budget": {
+    "largestFallbackHardLimitBytes": 256000,
+    "largestFallbackTargetBytes": 153600,
+    "targetVariantHardLimitBytes": 153600
+  },
+  "variants": [
+    {
+      "path": "opt/inspirations/voyager-golden-record-480.avif",
+      "format": "avif",
+      "width": 480,
+      "height": 480,
+      "sizeBytes": 35221,
+      "sizeKB": 34,
+      "withinBudget": true
+    },
+    {
+      "path": "opt/inspirations/voyager-golden-record-480.webp",
+      "format": "webp",
+      "width": 480,
+      "height": 480,
+      "sizeBytes": 40772,
+      "sizeKB": 40,
+      "withinBudget": true
+    },
+    {
+      "path": "opt/inspirations/voyager-golden-record-680.avif",
+      "format": "avif",
+      "width": 680,
+      "height": 680,
+      "sizeBytes": 65470,
+      "sizeKB": 64,
+      "withinBudget": true
+    },
+    {
+      "path": "opt/inspirations/voyager-golden-record-680.webp",
+      "format": "webp",
+      "width": 680,
+      "height": 680,
+      "sizeBytes": 76046,
+      "sizeKB": 74,
+      "withinBudget": true
+    },
+    {
+      "path": "opt/inspirations/voyager-golden-record-680.jpg",
+      "format": "jpeg",
+      "width": 680,
+      "height": 680,
+      "sizeBytes": 84632,
+      "sizeKB": 83,
+      "withinBudget": true
+    }
+  ],
+  "budgetCheck": {
+    "largestFallback": {
+      "path": "opt/inspirations/voyager-golden-record-680.jpg",
+      "sizeBytes": 84632,
+      "sizeKB": 83,
+      "hardLimit": "250 KB",
+      "pass": true
+    },
+    "targetVariantAVIF": {
+      "path": "opt/inspirations/voyager-golden-record-680.avif",
+      "sizeBytes": 65470,
+      "sizeKB": 64,
+      "hardLimit": "150 KB",
+      "pass": true
+    },
+    "targetVariantWebP": {
+      "path": "opt/inspirations/voyager-golden-record-680.webp",
+      "sizeBytes": 76046,
+      "sizeKB": 74,
+      "hardLimit": "150 KB",
+      "pass": true
+    }
+  },
+  "artDirection": "None required: the image is the full disk face-on and reads well at all viewport widths. A w-descriptor srcset with truthful sizes covers all delivery sizes without per-viewport crops.",
+  "notes": [
+    "Prose column (prose.css) is max-width: 680px — 1280px and 768px variants were over-serving this layout.",
+    "JPEG fallback is only generated at the largest width (680px); <picture>-capable browsers always use AVIF/WebP.",
+    "sizes attribute: (max-width: 750px) calc(100vw - 48px), 680px — reflects gutter(clamp(24px, 5vw, 80px)) x2 ≈ 48px at mobile.",
+    "Intrinsic dimensions width=680 height=680 set on <img> for CLS prevention (PERF-005)."
+  ]
+}

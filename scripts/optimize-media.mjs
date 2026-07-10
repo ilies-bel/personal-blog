@@ -40,8 +40,15 @@ const sharp = (await import('sharp')).default;
 
 const MEDIA_SOURCES = [
   {
+    // Prose column is max-width: 680px (prose.css).  No variant is ever rendered
+    // wider than that, so 1280px was over-serving and pushed the JPEG fallback
+    // over the 250 KB hard budget (PERF-004).  Two widths cover the full range:
+    //   480px — mobile viewports (≤ ~480 CSS px wide, gutter ≈ 48px)
+    //   680px — desktop/tablet prose column at 1x DPR; also serves 340px @2x
+    // The JPEG fallback is only generated at the largest width (680px) because
+    // <picture> browsers always use AVIF/WebP; the JPEG is the last-resort path.
     source: 'inspirations/voyager-golden-record.jpg',
-    widths: [480, 768, 1280],
+    widths: [480, 680],
     fallbackFormat: 'jpeg',
   },
   {
