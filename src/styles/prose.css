@@ -118,6 +118,13 @@
   letter-spacing: 0.08em;
   color: var(--fg-faint);
 }
+/* Long unbroken tokens (fully-qualified class names, JVM flags) also appear in
+   running prose as <em>/plain text, not only <code>. overflow-wrap is inherited,
+   so one declaration lets ANY descendant break an oversized token instead of
+   pushing the line box past the viewport (body clips overflow-x, so at
+   320-430px the overflow read as silently amputated text). break-word only
+   fires when a token can't fit — normal typography is untouched. */
+.prose { overflow-wrap: break-word; }
 .prose p { margin: 1.3rem 0; color: #c7bfb4; }
 .prose h2 { font-size: var(--text-title); margin: 2.75rem 0 1rem; }
 .prose h3 { font-size: var(--text-subtitle); margin: 2rem 0 0.75rem; }

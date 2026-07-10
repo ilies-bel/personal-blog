@@ -1,0 +1,86 @@
+---
+// Branded 404. GitHub Pages serves dist/404.html for any unknown path WITH a
+// real HTTP 404 status — so this page must exist (otherwise visitors get the
+// generic GitHub error page) and must never be soft-200 content. Static, zero
+// Three.js: an error page has to be the cheapest, most reliable route on the
+// site. Copy stays in the site's stellar-lifecycle voice without hiding what
+// happened; every primary destination is one link away.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { withBase } from '../consts';
+
+const DESTINATIONS = [
+  { label: 'Home', href: withBase('/'), note: 'the full lifecycle, from black hole to pale blue dot' },
+  { label: 'Work', href: withBase('projects'), note: 'the work that held' },
+  { label: 'Writing', href: withBase('writing'), note: 'everything, in plain words' },
+  { label: 'Graveyard', href: withBase('graveyard'), note: 'not everything survives' },
+  { label: 'About', href: withBase('about'), note: 'who is behind this' },
+  { label: 'Contact', href: `${withBase('about')}#get-in-touch`, note: 'get in touch' },
+];
+---
+
+<BaseLayout title="Page not found" description="This page doesn't exist — but the rest of the site does." noindex>
+  <section class="notfound measure">
+    <p class="notfound-code" aria-hidden="true">404</p>
+    <h1>This page collapsed.</h1>
+    <p class="notfound-lead">
+      Whatever lived at this address has crossed the event horizon — moved,
+      renamed, or never existed. Nothing comes back out, but everything else
+      is still shining:
+    </p>
+    <ul class="notfound-links">
+      {DESTINATIONS.map((d) => (
+        <li>
+          <a href={d.href}>{d.label}</a>
+          <span class="notfound-note"> — {d.note}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+</BaseLayout>
+
+<style>
+  .notfound {
+    padding-block: clamp(3rem, 14vh, 7rem);
+  }
+  .notfound-code {
+    margin: 0 0 0.6rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .notfound h1 {
+    margin: 0 0 1rem;
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    line-height: 1.1;
+    color: var(--fg);
+  }
+  .notfound-lead {
+    margin: 0 0 2rem;
+    max-width: 34rem;
+    color: var(--fg-muted, var(--fg));
+    line-height: 1.6;
+  }
+  .notfound-links {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .notfound-links li {
+    line-height: 1.7;
+  }
+  .notfound-links a {
+    display: inline-block;
+    padding: 0.35rem 0;
+    color: var(--fg);
+    text-underline-offset: 0.35em;
+  }
+  .notfound-note {
+    color: var(--fg-faint);
+  }
+</style>

@@ -8,6 +8,21 @@ export const SITE_DESCRIPTION =
   'Technical writing on web development, tooling, and software craft, by Iliès. Plus a scroll-scrubbed black-hole hero.';
 export const SITE_LANG = 'en';
 
+// Proper-case legal/author name for structured data (JSON-LD Person, article
+// author fields). BRAND_NAME below is the all-caps display lockup — keep the
+// two separate so styling never leaks into metadata.
+export const AUTHOR_NAME = 'Iliès Beldjilali';
+
+/**
+ * Join a path onto the configured BASE_URL, collapsing duplicate slashes.
+ * The single sanctioned way to build a base-relative href — with base '/'
+ * naive concatenation yields protocol-relative '//path' URLs that browsers
+ * resolve against a bogus host (the favicon bug this replaced).
+ */
+export function withBase(path: string): string {
+  return `${import.meta.env.BASE_URL}/${path}`.replace(/\/+/g, '/');
+}
+
 // The signature brand lockup — the hero's persistent identity (name + role).
 // Used as the SAME mark everywhere: the home scene (HeroIdentity), the reading-
 // page header, and the about overlay. One source of truth so the logo never drifts.

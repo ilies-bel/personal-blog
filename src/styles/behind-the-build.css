@@ -102,9 +102,19 @@ body.behind-the-build .btb-shader-code {
    the article's measure ceiling and reads as another instrument
    panel, not a separate widget.
    --------------------------------------------------------------- */
+/* Local scroll region for the table: on narrow viewports the nowrap numeric
+   columns exceed the prose measure; the table pans inside this container
+   instead of widening the document. Focusable (tabindex=0 in markup) so
+   keyboard users can pan it too. */
+body.behind-the-build .btb-table-scroll {
+  margin: 1.75rem 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 body.behind-the-build .btb-budget-table {
   width: 100%;
-  margin: 1.75rem 0;
+  margin: 0;
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: var(--text-micro);

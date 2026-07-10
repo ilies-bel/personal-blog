@@ -2,7 +2,16 @@
 // SEO-critical <head>. Everything here is rendered into the STATIC HTML at
 // build time so search crawlers see complete, correct metadata without
 // executing any of the client-side interrogation JavaScript.
-import { SITE_TITLE, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, SITE_LANG } from '../consts';
+import {
+  SITE_TITLE,
+  SITE_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  SITE_LANG,
+  AUTHOR_NAME,
+  BRAND_ROLE,
+  SOCIALS,
+  withBase,
+} from '../consts';
 // Import the above-the-fold faces so Vite resolves their final fingerprinted,
 // base-prefixed URLs (?url guarantees the href can never drift from the URL
 // the bundled CSS references). Two preloads:
@@ -22,6 +31,15 @@ interface Props {
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
+  // Extra schema.org nodes a page wants to append to the JSON-LD @graph
+  // (e.g. a project page adding CreativeWork/SoftwareSourceCode).
+  structuredData?: Record<string, unknown>[];
+  // Article author names (defaults to the site owner). Co-authors listed
+  // in post frontmatter flow through here into the BlogPosting author array.
+  authors?: string[];
+  // Error/utility pages (404): noindex + no canonical — the page is served at
+  // arbitrary URLs, so a canonical to /404/ would point at a non-route.
+  noindex?: boolean;
 }
 
 const {
@@ -31,6 +49,9 @@ const {
   type = 'website',
   publishedTime,
   modifiedTime,
+  structuredData = [],
+  authors = [AUTHOR_NAME],
+  noindex = false,
 } = Astro.props;
 
 // Canonical URL resolved against `site` + `base` from astro.config.
@@ -43,11 +64,67 @@ const ogImageURL = ogImage.startsWith('http')
 
 const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
 
-// JSON-LD structured data: WebSite for general pages, BlogPosting for articles.
-const jsonLd =
+// JSON-LD structured data — one @graph carrying every node so a page has a
+// single, complete machine-readable identity: the site owner (Person), the
+// WebSite, a BreadcrumbList on inner routes, BlogPosting on articles, plus
+// whatever page-specific nodes arrive via the structuredData prop.
+const siteURL = Astro.site ? new URL('/', Astro.site).href : canonicalURL.href;
+const personId = `${siteURL}#person`;
+
+const personLd = {
+  '@type': 'Person',
+  '@id': personId,
+  name: AUTHOR_NAME,
+  jobTitle: BRAND_ROLE,
+  url: siteURL,
+  email: `mailto:${SOCIALS.email}`,
+  sameAs: [SOCIALS.github, SOCIALS.twitter].filter(Boolean),
+};
+
+const websiteLd = {
+  '@type': 'WebSite',
+  name: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  url: siteURL,
+  author: { '@id': personId },
+  publisher: { '@id': personId },
+};
+
+// Breadcrumbs for inner routes: Home → (section) → page. The /posts/* URLs
+// belong editorially to the /writing hub, so that segment maps to Writing.
+const SEGMENT_LABELS: Record<string, { name: string; href: string }> = {
+  posts: { name: 'Writing', href: '/writing' },
+  writing: { name: 'Writing', href: '/writing' },
+  projects: { name: 'Work', href: '/projects' },
+  graveyard: { name: 'Graveyard', href: '/graveyard' },
+  about: { name: 'About', href: '/about' },
+  contact: { name: 'Contact', href: '/contact' },
+  'behind-the-build': { name: 'Behind the Build', href: '/behind-the-build' },
+};
+
+const pathSegments = Astro.url.pathname.split('/').filter(Boolean);
+const breadcrumbLd =
+  !noindex && pathSegments.length > 0 && Astro.site
+    ? {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: siteURL },
+          ...pathSegments.map((segment, i) => {
+            const isLast = i === pathSegments.length - 1;
+            const mapped = SEGMENT_LABELS[segment];
+            const name = isLast ? title : (mapped?.name ?? segment);
+            const item = isLast
+              ? canonicalURL.href
+              : new URL(mapped?.href ?? `/${pathSegments.slice(0, i + 1).join('/')}`, Astro.site).href;
+            return { '@type': 'ListItem', position: i + 2, name, item };
+          }),
+        ],
+      }
+    : null;
+
+const articleLd =
   type === 'article'
     ? {
-        '@context': 'https://schema.org',
         '@type': 'BlogPosting',
         headline: title,
         description,
@@ -55,20 +132,44 @@ const jsonLd =
         datePublished: publishedTime?.toISOString(),
         dateModified: (modifiedTime ?? publishedTime)?.toISOString(),
         mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalURL.href },
+        author: authors.map((name) =>
+          name === AUTHOR_NAME ? { '@id': personId } : { '@type': 'Person', name },
+        ),
+        publisher: { '@id': personId },
       }
-    : {
-        '@context': 'https://schema.org',
-        '@type': 'WebSite',
-        name: SITE_TITLE,
-        description: SITE_DESCRIPTION,
-        url: canonicalURL.href,
-      };
+    : null;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [personLd, websiteLd, breadcrumbLd, articleLd, ...structuredData].filter(Boolean),
+};
 ---
 
 <!-- Charset & viewport -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="generator" content={Astro.generator} />
+
+<!-- Pre-paint environment flags, set before first paint so CSS can branch on
+     them with zero flash:
+       • html.js          — JavaScript is running. The immersive layers (intro
+                            loader, 1800svh scroll track) are gated on this class
+                            so a no-JS visitor gets the static edition instead of
+                            an opaque loader that never lifts.
+       • html[data-motion] — resolved motion preference ('full' | 'reduced').
+                            The single source of truth every JS/CSS consumer
+                            reads (see src/lib/motion.ts); kept in sync with OS
+                            changes at runtime.
+     Must stay is:inline (pre-paint, unbundled). If this script changes, rerun
+     scripts/gen-csp-hashes.mjs so the CSP inline-script hash tracks it. -->
+<script is:inline>
+  document.documentElement.classList.add('js');
+  document.documentElement.dataset.motion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches
+    ? 'reduced'
+    : 'full';
+</script>
 
 <!-- Preload the two above-the-fold faces (Space Grotesk latin for display/body,
      IBM Plex Mono latin for the wordmark + role line) to minimize the FOUT swap
@@ -81,29 +182,31 @@ const jsonLd =
 <title>{fullTitle}</title>
 <meta name="title" content={fullTitle} />
 <meta name="description" content={description} />
-<link rel="canonical" href={canonicalURL} />
-<meta name="robots" content="index, follow" />
+{!noindex && <link rel="canonical" href={canonicalURL} />}
+<meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow'} />
 
-<!-- Icons -->
+<!-- Icons. hrefs go through withBase() — naive `${BASE_URL}/x` concatenation
+     with base '/' produced protocol-relative '//x' URLs that browsers resolved
+     against a bogus host, so every icon 404'd. -->
 <!-- SVG first: modern browsers use it and it self-inverts via its own @media rule. -->
-<link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL}/favicon.svg`} />
+<link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
 <!-- 32×32 raster: light/dark variants served by OS color-scheme. -->
-<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: light)" href={`${import.meta.env.BASE_URL}/favicon-32x32.png`} />
-<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)"  href={`${import.meta.env.BASE_URL}/favicon-32x32-dark.png`} />
+<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: light)" href={withBase('favicon-32x32.png')} />
+<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)"  href={withBase('favicon-32x32-dark.png')} />
 <!-- 16×16 raster: light/dark variants. -->
-<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: light)" href={`${import.meta.env.BASE_URL}/favicon-16x16.png`} />
-<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: dark)"  href={`${import.meta.env.BASE_URL}/favicon-16x16-dark.png`} />
+<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: light)" href={withBase('favicon-16x16.png')} />
+<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: dark)"  href={withBase('favicon-16x16-dark.png')} />
 <!-- .ico last: universal fallback for browsers that ignore the above (light default). -->
-<link rel="icon" href={`${import.meta.env.BASE_URL}/favicon.ico`} sizes="any" />
+<link rel="icon" href={withBase('favicon.ico')} sizes="any" />
 <!-- Apple touch icon: light/dark variants (iOS, opaque background required). -->
-<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: light)" href={`${import.meta.env.BASE_URL}/apple-touch-icon.png`} />
-<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: dark)"  href={`${import.meta.env.BASE_URL}/apple-touch-icon-dark.png`} />
+<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: light)" href={withBase('apple-touch-icon.png')} />
+<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: dark)"  href={withBase('apple-touch-icon-dark.png')} />
 
 <!-- Open Graph -->
 <meta property="og:type" content={type} />
 <meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
-<meta property="og:url" content={canonicalURL} />
+{!noindex && <meta property="og:url" content={canonicalURL} />}
 <meta property="og:image" content={ogImageURL} />
 <meta property="og:site_name" content={SITE_TITLE} />
 <meta property="og:locale" content={SITE_LANG} />

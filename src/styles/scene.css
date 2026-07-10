@@ -72,6 +72,25 @@ body.bare.hud-active::after {
    the glide start + duration are single-sourced from tokens.css (--boot-glide-start /
    --boot-glide-dur), so the background-fade delay below tracks the (now later) glide
    automatically and still begins only at glide end. */
+/* --- No-JS gate -------------------------------------------------------------
+   html.js is stamped by the pre-paint inline script in BaseHead. Without it
+   (JavaScript off/failed), the immersive layers are inert weight: the loader's
+   opaque cover would never lift (body.scene-ready is JS-added) and the 1800svh
+   track would be a huge blank scroll. Hide both and let the always-rendered
+   static edition (src/components/StaticEdition.astro) BE the homepage. With JS
+   on, the static edition hides and the live experience takes over. */
+html:not(.js) .scene-loader,
+html:not(.js) .scene-track,
+/* The hero island's SSR shell: .bh-stage inside is a fixed, opaque #000 layer
+   that would blanket the static edition. Without JS the scene can never mount,
+   so the whole root is dead weight. */
+html:not(.js) .bh-root {
+  display: none;
+}
+html.js .static-edition {
+  display: none;
+}
+
 .scene-loader {
   position: fixed;
   inset: 0;
@@ -680,6 +699,29 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--fg-faint);
+}
+/* Primary destinations inside the static edition's first viewport: plain,
+   labelled, conventional links — a no-JS visitor reaches any section without
+   scrolling. Row layout that wraps; generous padding keeps each target
+   comfortably tappable. */
+.static-edition-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6rem;
+  margin: 0 0 2.2rem;
+  padding: 0;
+  list-style: none;
+}
+.static-edition-nav a {
+  display: inline-block;
+  padding: 0.5rem 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg);
+  text-decoration-color: var(--fg-faint);
+  text-underline-offset: 0.35em;
 }
 
 /* --- WebGL-unavailable fallback (index.astro .webgl-fallback) --------------- */

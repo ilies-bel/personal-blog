@@ -1,7 +1,8 @@
 # Deploying the blog
 
-The site is a static Astro build published to **GitHub Pages** at
-<https://ilies-bel.github.io/personal-blog/>.
+The site is a static Astro build published to **GitHub Pages** on the custom
+apex domain <https://ilies-bel.dev> (Cloudflare handles DNS; `public/CNAME`
+binds the domain on every deploy).
 
 ## How deploys are triggered
 
@@ -23,6 +24,10 @@ git push origin v1.0.0
 Any tag matching `v*` (`v1.0.0`, `v2`, `v1.2.3-rc1`, …) fires the
 `.github/workflows/deploy.yml` workflow, which builds with Astro and publishes
 `dist/` to Pages.
+
+Because deploys are tag-triggered, every published build is **immutable and
+re-runnable**: rolling back means re-running the deploy workflow on the
+previous good tag (see `docs/RUNBOOK.md`).
 
 ### Manual deploy (no tag)
 
@@ -46,6 +51,11 @@ the repo is ever recreated.
   gh api --method PUT repos/ilies-bel/personal-blog/pages -f build_type=workflow
   ```
 
+- **Custom domain**: `ilies-bel.dev` is set as the Pages custom domain (with
+  *Enforce HTTPS* on) and `public/CNAME` contains the same value so a deploy
+  can never unbind it. DNS lives at Cloudflare: apex A/AAAA records to GitHub
+  Pages' IPs, `www` CNAME to `ilies-bel.github.io`.
+
 ## The workflow, in short
 
 `.github/workflows/deploy.yml`:
@@ -64,11 +74,15 @@ the repo is ever recreated.
 
 ## URLs and base path
 
-`astro.config.mjs` sets `base: '/personal-blog'` and
-`site: 'https://ilies-bel.github.io'` because this is a **project page**. If the
-site ever moves to a user page (`https://ilies-bel.github.io`) or a custom
-domain, set `base` to `'/'` and update `site` — links, sitemap, and canonical
-URLs all follow from those two values.
+`astro.config.mjs` sets `site: 'https://ilies-bel.dev'` and `base: '/'` because
+the site lives at the root of a custom domain. Links, the sitemap, canonical
+URLs, and icon hrefs (via `withBase()` in `src/consts.ts`) all follow from
+those two values.
+
+> **History:** this used to be a *project page* at
+> `https://ilies-bel.github.io/personal-blog/` with `base: '/personal-blog'`.
+> If you ever see that base path in docs, configs, or scripts, it is stale —
+> `playwright.config.ts` and this file carried it for a while after the move.
 
 ## Watching a deploy
 

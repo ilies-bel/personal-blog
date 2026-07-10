@@ -29,6 +29,12 @@ interface Props {
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
+  // Error/utility pages (404): emit robots noindex and no canonical URL.
+  noindex?: boolean;
+  // Extra schema.org nodes appended to BaseHead's JSON-LD @graph.
+  structuredData?: Record<string, unknown>[];
+  // Article author names (defaults to the site owner in BaseHead).
+  authors?: string[];
   // `bare` strips the standard reading chrome (gutter shell + footer) and shows
   // only the fixed corner overlay: brand top-left, the blog micro-nav top-right.
   // Used by the home page, whose whole canvas is the scroll-scrubbed scene.

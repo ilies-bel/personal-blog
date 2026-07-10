@@ -367,6 +367,10 @@ const FALLBACKS: readonly FallbackRow[] = [
         each. Anything that changes one of these by more than a small step should
         be re-measured against the same conditions.
       </p>
+      {/* Scroll container: the nowrap numeric columns can outgrow narrow
+          viewports; the table scrolls locally instead of widening the document
+          (which body{overflow-x:hidden} would clip into amputated columns). */}
+      <div class="btb-table-scroll" tabindex="0" role="region" aria-label="Performance budgets table">
       <table class="btb-budget-table">
         <thead>
           <tr>
@@ -387,6 +391,7 @@ const FALLBACKS: readonly FallbackRow[] = [
           ))}
         </tbody>
       </table>
+      </div>
       <p>
         And what your machine is doing right now — independent of the engine, just
         the browser's own rAF clock:

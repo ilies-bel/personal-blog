@@ -21,6 +21,25 @@ import sitemap from '@astrojs/sitemap';
 const SITE = 'https://ilies-bel.dev';
 const BASE = '/';
 
+// Dev-only routes: pages that are measuring benches / design tooling, not
+// content. They live OUTSIDE src/pages (in src/dev-pages) so the production
+// build cannot emit them at all — previously /dev-blueprint shipped an empty
+// crawlable shell and landed in the sitemap. The integration injects them only
+// when the dev server is running.
+const devOnlyPages = () => ({
+  name: 'dev-only-pages',
+  hooks: {
+    /** @param {{ command: string, injectRoute: (r: { pattern: string, entrypoint: string }) => void }} options */
+    'astro:config:setup': ({ command, injectRoute }) => {
+      if (command !== 'dev') return;
+      injectRoute({
+        pattern: '/dev-blueprint',
+        entrypoint: './src/dev-pages/dev-blueprint.astro',
+      });
+    },
+  },
+});
+
 // https://astro.build/config
 export default defineConfig({
   site: SITE,
@@ -29,7 +48,10 @@ export default defineConfig({
   integrations: [
     mdx(),
     react(),
-    sitemap(),
+    devOnlyPages(),
+    // Belt-and-braces: even if a dev-only route ever leaks into a build, keep
+    // it out of the sitemap.
+    sitemap({ filter: (page) => !page.includes('/dev-blueprint') }),
   ],
   build: {
     // Emit clean directory-style URLs (/posts/foo/ -> /posts/foo/index.html)

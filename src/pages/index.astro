@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import BlackHole from '../hero/BlackHole.tsx';
-import { BEATS } from '../hero/sceneTable';
+import StaticEdition from '../components/StaticEdition.astro';
 import { SCROLL_SECTION_COUNT } from '../hero/timeline';
 import {
   SCENE_READY_EVENT,
@@ -247,33 +247,13 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
   </div>
 
   {/* The manifesto copy is rendered by the island so it can fade per-state in
-      lockstep with the morph. The
-      static fallback below mirrors that copy (down-arc big lines + whispers) so
-      the page stays meaningful and indexable for crawlers / no-JS. */}
-  {/* The static no-JS / crawler fallback mirrors the live overlay's big line +
-      whisper for every beat, mapped over the same BEATS so the SSR copy can
-      never drift from the live copy. The reverse arc plays black hole -> ... ->
-      pale blue dot top-to-bottom, so the list is reversed (slice() first, never
-      mutating BEATS) to match that physical order — index 0 is the black-hole
-      beat; the dot beat lands last. The page <h1> is the dedicated .sr-only line
-      above (always server-rendered, present with or without JS), so EVERY beat
-      here is an <h2>: with JS off the single top-level heading stays that one
-      brand <h1> and the beats sit under it — no duplicate / competing h1. */}
-  <noscript>
-    <div class="scene-fallback measure">
-      <p class="scene-fallback-name">ILIÈS BELDJILALI</p>
-      <p class="scene-fallback-role">Software Engineer</p>
-
-      {BEATS.slice().reverse().map((beat) => (
-        <Fragment>
-          <h2>{beat.down}</h2>
-          <p>{beat.whisper}</p>
-        </Fragment>
-      ))}
-
-      <p>Make it last, or don't make it. Sounds interesting?
-        <a href={`${href('about')}#get-in-touch`}>Get in touch.</a></p>
-    </div>
-  </noscript>
+      lockstep with the morph. The static edition below carries the same copy
+      (same BEATS source, so no drift) as real always-rendered HTML: it IS the
+      homepage when JavaScript is off (CSS hides it under html.js and hides the
+      loader + scroll track under html:not(.js)), and it keeps the page fully
+      meaningful and indexable for crawlers and reader modes. Previously this
+      lived in <noscript>, painted UNDERNEATH the opaque loader — a no-JS
+      visitor saw only a dark screen. */}
+  <StaticEdition />
 
 </BaseLayout>
