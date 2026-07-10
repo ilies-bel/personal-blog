@@ -30,10 +30,58 @@ const projects = (await getCollection('projects')).sort(
     <p>Tools I built, shipped, and still stand behind.</p>
   </section>
 
-  <div class="projects-list" aria-label="Shipped projects">
+  {/*
+    Orbital composition (EXP-022).
 
-    {projects.map((project) => (
-      <article class="projects-entry" id={project.id}>
+    Visual law (route-physical-laws.md §Projects): bodies in sustained orbit
+    held by mutual gravity — position encodes consequence, trajectory, and mass.
+    Orbital distance from the gravitational center (left edge) is the dominant
+    axis: inner = most recent / highest-consequence; outer = older / lighter.
+
+    Implementation constraints satisfied:
+    · Titles and outcomes directly scannable — no meaning behind hover or motion.
+    · Fully keyboard-reachable via natural tab order + visible focus ring.
+    · Static/list equivalent: semantic <article> list IS the base document;
+      CSS orbital decorations are additive. No-JS renders identically (no JS).
+    · Reduced-motion: arc hover collapses; orbital focus ring → plain outline.
+    · Zero Three.js (PERF-002): CSS positioning + aria-hidden inline SVG ellipses.
+
+    Data: EXP-015a collection (src/content/projects/*.json).
+    order=1 → inner orbit (highest orbital mass, flush to gravitational center).
+    order=N → outer orbit (lighter mass, greater offset from gravitational center).
+  */}
+  <div class="projects-orbital-field" aria-label="Shipped projects">
+
+    {/*
+      Decorative orbital path rings — aria-hidden, zero semantics.
+      Ellipses are centred at x=0 (gravitational axis, left edge of the field).
+      Inner ring: tighter radius. Outer ring: wider radius.
+      These suggest orbital trajectories only; all project meaning lives in
+      the visible text/figures rendered by the articles below.
+    */}
+    <svg
+      class="projects-orbital-rings"
+      viewBox="0 0 1100 900"
+      aria-hidden="true"
+      focusable="false"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Inner orbit arc — highest-consequence project */}
+      <ellipse cx="0" cy="280" rx="370" ry="95" class="projects-ring projects-ring--inner" />
+      {/* Outer orbit arc — subsequent projects */}
+      <ellipse cx="0" cy="650" rx="610" ry="135" class="projects-ring projects-ring--outer" />
+      {/* Gravitational focus markers */}
+      <circle cx="0" cy="280" r="4" class="projects-ring-focus projects-ring-focus--inner" />
+      <circle cx="0" cy="650" r="3" class="projects-ring-focus projects-ring-focus--outer" />
+    </svg>
+
+    {projects.map((project, orbitIdx) => (
+      <article
+        class="projects-entry"
+        id={project.id}
+        data-orbit={orbitIdx}
+        style={`--orbit-idx: ${orbitIdx};`}
+      >
         <header class="projects-entry-header">
           <h2 class="projects-entry-name">
             <span data-decode>{project.data.name}</span>
@@ -265,13 +313,9 @@ const projects = (await getCollection('projects')).sort(
     padding-bottom: 7rem;
   }
 
-  .projects-hero,
-  .projects-list {
+  .projects-hero {
     width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
     margin-inline: auto;
-  }
-
-  .projects-hero {
     display: grid;
     gap: 1.1rem;
     margin-top: clamp(4rem, 11vw, 7.5rem);
@@ -299,17 +343,149 @@ const projects = (await getCollection('projects')).sort(
     text-wrap: pretty;
   }
 
-  .projects-list {
-    display: grid;
-    gap: 0;
-    border-top: 1px solid var(--line);
+  /* -------------------------------------------------------------------------
+   * Orbital field (EXP-022)
+   *
+   * The gravitational composition space. Contains:
+   *   1. A decorative SVG of orbital ring arcs (aria-hidden, behind content).
+   *   2. Project articles at orbital distances from the gravitational axis
+   *      (left border of this container).
+   *
+   * Orbital law: order=1 (inner) is widest, heaviest, flush to the axis.
+   * Each successive project indents by --orbit-step (orbital distance grows).
+   * Visual mass (panel weight, column ratio, border treatment) shrinks outward.
+   *
+   * Static/list equivalent: the semantic <article> list is the base document.
+   * No JS required — all styling is CSS. Reduced-motion collapses arc effects.
+   * ------------------------------------------------------------------------- */
+
+  .projects-orbital-field {
+    position: relative;
+    width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
+    margin-inline: auto;
+
+    /* Gravitational axis: the vertical line all orbits radiate from. */
+    border-left: 1px solid color-mix(in oklch, var(--accent-strong) 22%, transparent);
   }
 
+  /* -------------------------------------------------------------------------
+   * Decorative orbital path SVG
+   * Positioned absolutely behind the article content. overflow:visible so
+   * ellipses that extend past the SVG bounds still render.
+   * ------------------------------------------------------------------------- */
+  .projects-orbital-rings {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+  }
+
+  .projects-ring {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 0.75;
+  }
+  .projects-ring--inner { opacity: 0.38; }
+  .projects-ring--outer { opacity: 0.20; }
+
+  .projects-ring-focus {
+    fill: var(--accent-strong);
+  }
+  .projects-ring-focus--inner { opacity: 0.55; }
+  .projects-ring-focus--outer { opacity: 0.28; }
+
+  /* -------------------------------------------------------------------------
+   * Project cards (orbital bodies)
+   *
+   * Each article sits above the SVG rings (z-index: 1).
+   * --orbit-idx drives: horizontal offset (orbital distance), panel treatment.
+   * ------------------------------------------------------------------------- */
   .projects-entry {
-    padding: clamp(2rem, 6vw, 3.5rem) 0;
+    position: relative;
+    z-index: 1;
+
+    /* Orbital distance: outer projects offset rightward from the axis. */
+    margin-left: calc(var(--orbit-idx, 0) * clamp(2.5rem, 6vw, 5rem));
+
+    padding-block: clamp(2rem, 6vw, 3.5rem);
+    /* Left padding: breathing room from the orbital axis rail. */
+    padding-left: clamp(1.25rem, 3vw, 2rem);
     border-bottom: 1px solid var(--line);
   }
 
+  /* Inner orbit (order=1, orbit-idx=0): highest orbital mass.
+     Dense opaque panel, gold inset rail, widest content area.
+     Accent gold is active-orbit only — no gold on passive outer cards. */
+  .projects-entry[data-orbit="0"] {
+    background: color-mix(in oklch, var(--bg-soft) 88%, oklch(0.72 0.06 80) 5%);
+    /* Inset gold rail — the visual anchor to the gravitational axis */
+    box-shadow: inset 3px 0 0 0 var(--accent-strong);
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* Outer orbit (order=2+, orbit-idx≥1): lighter orbital mass.
+     Transparent panel, hairline axis connector, lower visual presence. */
+  .projects-entry[data-orbit="1"] {
+    background: transparent;
+    box-shadow: inset 1px 0 0 0 color-mix(in oklch, var(--line) 70%, transparent);
+  }
+
+  /* Future orbits (3+ projects): generic lighter treatment. */
+  .projects-entry:not([data-orbit="0"]):not([data-orbit="1"]) {
+    background: transparent;
+    box-shadow: inset 1px 0 0 0 color-mix(in oklch, var(--line) 50%, transparent);
+  }
+
+  /* -------------------------------------------------------------------------
+   * Orbital arc hover (spec motion verb: "arc — rotational sense, not lift/fade").
+   * A slight rightward drift suggests orbital momentum.
+   * Gated behind prefers-reduced-motion so reduced-motion users see static.
+   * ------------------------------------------------------------------------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .projects-entry {
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .projects-entry:hover {
+      transform: translateX(0.4rem);
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+   * Focus ring: orbital path metaphor.
+   * A gold outline traces the card perimeter when any child is focused.
+   * Reduced-motion: static rectangle (spec: "orbital focus ring → static
+   * rounded outline").
+   * No outline on the article itself (uses ::after pseudo-element so we can
+   * control the style independently of the browser default outline).
+   * ------------------------------------------------------------------------- */
+  .projects-entry:focus-within {
+    outline: none;
+  }
+
+  .projects-entry:focus-within::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 2px solid var(--accent-strong);
+    /* Arc suggests orbital curvature; reduced-motion collapses to square */
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .projects-entry:focus-within::after {
+      border-radius: 2px;
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+   * Entry header
+   * ------------------------------------------------------------------------- */
   .projects-entry-header {
     margin-bottom: 1.75rem;
   }
@@ -397,11 +573,26 @@ const projects = (await getCollection('projects')).sort(
     color: var(--fg-chrome-faint);
   }
 
+  /* -------------------------------------------------------------------------
+   * Entry body: figure + copy columns.
+   * Column proportions vary by orbital mass — inner projects have a heavier
+   * figure column (more visual proof surface); outer projects are copy-leaning
+   * (lighter visual mass, text carries the weight).
+   * ------------------------------------------------------------------------- */
   .projects-entry-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     gap: clamp(1.5rem, 5vw, 3rem);
     align-items: start;
+  }
+
+  /* Inner orbit: balanced columns — figure carries more visual weight */
+  .projects-entry[data-orbit="0"] .projects-entry-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+
+  /* Outer orbit and beyond: copy-leaning — figure recedes, text dominates */
+  .projects-entry:not([data-orbit="0"]) .projects-entry-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
   }
 
   .projects-figure {
@@ -554,6 +745,9 @@ const projects = (await getCollection('projects')).sort(
   .projects-topology__chip--merge  { fill: var(--fg); stroke: var(--fg-dim); }
   .projects-topology__chip--failed { fill: var(--ember); stroke: var(--ember); }
 
+  /* -------------------------------------------------------------------------
+   * Copy column
+   * ------------------------------------------------------------------------- */
   .projects-copy {
     display: grid;
     gap: 0;
@@ -635,8 +829,13 @@ const projects = (await getCollection('projects')).sort(
     padding: 0;
   }
 
+  /* -------------------------------------------------------------------------
+   * Responsive
+   * ------------------------------------------------------------------------- */
   @media (max-width: 58rem) {
-    .projects-entry-body {
+    /* Collapse figure+copy to single column at mid-width */
+    .projects-entry[data-orbit="0"] .projects-entry-body,
+    .projects-entry:not([data-orbit="0"]) .projects-entry-body {
       grid-template-columns: 1fr;
     }
 
@@ -644,11 +843,16 @@ const projects = (await getCollection('projects')).sort(
       position: static;
       max-width: 36rem;
     }
+
+    /* Reduce orbital offset on smaller screens so cards don't lose too much width */
+    .projects-entry {
+      margin-left: calc(var(--orbit-idx, 0) * clamp(1rem, 3vw, 2.5rem));
+    }
   }
 
   @media (max-width: 40rem) {
     .projects-hero,
-    .projects-list {
+    .projects-orbital-field {
       width: min(100%, calc(100vw - 2rem));
     }
 
@@ -657,5 +861,10 @@ const projects = (await getCollection('projects')).sort(
     }
     /* --text-hero is a fluid clamp, so it already scales on narrow widths —
        no per-breakpoint font-size override needed (mirrors writing.css). */
+
+    /* Minimal orbital offset on mobile — just enough to suggest depth */
+    .projects-entry {
+      margin-left: calc(var(--orbit-idx, 0) * 1rem);
+    }
   }
 </style>
