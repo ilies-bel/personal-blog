@@ -13,6 +13,7 @@ import { BUILT_STAGES } from '../../hero/timeline';
 import { detectDeviceTier } from '../../hero/lib/config';
 import { isWebGLUnavailableError, type SceneHandle } from '../../hero/scene/types';
 import { resolveReducedMotionNow } from '../../hero/components/reduced-motion';
+import { acquire, release } from '../../hero/scene/contextRegistry';
 
 interface SceneFigureProps {
   /** The lifecycle beat to pin, in getStage transition-space (0 = black hole …
@@ -42,21 +43,58 @@ export default function SceneFigure({ stage, caption }: SceneFigureProps) {
 
     let cancelled = false;
     let dispose: SceneHandle | null = null;
+    // true while we hold an acquired context slot from the registry.
+    let held = false;
     const tier = detectDeviceTier();
 
-    // Mount the engine only when the figure is actually near the viewport — an inline
-    // canvas should never spin up GPU work while it's three screens away.
+    // Tear down any live scene and release the registry slot.  Safe to call
+    // even when no scene has been mounted (dispose/held will be null/false).
+    const unmountScene = (): void => {
+      if (dispose) { dispose(); dispose = null; }
+      if (held) { release(); held = false; }
+      if (!cancelled) setMode('idle');
+    };
+
+    // Mount the engine only when the figure is near the viewport.  On each
+    // exit the scene is fully disposed (freeing the GL context slot) so the
+    // gallery virtualises: only the currently visible row holds a live context.
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((e) => e.isIntersecting) || dispose || cancelled) return;
-        observer.disconnect();
+        const entry = entries[entries.length - 1];
+        if (!entry) return;
+
+        if (!entry.isIntersecting) {
+          // Row left the intersection zone — release its GL context slot so
+          // another row (or another page element) can acquire one.
+          unmountScene();
+          return;
+        }
+
+        // Row entering the intersection zone.  Guard re-entry: if we already
+        // hold a slot (or the effect has been cancelled), do nothing.
+        if (dispose || held || cancelled) return;
+
+        // Ask the site-wide registry for a context slot.  If the cap (2) is
+        // already full, degrade to a static placeholder rather than exceeding
+        // the limit — one of the held slots will be released when its owner
+        // scrolls away, but we do not retry automatically (the figure stays
+        // static for this scroll visit; on the NEXT exit+enter cycle the slot
+        // may be free and the scene will mount).
+        if (!acquire()) {
+          setMode('static');
+          return;
+        }
+        held = true;
+
         void import('../../hero/scene/createScene')
           .then(async ({ createScene }) => {
-            if (cancelled) return;
-            // createScene is async now (sliced boot). A teardown racing the build
+            // Guard: the row may have left view or the effect may have been
+            // cancelled while the chunk was in flight.
+            if (!held || cancelled) return;
+            // createScene is async (sliced boot). A teardown racing the build
             // disposes the fresh handle the moment it resolves.
             const handle = await createScene(host, false, { getStage: () => pinned }, tier);
-            if (cancelled) {
+            if (!held || cancelled) {
               handle();
               return;
             }
@@ -65,6 +103,8 @@ export default function SceneFigure({ stage, caption }: SceneFigureProps) {
           })
           .catch((error: unknown) => {
             void isWebGLUnavailableError(error);
+            // Release the slot we acquired but could not use.
+            if (held) { release(); held = false; }
             setMode('static');
           });
       },
@@ -75,7 +115,7 @@ export default function SceneFigure({ stage, caption }: SceneFigureProps) {
     return () => {
       cancelled = true;
       observer.disconnect();
-      dispose?.();
+      unmountScene();
     };
   }, [stage]);
 

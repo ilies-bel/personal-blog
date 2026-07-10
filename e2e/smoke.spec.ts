@@ -213,3 +213,55 @@ test('nested post route — icon hrefs are root-relative, not protocol-relative 
     `Network request failures detected on nested post route`
   ).toHaveLength(0)
 })
+
+// ---------------------------------------------------------------------------
+// PERF-001 — WebGL context cap (≤ 2 live renderers site-wide)
+//
+// Navigates home ↔ behind-the-build five times via SPA (ClientRouter) and
+// asserts that the site-wide registry count never exceeds CONTEXT_CAP = 2.
+// The count is published on window.__webgl_context_count__ by contextRegistry
+// so we can read it from Playwright without any DOM proxy.
+//
+// If WebGL is unavailable in the headless browser the count stays 0, which
+// satisfies the ≤ 2 invariant automatically.
+// ---------------------------------------------------------------------------
+
+test('PERF-001 — WebGL context count never exceeds 2 across home↔behind-the-build navigation', async ({ page }) => {
+  const getCount = (): Promise<number> =>
+    page.evaluate(() => (window as unknown as { __webgl_context_count__?: number }).__webgl_context_count__ ?? 0)
+
+  const assertCap = async (label: string): Promise<void> => {
+    const count = await getCount()
+    expect(
+      count,
+      `Context count exceeded cap at "${label}" (got ${count}, cap = 2)`
+    ).toBeLessThanOrEqual(2)
+  }
+
+  // Start on the home page.
+  await page.goto('/')
+  await assertCap('home (initial load)')
+
+  // Navigate home ↔ behind-the-build 5 times via in-page links (SPA navigation)
+  // so ClientRouter's mount/unmount lifecycle is exercised on every trip.
+  for (let i = 1; i <= 5; i++) {
+    // Navigate to behind-the-build via the SPA router.
+    await page.evaluate(() => {
+      const link: HTMLAnchorElement | null = document.querySelector('a[href="/behind-the-build"]')
+      link?.click()
+    })
+    await page.waitForURL('**/behind-the-build', { timeout: 10_000 })
+    // Allow scenes to initialise (they are deferred via setTimeout 0 + dynamic import).
+    await page.waitForTimeout(2_000)
+    await assertCap(`behind-the-build (trip ${i})`)
+
+    // Navigate back home.
+    await page.evaluate(() => {
+      const link: HTMLAnchorElement | null = document.querySelector('a[href="/"]')
+      link?.click()
+    })
+    await page.waitForURL('**/', { timeout: 10_000 })
+    await page.waitForTimeout(1_000)
+    await assertCap(`home (return ${i})`)
+  }
+})

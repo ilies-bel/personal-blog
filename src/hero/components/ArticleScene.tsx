@@ -22,6 +22,7 @@ import { PresentationClock } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
 import { isWebGLUnavailableError, type SceneHandle } from '../scene/types';
 import { PosterSlideshow, resolveReducedMotionNow } from './reduced-motion';
+import { acquire, release } from '../scene/contextRegistry';
 
 /** Custom-event name the scene publishes each meaningful scroll step. The reading
  *  HUDs (ArticleHud, GraveyardHud — sibling islands that don't share React context)
@@ -185,6 +186,8 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
 
     let cancelled = false;
     let dispose: SceneHandle | null = null;
+    // true while we hold a context registry slot.
+    let articleSlot = false;
     // Off-screen gate: createScene loads via dynamic import, so the IntersectionObserver
     // can already have fired pause-while-out-of-view before `dispose` exists. We latch
     // the desired state here and apply it the moment the handle resolves, so the loop
@@ -197,6 +200,23 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
     // downstream (camera arc, shader stage, scene id) is the engine's existing
     // pure function of this number, unchanged.
     const getStage = (): number => clock.current.stage;
+
+    // Acquire a site-wide WebGL context slot (cap = 2). The article backdrop is
+    // the primary consumer on article pages; if the cap is already full (only
+    // possible if another article-page island somehow races this one) the backdrop
+    // stays blank while the prose remains fully readable.
+    if (!acquire()) {
+      // Swallow gracefully — no crash, no canvas, the on-before-swap listener has
+      // not been registered yet so no removal is needed.
+      return () => {
+        cancelled = true;
+        unsubClock();
+        clock.stop();
+        unsub();
+        tracker.stop();
+      };
+    }
+    articleSlot = true;
 
     void import('../scene/createScene')
       .then(async ({ createScene }) => {
@@ -279,6 +299,9 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
       unsub();
       tracker.stop();
       dispose?.();
+      // Release the context registry slot so navigating away frees the slot for
+      // the next page's canvas (e.g. HeroIsland on the home page).
+      if (articleSlot) { release(); articleSlot = false; }
     };
   }, [journey, renderMode]);
 

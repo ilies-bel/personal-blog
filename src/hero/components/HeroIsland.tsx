@@ -22,6 +22,7 @@ import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { dwellForScene, sceneForProgress } from '../sceneTable';
 import { PresentationClock, type PresentationState } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
+import { acquire, release } from '../scene/contextRegistry';
 import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
@@ -240,7 +241,16 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // the hydration/effect flush (same shape as the live path below). createScene
       // is async (sliced boot), so a teardown racing the build disposes the fresh
       // handle the moment it resolves.
+      //
+      // Acquire a context slot from the site-wide registry (cap = 2).  If the cap
+      // is already full the backdrop simply stays blank — the page's own copy is
+      // fully readable without the atmosphere layer.
+      let backdropSlot = false;
+      if (acquire()) {
+        backdropSlot = true;
+      }
       const engineKickoff = window.setTimeout(() => {
+        if (!backdropSlot || cancelled) return;
         void import('../scene/createScene')
           .then(async ({ createScene }) => {
             if (cancelled) return;
@@ -265,6 +275,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         cancelled = true;
         window.clearTimeout(engineKickoff);
         disposeRef?.();
+        if (backdropSlot) { release(); backdropSlot = false; }
       };
     }
 
@@ -424,8 +435,22 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     //     rig construction arrives as a series of sub-tasks too.
     // The loader (scene:ready contract, index.astro) covers this whole window, so
     // none of the added task boundaries are visible.
+    // Track whether the live-scene branch holds a context registry slot so the
+    // cleanup can release it unconditionally. Set synchronously inside the
+    // engine kickoff (before the first await) so cleanup always sees the
+    // correct state regardless of when the component unmounts.
+    let liveSlot = false;
+
     const engineKickoff = window.setTimeout(() => {
       void (async (): Promise<void> => {
+        // Acquire a site-wide WebGL context slot (cap = 2). The live hero is
+        // the primary consumer on the home page; if somehow the cap is already
+        // full, degrade gracefully rather than exceeding the limit.
+        if (!acquire()) {
+          if (!cancelled) revealWithoutWebgl();
+          return;
+        }
+        liveSlot = true; // set synchronously — cleanup sees it before any await
         await import('../scene/warmThree'); // 1st eval task: three core, alone
         await new Promise<void>((resolve) => { window.setTimeout(resolve, 0); }); // task boundary
         const { createScene } = await import('../scene/createScene'); // 2nd: addons + scene code
@@ -510,6 +535,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // (We dispose via disposeRef, not a `dispose` local, because createScene now
       // resolves inside the dynamic import's .then() and is out of scope here.)
       disposeRef?.();
+      // Release the context registry slot so other pages / gallery figures can
+      // acquire a renderer after navigation.  Only released if successfully
+      // acquired (liveSlot guards the double-release case).
+      if (liveSlot) { release(); liveSlot = false; }
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
       // ONLY the island-owned chrome class (is-scrolled). We deliberately do NOT
       // touch hud-active / hud-booting / hud-shutting-down: those are owned by the
