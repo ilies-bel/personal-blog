@@ -58,8 +58,58 @@ jobs:
         with:
           path: ./dist
 
+  # ---------------------------------------------------------------------------
+  # E2E gate — blocks the deploy job.
+  #
+  # Runs the full Playwright smoke suite against the production-built app.
+  # The webServer in playwright.config.ts builds the static bundle with
+  # `astro build` and serves it via `astro preview`, so the tests exercise
+  # the same SSG output that the build job uploads to GitHub Pages.
+  #
+  # build and e2e run in parallel; deploy waits for both to succeed.
+  # ---------------------------------------------------------------------------
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Install Chromium and its OS-level dependencies in one step.
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: pnpm run test:e2e
+        env:
+          CI: true
+
+      # Always upload artifacts so failures are diagnosable even when the job
+      # exits non-zero.  The artifact name includes the commit SHA so every
+      # release has its own evidence slot (QA-001 artifact-retention requirement).
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 30
+
   deploy:
-    needs: build
+    needs: [build, e2e]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
