@@ -75,9 +75,13 @@ body.bare.hud-active::after {
 .scene-loader {
   position: fixed;
   inset: 0;
-  z-index: 60;                           /* above the corner chrome (21) + any HUD */
+  z-index: 60;                           /* above most chrome; nav (.overlay-blog) raised to 62 */
   display: grid;
   place-items: center;
+  /* The loader contains no interactive content (aria-hidden). pointer-events:none lets
+     clicks pass through to elements that ARE above it (nav at z-index 62, skip button at
+     61). This also means the dark ::before background never swallows pointer events. */
+  pointer-events: none;
   /* No --bg fill here anymore — it lives on ::before so it can fade independently of
      (and later than) the dot+name. The element itself stays opacity:1 the whole time. */
   opacity: 1;
@@ -143,13 +147,85 @@ body.bare.hud-active::after {
   0%, 100% { transform: scale(0.82); opacity: 0.5; }
   50%      { transform: scale(1.12); opacity: 1; }
 }
+
+/* Phase label: names the actual boot step so the wait reads as progress, not a
+   frozen screen. Keyed on body classes dispatched by HeroIsland at each real
+   milestone — no fake progress bar, no timer tick. Sits below the wordmark inside
+   .scene-loader-mark (which fades early on scene-ready; the label fades with it). */
+.scene-loader-phase {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  opacity: 0.4;
+}
+/* Default phase (PENDING — engine not yet fetching): neutral "Starting" copy. */
+.scene-loader-phase::before { content: 'Starting\2026'; }
+/* HeroIsland adds this body class when the dynamic import kicks off. */
+body.loader-phase-fetching .scene-loader-phase::before { content: 'Loading engine\2026'; }
+/* HeroIsland swaps to this once the import resolves and createScene begins. */
+body.loader-phase-compiling .scene-loader-phase::before { content: 'Building scene\2026'; }
+
+/* Skip-to-content button — a sibling of .scene-loader (NOT inside aria-hidden),
+   keyboard and pointer accessible from the first frame. Clicking it dispatches
+   loader:skip (handled by initLoader in index.astro) which lifts the loader
+   immediately and enables navigation. Fades in after a short delay via animation so
+   it is invisible on fast loads and only appears when the engine is taking a moment.
+   Disappears automatically when scene-ready is set (loader is dissolving). */
+.scene-loader-skip-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 61;                             /* above the loader (z-index 60) */
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  background: none;
+  border: none;
+  padding: 0.5rem 0.25rem;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  /* Fade in after 1.5 s so the button is invisible when the scene loads quickly.
+     `forwards` keeps opacity 0.55 after the animation ends. */
+  animation: scene-loader-skip-appear 0.5s var(--ease-out-quint) 1.5s forwards;
+  transition: color 0.15s;
+}
+@keyframes scene-loader-skip-appear {
+  to { opacity: 0.55; }
+}
+/* Allow pointer interaction only while the loader is showing. */
+body:not(.scene-ready) .scene-loader-skip-btn {
+  pointer-events: auto;
+}
+.scene-loader-skip-btn:hover,
+.scene-loader-skip-btn:focus-visible {
+  color: var(--fg);
+  outline: none;
+}
+.scene-loader-skip-btn:focus-visible {
+  text-decoration: underline;
+}
+/* Fade out immediately when scene-ready is added (scene has painted or skip was clicked). */
+body.scene-ready .scene-loader-skip-btn {
+  opacity: 0;
+  pointer-events: none;
+  animation: none;
+  transition: opacity 0.25s var(--ease-out-quint);
+}
+
 /* Ready: SEQUENCE the dissolve around the glide instead of fading the whole overlay at
-   once. The element itself stays opacity:1 (it must keep blocking the scene); pointer
-   events fall through to the live scene immediately. The two layers fade on their OWN
-   schedules: the dot+name (.scene-loader-mark) fade FIRST, before the glide starts; the
-   dark --bg background (.scene-loader::before) fades LAST, only after the glide lands.
-   Kept in the DOM (no display:none) so the transitions can run; inert after via
-   pointer-events. */
+   once. The element itself stays opacity:1 (it must keep blocking the scene). The two
+   layers fade on their OWN schedules: the dot+name (.scene-loader-mark) fade FIRST,
+   before the glide starts; the dark --bg background (.scene-loader::before) fades LAST,
+   only after the glide lands. Kept in the DOM (no display:none) so the transitions can
+   run. pointer-events:none is already set on the element itself (default above); this
+   restates it for clarity — the live scene is interactive the moment scene-ready lands. */
 body.scene-ready .scene-loader {
   pointer-events: none;
 }
@@ -170,6 +246,10 @@ body.scene-ready .scene-loader::before {
    clears a hair before the background, keeping it calm rather than abrupt. */
 @media (prefers-reduced-motion: reduce) {
   .scene-loader-dot { animation: none; }
+  /* Also suppress the skip-button fade-in animation under reduced motion —
+     show it immediately (after 0 delay) so the preference-reduced path doesn't
+     animate anything unnecessarily. */
+  .scene-loader-skip-btn { animation: none; opacity: 0.55; }
   .scene-loader::before {
     transition: opacity 0.7s var(--ease-out-quint) 0s;
   }
@@ -225,7 +305,11 @@ body.scene-ready .scene-loader::before {
   position: fixed;
   top: clamp(0.75rem, 2.5vw, 1.5rem);
   right: clamp(1rem, 4vw, 3rem);
-  z-index: 21;                           /* above the manifesto overlay, stays clickable */
+  /* EXP-006: raised above the intro loader (z-index 60) so site navigation is
+     accessible from the very first frame of loading, not just after the engine paints.
+     The skip button sits at 61; nav is at 62 so it is the topmost interactive element
+     in the top-right corner at all times. */
+  z-index: 62;
   display: flex;
   align-items: center;
   gap: 0.6rem;

@@ -40,6 +40,10 @@ import {
   HUD_ACTIVE_BODY_CLASS,
   WEBGL_UNAVAILABLE_BODY_CLASS,
   REDUCED_MOTION_EXPLAINED_STORAGE_KEY,
+  LOADER_SKIP_EVENT,
+  LOADER_TIMEOUT_EVENT,
+  LOADER_PHASE_FETCHING_BODY_CLASS,
+  LOADER_PHASE_COMPILING_BODY_CLASS,
   readDebugNumber,
 } from '../lib/constants';
 // createScene (and, transitively, three.js + GPUComputationRenderer + UnrealBloom
@@ -441,6 +445,29 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // correct state regardless of when the component unmounts.
     let liveSlot = false;
 
+    // --- EXP-006: loader interruptibility -----------------------------------
+    // The hard 8 s loader timeout (index.astro) dispatches LOADER_TIMEOUT_EVENT
+    // when scene:ready has never fired — meaning the engine genuinely stalled.
+    // Respond with revealWithoutWebgl() so the visitor reaches the usable
+    // manifesto + section-nav edition instead of staying behind a blank canvas.
+    // The `cancelled` guard prevents a stale listener from acting after unmount.
+    const onLoaderTimeout = (): void => {
+      if (!cancelled) revealWithoutWebgl();
+    };
+    window.addEventListener(LOADER_TIMEOUT_EVENT, onLoaderTimeout, { once: true });
+
+    // When the visitor presses "Skip to content" while the engine is still
+    // loading, the loader lifts immediately (index.astro handles the visual
+    // side). HeroIsland must also resolve to a usable edition so the blank
+    // canvas is not left frozen behind the dismissed loader. Only act here if
+    // the scene has not yet painted (sceneHandleRef is still null) — once the
+    // scene IS running its frame loop, a skip changes nothing meaningful.
+    const onLoaderSkip = (): void => {
+      if (!cancelled && sceneHandleRef.current === null) revealWithoutWebgl();
+    };
+    window.addEventListener(LOADER_SKIP_EVENT, onLoaderSkip, { once: true });
+    // --- end EXP-006 interruptibility ----------------------------------------
+
     const engineKickoff = window.setTimeout(() => {
       void (async (): Promise<void> => {
         // Acquire a site-wide WebGL context slot (cap = 2). The live hero is
@@ -451,9 +478,22 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           return;
         }
         liveSlot = true; // set synchronously — cleanup sees it before any await
+
+        // EXP-006 phase label: mark that the engine chunk download has started
+        // so the loader's phase label CSS shows "Loading engine…". Cleared in
+        // cleanup (unmount) and on the transition to the compiling phase below.
+        document.body.classList.add(LOADER_PHASE_FETCHING_BODY_CLASS);
+
         await import('../scene/warmThree'); // 1st eval task: three core, alone
         await new Promise<void>((resolve) => { window.setTimeout(resolve, 0); }); // task boundary
         const { createScene } = await import('../scene/createScene'); // 2nd: addons + scene code
+
+        // EXP-006 phase label: engine chunk resolved — swap to "Building scene…"
+        // so the loader reflects that we are now constructing GPU rigs and compiling
+        // shaders, not waiting on the network. Both classes are cleared in cleanup.
+        document.body.classList.remove(LOADER_PHASE_FETCHING_BODY_CLASS);
+        document.body.classList.add(LOADER_PHASE_COMPILING_BODY_CLASS);
+
         if (cancelled) return;
         const dispose = await createScene(host, isReduced, {
           getStage,
@@ -523,6 +563,12 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // torn-down mount; the `cancelled` flag already guards every continuation, this
       // just saves the wasted import.
       window.clearTimeout(engineKickoff);
+      // Remove EXP-006 loader interruptibility listeners so they don't fire on stale
+      // mounts (e.g. SPA navigation away and back). The `cancelled` flag also guards
+      // them, but explicit removal is belt-and-suspenders and avoids keeping the closure
+      // alive in the event-listener registry.
+      window.removeEventListener(LOADER_TIMEOUT_EVENT, onLoaderTimeout);
+      window.removeEventListener(LOADER_SKIP_EVENT, onLoaderSkip);
       document.removeEventListener('astro:before-swap', onBeforeSwap);
       unsubClock();
       clock.stop();
@@ -553,7 +599,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // clean slate instead of inheriting a stale "unavailable" note. If WebGL is still
       // unavailable the next mount simply re-adds it. (SCENE_READY stays owned by the
       // loader script — we never strip it here.)
-      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
+      // Also clear the EXP-006 phase classes — a re-mount starts from PENDING again.
+      document.body.classList.remove(
+        SCROLLED_BODY_CLASS,
+        AT_OPENING_BODY_CLASS,
+        WEBGL_UNAVAILABLE_BODY_CLASS,
+        DIVING_BODY_CLASS,
+        LOADER_PHASE_FETCHING_BODY_CLASS,
+        LOADER_PHASE_COMPILING_BODY_CLASS,
+      );
     };
   }, [backdrop, backdropStage, reduced]);
 

@@ -134,6 +134,31 @@ export const HUD_STATE_STORAGE_KEY = 'hud-state';
  *  and MUST be kept in sync with this value. */
 export const SCENE_READY_EVENT = 'scene:ready';
 
+/** Window CustomEvent fired when the user presses the "skip to content" button that
+ *  is always visible in the loader from the first frame. The index.astro loader
+ *  script handles it by lifting the loader immediately (bypassing the animation-gated
+ *  loader-gone delay) so navigation becomes accessible at once. HeroIsland listens too:
+ *  if the engine has not yet resolved it falls back to revealWithoutWebgl() so no blank
+ *  canvas is left behind. */
+export const LOADER_SKIP_EVENT = 'loader:skip';
+
+/** Window CustomEvent fired by the index.astro loader's hard 8 s safety timeout when
+ *  the scene has NOT dispatched scene:ready — i.e. the engine never painted. HeroIsland
+ *  listens and calls revealWithoutWebgl() so the visitor always reaches a usable page
+ *  (manifesto copy + section nav) rather than being blocked by a stalled canvas. */
+export const LOADER_TIMEOUT_EVENT = 'loader:timeout';
+
+/** Body class added by HeroIsland when the engine chunk dynamic-import begins.
+ *  The loader's phase label CSS keys off this to show "Loading engine…" during the
+ *  download window. Cleared when the import resolves or a failure reveal fires. */
+export const LOADER_PHASE_FETCHING_BODY_CLASS = 'loader-phase-fetching';
+
+/** Body class added by HeroIsland when the engine module has arrived and createScene
+ *  is actively building the scene (typed-array rigs, shader compile). The loader's
+ *  phase label CSS keys off this to show "Building scene…". Cleared on first frame
+ *  (the loader lifts) or on any failure reveal. */
+export const LOADER_PHASE_COMPILING_BODY_CLASS = 'loader-phase-compiling';
+
 // --- scroll direction ------------------------------------------------------
 export type ScrollDirection = 'down' | 'up';
 export const SCROLL_DOWN: ScrollDirection = 'down';

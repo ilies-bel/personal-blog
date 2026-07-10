@@ -9,6 +9,8 @@ import {
   LOADER_GONE_BODY_CLASS,
   LOADER_MIN_MS,
   LOADER_SEEN_STORAGE_KEY,
+  LOADER_SKIP_EVENT,
+  LOADER_TIMEOUT_EVENT,
 } from '../hero/lib/constants';
 import { SITE_TITLE, SITE_DESCRIPTION, BRAND_NAME, BRAND_ROLE } from '../consts';
 
@@ -47,8 +49,23 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     <div class="scene-loader-mark">
       <span class="scene-loader-dot"></span>
       <span class="scene-loader-name">{BRAND_NAME}</span>
+      {/* Phase label: CSS pseudo-content names the current boot milestone (fetching,
+          compiling, or the default "Starting…"). Updated via body classes dispatched
+          by HeroIsland at each real milestone — no fake progress. aria-hidden flows
+          from the parent; this is for sighted users watching the loader only. */}
+      <span class="scene-loader-phase"></span>
     </div>
   </div>
+  {/* Skip-to-content button — positioned as a sibling OUTSIDE the aria-hidden loader
+      so it is always reachable by keyboard and assistive technology from the very first
+      frame. Clicking it dispatches LOADER_SKIP_EVENT, handled by initLoader() below,
+      which immediately lifts the loader and enables navigation without waiting for the
+      engine to paint. It fades in after a brief delay (CSS) so it is invisible on fast
+      loads and becomes visible only when the engine is taking longer than expected.
+      Hidden completely on no-JS via html.no-js in scene.css. */}
+  <button type="button" class="scene-loader-skip-btn" aria-label="Skip loading and go to page content">
+    Skip to content
+  </button>
 
   {/* Skip experience — the persistent escape hatch from the cinematic opening.
       An always-visible, always-reachable anchor that lets any visitor bypass the
@@ -83,11 +100,19 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       reveal as soon as scene:ready fires (no floor). A back-nav WITHIN the
       session therefore never re-imposes the floor.
 
-      A long safety timeout is the hard backstop in BOTH cases — it fires solely
-      if scene:ready never arrives (a failed WebGL context / a browser with JS but
-      no WebGL), so the loader can never get stuck over a dead canvas. It bypasses
-      the floor (the floor only fires once the scene is actually ready). 8s > the
-      2.5s floor, so they compose cleanly: floor raises the early bound, safety
+      SKIP PATH: the always-visible "Skip to content" button (the .scene-loader-skip-btn
+      sibling) dispatches LOADER_SKIP_EVENT on click; initLoader() handles it with an
+      immediate reveal that also sets LOADER_GONE_BODY_CLASS synchronously (skipping
+      the CSS transition wait) so navigation is accessible at once. HeroIsland listens
+      for LOADER_SKIP_EVENT separately and may cancel an in-flight engine load.
+
+      HARD SAFETY TIMEOUT: 8 s is the absolute backstop — it fires only if scene:ready
+      never arrives (engine chunk stalled, WebGL failed silently, catastrophic failure).
+      When the timeout fires with no genuine scene paint, it dispatches LOADER_TIMEOUT_EVENT
+      so HeroIsland can resolve to the no-WebGL usable edition (manifesto copy + section
+      nav) instead of leaving a blank canvas. reveal() is then called regardless — the
+      loader can never get stuck forever. The timeout bypasses the first-load floor;
+      8s > 2.5s floor, so they compose cleanly: floor raises the early bound, safety
       caps the late bound.
 
       Once the loader is REVEALED (scene-ready added) the dissolve runs in order:
@@ -116,7 +141,29 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       LOADER_GONE_BODY_CLASS,
       LOADER_MIN_MS,
       LOADER_SEEN_STORAGE_KEY,
+      LOADER_SKIP_EVENT,
+      LOADER_TIMEOUT_EVENT,
     } from '../hero/lib/constants';
+
+    // Loader state machine
+    // ====================
+    // STATES (implicit, keyed by body classes):
+    //   PENDING    — loader visible, no phase classes, engine not yet fetching
+    //   FETCHING   — body.loader-phase-fetching (set by HeroIsland when import() fires)
+    //   COMPILING  — body.loader-phase-compiling (set by HeroIsland after import resolves)
+    //   REVEALING  — body.scene-ready (loader fading, engine either painted or bypassed)
+    //   GONE       — body.loader-gone (loader fully dissolved, nav/markers interactive)
+    //
+    // TRANSITIONS:
+    //   PENDING → FETCHING   HeroIsland adds loader-phase-fetching at engine kickoff
+    //   FETCHING → COMPILING HeroIsland swaps phase classes once createScene begins
+    //   COMPILING → REVEALING  scene:ready fires (createScene first frame) → reveal()
+    //   any → REVEALING      8 s hard timeout fires → loader:timeout dispatched → reveal()
+    //   any → REVEALING      user clicks skip → loader:skip → immediate reveal
+    //   REVEALING → GONE     CSS ::before opacity transition ends (or 2.1 s backstop)
+    //
+    // HeroIsland listens for loader:timeout and loader:skip to resolve the page to a
+    // usable edition (revealWithoutWebgl or revealImmediate) when the engine stalls.
 
     function initLoader(): void {
       // Only run on the home page — the loader element is present only on '/'.
@@ -128,6 +175,15 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       // automatically when the DOM is swapped (new .scene-loader = fresh element).
       if (loader.dataset.loaderInit) return;
       loader.dataset.loaderInit = '1';
+
+      // Wire the skip button (sibling of the loader, outside aria-hidden). Re-wired on
+      // each page-load event because each swap creates a new button element in the DOM.
+      const skipBtn = document.querySelector<HTMLButtonElement>('.scene-loader-skip-btn');
+      skipBtn?.addEventListener(
+        'click',
+        () => { window.dispatchEvent(new CustomEvent(LOADER_SKIP_EVENT)); },
+        { once: true },
+      );
 
       // Stamp body.loader-gone ONCE the dark ::before layer has fully faded out.
       // isConnected guards against stale timers firing after the page is swapped.
@@ -170,6 +226,15 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         armGone();
       };
 
+      // Immediate reveal: bypasses the animation-gated armGone path, setting
+      // loader-gone synchronously. Used by the skip path so navigation becomes
+      // accessible instantly without waiting for the CSS transition chain to complete.
+      const revealImmediate = (): void => {
+        if (!loader.isConnected) return;
+        document.body.classList.add(SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS);
+        armGone(); // arm anyway for belt-and-suspenders (idempotent)
+      };
+
       // Warm back-nav / fast-hydration race: scene-ready is already on the body
       // (a previous reveal() call within this DOM phase already ran).
       // Just arm the loader-gone signal and exit — no need to re-listen.
@@ -197,20 +262,46 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         firstLoad = true;
       }
 
-      // On first load, gate the reveal behind the floor: when the scene is ready
-      // (or already), wait out whatever remains of LOADER_MIN_MS. On later loads
-      // (back-navs within the session), reveal the instant the scene is ready.
-      const onReady = firstLoad
-        ? (): void => {
-            window.setTimeout(reveal, Math.max(0, LOADER_MIN_MS - (performance.now() - t0)));
-          }
-        : reveal;
-      window.addEventListener(SCENE_READY_EVENT, onReady, { once: true });
+      // Track whether the scene has genuinely painted (scene:ready came from an actual
+      // first composited frame, not from skip or the safety timeout). This flag is what
+      // the hard timeout checks to decide whether it is a genuine late-paint (normal
+      // path: timeout is just a no-op backstop) or a real engine failure (timeout is
+      // the first reveal, so we dispatch loader:timeout for HeroIsland to handle).
+      let scenePainted = false;
 
-      // Safety backstop ONLY — never the normal path, and it bypasses the floor.
-      // Long enough that the engine has surely painted on any real device; if it
-      // hasn't (no WebGL), we still lift the loader so the page isn't trapped.
-      window.setTimeout(reveal, 8000);
+      // Combined scene:ready handler — marks genuinely painted AND honours the
+      // first-load floor (waits out LOADER_MIN_MS before calling reveal).
+      const onSceneReady = (): void => {
+        scenePainted = true;
+        if (firstLoad) {
+          window.setTimeout(reveal, Math.max(0, LOADER_MIN_MS - (performance.now() - t0)));
+        } else {
+          reveal();
+        }
+      };
+      window.addEventListener(SCENE_READY_EVENT, onSceneReady, { once: true });
+
+      // Skip path: user pressed the always-visible "skip to content" button while the
+      // engine was still loading. Immediately lift the loader and enable navigation
+      // (revealImmediate bypasses the CSS-transition delay on loader-gone). Also
+      // dispatch loader:skip so HeroIsland can cancel any in-flight engine load and
+      // resolve to a usable fallback instead of starting the render loop mid-page-use.
+      window.addEventListener(LOADER_SKIP_EVENT, revealImmediate, { once: true });
+
+      // Hard safety timeout — the ABSOLUTE backstop.
+      // If scene:ready never fires in 8 s (engine stalled, WebGL failed silently,
+      // slow network), dispatch loader:timeout so HeroIsland resolves to the no-WebGL
+      // usable edition, then call reveal() regardless. The reveal() is idempotent:
+      // if skip or the normal scene:ready path already ran it first, this is a no-op.
+      // ONLY dispatches loader:timeout when the scene hasn't genuinely painted — the
+      // timeout is NOT fired on the normal path where the engine just took slightly
+      // over LOADER_MIN_MS (the floor) to paint its first frame.
+      window.setTimeout(() => {
+        if (!scenePainted) {
+          window.dispatchEvent(new CustomEvent(LOADER_TIMEOUT_EVENT));
+        }
+        reveal();
+      }, 8000);
     }
 
     document.addEventListener('astro:page-load', initLoader);
