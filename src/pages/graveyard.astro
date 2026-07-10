@@ -142,11 +142,14 @@ const specimens: readonly Specimen[] = [
 </BaseLayout>
 
 {/* SCROLL REVEAL — entries fade + rise into place as they enter the spy window.
-    Pure inline IO; honours OS reduced-motion (skips the transition by setting
-    data-revealed immediately on every entry, while the CSS @media query gates
-    the transition off so the swap is instant). Re-runs on ClientRouter swaps so
-    a back-nav into /graveyard re-arms the observer on the fresh DOM. */}
+    Pure inline IO; honours the resolved reduced-motion preference (skips the
+    transition by setting data-revealed immediately on every entry, while the CSS
+    html[data-motion='reduced'] block gates the transition off so the swap is
+    instant). Re-runs on ClientRouter swaps so a back-nav into /graveyard re-arms
+    the observer on the fresh DOM. */}
 <script>
+  import { getMotion } from '../lib/motion';
+
   function initGraveyardReveal() {
     if (!document.body.classList.contains('graveyard-page')) return;
     const entries = Array.from(
@@ -154,9 +157,7 @@ const specimens: readonly Specimen[] = [
     );
     if (entries.length === 0) return;
 
-    const reduceMotion =
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduceMotion = getMotion() === 'reduced';
     if (reduceMotion || typeof IntersectionObserver === 'undefined') {
       // Reduced motion or no observer support: ship them all in instantly.
       entries.forEach((el) => el.setAttribute('data-revealed', 'true'));

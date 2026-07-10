@@ -209,18 +209,17 @@
   text-transform: uppercase;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .writing-row-copy,
-  .writing-row:hover .writing-row-copy,
-  .writing-row:active .writing-row-copy {
-    transform: none;
-  }
+/* Reduced motion — resolved via html[data-motion] (see src/lib/motion.ts). */
+:where(html[data-motion='reduced']) .writing-row-copy,
+:where(html[data-motion='reduced']) .writing-row:hover .writing-row-copy,
+:where(html[data-motion='reduced']) .writing-row:active .writing-row-copy {
+  transform: none;
+}
 
-  /* The trailing ↗ still appears (it is an affordance, not decoration) but
-     without the diagonal travel. */
-  .writing-row::after {
-    transform: none;
-  }
+/* The trailing ↗ still appears (it is an affordance, not decoration) but
+   without the diagonal travel. */
+:where(html[data-motion='reduced']) .writing-row::after {
+  transform: none;
 }
 
 @media (max-width: 40rem) {

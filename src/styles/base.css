@@ -123,12 +123,17 @@ h3 { line-height: 1.15; font-weight: var(--weight-bold); letter-spacing: -0.01em
 }
 
 /* Global reduced-motion: kill animation/transition and instant-scroll everywhere.
-   Concern-specific reduced-motion (hero, hud) lives with those stylesheets. */
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
+   Keyed on html[data-motion='reduced'] — the resolved preference (manual override
+   ?? OS) stamped pre-paint by BaseHead and kept live by src/lib/motion.ts — so the
+   manual toggle governs CSS too. :where() keeps the original specificity; the
+   bare html[...] selector also covers html itself (the old `*` did). Concern-
+   specific reduced-motion (hero, hud) lives with those stylesheets. */
+html:where([data-motion='reduced']) { scroll-behavior: auto; }
+html:where([data-motion='reduced']),
+:where(html[data-motion='reduced']) *,
+:where(html[data-motion='reduced']) *::before,
+:where(html[data-motion='reduced']) *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
 }

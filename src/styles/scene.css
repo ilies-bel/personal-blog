@@ -187,14 +187,12 @@ body.scene-ready .scene-loader::before {
    is removed here so it does not sit solid waiting for a glide that never happens). Both
    start on scene-ready with no staging; the dot+name's slightly shorter fade simply
    clears a hair before the background, keeping it calm rather than abrupt. */
-@media (prefers-reduced-motion: reduce) {
-  .scene-loader-dot { animation: none; }
-  .scene-loader::before {
-    transition: opacity 0.7s var(--ease-out-quint) 0s;
-  }
-  .scene-loader-mark {
-    transition: opacity 0.5s var(--ease-out-quint) 0s;
-  }
+:where(html[data-motion='reduced']) .scene-loader-dot { animation: none; }
+:where(html[data-motion='reduced']) .scene-loader::before {
+  transition: opacity 0.7s var(--ease-out-quint) 0s;
+}
+:where(html[data-motion='reduced']) .scene-loader-mark {
+  transition: opacity 0.5s var(--ease-out-quint) 0s;
 }
 
 /* The scroll track: N stages that exist only to give the page scrollable height.
@@ -325,9 +323,7 @@ body.at-opening:not(.hud-active) .overlay-blog {
 .overlay-blog-section:focus-visible .overlay-blog-lock {
   opacity: 1;
 }
-@media (prefers-reduced-motion: reduce) {
-  .overlay-blog-lock { transition: none; }
-}
+:where(html[data-motion='reduced']) .overlay-blog-lock { transition: none; }
 
 /* HUD-active (black hole) brightens AND lifts the section labels in place of
    the old fold-out-from-zero-width reveal. The lift is small (~2px) — a quiet
@@ -449,16 +445,14 @@ body.bare.hud-active .overlay-blog {
    lift (.overlay-blog-link:hover → --fg) and the target-lock corner-tick frame. The
    gold underline-sweep that the reading nav (.subnav) uses is intentionally NOT
    mirrored here. */
-@media (prefers-reduced-motion: reduce) {
-  .overlay-blog-icon,
-  .overlay-blog-link { transition: none; }
-  body.bare.hud-active .overlay-blog { animation: none; }
-  body.bare.hud-active .bh-identity { animation: none; }
-  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
-  /* Drop the social-logo lift/scale; the gold glow still confirms hover. */
-  .overlay-blog-social:hover .overlay-blog-icon,
-  .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }
-}
+:where(html[data-motion='reduced']) .overlay-blog-icon,
+:where(html[data-motion='reduced']) .overlay-blog-link { transition: none; }
+:where(html[data-motion='reduced']) body.bare.hud-active .overlay-blog { animation: none; }
+:where(html[data-motion='reduced']) body.bare.hud-active .bh-identity { animation: none; }
+:where(html[data-motion='reduced']) body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
+/* Drop the social-logo lift/scale; the gold glow still confirms hover. */
+:where(html[data-motion='reduced']) .overlay-blog-social:hover .overlay-blog-icon,
+:where(html[data-motion='reduced']) .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }
 
 /* Power button: a CIRCLED power glyph (a thin ring frame echoing the old
    constellation mark) — the HUD MASTER POWER. One click toggles the powered
@@ -524,9 +518,7 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
   position: relative;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .overlay-blog-power { transition: none; }
-}
+:where(html[data-motion='reduced']) .overlay-blog-power { transition: none; }
 
 /* Reduced-motion toggle — a sibling glyph button to the corner power control. The
    React island PORTALS it INTO the .overlay-blog flex row (BUG 4 fix: a single fixed
@@ -670,10 +662,8 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
 .scene-toggle[aria-pressed='true'] .scene-toggle-slash {
   opacity: 1;
 }
-@media (prefers-reduced-motion: reduce) {
-  .scene-toggle,
-  .scene-toggle-slash { transition: none; }
-}
+:where(html[data-motion='reduced']) .scene-toggle,
+:where(html[data-motion='reduced']) .scene-toggle-slash { transition: none; }
 
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */

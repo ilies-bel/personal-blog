@@ -6,6 +6,7 @@
 // sits at the world origin). Brightness-related values are lifted above the moody
 // reference still so the hero reads as clearly luminous (see exposure / bloomStr /
 // disk brightness).
+import { getMotion } from '../../lib/motion';
 import { DEBUG_WINDOW_KEYS, readDebugNumber, readDebugString } from './constants';
 
 export interface Config {
@@ -118,9 +119,10 @@ export const CFG: Config = {
 export const lookOffsetX = -0.82;
 export const lookOffsetY = 0.16;
 
+/** Resolved reduced-motion preference (manual override ?? OS) — delegates to the
+ *  sitewide motion module's <html data-motion> attribute. SSR-safe (false). */
 export function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return getMotion() === 'reduced';
 }
 
 // --- device tier ------------------------------------------------------------

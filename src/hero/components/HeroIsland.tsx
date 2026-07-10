@@ -170,13 +170,18 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
   // The RESOLVED reduced-motion preference (manual override ?? OS preference) and a
-  // setter. This single value is the source of truth for BOTH the mount decision
-  // below (live WebGL hero vs the still poster slideshow) AND the corner toggle — it
-  // is threaded into the context state/actions so the button and the engine never
-  // disagree. The hook owns the matchMedia listener, so HeroIsland keeps no
-  // motion-preference effect of its own. `fromOsOnly` is true when the reduced state
-  // comes purely from the OS (no manual override yet) — it gates the one-time
-  // explanatory modal below.
+  // setter, backed by the sitewide motion module (src/lib/motion.ts → useMotion).
+  // This single value is the source of truth for BOTH the mount decision below
+  // (live WebGL hero vs the still poster slideshow) AND the corner toggle — it is
+  // threaded into the context state/actions so the button and the engine never
+  // disagree. Hydration-safe: the hydration render matches the server HTML ('full'
+  // branch) and React reconciles to the real client value before paint, so the old
+  // React #418-class mismatch for OS-reduced visitors is gone. The module owns the
+  // one matchMedia listener, so HeroIsland keeps no motion-preference effect of its
+  // own — an OS flip mid-session streams in here, re-runs the mount effect via the
+  // `reduced` dependency, and swaps engine <-> poster live, no reload. `fromOsOnly`
+  // is true when the reduced state comes purely from the OS (no manual override
+  // yet) — it gates the one-time explanatory modal below.
   const { reduced, fromOsOnly, setReduced } = useReducedMotionPreference();
   // The reduced-motion modal: which copy to show, or null when closed.
   //   'confirm' — opened by a corner-toggle click that turns reduced motion ON.
@@ -200,16 +205,16 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    // Resolve the reduced-motion preference SYNCHRONOUSLY from the live client
-    // environment (manual override ?? OS media query) rather than trusting React's
-    // `reduced` state, which under `client:visible` can be a stale `false` on the very
-    // first client render (the island is SSR'd with window undefined, so the hook
-    // seeds false and only reconciles true in a post-mount effect). Reading the true
-    // value here is what guarantees we NEVER import + build a WebGL canvas when the
-    // resolved preference is reduced — closing the "canvas mounts then is torn down"
-    // gap. `reduced` is still in this effect's dependency list, so flipping the corner
-    // toggle re-runs the effect and re-reads the (now updated) value, re-mounting or
-    // tearing down the scene as appropriate. The two agree once reconciled.
+    // Resolve the reduced-motion preference SYNCHRONOUSLY from the pre-paint
+    // <html data-motion> attribute (manual override ?? OS — see src/lib/motion.ts)
+    // rather than trusting React's `reduced` state, which under `client:visible` is
+    // deliberately 'full'-shaped on the hydration render (it must match the server
+    // HTML). Reading the true value here is what guarantees we NEVER import + build
+    // a WebGL canvas when the resolved preference is reduced — closing the "canvas
+    // mounts then is torn down" gap. `reduced` is still in this effect's dependency
+    // list, so a corner-toggle flip OR a live OS preference change re-runs the
+    // effect and re-reads the (now updated) value, re-mounting or tearing down the
+    // scene as appropriate. The two agree once reconciled.
     const isReduced = resolveReducedMotionNow();
     // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
     // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,

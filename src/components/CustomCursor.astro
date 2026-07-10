@@ -201,17 +201,17 @@
     transform: translate(-50%, -50%) scale(var(--dock-scale));
   }
 
-  /* Reduced motion: keep the cursor fully functional but skip the scale/opacity
-     animation — the hexagon snaps in/out instead of easing. The comet tail is
-     also suppressed (the script never starts the draw loop under reduced motion,
-     and this hides the canvas belt-and-braces). */
-  @media (prefers-reduced-motion: reduce) {
-    .cursor__hex {
-      transition: none;
-    }
-    .cursor-trail {
-      display: none;
-    }
+  /* Reduced motion (resolved sitewide via html[data-motion] — manual override ??
+     OS, stamped pre-paint; :where() keeps the original specificity): keep the
+     cursor fully functional but skip the scale/opacity animation — the hexagon
+     snaps in/out instead of easing. The comet tail is also suppressed (the script
+     never starts the draw loop under reduced motion, and this hides the canvas
+     belt-and-braces). */
+  :global(:where(html[data-motion='reduced'])) .cursor__hex {
+    transition: none;
+  }
+  :global(:where(html[data-motion='reduced'])) .cursor-trail {
+    display: none;
   }
 
   /* Coarse / no-fine-pointer devices: never render the custom cursor at all.
@@ -226,6 +226,10 @@
 </style>
 
 <script>
+  // Resolved motion preference (manual override ?? OS) from the sitewide module —
+  // read once for the initial state, kept live via the module's shared listener.
+  import { getMotion, onMotionChange } from '../lib/motion';
+
   // Custom-cursor controller. Runs once per page load (plain MPA Astro — each
   // navigation is a fresh document), guarded against double-init.
   //
@@ -289,9 +293,14 @@
       '[data-cursor="interactive"]',
     ].join(',');
 
-    // Honour reduced-motion: with it on, the ball still tracks the pointer exactly
+    // Honour reduced motion: with it on, the ball still tracks the pointer exactly
     // (written directly in onMove) but the comet tail / draw loop never runs.
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Live-updated so a mid-session preference flip takes effect without a reload
+    // (the CSS side — hiding the trail canvas — keys off html[data-motion] too).
+    let reduceMotion = getMotion() === 'reduced';
+    onMotionChange((motion) => {
+      reduceMotion = motion === 'reduced';
+    });
 
     // --- inlined house helpers (mirror src/hero, kept here so the IIFE stays
     //     self-contained — see lifecycle.ts easeOut + config.ts tuneRenderPixelRatio) ---

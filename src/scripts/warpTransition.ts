@@ -24,6 +24,8 @@
 // (BaseLayout's resurface handler no-ops the deceleration too), so a reduced-motion
 // visitor gets a plain, instant swap with no light show.
 
+import { getMotion } from '../lib/motion';
+
 const WARP_FLAG = 'bh:warp';
 
 // --- Timing (ms) -----------------------------------------------------------
@@ -476,11 +478,9 @@ function navigateNow(href: string): void {
 }
 
 // --- Reduced motion --------------------------------------------------------
+// Resolved motion preference (manual override ?? OS) from the sitewide module.
 function prefersReduced(): boolean {
-  return (
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  return getMotion() === 'reduced';
 }
 
 // --- Click interception ----------------------------------------------------

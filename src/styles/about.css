@@ -187,18 +187,16 @@
   stroke-dashoffset: 0;
 }
 
-/* Safety net: if the user toggles prefers-reduced-motion AFTER the body class
-   was set (some OSes don't notify), the animated branch is short-circuited so
-   the signature remains visible. */
-@media (prefers-reduced-motion: reduce) {
-  .about-page.has-signature-anim .about-signature-name {
-    clip-path: none;
-    transition: none;
-  }
-  .about-page.has-signature-anim .about-signature-flourish path {
-    stroke-dashoffset: 0;
-    transition: none;
-  }
+/* Safety net: if the resolved motion preference flips to reduced AFTER the body
+   class was set (html[data-motion] updates live — see src/lib/motion.ts), the
+   animated branch is short-circuited so the signature remains visible. */
+:where(html[data-motion='reduced']) .about-page.has-signature-anim .about-signature-name {
+  clip-path: none;
+  transition: none;
+}
+:where(html[data-motion='reduced']) .about-page.has-signature-anim .about-signature-flourish path {
+  stroke-dashoffset: 0;
+  transition: none;
 }
 
 /* Generous separation marks the gear-change from voice to action. */

@@ -377,16 +377,14 @@ body.article-page .prose[data-scene-journey] {
 }
 
 /* Reduced motion: no HUD boot slide, no panel/dot easing — instant, calm states. */
-@media (prefers-reduced-motion: reduce) {
-  .article-hud { animation: none; }
-  .article-hud-rail-fill,
-  .islands-demo,
-  .islands-demo-dot,
-  .islands-demo-button,
-  .signals-readout,
-  .signals-readout-dot,
-  .signals-readout-button { transition: none; }
-}
+:where(html[data-motion='reduced']) .article-hud { animation: none; }
+:where(html[data-motion='reduced']) .article-hud-rail-fill,
+:where(html[data-motion='reduced']) .islands-demo,
+:where(html[data-motion='reduced']) .islands-demo-dot,
+:where(html[data-motion='reduced']) .islands-demo-button,
+:where(html[data-motion='reduced']) .signals-readout,
+:where(html[data-motion='reduced']) .signals-readout-dot,
+:where(html[data-motion='reduced']) .signals-readout-button { transition: none; }
 
 /* --- CONTINUATION — the "next note" block closing every article -------------
    The reading journey used to dead-end on the copyright line; this hands the

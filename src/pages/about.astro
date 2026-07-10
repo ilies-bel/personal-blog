@@ -77,7 +77,7 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       {/* The personal moment: a sign-off in Instrument Serif italic with a hand-
          drawn flourish underline. Reads as "this is a person, with a name", not a
          styled bio. On view, the name reveals (clip-path) and the flourish strokes
-         itself in; under prefers-reduced-motion or no-JS, both render statically
+         itself in; under reduced motion or no-JS, both render statically
          from the first frame — same composition, no movement. The screen-reader
          label flattens it to "Signed, Iliès" so it isn't read as a stray word. */}
       {/* A paragraph can't carry aria-label; the sr-only span provides the
@@ -126,11 +126,14 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 <script>
   // The personal moment: tag <body> with .has-signature-anim so the signature
   // starts hidden (clip-path collapsed, flourish stroke offset), then drop the
-  // .is-drawn class on the signature when it enters the viewport. Under
-  // prefers-reduced-motion we skip the whole branch — the static state in CSS is
-  // the reduced-motion equivalent (signature visible from frame one). No-JS gets
-  // the same static state for free, since the tag is what *hides* the signature.
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // .is-drawn class on the signature when it enters the viewport. Under the
+  // resolved reduced-motion preference (sitewide motion module) we skip the whole
+  // branch — the static state in CSS is the reduced-motion equivalent (signature
+  // visible from frame one). No-JS gets the same static state for free, since the
+  // tag is what *hides* the signature.
+  import { getMotion } from '../lib/motion';
+
+  const reduceMotion = getMotion() === 'reduced';
   if (!reduceMotion) {
     document.body.classList.add('has-signature-anim');
     const sig = document.querySelector('.about-signature');

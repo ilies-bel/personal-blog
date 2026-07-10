@@ -21,9 +21,7 @@
   transition: transform 0.15s ease;
 }
 .skip-link:focus { transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) {
-  .skip-link { transition: none; }
-}
+:where(html[data-motion='reduced']) .skip-link { transition: none; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Sub-page HUD nav (.subnav) — the standard reading-page header rebuilt in the
@@ -33,7 +31,7 @@
    as the same family: a single top hairline rule, brand lockup hard-left, a glyph
    + mono-uppercase rail hard-right, hairline dividers, target-lock on the current
    section. Mirrors the .overlay-blog hover micro-interaction (icon brighten +
-   underline sweep) and respects prefers-reduced-motion.
+   underline sweep) and respects the resolved reduced-motion preference.
    ────────────────────────────────────────────────────────────────────────── */
 .subnav {
   display: flex;
@@ -202,10 +200,8 @@
   background-size: 100% 1px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .subnav-label,
-  .subnav-lock { transition: none; }
-}
+:where(html[data-motion='reduced']) .subnav-label,
+:where(html[data-motion='reduced']) .subnav-lock { transition: none; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Site footer — the subnav's closing counterpart: one quiet instrument row
@@ -273,9 +269,7 @@
 }
 .site-footer a:hover .site-footer-label,
 .site-footer a:focus-visible .site-footer-label { background-size: 100% 1px; }
-@media (prefers-reduced-motion: reduce) {
-  .site-footer-label { transition: none; }
-}
+:where(html[data-motion='reduced']) .site-footer-label { transition: none; }
 
 @media (max-width: 40rem) {
   .subnav {

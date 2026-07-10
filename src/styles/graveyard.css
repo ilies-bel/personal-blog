@@ -58,14 +58,12 @@ body.graveyard-page .wrap {
 /* NO-JS / SSR FALLBACK — the inline script sets data-revealed; without JS the
    entries must still be readable. The `.no-js` class isn't used elsewhere, so
    the simpler defence is a `<noscript>` style block in the page itself. We
-   ALSO honour prefers-reduced-motion below: instant in, no rise. */
+   ALSO honour the resolved reduced-motion preference below: instant in, no rise. */
 
-/* Reduced motion: ship the entries in instantly — only the visual transition is
-   gated off. */
-@media (prefers-reduced-motion: reduce) {
-  .graveyard-entry {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
+/* Reduced motion (html[data-motion], see src/lib/motion.ts): ship the entries in
+   instantly — only the visual transition is gated off. */
+:where(html[data-motion='reduced']) .graveyard-entry {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }

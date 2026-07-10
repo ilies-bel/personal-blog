@@ -21,6 +21,8 @@
 // consumer (nav labels, footer labels, back-links, contact links, HUD rail
 // titles) satisfies this.
 
+import { getMotion } from '../lib/motion';
+
 const GLYPHS = '#/\\|<>[]{}=+*%$@!?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const DURATION_MS = 300;
 
@@ -38,9 +40,8 @@ function poolFor(original: string): string {
  *  can cancel. WeakMap: nodes swapped out by ClientRouter just fall away. */
 const running = new WeakMap<HTMLElement, number>();
 
-const prefersReducedMotion = (): boolean =>
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Resolved motion preference (manual override ?? OS) from the sitewide module.
+const prefersReducedMotion = (): boolean => getMotion() === 'reduced';
 
 function stop(el: HTMLElement): void {
   const raf = running.get(el);

@@ -319,6 +319,4 @@ body.behind-the-build .btb-fallback-detail {
    Reduced motion: no transitions on the FPS meter button. The page
    is otherwise quiet by design.
    --------------------------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  body.behind-the-build .fps-meter-button { transition: none; }
-}
+:where(html[data-motion='reduced']) body.behind-the-build .fps-meter-button { transition: none; }

@@ -14,7 +14,7 @@
 // seams. A masked lit pass re-strokes the amber under the resting light's
 // radial falloff so the frame still reads as LIT, not flat. Visibility is a
 // plain CSS crossfade off the power FSM body classes (see hud.css →
-// "COCKPIT CANOPY", the prefers-reduced-motion branch).
+// "COCKPIT CANOPY", the reduced-motion branch).
 import {
   COCKPIT_BEAMS,
   HULL_OUTER,

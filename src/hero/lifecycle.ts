@@ -80,7 +80,7 @@ export interface LifecycleInput {
   stage: number;
   /** seconds since scene start, for the resting rotation drift. */
   t: number;
-  /** prefers-reduced-motion → freeze to the settled frame. */
+  /** resolved reduced-motion preference → freeze to the settled frame. */
   reduced: boolean;
   /** supernova whiteout envelope (0..1) from the time-based clock in frame(). */
   nova: number;

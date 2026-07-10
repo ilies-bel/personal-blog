@@ -156,19 +156,32 @@ const jsonLd = {
                             loader, 1800svh scroll track) are gated on this class
                             so a no-JS visitor gets the static edition instead of
                             an opaque loader that never lifts.
-       • html[data-motion] — resolved motion preference ('full' | 'reduced').
-                            The single source of truth every JS/CSS consumer
-                            reads (see src/lib/motion.ts); kept in sync with OS
-                            changes at runtime.
-     Must stay is:inline (pre-paint, unbundled). If this script changes, rerun
-     scripts/gen-csp-hashes.mjs so the CSP inline-script hash tracks it. -->
+       • html[data-motion] — resolved motion preference ('full' | 'reduced'):
+                            manual override (the 'bh:reduced-motion' localStorage
+                            key the hero's corner toggle writes) if set, else the
+                            OS preference. The single source of truth every
+                            JS/CSS consumer reads (see src/lib/motion.ts, which
+                            owns the key + keeps the attribute in sync with OS
+                            changes at runtime — keep the literals aligned).
+     Must stay is:inline (pre-paint, unbundled) and tiny. -->
 <script is:inline>
   document.documentElement.classList.add('js');
-  document.documentElement.dataset.motion = window.matchMedia(
-    '(prefers-reduced-motion: reduce)',
-  ).matches
-    ? 'reduced'
-    : 'full';
+  (function () {
+    var motion = null;
+    try {
+      var stored = window.localStorage.getItem('bh:reduced-motion');
+      if (stored === 'true') motion = 'reduced';
+      else if (stored === 'false') motion = 'full';
+    } catch (e) {
+      /* private mode — fall through to the OS preference */
+    }
+    if (!motion) {
+      motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'reduced'
+        : 'full';
+    }
+    document.documentElement.dataset.motion = motion;
+  })();
 </script>
 
 <!-- Preload the two above-the-fold faces (Space Grotesk latin for display/body,
