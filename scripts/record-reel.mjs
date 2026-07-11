@@ -25,7 +25,7 @@
 import { chromium } from '@playwright/test';
 import { spawn, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, rename } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -119,6 +119,10 @@ try {
       })
       .catch(() => console.warn('  (scene:ready timeout — continuing)'));
 
+  // FOOTAGE-FIRST: any chapter failing must never discard what's already on
+  // film — the catch below logs and falls through to the save path, so a
+  // partial pass still lands as raw footage (rerun for the full cut).
+  try {
   // CHAPTER 1 — loader boot + the full hero descent. The boot beat is real
   // footage on purpose (loader honesty is part of the story); the owner trims.
   console.log('chapter 1: home descent');
@@ -169,8 +173,14 @@ try {
   await page.waitForTimeout(2000);
 
   // CHAPTER 4 — Behind the Build: anatomy + one live shader activation.
+  // domcontentloaded, NOT load: the live-scene route holds the load event
+  // for minutes under software GL (the P9 carried note) — scene:ready below
+  // is the real wait.
   console.log('chapter 4: behind the build');
-  await page.goto(`${BASE}/behind-the-build?tier=high`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/behind-the-build?tier=high`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 120_000,
+  });
   await waitReady(3);
   await page.waitForTimeout(2500);
   const figure = page.locator('.scene-figure').first();
@@ -189,6 +199,11 @@ try {
   await page.click('a[href="/contact"], a[href="/contact/"]');
   await page.waitForURL('**/contact*', { timeout: 30_000 });
   await page.waitForTimeout(5000);
+  } catch (err) {
+    console.warn(
+      `\n  chapter failed (${String(err).split('\n')[0]}) — saving the footage captured so far`,
+    );
+  }
 
   await page.close();
   const video = page.video();
@@ -203,7 +218,13 @@ if (!videoPath) {
   console.error('no video was recorded');
   process.exit(1);
 }
-await rename(videoPath, RAW);
+try {
+  await rename(videoPath, RAW);
+} catch {
+  // cross-device or locked-file fallback — the footage matters more than the move.
+  await copyFile(videoPath, RAW);
+  await rm(videoPath, { force: true });
+}
 console.log(`\n✓ raw reel footage → ${RAW.slice(root.length + 1)}`);
 
 // --- optional mp4 + editing instructions ---------------------------------------

@@ -120,7 +120,7 @@ const PHASES = new Set((process.env.PHASES ?? '1,2,3,4').split(',').map(Number))
  *  annotate shots captured by an earlier run when it rebuilds the manifest. */
 const SHOT_NOTES = {
   'main-01-black-hole': 'Black hole opening frame (scroll 0)',
-  'main-02-supernova-crest': 'Supernova shock-breakout at the deterministic nova peak (stage 0.62)',
+  'main-02-supernova-crest': 'Supernova shock-breakout, ejecta shell + radial fingers (stage 0.72)',
   'main-03-red-giant': 'Red giant held beat, parked vast-limb framing (stage 2.05)',
   'main-04-finale-ledger': 'Finale: pale blue dot + the honest ledger (shipped/dead counts, replay)',
   'still-01-collapse': 'Core collapse between blast and horizon (stage 0.9)',
@@ -195,7 +195,11 @@ try {
   // each pin waits a few real frames so the eased uniforms land.
   const LIFECYCLE = [
     { name: 'main-01-black-hole', group: 'main', stage: 0.0 },
-    { name: 'main-02-supernova-crest', group: 'main', stage: 0.62, flash: 1 },
+    // 0.72, NOT the 0.62 nova peak: at the peak the 0.72-strength screen
+    // flash washes the frame into a blown white square — past it the ejecta
+    // shell + radial fingers read while the core still burns. Reviewed via a
+    // 0.50–0.78 sweep; never pin __bhFlash=1 here for the same reason.
+    { name: 'main-02-supernova-crest', group: 'main', stage: 0.72 },
     { name: 'main-03-red-giant', group: 'main', stage: 2.05 },
     { name: 'still-01-collapse', group: 'stills', stage: 0.9 },
     { name: 'still-02-yellow-star', group: 'stills', stage: 2.9 },

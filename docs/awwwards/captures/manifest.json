@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-11T00:29:56.219Z",
-  "commit": "916c1af",
+  "generatedAt": "2026-07-11T00:38:18.455Z",
+  "commit": "5e83f65",
   "note": "Shot inventory for scripts/shoot-submission.mjs. The pixels live in scratchpad/submission/ (gitignored — regenerated per release, archived with the judged build per docs/RUNBOOK.md); this manifest is the committed record of what the suite produces.",
   "stillSize": "1600x1200",
   "feedPreviewSize": "800x600",
@@ -18,8 +18,8 @@
       "feedPreview": "feed/main-02-supernova-crest-feed.png",
       "width": 1600,
       "height": 1200,
-      "kb": 625,
-      "note": "Supernova shock-breakout at the deterministic nova peak (stage 0.62)"
+      "kb": 1072,
+      "note": "Supernova shock-breakout, ejecta shell + radial fingers (stage 0.72)"
     },
     {
       "file": "main/main-03-red-giant.png",
