@@ -55,7 +55,7 @@
 // clears a touch-set lock from "no pointer is near") so the tap doesn't race the
 // next frame. Desktop's mouse-proximity + keyboard-focus path is untouched — the
 // touch branch only runs when `window.matchMedia('(pointer: coarse)')` matches.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type MarkerPlacement,
 } from '../HudNavigation';
@@ -135,12 +135,6 @@ const ACTIVE_RADIUS_FACTOR = 1.55; // active band = lock radius → 1.55× the e
 const HOVER_RADIUS_FACTOR = 2.7; // hover band  = active edge → 2.7× the engage radius
 const TIER_RELEASE_MARGIN = 10; // px past a tier edge before it relaxes
 
-// Keep-alive gap: while locked, if the pointer leaves the lock circle but is still
-// within KEEP_ALIVE_PAD pixels of the card body (in the padded region that bridges
-// the dot→card connector gap) the lock is held. This lets the cursor travel from
-// the dot through the connector to the card without the lock dropping mid-journey.
-const KEEP_ALIVE_PAD = 28; // px — bridges the dot→card connector gap
-
 // Card-flip threshold: when the marker sits in the right ~30% of the viewport the
 // card + connector flip to the LEFT so the card stays on-screen.
 const CARD_FLIP_FRACTION = 0.7;
@@ -208,22 +202,6 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
   // frame) and SKIPS the proximity branch entirely. A ref so toggling it never
   // re-renders — the rAF loop reads it and drives the visible `locked` state.
   const touchLockedRef = useRef(false);
-
-  // Cached marker-box width — populated by ResizeObserver on mount and on every
-  // CSS-computed-size change (e.g. responsive breakpoints), NOT read per-frame via
-  // getBoundingClientRect(). Eliminates the forced synchronous layout that the
-  // old per-frame read caused (write el.style → read .width → forced layout).
-  const boxWidthRef = useRef(0);
-
-  // Card-body bounding rect snapshot, taken via useLayoutEffect immediately after
-  // React renders data-locked="true" so the card is in layout and has a real
-  // position. The rAF keep-alive check adjusts this by the marker's displacement
-  // since the snapshot — so it never calls getBoundingClientRect() inside rAF.
-  const cardRectCacheRef = useRef<DOMRect | null>(null);
-
-  // Marker screen position (CSS px) at the moment cardRectCacheRef was snapped.
-  // The delta (current x/y − snapshot x/y) is the card's displacement.
-  const markerPosAtCardSnapRef = useRef<{ x: number; y: number } | null>(null);
 
   // Whether the marker is currently in the visible window (gates opacity CSS class).
   const [visible, setVisible] = useState(false);
@@ -316,51 +294,6 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     return () => document.removeEventListener('pointerdown', onDocPointerDown, true);
   }, []);
 
-  // ResizeObserver — keeps boxWidthRef current without per-frame DOM reads.
-  // The marker box width is CSS-driven and only changes on responsive breakpoints
-  // or explicit viewport resize; ResizeObserver fires exactly then (and once on
-  // mount for the initial value). borderBoxSize gives the border-box inline size —
-  // the same value as getBoundingClientRect().width for non-rotated elements —
-  // without triggering a synchronous layout. Falls back to contentRect.width on
-  // browsers that don't expose borderBoxSize (very old Safari).
-  useEffect(() => {
-    const el = elRef.current;
-    if (!el) return;
-    // Synchronous initial measurement so the first rAF frame has a real width
-    // (ResizeObserver callbacks are asynchronous and fire in the next task).
-    boxWidthRef.current = el.getBoundingClientRect().width;
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      const bbs = entry.borderBoxSize?.[0];
-      boxWidthRef.current = bbs ? bbs.inlineSize : entry.contentRect.width;
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Snapshot the card body rect immediately after React renders data-locked="true".
-  // useLayoutEffect fires synchronously after DOM mutation and before paint, so by
-  // the time it runs the card has received data-locked="true" and any CSS that
-  // shows it (display/visibility) is applied — getBoundingClientRect() returns a
-  // real, non-zero rect. The rAF loop adjusts this snapshot by the marker's
-  // displacement since then, so the keep-alive check never reads the DOM.
-  // When `locked` drops the snapshot is cleared so a stale rect from a prior lock
-  // can never leak into a new engagement.
-  useLayoutEffect(() => {
-    if (!locked) {
-      cardRectCacheRef.current = null;
-      markerPosAtCardSnapRef.current = null;
-      return;
-    }
-    const el = elRef.current;
-    if (!el) return;
-    const cardEl = el.querySelector<HTMLElement>('.star-marker-card-body');
-    if (!cardEl) return;
-    cardRectCacheRef.current = cardEl.getBoundingClientRect();
-    markerPosAtCardSnapRef.current = screenRef.current;
-  }, [locked]);
-
   useEffect(() => {
     let rafId = 0;
     let lastVisible = false;
@@ -373,15 +306,33 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     const owner = placement.id;
     const anchored = placement.anchored === true;
 
+    // LAYOUT-THRASH FIX: the marker box width used to be measured with
+    // getBoundingClientRect() INSIDE tick(), immediately after the left/top style
+    // writes — an unconditional write-then-read that forced a synchronous layout
+    // every frame, for every marker (~7 live at once). The box only actually
+    // changes on viewport/style changes, so it is measured ONCE here and then
+    // kept fresh by a ResizeObserver on the element (borderBoxSize arrives with
+    // the observation — no layout read even in the callback). tick() below now
+    // does ALL its reads before ALL its writes, so the frame never forces layout.
+    const measureEl = elRef.current;
+    let boxWidth = measureEl ? measureEl.getBoundingClientRect().width : 0;
+    let resizeObserver: ResizeObserver | null = null;
+    if (measureEl && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[entries.length - 1];
+        if (!entry) return;
+        const size = entry.borderBoxSize?.[0];
+        // borderBoxSize is the layout-free fast path; the rect fallback runs at
+        // resize cadence only (never per frame), so it stays thrash-free.
+        boxWidth = size ? size.inlineSize : entry.target.getBoundingClientRect().width;
+      });
+      resizeObserver.observe(measureEl);
+    }
+
     function tick() {
       rafId = requestAnimationFrame(tick);
       const frame = markerFrameRef.current;
       if (!frame) return;
-
-      // ── Phase 1: COMPUTE ─────────────────────────────────────────────────
-      // No DOM reads, no DOM writes. All geometry uses either cached values
-      // (boxWidthRef, cardRectCacheRef) or values computed from ref/prop data,
-      // so this phase never touches the DOM and cannot force a layout.
 
       // Is THIS marker's beat the one on screen? frame.beatId is computed by the
       // scene from the SAME text bands + raw scroll the manifesto overlay renders
@@ -404,20 +355,11 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // onClick reads screenRef, converts to NDC, and passes it as the dive aim point).
       screenRef.current = { x, y };
 
-      // Box width from the ResizeObserver cache — no per-frame getBoundingClientRect.
-      // The ResizeObserver updates boxWidthRef whenever the CSS-computed size changes
-      // (responsive breakpoints, DevTools resize, etc.); between those events the
-      // value is stable, so reading a ref here costs nothing and forces no layout.
-      const boxWidth = boxWidthRef.current;
-
-      // Engage radius = hexagon circumradius at the on-screen peak. Derived from the
-      // cached width every frame (cheap multiply) so the tier math below always reads
-      // the same value within a tick (no re-measure inside branches).
-      const engageRadius = boxWidth * HEX_PEAK_RATIO;
-
-      // Live pointer distance (squared) to this marker, or -1 when no pointer.
-      const p = pointerRef.current;
-      const distSq = p ? (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) : -1;
+      const el = elRef.current;
+      // NOTE — read/write discipline: every DOM WRITE of this frame (el.style
+      // left/top/vars, the __bhMarkerLock publish) now happens at the END of
+      // tick(), after all state is computed, so no read below ever runs against
+      // freshly-dirtied style and forces a synchronous layout.
 
       // Proximity / focus / touch lock. Computed against this marker's CURRENT
       // x/y, with hysteresis so it doesn't chatter at the boundary. Keyboard focus
@@ -432,18 +374,22 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // event-driven (set by tap, cleared by an outside tap / navigation). The only
       // thing that still overrides it is `!nextVisible` (the marker scrolled away),
       // which also resets touchLockedRef so a re-entry starts clean.
+      // Geometry shared by the lock AND the new hover/active tiers: the engage
+      // radius is the hexagon's on-screen peak (circumradius); the tier radii fan
+      // out from it. `boxWidth` is the CACHED measurement (mount + ResizeObserver
+      // above) — never a per-frame getBoundingClientRect.
+      const engageRadius = boxWidth * HEX_PEAK_RATIO;
+      // Live pointer distance (squared) to this marker, or -1 when no pointer.
+      const p = pointerRef.current;
+      const distSq = p ? (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) : -1;
+
       let nextLocked = lastLocked;
-      if (focusedRef.current) {
-        // Keyboard focus always engages the lock — regardless of whether the
-        // marker is in its beat window (nextVisible).  A Tab user must be able
-        // to open the card even when the 3-D scene is mid-transition or the
-        // marker is not currently the active beat; aria-expanded must flip to
-        // "true" as soon as focus lands.
-        nextLocked = true;
-      } else if (!nextVisible) {
+      if (!nextVisible) {
         nextLocked = false;
         touchLockedRef.current = false;
       } else if (touchLockedRef.current) {
+        nextLocked = true;
+      } else if (focusedRef.current) {
         nextLocked = true;
       } else {
         if (p) {
@@ -461,28 +407,16 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
             // locked, treat the card's rect (padded to bridge the connector gap) as
             // part of the keep-alive region: the lock only truly drops once the
             // pointer leaves BOTH the release circle AND that padded card region.
-            //
-            // The card rect was snapshotted in useLayoutEffect when the lock first
-            // engaged (after React painted data-locked="true"). We adjust it by the
-            // marker's displacement since then — so fixed-spot markers (no movement)
-            // get a zero delta, and the anchored marker (rides the star) tracks
-            // correctly. No getBoundingClientRect() inside this rAF frame.
-            const snap = cardRectCacheRef.current;
-            const snapPos = markerPosAtCardSnapRef.current;
-            if (snap && snapPos) {
-              const dx = x - snapPos.x;
-              const dy = y - snapPos.y;
-              nextLocked =
-                p.x >= snap.left + dx - KEEP_ALIVE_PAD &&
-                p.x <= snap.right + dx + KEEP_ALIVE_PAD &&
-                p.y >= snap.top + dy - KEEP_ALIVE_PAD &&
-                p.y <= snap.bottom + dy + KEEP_ALIVE_PAD;
-            } else {
-              // Snapshot not yet available (card not in layout on lock engage).
-              // Conservatively release — the lock re-engages if the pointer
-              // comes back within the engage radius.
-              nextLocked = false;
-            }
+            const cardEl = el?.querySelector<HTMLElement>('.star-marker-card-body');
+            const cr = cardEl?.getBoundingClientRect();
+            const KEEP_ALIVE_PAD = 28; // px — bridges the dot→card connector gap
+            const overCardRegion =
+              !!cr &&
+              p.x >= cr.left - KEEP_ALIVE_PAD &&
+              p.x <= cr.right + KEEP_ALIVE_PAD &&
+              p.y >= cr.top - KEEP_ALIVE_PAD &&
+              p.y <= cr.bottom + KEEP_ALIVE_PAD;
+            nextLocked = overCardRegion;
           }
         } else if (!focusedRef.current) {
           nextLocked = false;
@@ -497,12 +431,14 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       // state can't chatter as the pointer hovers a boundary. The tiers sit strictly
       // OUTSIDE the lock radius, so this never changes WHEN the lock fires.
       let nextState: MarkerState = lastState;
-      if (nextLocked) {
-        // nextLocked is true whenever focusedRef or touchLockedRef is set, so
-        // checking nextLocked first also covers the keyboard-focus path above.
-        nextState = 'locked';
-      } else if (!nextVisible) {
+      if (!nextVisible) {
         nextState = 'idle';
+      } else if (nextLocked) {
+        nextState = 'locked';
+      } else if (focusedRef.current) {
+        // Keyboard focus engages the lock above already, but guard so a focused
+        // marker is never left below ACTIVE even if the lock branch is bypassed.
+        nextState = 'active';
       } else if (distSq < 0) {
         nextState = 'idle';
       } else {
@@ -533,13 +469,10 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         nextSide = x > window.innerWidth * CARD_FLIP_FRACTION ? 'left' : 'right';
       }
 
-      // ── Phase 2: WRITE ───────────────────────────────────────────────────
-      // ALL DOM mutations happen after ALL reads/computation. No
-      // getBoundingClientRect() (or any layout-triggering read) appears after
-      // this point in the tick, so no forced synchronous layout occurs.
+      // --- WRITES: everything below only mutates (styles, the cursor global,
+      // React state) — all reads for this frame are done. ---------------------
 
       // Update position directly on the DOM element (no setState, no re-render).
-      const el = elRef.current;
       if (el) {
         el.style.left = `${x.toFixed(1)}px`;
         el.style.top = `${y.toFixed(1)}px`;
@@ -558,12 +491,13 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       }
 
       // Publish the lock to the sitewide cursor every frame it's locked so the
-      // cursor docks to THIS marker's centre. hexRadius = half the marker box,
-      // derived from the cached boxWidth — no getBoundingClientRect() needed.
-      // On release, clear the global ONLY if we still own it — never stomp another
+      // cursor docks to THIS marker's centre. Half the marker box is the hexRadius
+      // the cursor uses to size its gold inner hex inside the white one (the same
+      // cached boxWidth the engage radius derives from — one box, one measure). On
+      // release, clear the global ONLY if we still own it — never stomp another
       // marker's lock (markers' peak-radius hitboxes never overlap, so a stale
-      // owner can only appear if a far marker's release frame runs after a near one
-      // engaged; the ownership compare keeps that correct anyway).
+      // owner can only appear if a far marker's release frame runs after a near
+      // one engaged; the ownership compare keeps that correct anyway).
       const w = markerLockWindow();
       if (nextLocked) {
         w.__bhMarkerLock = { active: true, x, y, hexRadius: boxWidth / 2, owner };
@@ -574,8 +508,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
         }
       }
 
-      // ── Phase 3: REACT STATE FLIPS ───────────────────────────────────────
-      // Only trigger re-renders when a render-relevant value actually flips.
+      // Only trigger React re-renders when a render-relevant value actually flips.
       if (nextVisible !== lastVisible) {
         lastVisible = nextVisible;
         setVisible(nextVisible);
@@ -599,6 +532,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
+      resizeObserver?.disconnect();
       // Drop any held touch lock so a re-mount (Strict-Mode double-invoke, route
       // change) starts unlocked rather than inheriting a stale tap.
       touchLockedRef.current = false;
@@ -615,7 +549,6 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
       className="star-marker"
       href={resolveHref(base, placement.href)}
       aria-label={`${headline} ${body}`}
-      aria-expanded={locked}
       data-visible={visible}
       data-reduced={reduced}
       data-locked={locked}

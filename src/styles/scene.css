@@ -49,8 +49,9 @@ body.bare.hud-active::after {
    document arrives — no JS, no font wait beyond the sitewide faces — so the visitor
    never stares at a blank black page while the ~200 KB-gzip three.js engine chunk
    loads, parses, allocates ~40 MB of typed arrays and compiles the shader. It fills
-   the viewport ABOVE everything (canvas 0, vignette/chrome/HUD up to ~21), in the
-   site's own palette: a single quiet pale speck pulsing under the wordmark — the
+   the viewport above the scene layers (canvas 0, vignette 9, identity 20) but BELOW
+   the corner nav (z-70 — labelled navigation stays clickable during the load, P7), in
+   the site's own palette: a single quiet pale speck pulsing under the wordmark — the
    pale-blue-dot the scene itself opens on — so the wait reads as the dot about to
    bloom, not a broken page. It fades out (and stops catching pointer events) the
    moment the hero paints its first real frame: body.scene-ready, added by the inline
@@ -72,16 +73,37 @@ body.bare.hud-active::after {
    the glide start + duration are single-sourced from tokens.css (--boot-glide-start /
    --boot-glide-dur), so the background-fade delay below tracks the (now later) glide
    automatically and still begins only at glide end. */
+/* --- No-JS gate -------------------------------------------------------------
+   html.js is stamped by the pre-paint inline script in BaseHead. Without it
+   (JavaScript off/failed), the immersive layers are inert weight: the loader's
+   opaque cover would never lift (body.scene-ready is JS-added) and the 1800svh
+   track would be a huge blank scroll. Hide both and let the always-rendered
+   static edition (src/components/StaticEdition.astro) BE the homepage. With JS
+   on, the static edition hides and the live experience takes over. */
+html:not(.js) .scene-loader,
+html:not(.js) .scene-track,
+/* The hero island's SSR shell: .bh-stage inside is a fixed, opaque #000 layer
+   that would blanket the static edition. Without JS the scene can never mount,
+   so the whole root is dead weight. */
+html:not(.js) .bh-root {
+  display: none;
+}
+/* EXCEPT the ambient poster backdrop (AmbientBackdrop.astro): it is pure
+   HTML/CSS — no engine to mount, nothing opaque to strand — so the no-JS
+   reading pages keep their designed atmosphere instead of a bare room. */
+html:not(.js) .bh-root.ambient-backdrop {
+  display: block;
+}
+html.js .static-edition {
+  display: none;
+}
+
 .scene-loader {
   position: fixed;
   inset: 0;
-  z-index: 60;                           /* above most chrome; nav (.overlay-blog) raised to 62 */
+  z-index: 60;                           /* above the corner chrome (21) + any HUD */
   display: grid;
   place-items: center;
-  /* The loader contains no interactive content (aria-hidden). pointer-events:none lets
-     clicks pass through to elements that ARE above it (nav at z-index 62, skip button at
-     61). This also means the dark ::before background never swallows pointer events. */
-  pointer-events: none;
   /* No --bg fill here anymore — it lives on ::before so it can fade independently of
      (and later than) the dot+name. The element itself stays opacity:1 the whole time. */
   opacity: 1;
@@ -147,85 +169,52 @@ body.bare.hud-active::after {
   0%, 100% { transform: scale(0.82); opacity: 0.5; }
   50%      { transform: scale(1.12); opacity: 1; }
 }
-
-/* Phase label: names the actual boot step so the wait reads as progress, not a
-   frozen screen. Keyed on body classes dispatched by HeroIsland at each real
-   milestone — no fake progress bar, no timer tick. Sits below the wordmark inside
-   .scene-loader-mark (which fades early on scene-ready; the label fades with it). */
-.scene-loader-phase {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.22em;
-  text-indent: 0.22em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-  opacity: 0.4;
-}
-/* Default phase (PENDING — engine not yet fetching): neutral "Starting" copy. */
-.scene-loader-phase::before { content: 'Starting\2026'; }
-/* HeroIsland adds this body class when the dynamic import kicks off. */
-body.loader-phase-fetching .scene-loader-phase::before { content: 'Loading engine\2026'; }
-/* HeroIsland swaps to this once the import resolves and createScene begins. */
-body.loader-phase-compiling .scene-loader-phase::before { content: 'Building scene\2026'; }
-
-/* Skip-to-content button — a sibling of .scene-loader (NOT inside aria-hidden),
-   keyboard and pointer accessible from the first frame. Clicking it dispatches
-   loader:skip (handled by initLoader in index.astro) which lifts the loader
-   immediately and enables navigation. Fades in after a short delay via animation so
-   it is invisible on fast loads and only appears when the engine is taking a moment.
-   Disappears automatically when scene-ready is set (loader is dissolving). */
-.scene-loader-skip-btn {
-  position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  z-index: 61;                             /* above the loader (z-index 60) */
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
-  text-indent: 0.18em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
+/* SKIP INTRO (P7 loader honesty) — the loader's one real control: a quiet mono
+   bracket label pinned to the loader's bottom-centre (the slot the boot readout
+   only occupies AFTER the reveal, so they never overlap). Server-rendered,
+   wired by the bundled loader script (works pre-hydration), ≥44px target via
+   padding. It disappears the moment any reveal starts (body.scene-ready below)
+   — once the dissolve is running its job is done. */
+.scene-loader-skip {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 5vh, 3rem));
+  left: 50%;
+  transform: translateX(-50%);
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
   background: none;
-  border: none;
-  padding: 0.5rem 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.75rem 1.1rem;
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  /* Fade in after 1.5 s so the button is invisible when the scene loads quickly.
-     `forwards` keeps opacity 0.55 after the animation ends. */
-  animation: scene-loader-skip-appear 0.5s var(--ease-out-quint) 1.5s forwards;
-  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  transition: color 0.16s ease;
 }
-@keyframes scene-loader-skip-appear {
-  to { opacity: 0.55; }
-}
-/* Allow pointer interaction only while the loader is showing. */
-body:not(.scene-ready) .scene-loader-skip-btn {
-  pointer-events: auto;
-}
-.scene-loader-skip-btn:hover,
-.scene-loader-skip-btn:focus-visible {
+.scene-loader-skip:hover { color: var(--fg); }
+.scene-loader-skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
   color: var(--fg);
-  outline: none;
 }
-.scene-loader-skip-btn:focus-visible {
-  text-decoration: underline;
-}
-/* Fade out immediately when scene-ready is added (scene has painted or skip was clicked). */
-body.scene-ready .scene-loader-skip-btn {
-  opacity: 0;
-  pointer-events: none;
-  animation: none;
-  transition: opacity 0.25s var(--ease-out-quint);
-}
-
+body.scene-ready .scene-loader-skip { display: none; }
+:where(html[data-motion='reduced']) .scene-loader-skip { transition: none; }
 /* Ready: SEQUENCE the dissolve around the glide instead of fading the whole overlay at
-   once. The element itself stays opacity:1 (it must keep blocking the scene). The two
-   layers fade on their OWN schedules: the dot+name (.scene-loader-mark) fade FIRST,
-   before the glide starts; the dark --bg background (.scene-loader::before) fades LAST,
-   only after the glide lands. Kept in the DOM (no display:none) so the transitions can
-   run. pointer-events:none is already set on the element itself (default above); this
-   restates it for clarity — the live scene is interactive the moment scene-ready lands. */
+   once. The element itself stays opacity:1 (it must keep blocking the scene); pointer
+   events fall through to the live scene immediately. The two layers fade on their OWN
+   schedules: the dot+name (.scene-loader-mark) fade FIRST, before the glide starts; the
+   dark --bg background (.scene-loader::before) fades LAST, only after the glide lands.
+   Kept in the DOM (no display:none) so the transitions can run; inert after via
+   pointer-events. */
 body.scene-ready .scene-loader {
   pointer-events: none;
 }
@@ -244,18 +233,12 @@ body.scene-ready .scene-loader::before {
    is removed here so it does not sit solid waiting for a glide that never happens). Both
    start on scene-ready with no staging; the dot+name's slightly shorter fade simply
    clears a hair before the background, keeping it calm rather than abrupt. */
-@media (prefers-reduced-motion: reduce) {
-  .scene-loader-dot { animation: none; }
-  /* Also suppress the skip-button fade-in animation under reduced motion —
-     show it immediately (after 0 delay) so the preference-reduced path doesn't
-     animate anything unnecessarily. */
-  .scene-loader-skip-btn { animation: none; opacity: 0.55; }
-  .scene-loader::before {
-    transition: opacity 0.7s var(--ease-out-quint) 0s;
-  }
-  .scene-loader-mark {
-    transition: opacity 0.5s var(--ease-out-quint) 0s;
-  }
+:where(html[data-motion='reduced']) .scene-loader-dot { animation: none; }
+:where(html[data-motion='reduced']) .scene-loader::before {
+  transition: opacity 0.7s var(--ease-out-quint) 0s;
+}
+:where(html[data-motion='reduced']) .scene-loader-mark {
+  transition: opacity 0.5s var(--ease-out-quint) 0s;
 }
 
 /* The scroll track: N stages that exist only to give the page scrollable height.
@@ -276,16 +259,19 @@ body.scene-ready .scene-loader::before {
    ≈192svh of scrolling to ≈0.20 × (6 × 300) = ≈360svh (~1.9× longer to scroll
    through), giving the gas a long, legible build into the forming star. SCROLL_SECTION_COUNT
    (=6) is unchanged; this is purely a height change, so all proportions/easings hold. */
-.scene-track { position: relative; z-index: 0; }
-.scene-stage { height: 300svh; } /* was 160svh — lengthens the whole arc ~1.875×; collapse ≈360svh */
-/* ENG-007 — Mobile cut: compress the scroll track to 8 × 100svh so the full
-   stellar lifecycle fits in ~8 phone viewports (vs ≈18 on the desktop track).
-   Each of the 6 .scene-stage elements is raised to ≈133svh so 6 × 133svh ≈
-   8 × 100svh. The stage coordinate system and every lifecycle threshold remain
-   byte-identical — only the PHYSICAL scroll distance per beat changes.
-   See docs/specs/mobile-cut.md §2 and §8.1. */
-@media (max-width: 767px) {
-  .scene-stage { height: calc(8 / 6 * 100svh); /* ≈ 133.33svh — 8 VP total */ }
+.scene-track { position: relative; z-index: 0; --stage-h: 300svh; }
+/* Per-stage height rides ONE custom property so the whole timeline compresses
+   with a single override — scroll.ts normalizes progress against the MEASURED
+   document height, so every beat proportion, easing and stage bound is
+   untouched by this value; only "pixels scrolled per unit progress" changes. */
+.scene-stage { height: var(--stage-h, 300svh); } /* desktop: was 160svh — lengthens the whole arc ~1.875×; collapse ≈360svh */
+/* MOBILE LIFECYCLE CUT (P7): 6 × 300svh = 1800svh was an ~18-viewport thumb
+   marathon on a phone. 140svh per stage → 6 × 140 = 840svh ≈ 8.4 viewports of
+   scrolling for the full arc — still one long cinematic pull, but finishable.
+   Desktop keeps the full 300svh pacing (mouse wheels + trackpads scroll far
+   faster per gesture than thumbs). */
+@media (max-width: 768px) {
+  .scene-track { --stage-h: 140svh; }
 }
 
 /* --- Fixed corner overlay (brand top-left, blog micro-nav top-right) --------- */
@@ -305,11 +291,13 @@ body.scene-ready .scene-loader::before {
   position: fixed;
   top: clamp(0.75rem, 2.5vw, 1.5rem);
   right: clamp(1rem, 4vw, 3rem);
-  /* EXP-006: raised above the intro loader (z-index 60) so site navigation is
-     accessible from the very first frame of loading, not just after the engine paints.
-     The skip button sits at 61; nav is at 62 so it is the topmost interactive element
-     in the top-right corner at all times. */
-  z-index: 62;
+  /* ABOVE the intro loader (z-60), deliberately (P7): labelled navigation must
+     be usable from FIRST PAINT, so the corner nav paints over the dark loader
+     cover and stays clickable while the engine warms — same precedent as the
+     boot readout, which already rides above the loader stack (hud.css). The
+     brand/identity and the in-scene markers stay UNDER the cover on purpose
+     (the loader centres the same wordmark; markers gate on loader-gone). */
+  z-index: 70;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -346,8 +334,6 @@ body.at-opening:not(.hud-active) .overlay-blog {
 .overlay-blog-link {
   display: inline-flex;
   align-items: center;
-  /* EXP-013: 44 px minimum touch target height (project policy). */
-  min-height: 2.75rem;
   color: var(--hud-rail-dim-text);
   text-decoration: none;
   transition:
@@ -401,9 +387,7 @@ body.at-opening:not(.hud-active) .overlay-blog {
 .overlay-blog-section:focus-visible .overlay-blog-lock {
   opacity: 1;
 }
-@media (prefers-reduced-motion: reduce) {
-  .overlay-blog-lock { transition: none; }
-}
+:where(html[data-motion='reduced']) .overlay-blog-lock { transition: none; }
 
 /* HUD-active (black hole) brightens AND lifts the section labels in place of
    the old fold-out-from-zero-width reveal. The lift is small (~2px) — a quiet
@@ -481,14 +465,7 @@ body.bare.hud-active .overlay-blog {
    hover instead: the glyph lifts + scales a touch and lights up with a gold
    glow, so the brand mark itself reacts. Scoped to .overlay-blog-social so the
    Power/ReducedMotion control glyphs (also .overlay-blog-icon) are untouched.
-   transform-box keeps the scale anchored to the glyph's own centre.
-   EXP-013: min-width 2.75 rem (44 px) ensures the icon link meets the project
-   minimum touch-target policy on coarse-pointer layouts; justify-content: center
-   keeps the glyph centred within the expanded hit area. */
-.overlay-blog-social {
-  min-width: 2.75rem;
-  justify-content: center;
-}
+   transform-box keeps the scale anchored to the glyph's own centre. */
 .overlay-blog-social .overlay-blog-icon {
   transform-origin: center;
   transition:
@@ -532,16 +509,14 @@ body.bare.hud-active .overlay-blog {
    lift (.overlay-blog-link:hover → --fg) and the target-lock corner-tick frame. The
    gold underline-sweep that the reading nav (.subnav) uses is intentionally NOT
    mirrored here. */
-@media (prefers-reduced-motion: reduce) {
-  .overlay-blog-icon,
-  .overlay-blog-link { transition: none; }
-  body.bare.hud-active .overlay-blog { animation: none; }
-  body.bare.hud-active .bh-identity { animation: none; }
-  body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
-  /* Drop the social-logo lift/scale; the gold glow still confirms hover. */
-  .overlay-blog-social:hover .overlay-blog-icon,
-  .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }
-}
+:where(html[data-motion='reduced']) .overlay-blog-icon,
+:where(html[data-motion='reduced']) .overlay-blog-link { transition: none; }
+:where(html[data-motion='reduced']) body.bare.hud-active .overlay-blog { animation: none; }
+:where(html[data-motion='reduced']) body.bare.hud-active .bh-identity { animation: none; }
+:where(html[data-motion='reduced']) body.bare.hud-active .overlay-blog-links .overlay-blog-link { transform: none; }
+/* Drop the social-logo lift/scale; the gold glow still confirms hover. */
+:where(html[data-motion='reduced']) .overlay-blog-social:hover .overlay-blog-icon,
+:where(html[data-motion='reduced']) .overlay-blog-social:focus-visible .overlay-blog-icon { transform: none; }
 
 /* Power button: a CIRCLED power glyph (a thin ring frame echoing the old
    constellation mark) — the HUD MASTER POWER. One click toggles the powered
@@ -555,10 +530,8 @@ body.bare.hud-active .overlay-blog {
   -webkit-appearance: none;
   margin: 0;
   padding: 0;
-  /* EXP-013: raised from 2.1rem (33.6 px) to 2.75rem (44 px) — project policy
-     minimum touch target. */
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.1rem;
+  height: 2.1rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: color-mix(in oklch, var(--bg) 55%, transparent);
@@ -609,9 +582,7 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
   position: relative;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .overlay-blog-power { transition: none; }
-}
+:where(html[data-motion='reduced']) .overlay-blog-power { transition: none; }
 
 /* Reduced-motion toggle — a sibling glyph button to the corner power control. The
    React island PORTALS it INTO the .overlay-blog flex row (BUG 4 fix: a single fixed
@@ -628,28 +599,6 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
    absent). The flow-based rule wins whenever the button is actually inside the row. */
 .overlay-blog-motion {
   order: 0;  /* flex order 0 → sits just left of the power button (order: 1) */
-  /* Extend the fixed-circle layout (.overlay-blog-power: grid, 2.1rem square) to a
-     pill that can hold both the icon and the visible state label. Override display +
-     width so the ring scales to the content, keeping the same height (2.1rem). */
-  display: flex;
-  align-items: center;
-  gap: 0.28rem;
-  width: auto;
-  padding: 0 0.55rem 0 0.4rem;
-}
-/* The visible state label: "STILL" in reduced mode, "MOTION" in live mode.
-   Mono caps at the HUD's instrument-rung size so it reads as a status indicator,
-   not decorative copy. Inherits the button's current color so it shares the gold
-   lit-state automatically (the [aria-pressed='true'] rule on .overlay-blog-power
-   flips color to var(--accent-strong), which this span picks up). */
-.overlay-blog-motion-label {
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  line-height: 1;
-  color: inherit;
-  user-select: none;
 }
 /* Separate the two GROUPS in the row: the social links (GitHub/X) on the left and the
    command buttons (reduced-motion + power) on the right. The reduced-motion toggle is
@@ -680,15 +629,31 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
    active. The base .overlay-blog-power[aria-pressed='true'] rule already styles this;
    this is just a documentation anchor — no extra declarations needed. */
 
-/* On the smallest screens the HOME canvas folds the section links away and keeps
-   only the socials + power controls (the bottom number rail carries the scene
-   sections there). About is a calm reading panel, so it KEEPS its links — without
-   them the page would have no navigation at all on a phone. As one fixed top-right
-   row they would wrap straight over the fixed brand lockup, so on About the whole
-   corner nav drops to a WRAPPED BAND below the brand (absolute, not fixed — it
-   scrolls away with the page like the reading pages' stacked subnav). */
+/* On the smallest screens a single fixed top-right row (four labels + socials +
+   controls) would wrap straight over the fixed brand/identity lockup, so BOTH
+   bare pages drop the whole corner nav to a WRAPPED BAND below the brand.
+   P7: the HOME canvas used to fold the section links away entirely here (only
+   socials + power survived) — that left a phone visitor with NO labelled
+   navigation in the first viewport, which violates the one-interaction IA
+   guarantee. Home now keeps its links in the same band treatment, still FIXED
+   (the home nav is scene chrome — it must ride the whole 840svh scroll), while
+   About's band stays absolute (a reading panel — it scrolls away with the page
+   like the reading pages' stacked subnav). */
 @media (max-width: 34rem) {
-  body:not(.about-page) .overlay-blog-links { display: none; }
+  body.bare:not(.about-page) .overlay-blog {
+    top: 4.9rem;
+    left: clamp(1rem, 4vw, 3rem);
+    right: clamp(1rem, 4vw, 3rem);
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+  /* Two designed rows, not an accidental wrap: the four destination labels own
+     the first line (flex-basis 100% forces the break), the icon controls
+     (socials + motion + power) group on the second. */
+  body.bare:not(.about-page) .overlay-blog-links {
+    flex-basis: 100%;
+  }
   body.bare.about-page .overlay-blog {
     position: absolute;
     top: 4.9rem;
@@ -697,77 +662,10 @@ body.hud-active .overlay-blog-power:not(.overlay-blog-motion) {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
-  body.bare.about-page .overlay-blog-links {
+  .overlay-blog-links {
     flex-wrap: wrap;
     gap: 0.2rem 0.9rem;
     justify-content: flex-start;
-  }
-}
-
-/* ENG-006 — Mobile primary-navigation bottom bar (320–430 px).
-   The ≤ 34 rem block above hides .overlay-blog-links on the home scene surface,
-   relying on the HUD's bottom number rail for section access. The HUD requires JS
-   and the full scene boot, which means the FIRST VIEWPORT has no labelled canonical
-   destinations on mobile. This narrower breakpoint (≤ 26.9375 rem = 430 px) overrides
-   that: Work / Writing / About / Contact are restored and the whole overlay is
-   repositioned as a full-width bottom bar visible in the opening viewport through every
-   lifecycle phase — loading, scene-ready, mid-scroll. It must appear ABOVE the intro
-   loader (z-60) so the links are tappable from the first server render.
-   This block is placed AFTER the ≤ 34 rem block so the narrower breakpoint wins
-   the cascade at equal specificity. body:not(.about-page) preserves About's
-   absolute-band layout (defined in the block above). */
-@media (max-width: 26.9375rem) {
-  /* Reposition: top-right corner → full-width pinned bottom bar. */
-  body:not(.about-page) .overlay-blog {
-    position: fixed;
-    top: auto;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 61;                      /* above intro loader (z-60); below skip-link (z-62) */
-    display: flex;
-    align-items: stretch;
-    justify-content: flex-start;
-    gap: 0;
-    padding: 0;
-    background: color-mix(in oklch, var(--bg) 88%, transparent);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid var(--hud-line);
-  }
-  /* Restore link visibility — the ≤ 34 rem block sets display:none here. */
-  body:not(.about-page) .overlay-blog-links {
-    display: flex;
-    flex: 1;
-    align-items: stretch;
-    justify-content: space-around;
-    gap: 0;
-  }
-  /* Minimum 44 × 44 CSS-px touch target per link (WCAG 2.5.5 / EXP-013). */
-  body:not(.about-page) .overlay-blog-section {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 2.75rem;              /* 44 CSS px */
-    padding: 0.5rem 0.25rem;
-  }
-  /* Suppress non-destination controls — the bottom bar is the primary
-     destinations slot only; socials and HUD function buttons are hidden here. */
-  body:not(.about-page) .overlay-blog .overlay-blog-social,
-  body:not(.about-page) .overlay-blog .overlay-blog-power,
-  body:not(.about-page) .overlay-blog .overlay-blog-motion {
-    display: none;
-  }
-  /* Cancel the HUD-active label-lift inside the bottom bar so labels don't
-     shift position when the HUD powers on. */
-  body.bare.hud-active .overlay-blog-links .overlay-blog-link {
-    transform: none;
-  }
-  /* Lift skip-experience above the bottom nav bar so both are reachable
-     without overlap (bar height ≈ 2.75 rem + existing bottom offset). */
-  .skip-experience {
-    bottom: calc(2.75rem + clamp(0.875rem, 2.5vw, 1.5rem));
   }
 }
 
@@ -801,10 +699,8 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
   -webkit-appearance: none;
   margin: 0;
   padding: 0;
-  /* EXP-013: raised from 2.1rem (33.6 px) to 2.75rem (44 px) — project policy
-     minimum touch target. */
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.1rem;
+  height: 2.1rem;
   flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -846,74 +742,13 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
 .scene-toggle[aria-pressed='true'] .scene-toggle-slash {
   opacity: 1;
 }
-@media (prefers-reduced-motion: reduce) {
-  .scene-toggle,
-  .scene-toggle-slash { transition: none; }
-}
+:where(html[data-motion='reduced']) .scene-toggle,
+:where(html[data-motion='reduced']) .scene-toggle-slash { transition: none; }
 
-
-/* --- Skip experience (index.astro) ------------------------------------------ */
-/* Persistent escape hatch from the cinematic opening. Present in the DOM from
-   first server render (no JS dependency), positioned above the intro loader
-   (z-62 > z-60) so it is tappable and keyboard-focusable from zero milliseconds
-   through every lifecycle phase (loading, scene-ready, mid-scroll, loader-gone).
-   Bottom-right corner: clear of the top-right nav cluster, the bottom-left
-   hud-frame-readout, the bottom-center compass, and the browser swipe-back zone
-   (which lives at the far-left screen edge on iOS/Chrome).
-   Label explains the outcome ("Skip experience"), not a cockpit metaphor.
-   Touch target: min 44 × 44 px (WCAG 2.5.5). */
-.skip-experience {
-  position: fixed;
-  bottom: clamp(0.875rem, 2.5vw, 1.5rem);
-  right: clamp(0.875rem, 3vw, 2rem);
-  z-index: 62;                            /* above loader (60) + all chrome (≤ 21) */
-
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-
-  /* Minimum 44 × 44 px touch target (WCAG 2.5.5) */
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-  padding: 0.65rem 0.9rem;
-  display: inline-flex;
-  align-items: center;
-
-  /* Subdued at rest; brightens on hover/focus so it is always discoverable
-     without competing with the scene. Same dim text rung as resting nav links. */
-  color: var(--fg-faint);
-  transition: color 0.2s var(--ease-out-quint);
-}
-.skip-experience:hover {
-  color: var(--fg-dim);
-}
-.skip-experience:focus-visible {
-  color: var(--fg);
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm, 0.2rem);
-}
-@media (prefers-reduced-motion: reduce) {
-  .skip-experience { transition: none; }
-}
 
 /* --- No-JS / crawler fallback (index.astro <noscript>) ---------------------- */
 /* Shown only when the island can't mount; mirrors the manifesto copy so the page
    stays meaningful and indexable. Inherits .measure from the markup. */
-
-/* ENG-001 — neutralise the JS-only scene elements when JS is absent.
-   html.no-js is set by BaseLayout.astro on the <html> element and removed
-   synchronously by the is:inline head script when JS is available, so
-   JS-enabled visitors never see these overrides. With JS disabled the class
-   persists and these two rules prevent:
-     • the fixed loader cover (scene-loader) blocking the entire viewport
-     • the ~1800svh scroll track adding miles of dead scrollable height */
-html.no-js .scene-loader { display: none !important; }
-html.no-js .scene-track  { display: none !important; }
-
 .scene-fallback {
   padding-block: clamp(2.5rem, 12vh, 6rem);
   color: var(--fg);
@@ -935,83 +770,28 @@ html.no-js .scene-track  { display: none !important; }
   text-transform: uppercase;
   color: var(--fg-faint);
 }
-/* No-JS primary-destination nav (ENG-001). Appears immediately below the
-   identity lockup so Work / Writing / About / Contact are visible without
-   scrolling. Uses the same mono-uppercase type as .scene-fallback-role; the
-   accent underline mirrors the site's link grammar. */
-.scene-fallback-nav {
+/* Primary destinations inside the static edition's first viewport: plain,
+   labelled, conventional links — a no-JS visitor reaches any section without
+   scrolling. Row layout that wraps; generous padding keeps each target
+   comfortably tappable. */
+.static-edition-nav ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 1.5rem;
-  margin: 0 0 2rem;
+  gap: 0.4rem 1.6rem;
+  margin: 0 0 2.2rem;
   padding: 0;
   list-style: none;
 }
-.scene-fallback-nav a {
+.static-edition-nav a {
+  display: inline-block;
+  padding: 0.5rem 0;
   font-family: var(--font-mono);
   font-size: var(--text-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--fg);
-  text-decoration-line: underline;
-  text-underline-offset: 0.25em;
-  text-decoration-color: color-mix(in oklch, var(--accent) 55%, transparent);
-}
-.scene-fallback-nav a:hover,
-.scene-fallback-nav a:focus-visible {
-  color: var(--accent-strong);
-  text-decoration-color: var(--accent-strong);
-}
-.scene-fallback-nav a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 2px;
-}
-
-/* EXP-001 — manifesto beats, authored typographic treatment.
-   Each beat section gets a hairline rule separating it from the previous so
-   the reverse-lifecycle arc reads as a deliberate sequence (black hole → pale
-   blue dot) rather than an undifferentiated dump of copy. Three typographic
-   tiers mirror the live overlay: kicker (mono uppercase dim), headline (display
-   large), whisper (dim small italic). The kicker text is lowercase in the data
-   (beat.state = 'black hole', 'red giant', …) — text-transform: uppercase in
-   CSS handles the presentation so the data never needs to hard-code case. */
-.scene-fallback-beat {
-  padding-block-start: 2.25rem;
-  border-top: 1px solid color-mix(in oklch, var(--fg) 12%, transparent);
-  margin-block-start: 2.25rem;
-}
-/* Override margin when two beats sit adjacent (avoid double-gap). */
-.scene-fallback-beat:first-of-type {
-  margin-block-start: 0;
-}
-.scene-fallback-beat-kicker {
-  margin: 0 0 0.5rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--fg-faint);
-}
-/* h2 global already sets font-family / weight / line-height / letter-spacing;
-   only the size needs to be declared here so the beat reads as a major statement. */
-.scene-fallback-beat-heading {
-  margin: 0 0 0.625rem;
-  font-size: var(--text-display);
-}
-.scene-fallback-beat-whisper {
-  margin: 0;
-  font-size: var(--text-body-sm);
-  font-style: italic;
-  color: var(--fg-dim);
-}
-/* CTA paragraph — matches the "Get in touch" closes from other pages; separated
-   from the last beat by the same hairline treatment used between beats. */
-.scene-fallback-cta {
-  margin-block-start: 2.25rem;
-  padding-block-start: 2rem;
-  border-top: 1px solid color-mix(in oklch, var(--fg) 12%, transparent);
-  font-size: var(--text-body);
+  text-decoration-color: var(--fg-faint);
+  text-underline-offset: 0.35em;
 }
 
 /* --- WebGL-unavailable fallback (index.astro .webgl-fallback) --------------- */

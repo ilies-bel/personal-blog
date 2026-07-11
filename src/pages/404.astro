@@ -1,265 +1,86 @@
 ---
+// Branded 404. GitHub Pages serves dist/404.html for any unknown path WITH a
+// real HTTP 404 status — so this page must exist (otherwise visitors get the
+// generic GitHub error page) and must never be soft-200 content. Static, zero
+// Three.js: an error page has to be the cheapest, most reliable route on the
+// site. Copy stays in the site's stellar-lifecycle voice without hiding what
+// happened; every primary destination is one link away.
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { SOCIALS } from '../consts';
+import { withBase } from '../consts';
 
-const base = import.meta.env.BASE_URL;
-const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+const DESTINATIONS = [
+  { label: 'Home', href: withBase('/'), note: 'the full lifecycle, from black hole to pale blue dot' },
+  { label: 'Work', href: withBase('projects'), note: 'the work that held' },
+  { label: 'Writing', href: withBase('writing'), note: 'everything, in plain words' },
+  { label: 'Graveyard', href: withBase('graveyard'), note: 'not everything survives' },
+  { label: 'About', href: withBase('about'), note: 'who is behind this' },
+  { label: 'Contact', href: withBase('contact'), note: 'get in touch' },
+];
 ---
 
-<BaseLayout
-  title="Page not found"
-  description="The page you're looking for doesn't exist."
-  noindex={true}
-  bodyClass="not-found-page"
->
-  <section class="not-found-hero" aria-labelledby="not-found-title">
-    <!--
-      Lost-signal illustration — CSS/SVG only, no JS, no Three.js.
-      Three staggered sonar rings emanate from a drifting probe body.
-    -->
-    <div class="not-found-signal" aria-hidden="true">
-      <svg
-        class="signal-svg"
-        viewBox="0 0 120 120"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <!-- Pulsing rings: same circle, staggered via animation-delay -->
-        <circle class="ring ring-a" cx="60" cy="60" r="52" />
-        <circle class="ring ring-b" cx="60" cy="60" r="52" />
-        <circle class="ring ring-c" cx="60" cy="60" r="52" />
-
-        <!-- Probe: diamond body + antenna mast + two solar arms -->
-        <g class="probe">
-          <polygon class="probe-body" points="60,52 68,60 60,68 52,60" />
-          <line class="probe-mast" x1="60" y1="44" x2="60" y2="52" stroke-linecap="round" />
-          <line class="probe-arm"  x1="43" y1="60" x2="52" y2="60" stroke-linecap="round" />
-          <line class="probe-arm"  x1="68" y1="60" x2="77" y2="60" stroke-linecap="round" />
-        </g>
-      </svg>
-    </div>
-
-    <p class="not-found-code" aria-hidden="true">404</p>
-    <h1 id="not-found-title">Signal lost.</h1>
-    <p class="not-found-body">
-      Nothing at these coordinates. This page may have moved, been removed,
-      or the address never existed.
+<BaseLayout title="Page not found" description="This page doesn't exist — but the rest of the site does." noindex>
+  <section class="notfound measure">
+    <p class="notfound-code" aria-hidden="true">404</p>
+    <h1>This page collapsed.</h1>
+    <p class="notfound-lead">
+      Whatever lived at this address has crossed the event horizon — moved,
+      renamed, or never existed. Nothing comes back out, but everything else
+      is still shining:
     </p>
-  </section>
-
-  <nav
-    id="not-found-recovery"
-    class="not-found-recovery"
-    aria-label="Recovery links"
-  >
-    <p class="not-found-recovery-label">Find your way back</p>
-    <ul class="not-found-links" role="list">
-      <li>
-        <a href={href('')}>Home</a>
-      </li>
-      <li>
-        <a href={href('projects')}>Work</a>
-      </li>
-      <li>
-        <a href={href('writing')}>Writing</a>
-      </li>
-      <li>
-        <a href={href('about')}>About</a>
-      </li>
-      {SOCIALS.email && (
+    <ul class="notfound-links">
+      {DESTINATIONS.map((d) => (
         <li>
-          <a href={`mailto:${SOCIALS.email}`}>Contact</a>
+          <a href={d.href}>{d.label}</a>
+          <span class="notfound-note"> — {d.note}</span>
         </li>
-      )}
+      ))}
     </ul>
-  </nav>
+  </section>
 </BaseLayout>
 
 <style>
-  .not-found-page .wrap {
-    padding-bottom: 7rem;
+  .notfound {
+    padding-block: clamp(3rem, 14vh, 7rem);
   }
-
-  .not-found-hero,
-  .not-found-recovery {
-    width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
-    margin-inline: auto;
-  }
-
-  .not-found-hero {
-    display: grid;
-    gap: 1rem;
-    margin-top: clamp(4rem, 11vw, 7.5rem);
-    margin-bottom: clamp(2.5rem, 8vw, 5rem);
-  }
-
-  /* ── Lost-signal illustration ───────────────────────────────────────────── */
-
-  .not-found-signal {
-    margin-bottom: clamp(1rem, 3vw, 1.75rem);
-  }
-
-  .signal-svg {
-    display: block;
-    width: clamp(72px, 11vw, 96px);
-    height: auto;
-    overflow: visible;
-  }
-
-  /*
-   * Rings: three identical circles, staggered by –1.6 s each so one ring
-   * is always expanding while another is fading — continuous sonar pulse.
-   */
-  .ring {
-    stroke: var(--fg-dim);
-    stroke-width: 0.75;
-    fill: none;
-    transform-origin: 60px 60px;
-    animation: ring-pulse 4.8s ease-out infinite;
-    opacity: 0;
-  }
-
-  .ring-b { animation-delay: -1.6s; }
-  .ring-c { animation-delay: -3.2s; }
-
-  @keyframes ring-pulse {
-    0%  { opacity: 0;    transform: scale(0.08); }
-    8%  { opacity: 0.35; }
-    85% { opacity: 0;    }
-    100%{ opacity: 0;    transform: scale(1);    }
-  }
-
-  /*
-   * Probe: gold accent body that drifts very slowly — adrift in the void.
-   * Eight-second cycle so it reads as genuinely lost, not just bouncing.
-   */
-  .probe {
-    transform-origin: 60px 60px;
-    animation: probe-drift 8s ease-in-out infinite;
-  }
-
-  .probe-body {
-    fill: var(--accent);
-    fill-opacity: 0.12;
-    stroke: var(--accent);
-    stroke-width: 1.5;
-    stroke-linejoin: round;
-  }
-
-  .probe-mast,
-  .probe-arm {
-    stroke: var(--accent);
-    stroke-width: 1.5;
-  }
-
-  @keyframes probe-drift {
-    0%, 100% { transform: translate(0,     0)    rotate(0deg);   }
-    25%       { transform: translate(2px,  -3px) rotate(5deg);   }
-    75%       { transform: translate(-2px,  2px) rotate(-4deg);  }
-  }
-
-  /* Respect reduced motion: keep the illustration, drop all animation */
-  @media (prefers-reduced-motion: reduce) {
-    .ring {
-      animation: none;
-      opacity: 0.18;
-      transform: scale(0.55);
-    }
-
-    .probe {
-      animation: none;
-    }
-  }
-
-  /* ── Type stack ─────────────────────────────────────────────────────────── */
-
-  .not-found-code {
-    margin: 0;
+  .notfound-code {
+    margin: 0 0 0.6rem;
     font-family: var(--font-mono);
     font-size: var(--text-label);
-    letter-spacing: 0.18em;
+    letter-spacing: 0.32em;
     text-transform: uppercase;
-    color: var(--fg-chrome-faint);
+    color: var(--fg-faint);
   }
-
-  .not-found-hero h1 {
-    max-width: 14ch;
-    margin: 0;
-    font-size: var(--text-hero);
-    line-height: var(--leading-tight);
-    letter-spacing: var(--tracking-tight);
-    text-wrap: balance;
-  }
-
-  .not-found-body {
-    max-width: 42rem;
-    margin: 0;
-    color: var(--fg-dim);
-    font-size: var(--text-subtitle);
-    line-height: 1.58;
-    text-wrap: pretty;
-  }
-
-  /* ── Recovery nav ───────────────────────────────────────────────────────── */
-
-  .not-found-recovery {
-    border-top: 1px solid var(--line);
-    padding-top: clamp(1.5rem, 5vw, 2.5rem);
-  }
-
-  .not-found-recovery-label {
+  .notfound h1 {
     margin: 0 0 1rem;
-    font-family: var(--font-mono);
-    font-size: var(--text-label);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--fg-chrome-faint);
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    line-height: 1.1;
+    color: var(--fg);
   }
-
-  .not-found-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 0;
-    list-style: none;
+  .notfound-lead {
+    margin: 0 0 2rem;
+    max-width: 34rem;
+    color: var(--fg-muted, var(--fg));
+    line-height: 1.6;
+  }
+  .notfound-links {
     margin: 0;
     padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.35rem;
   }
-
-  .not-found-links li {
-    display: flex;
-    align-items: center;
+  .notfound-links li {
+    line-height: 1.7;
   }
-
-  /* Quiet slash separator between items — mirrors the footer pattern */
-  .not-found-links li + li::before {
-    content: '/';
-    padding: 0 0.75rem;
-    color: var(--fg-chrome-faint);
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-  }
-
-  .not-found-links a {
-    color: var(--fg-dim);
-    text-decoration: none;
-    font-size: 1rem;
-    line-height: 1.5;
-    transition: color 0.16s ease;
-  }
-
-  .not-found-links a:hover {
+  .notfound-links a {
+    display: inline-block;
+    padding: 0.35rem 0;
     color: var(--fg);
-    text-decoration: underline;
+    text-underline-offset: 0.35em;
   }
-
-  @media (max-width: 40rem) {
-    .not-found-hero,
-    .not-found-recovery {
-      width: min(100%, calc(100vw - 2rem));
-    }
-
-    .not-found-hero {
-      margin-top: 2.75rem;
-    }
+  .notfound-note {
+    color: var(--fg-faint);
   }
 </style>

@@ -8,21 +8,17 @@ import {
 import {
   cameraBaseForLifecycleP,
   DOT_HOLD_END,
-  dwellForScene,
   HUD_NAV_ITEMS,
   legacyStageForProgressFromTable,
   NEBULA_GROW_END,
   RED_HOLD_END,
   RED_HOLD_START,
-  sceneForProgress,
-  settledIdForStage,
   smoothstep,
   STAR_IGNITION_START,
   YELLOW_HOLD_END,
   YELLOW_SETTLE_END,
   type HudNavItem,
   type HudTargetId,
-  type Phase,
 } from './sceneTable';
 
 // ===========================================================================
@@ -194,14 +190,9 @@ export function cameraPoseForProgress(progress: number, time: number, nova: numb
 }
 
 // ===========================================================================
-// LIFECYCLE POSITION — "where am I on the lifecycle, and how far through it?"
-//
-// Formerly lifecycleMachine.ts. resolve() is a pure COMPOSITION of the sceneTable
-// walkers (sceneForProgress + legacyStageForProgress + settledIdForStage); it adds
-// NO new math, so it returns exactly what the four scattered reads returned, in one
-// object. hudIdForStage() is the single scroll-spy implementation. Both live here —
-// the choreography facade — so callers learn ONE module instead of choosing between
-// the raw table walkers and a separate machine layer.
+// SCROLL-SPY — hudIdForStage() is the single scroll-spy implementation, living
+// here (the choreography facade) so callers learn ONE module instead of choosing
+// between the raw sceneTable walkers and a separate machine layer.
 // ===========================================================================
 
 // HUD nav rows in ascending `stage` order. The source list is authored in this

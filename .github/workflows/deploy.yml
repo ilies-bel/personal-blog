@@ -52,12 +52,15 @@ jobs:
       - name: Build with Astro
         run: pnpm run build
 
-      # PERF-006: validate the media pipeline — fails if any delivered raster
-      # exceeds 500 KB without an approval entry, if a manifest output lacks
-      # intrinsic dimensions, if content-hash duplicates exist, or if an asset
-      # ≥ 100 KB is in dist/ but unreferenced in any HTML/CSS/JS.
-      - name: Check media pipeline
-        run: pnpm run check-media
+      # Minimal self-contained dist gates before publishing. The full gate
+      # battery (budgets, OG cards, CSP hashes, html-validate, Lighthouse,
+      # Playwright matrix) runs in ci.yml on the same push; these two are the
+      # cheap last line of defense so deploy can never ship a broken artifact.
+      - name: Internal link check
+        run: node scripts/check-links.mjs dist
+
+      - name: Asset size gate
+        run: node scripts/check-asset-sizes.mjs dist
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

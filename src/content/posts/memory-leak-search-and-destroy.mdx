@@ -2,204 +2,143 @@
 title: "Memory Leak: Search and Destroy"
 description: "A production OutOfMemoryError, a heap dump pulled from a cramped Alpine container, and the flamegraph that pointed at our own monitoring SDK."
 pubDate: 2023-12-11
-updatedDate: 2026-07-10
 tags: ["java", "jvm", "debugging", "production"]
 type: investigation
-topics: ["java", "jvm", "debugging", "production", "memory management"]
 draft: false
+# EVIDENCE (P13) — the artifacts backing this investigation, rendered as an
+# aside by the post layout. Only what the article itself already references
+# lives here; the owner's profiler captures (flamegraph, retained-memory
+# table) join this list when supplied (docs/INPUTS-NEEDED.md #7).
+evidence:
+  - label: Original write-up (in French) — Takima on Medium, December 2023
+    url: https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb
+  - label: The sentry-java bug we hit — upstream issue #2496
+    url: https://github.com/getsentry/sentry-java/issues/2496
+  - label: The upstream fix, shipped in SDK 6.13 — PR #2505
+    url: https://github.com/getsentry/sentry-java/pull/2505
+# FORMALIZED CO-AUTHORSHIP (P6): both names flow into the BlogPosting JSON-LD
+# author array (BaseHead) and the visible byline on the article header. The
+# provenance block replaces the old italic first line of the body — the article
+# page and the /writing index both render it from this data.
+authors: ["Iliès Beldjilali", "Lansana Diomande"]
+provenance:
+  note: First published in French on Takima's Medium publication, December 2023
+  url: https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb
 ---
 
-*Originally published in French on [Takima's Medium publication](https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb) in December 2023, co-written with Lansana Diomande. This edition expands the original narrative into a forensic investigation format — timeline, hypotheses, evidence, root cause, and a reusable method — so each step can be inspected and reproduced.*
+## Introduction
 
----
+Let me tell you the story of a passionate young web developer. Having finished building his first feature and tested it conscientiously, he decides to ship his code to production.
 
-## Incident log
+The feature is doing well and the users are happy. But after a few weeks, the thing every developer dreads most in the world happens.
 
-The following timeline reconstructs the key moments of the investigation from notes taken during the incident. Exact calendar dates are not recorded; phases are labelled relative to the initial crash.
+**A crash in production!**
 
-| Phase | Event |
-|-------|-------|
-| T+0 | **Crash.** `java.lang.OutOfMemoryError: Java heap space` in production. Application down. |
-| T+0 | **Triage.** Single clue: OOM on the heap. No heap dump was captured at crash time. |
-| T+1 | **Reproduction.** Gatling load test reproduces climbing heap usage on a controlled environment. |
-| T+2 | **Heap dump captured.** `jattach` used inside the Alpine/JRE container to extract the `.hprof` file. |
-| T+3 | **Heap analysis.** `ConcurrentHashMap` surfaces as the top retained-memory holder in the profiler. |
-| T+4 | **Flamegraph.** `io.sentry.transport.HttpConnection.createConnection` accounts for approximately 50 % of all allocations. |
-| T+5 | **Hypothesis confirmed.** Sentry disabled — heap growth stops under the same load. |
-| T+6 | **Fix applied.** Sentry SDK bumped from 6.12.1 to 6.13. |
-| T+7 | **Verified in production.** Heap stable under identical traffic. |
+A single clue: `java.lang.OutOfMemoryError: Java heap space`.
 
-> **Evidence needed — crash-time heap dump:** No heap dump was captured when the application crashed in production. The instance was likely restarted before a snapshot could be taken. A prior JVM flag of `-XX:+HeapDumpOnOutOfMemoryError` would have generated it automatically. See `evidence/content/memory-leak-evidence-needed.md` item E-1.
+That young developer was us, a year ago. Through this write-up of our experience, we hope to help you analyze and deal with this kind of dangerous incident — which happens more often than you'd think.
 
----
-
-## Background: what is a memory leak?
+## What is a memory leak?
 
 Picture a parking lot, where every car drives in and eventually drives out. The wrecks always get towed to the scrapyard. Now imagine the lot never empties, or empties too slowly, and ends up saturated. We have a problem: new cars have nowhere to park.
 
-In the JVM, every object uses a small amount of memory, quickly freed by the garbage collector once the object is no longer referenced. Sometimes, though, unused objects live on indefinitely.
+In the case of the JVM, every object uses a small amount of memory, but it is quickly cleaned up by the garbage collector once it is no longer used. Sometimes, though, unused objects live on indefinitely.
 
-These objects pile up and eventually block future allocations the application needs to run. The danger of memory leaks is that they often slip through testing and quality assurance — they tend to surface after the application has been running for weeks, sometimes long after the triggering code shipped to production.
+These objects pile up and eventually block the future allocations the application needs to run properly.
 
----
+The danger of memory leaks is that they often slip through testing and quality assurance. They tend to show up after the application has been running for a long stretch — sometimes several weeks after the code went to production.
 
-## Phase 1 — Reproducing the leak
+In our case, we had no information about the state of memory at the moment of the crash. So our investigation started with putting the application under load, to try to reproduce the error.
 
-**Starting conditions.** At the moment of the crash, there was no visibility into the heap state: no metrics, no dump, no profiling data from the production instance. The investigation started from zero.
+## Reproducing the memory leak detected in production
 
-**Goal.** Simulate the load that triggered the crash on controlled infrastructure, confirm heap usage climbs, and produce a repeatable test to verify any future fix.
+The first goal is to simulate the usage of the application that led to the crash. Being able to reproduce it would let us confirm the memory leak was actually fixed.
 
-A first, simplistic approach would be to write a script in Bash or Python to fire requests automatically. We needed something more precise: a realistic simulation of the very short, intense load spike that characterises our application's real traffic. We used [Gatling](https://gatling.io/), an open-source load-testing tool with a Java SDK.
+A first, simplistic approach can be to write a script (in bash or Python, say) that fires the requests automatically.
 
-With the Gatling scenario running, we observed heap usage via `jstat` and the IntelliJ profiler over JMX. The result was unambiguous: **heap usage climbed steadily toward the container memory limit** and did not stabilise.
+In our case, we needed to realistically simulate the very short, intense load spike that characterizes how our application behaves in real conditions. So we used [Gatling](https://gatling.io/), an open-source tool that makes it simple to run effective, measurable load tests. There is even a Java SDK now.
 
-> **Evidence needed — heap-growth graph:** A screenshot of the memory monitor captured during the Gatling run — heap used vs. time, annotated with the load-test window and the container memory limit — would make the climb immediately visible rather than asserted. See `evidence/content/memory-leak-evidence-needed.md` item E-2.
+To observe the impact of our simulations, we needed to visualize memory allocations over time. Plenty of tools can do this; here are the ones we used:
 
----
+- *jstat* or *jmap* (bundled with the JDK)
 
-## Phase 2 — Instrumentation
+If you only have a JRE:
 
-Our infrastructure runs a JRE (not a full JDK) on Alpine Linux to keep Docker images small. Disk space inside the container was very tight. Those two constraints shaped every tool choice.
+- the JMX standard
+- [jattach](https://github.com/jattach/jattach)
 
-| Tool | Role | Why chosen |
-|------|------|-----------|
-| [Gatling](https://gatling.io/) | Load generation | Realistic HTTP traffic with repeatable, measurable scenarios; Java SDK |
-| `jstat` / `jmap` | Quick heap stats | Bundled with JDK — not available in this environment (JRE only) |
-| [jattach](https://github.com/jattach/jattach) | Heap dump capture | Standalone binary, minimal footprint; works on JRE-only Alpine containers |
-| IntelliJ profiler / VisualVM | Heap dump analysis and flamegraph | GUI analysis of `.hprof` files; allocation flamegraph view |
-| JMX standard | Live heap metrics | Works with JRE; readable by VisualVM and IntelliJ |
+If you prefer a graph-based view, monitoring tools such as [VisualVM](https://visualvm.github.io/) — or IntelliJ — can interpret the JMX standard.
 
-**Why not `jmap`?** `jmap` ships with the JDK. Our container carried a JRE only. `jattach` replicates the `dumpheap` command via the JVM attach API, which is accessible from any process with the right OS permissions — no JDK required, and the resulting `.hprof` file is identical.
+If the memory in use keeps climbing, that is the sign of a memory leak. All that's left is to find the cause.
 
----
+Profiling our application during the load test made the leak plain: the heap usage climbed steadily, edging dangerously close to our memory limit.
 
-## Phase 3 — Evidence collection
+## Getting and analyzing the heap dump
 
-### 3a. Heap dump
+To analyze the memory in use, we had to connect to the machine hosting our application and use tools that would let us extract a *heap dump*.
 
-A heap dump is a snapshot of all JVM memory allocations at a precise instant. It records every live object, its class, its size, and the references between objects. The file format is `.hprof`.
+The heap dump is a file containing all of the JVM's memory-allocation information at a precise instant. It comes in the *hprof* format.
 
-We captured it with `jattach`:
+Many tools exist to capture a heap dump, *jmap* being the best known. We won't go into the details in this article — [Baeldung has a good piece on the subject](https://www.baeldung.com/java-heap-dump-capture).
 
-```sh
-jattach <pid> dumpheap /tmp/heap.hprof
-```
+In our infrastructure, we run a JRE on an Alpine operating system to keep our Docker images small. We were also very tight on disk space inside the container. Given those constraints, we chose [jattach](https://github.com/jattach/jattach), a standalone, ultra-light tool that can extract the heap dump the same way *jmap* does.
 
-We then loaded the dump into the IntelliJ profiler. Sorting by **Retained** memory, `ConcurrentHashMap` appeared at the top of the class list.
+Once we had the heap dump, we could analyze it with tools like *VisualVM*, *Eclipse MAT*, or the IntelliJ profiler.
 
-Three columns drive this analysis:
+We started by analyzing the list of objects present at the moment of the dump — the profiler lays them out in a table, and three columns matter:
 
-| Column | Meaning |
-|--------|---------|
-| Count | Number of live instances of this class |
-| Shallow | Memory the objects occupy directly |
-| Retained | Memory freed if all instances were collected, including every object they reference |
+- **Count** is the number of instances of each class.
+- **Shallow** is the memory those objects occupy by themselves.
+- **Retained** is obtained by recursively summing the memory of all the objects tied to the original one (these are sometimes called memory islands). It represents the amount of memory that would be freed if the class's objects were cleaned up by the garbage collector.
 
-Data-collection objects — Maps, Lists — routinely top the Retained column because their job is to hold references to other objects. The challenge is tracing *who put objects into the map*, and *who should have removed them*.
+The idea is to find out which objects hide behind the biggest chunks of retained memory. Very often the problematic objects are data collections, since their whole job is to hold other objects.
 
-> **Evidence needed — heap dump object table:** A screenshot (or exported CSV) of the Objects tab in IntelliJ profiler or Eclipse MAT, sorted by Retained size descending, showing `ConcurrentHashMap` at or near the top, constitutes the primary evidence for this step. See `evidence/content/memory-leak-evidence-needed.md` item E-3.
+Here, the *ConcurrentHashMap* class was our first candidate.
 
-### 3b. Flamegraph
+So far we had analyzed memory at a fixed point in time. Next, we wanted to find the methods responsible for producing those objects, by analyzing the behavior of the application while it runs.
 
-A flamegraph plots each method call as a rectangle; the rectangle's width is proportional to the memory it allocated during the profiling window. Wide rectangles are where allocations concentrate.
+For that, we used a **flamegraph**. A flamegraph is a diagram showing each method alongside the memory footprint it generated over the analysis window.
 
-We captured the flamegraph with the IntelliJ profiler during a Gatling run.
+In the flamegraph the IntelliJ profiler produced during our Gatling simulation, each rectangle represents a method call, and its width shows the proportion of memory used during the analysis period. *Thread.run* is our application's entry point, and the hungriest method turned out to be *io.sentry.transport.HttpConnection.createConnection*. Switching to a list view, we could see this call was responsible for half of all memory allocations.
 
-> **Evidence needed — flamegraph image:** The flamegraph is the single most important piece of evidence in this investigation. It should show `Thread.run` as the entry point and `io.sentry.transport.HttpConnection.createConnection` spanning approximately 50 % of the total allocation width. See `evidence/content/memory-leak-evidence-needed.md` item E-4.
+Walking back up the call chain in the profiler's tree view, we realized that every request to our application triggered a data send by *Sentry* through the *FilterChain*. That data was stored in a concurrent hash map, which was filling up memory. It is sent to the *Sentry* platform by the client for performance analysis.
 
-**What the flamegraph showed.** The entry point was `Thread.run`. Walking down the call tree, `io.sentry.transport.HttpConnection.createConnection` was by far the widest rectangle. Switching to a callers view, we traced the chain:
+We had found our presumed culprit. Now to fix the problem.
 
-1. Every inbound HTTP request to our application triggered the Spring `FilterChain`.
-2. The `FilterChain` invoked a Sentry performance-tracing hook.
-3. That hook called `io.sentry.transport.HttpConnection.createConnection`, which stored performance data in a `ConcurrentHashMap`.
-4. The map was never drained — entries accumulated for every request, retaining all the objects they referenced.
+To confirm our hypothesis, we disabled the library. Replaying our performance tests, we saw the problem was gone.
 
----
+Before digging any further, we tried updating the *Sentry* SDK — and that alone was enough to end the memory leak.
 
-## Phase 4 — Hypotheses
+After some digging through the *sentry-java* SDK's issues and commits, we understood that the version we were using (6.12.1) did indeed have a [bug](https://github.com/getsentry/sentry-java/issues/2496). It was fixed as of version 6.13 of the SDK by [this merge request](https://github.com/getsentry/sentry-java/pull/2505).
 
-### Hypothesis A — The leak originates in our application code
+Victory! The application was back on its feet and running in production again, successfully. Ironically, it was *Sentry* — the cause of our crash — that was able to alert us to the problem.
 
-**Status: discarded.**
+Detecting a memory leak in production is one thing; the best approach is still to avoid them by following a set of preventive good practices.
 
-Our first instinct was to look for application-layer mistakes: missing `close()` calls, static collection fields accumulating data, or sessions not expiring. The heap dump and flamegraph ruled this out quickly. Every allocation hot-spot sat entirely inside the Sentry SDK, not in any class we owned.
+## Prevention is better than cure
 
-### Hypothesis B — The Sentry SDK has a resource-management bug
+Here is a non-exhaustive list of tips for avoiding memory leaks.
 
-**Status: confirmed.**
+It is important to know your application's limits. Load tests are a good way to check that your application behaves correctly under nominal load, but also — and above all — in extreme yet realistic scenarios (think of the holiday season for Amazon).
 
-The flamegraph pointed directly at `io.sentry.transport.HttpConnection.createConnection`. The `ConcurrentHashMap` growing in retained memory was inside the SDK's transport layer — performance data queued for upload to the Sentry platform that was never flushed or evicted.
+Bumping library versions and staying up to date is always good practice, both for security and for bug prevention. It could have spared us the whole problem in our situation. Tools like [Dependabot](https://github.com/dependabot) exist to update dependencies automatically.
 
-**Verification step.** We disabled the Sentry SDK entirely and replayed the Gatling scenario. Heap usage stabilised. This isolated the SDK as the sole variable and confirmed our hypothesis.
+Static-analysis tools such as *Sonar* can sometimes detect code smells likely to produce memory leaks.
 
-> **Evidence needed — before/after heap graphs:** A side-by-side comparison of heap-usage graphs — one with Sentry enabled (climbing) and one with Sentry disabled (stable) — would convert this confirmation step from narrative to visual evidence. See `evidence/content/memory-leak-evidence-needed.md` item E-5.
+Good log and metrics monitoring also gives you more visibility. Adding alerting makes you more reactive. We recommend [Datadog](https://www.datadoghq.com/), or an *ELK* stack for an open-source option.
 
-Searching the `sentry-java` issue tracker, we found [issue #2496](https://github.com/getsentry/sentry-java/issues/2496), which described exactly our symptom in version 6.12.1.
+Finally, despite all the precautions taken, problems can still happen in production. It is then important to be able to collect as much information as possible at the moment the application crashes. The *HeapDumpOnOutOfMemoryError* option on the JVM gets you the precious memory file that will save you a lot of analysis time.
 
----
+## Conclusion
 
-## Phase 5 — Root cause
+Detecting and resolving memory leaks can turn out to be complex, but a methodical approach and the right tools can make the process much easier.
 
-**Affected version:** Sentry Java SDK 6.12.1.
+As a reminder, you should try to:
 
-**Mechanism.** The SDK's HTTP transport layer opened a connection and stored performance-tracing data in a `ConcurrentHashMap` for every request passing through the Spring `FilterChain`. In version 6.12.1, a bug prevented the map from being drained after the data was sent. Entries accumulated indefinitely, retaining all referenced objects, until the heap exhausted available space.
+- Collect as much information as possible through the logs, and a heap dump if available
+- Analyze the heap dumps
+- Try to reproduce the memory leak
+- Fix the problem you found
+- Validate the fix on your staging environments
 
-**Upstream acknowledgement.** The bug is documented in [sentry-java issue #2496](https://github.com/getsentry/sentry-java/issues/2496) and fixed in [pull request #2505](https://github.com/getsentry/sentry-java/pull/2505), merged into version 6.13.
-
----
-
-## Phase 6 — Fix
-
-A one-line change in the dependency manifest:
-
-```
-# Before
-io.sentry:sentry-spring-boot-starter:6.12.1
-
-# After
-io.sentry:sentry-spring-boot-starter:6.13.0
-```
-
-No application code required changes. The fix was entirely in the third-party library.
-
----
-
-## Phase 7 — Verification
-
-**Step 1 — Disable Sentry.** Replaying the Gatling scenario with Sentry fully disabled confirmed that heap usage was stable (see Hypothesis B). This proved the SDK was the sole cause.
-
-**Step 2 — Update and replay.** After bumping to 6.13, we re-ran the same Gatling scenario. Heap usage remained stable over the full test duration. The `ConcurrentHashMap` retained size did not climb.
-
-**Step 3 — Production deployment.** The updated SDK shipped to production. The application remained stable under identical traffic.
-
-> **Evidence needed — post-fix heap graph:** A heap-usage graph from the same Gatling scenario with SDK 6.13 — ideally shown alongside the pre-fix graph — would close the evidentiary loop. See `evidence/content/memory-leak-evidence-needed.md` item E-6.
-
-*An ironic footnote: Sentry — the tool that caused the crash — was the one that alerted us to the `OutOfMemoryError` in the first place.*
-
----
-
-## Reusable investigation method
-
-The following five-step sequence generalises to any JVM memory-leak investigation:
-
-1. **Collect what you can at the crash site.** Enable `-XX:+HeapDumpOnOutOfMemoryError` before incidents, not after. Logs, metrics, and a heap dump captured at the moment of failure are worth more than any post-mortem reconstruction.
-
-2. **Reproduce the leak on controlled infrastructure.** A scripted load test — [Gatling](https://gatling.io/), JMeter, k6 — that reliably triggers climbing heap usage gives you a repeatable experimental apparatus.
-
-3. **Capture and analyse a heap dump.** Sort by Retained memory. Data-collection classes (Maps, Lists) at the top are common, but they are symptoms — trace object ownership to find the allocating code.
-
-4. **Capture a flamegraph.** The flamegraph converts the ownership question into a call-stack question. The widest rectangle in the allocation view is your primary suspect.
-
-5. **Confirm by isolation, then fix.** Disable or replace the suspect; replay the load test. Only when the symptom disappears do you have confirmation. Fix, re-run, deploy.
-
----
-
-## Prevention
-
-The best fix is the one you never need:
-
-- **Know your limits.** Load-test at nominal *and* peak-realistic load. Memory leaks rarely surface under everyday conditions alone.
-- **Stay current on dependencies.** This entire incident was a known SDK bug. Tools like [Dependabot](https://github.com/dependabot) keep libraries up to date automatically.
-- **Use static analysis.** Tools such as *SonarQube* flag patterns likely to cause leaks — unclosed resources, growing static collections.
-- **Add observability.** Heap metrics and alerting (Datadog, an ELK stack) let you catch a climbing baseline before the application crashes.
-- **Arm the JVM.** Add `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/dumps/` to your JVM flags in every environment. A heap dump captured at crash time is the fastest path to a root cause.
+We hope that through this article you'll feel ready to take on the study and treatment of these scary errors.

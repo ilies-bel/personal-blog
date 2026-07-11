@@ -1,19 +1,19 @@
 // Tangential warp-arc rig (background light bent around the shadow).
-import { AdditiveBlending, BufferAttribute, BufferGeometry, LineSegments, Scene, ShaderMaterial, Sphere, UniformsUtils, Vector3 } from 'three';
+import * as THREE from 'three';
 import { CFG } from '../lib/config';
 import { warpVertexShader, warpFragmentShader } from '../shaders/warp.glsl';
 import type { Uniforms, UniformRig } from './types';
 
 export interface WarpRig extends UniformRig {
-  seg: LineSegments; // primary arc image
-  seg2: LineSegments; // secondary arc image
-  geo: BufferGeometry;
-  mat: ShaderMaterial;
-  matSec: ShaderMaterial; // secondary material (cloned uniforms, sign -1)
+  seg: THREE.LineSegments; // primary arc image
+  seg2: THREE.LineSegments; // secondary arc image
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  matSec: THREE.ShaderMaterial; // secondary material (cloned uniforms, sign -1)
   uniforms: Uniforms; // primary's shared block (matSec clones it)
   dispose: () => void;
 }
-export function buildWarp(scene: Scene, particleCount: number): WarpRig {
+export function buildWarp(scene: THREE.Scene, particleCount: number): WarpRig {
   const WARP_STARS = Math.max(2000, Math.floor(particleCount * 0.02));
   const K = 7;
   const V = WARP_STARS * K * 2;
@@ -37,11 +37,11 @@ export function buildWarp(scene: Scene, particleCount: number): WarpRig {
       warpPos[v * 3] = x; warpPos[v * 3 + 1] = y; warpPos[v * 3 + 2] = z; warpSeed[v] = sd; warpSPar[v] = a1; v++;
     }
   }
-  const geo = new BufferGeometry();
-  geo.setAttribute('position', new BufferAttribute(warpPos, 3));
-  geo.setAttribute('aSeed', new BufferAttribute(warpSeed, 1));
-  geo.setAttribute('aS', new BufferAttribute(warpSPar, 1));
-  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e7);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(warpPos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(warpSeed, 1));
+  geo.setAttribute('aS', new THREE.BufferAttribute(warpSPar, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
   const uniforms: Uniforms = {
     uTime: { value: 0 },
@@ -52,23 +52,23 @@ export function buildWarp(scene: Scene, particleCount: number): WarpRig {
     uWarp: { value: CFG.warp },
     uHole: { value: 0.12 },
   };
-  const mat = new ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: warpVertexShader,
     fragmentShader: warpFragmentShader,
     transparent: true,
-    blending: AdditiveBlending,
+    blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
   const matSec = mat.clone();
-  matSec.uniforms = UniformsUtils.clone(uniforms);
+  matSec.uniforms = THREE.UniformsUtils.clone(uniforms);
   matSec.uniforms.uImageSign.value = -1.0;
 
-  const seg = new LineSegments(geo, mat);
+  const seg = new THREE.LineSegments(geo, mat);
   seg.frustumCulled = false;
   scene.add(seg);
-  const seg2 = new LineSegments(geo, matSec);
+  const seg2 = new THREE.LineSegments(geo, matSec);
   seg2.frustumCulled = false;
   scene.add(seg2);
 

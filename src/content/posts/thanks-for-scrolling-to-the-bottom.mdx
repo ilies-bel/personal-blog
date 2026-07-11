@@ -4,7 +4,6 @@ description: "Two pictures I could never get out of my head, and why they ended 
 pubDate: 2026-06-08
 tags: ["meta", "design", "inspiration"]
 type: essay
-topics: ["design", "meta", "inspiration"]
 draft: false
 # The bespoke Interstellar bookcase-corridor renders instead of the default
 # black-hole backdrop. Uses the newer scene.backdrop seam (the layout reads
@@ -13,138 +12,45 @@ scene:
   backdrop: tesseract
 ---
 
+import Img from '../../components/mdx/Img.astro';
+import luminet from '../../assets/inspirations/luminet-blackhole-1979.jpg';
+import voyager from '../../assets/inspirations/voyager-golden-record.jpg';
+
 I didn't start with a philosophy. I started with two pictures I could never quite get out of my head.
 
 The first is a black hole. Not the famous 2019 photograph, but a drawing from 1979. A young CNRS researcher named Jean-Pierre Luminet calculated what a black hole would actually look like, the way its gravity would sling the light of its own disk around it, brighter on one side than the other. There were no printers that could render it, so he placed the shading by hand, dot by dot, in ink. It was not an artist's impression. It was physics, drawn by a person who cared enough to draw it.
 
 <figure>
-  <div style="border-top: 1px solid oklch(0.38 0.018 252); padding-top: 0.4em; margin-bottom: 0.6em;">
-    <span style="font-size: 0.68em; letter-spacing: 0.09em; text-transform: uppercase; color: oklch(0.52 0.022 252);">Plate I</span>
-  </div>
-  {/* Responsive <picture>: AVIF → WebP → JPEG fallback from scripts/optimize-media.mjs.
-      Two widths (480, 700) cover mobile and the full prose column (≤ 680 px wide).
-      Intrinsic width/height tell the browser the 700×346 aspect ratio before the file
-      loads so no layout shift occurs (PERF-005). */}
-  <picture>
-    <source
-      type="image/avif"
-      srcSet={
-        [480, 700]
-          .map(w => {
-            const u = `${import.meta.env.BASE_URL}/opt/inspirations/luminet-blackhole-1979-${w}.avif`.replace(/\/+/g, '/');
-            return `${u} ${w}w`;
-          })
-          .join(', ')
-      }
-      sizes="(max-width: 640px) 480px, 700px"
-    />
-    <source
-      type="image/webp"
-      srcSet={
-        [480, 700]
-          .map(w => {
-            const u = `${import.meta.env.BASE_URL}/opt/inspirations/luminet-blackhole-1979-${w}.webp`.replace(/\/+/g, '/');
-            return `${u} ${w}w`;
-          })
-          .join(', ')
-      }
-      sizes="(max-width: 640px) 480px, 700px"
-    />
-    <img
-      src={`${import.meta.env.BASE_URL}/opt/inspirations/luminet-blackhole-1979-700.jpg`.replace(/\/+/g, '/')}
-      alt="Jean-Pierre Luminet's hand-drawn simulation of a black hole, 1979, showing the gravitational lensing of the accretion disk"
-      style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
-      loading="lazy"
-      width="700"
-      height="346"
-    />
-  </picture>
+  <Img
+    src={luminet}
+    alt="Jean-Pierre Luminet's hand-drawn simulation of a black hole, 1979, showing the gravitational lensing of the accretion disk"
+  />
   <figcaption>
-    <strong>Plate I — Gravitational-lensing simulation of a black hole (1979).</strong>
-    {' '}Jean-Pierre Luminet. Computed and rendered dot by dot in ink — no printer of the era could reproduce the required precision.
-    {' '}Observatoire de Paris / CNRS.
+    Jean-Pierre Luminet, the first black hole simulation, 1979. (c) Jean-Pierre Luminet / Observatoire de Paris / CNRS.
     {' '}
-    <a href="https://www.cnrs.fr/en/press/first-ever-image-black-hole-cnrs-researcher-had-simulated-it-early-1979" target="_blank" rel="noopener noreferrer">Source: CNRS press archive</a>
-    {' '}·{' '}
-    <em>© Jean-Pierre Luminet / Observatoire de Paris / CNRS — license unconfirmed for portfolio use; see evidence/content/imagery-licenses-needed.md.</em>
+    <a href="https://www.cnrs.fr/en/press/first-ever-image-black-hole-cnrs-researcher-had-simulated-it-early-1979" target="_blank" rel="noopener noreferrer">Source: CNRS</a>
   </figcaption>
 </figure>
 
 The second is gold. The Voyager Golden Record, bolted to a probe that left our solar system and will outlive every one of us. A disk engraved with how to find Earth and what we sounded like, flung into the dark on the off chance that someone, someday, finds it. A message with no expectation of a reply.
 
+{/* quality 55: the 2215px source photo lands its largest delivered variant
+    (AVIF at 1360w, the 2x of the prose column) around 146KB — the asset this
+    replaces shipped as a raw 4MB jpg. */}
 <figure>
-  {/*
-    Responsive Golden Record — PERF-004
-    Prose column is max-width: 680px (prose.css).  No variant ever renders
-    wider than that, so widths [480, 680] cover the full delivery range:
-      480px  — mobile viewports (≤ ~750 px wide, accounting for gutters)
-      680px  — desktop/tablet prose column at 1x; also serves 340 px @2x
-
-    sizes truthfully reflects the prose gutter (clamp(24px, 5vw, 80px) on
-    each side, ≈ 48px total at mobile widths, prose capped at 680px beyond):
-      (max-width: 750px) calc(100vw - 48px) → browser picks 480px for small
-                                               viewports, 680px for wider ones
-      680px (default)                        → prose column width on desktop
-
-    Art direction: the image is the full disk face-on.  No crop variant is
-    needed — the circular record reads well at every viewport width.  A
-    separate <source media="..."> is not warranted here; the w-descriptor
-    srcset handles all display sizes through the sizes hint.
-
-    Intrinsic dimensions (680×680) match the largest delivered file so the
-    browser can reserve the correct aspect-ratio slot before the image loads
-    (CLS prevention — PERF-005).
-  */}
-  <div style="border-top: 1px solid oklch(0.38 0.018 252); padding-top: 0.4em; margin-bottom: 0.6em;">
-    <span style="font-size: 0.68em; letter-spacing: 0.09em; text-transform: uppercase; color: oklch(0.52 0.022 252);">Plate II</span>
-  </div>
-  <picture>
-    <source
-      type="image/avif"
-      srcSet={
-        [480, 680]
-          .map(w => {
-            const u = `${import.meta.env.BASE_URL}/opt/inspirations/voyager-golden-record-${w}.avif`.replace(/\/+/g, '/');
-            return `${u} ${w}w`;
-          })
-          .join(', ')
-      }
-      sizes="(max-width: 750px) calc(100vw - 48px), 680px"
-    />
-    <source
-      type="image/webp"
-      srcSet={
-        [480, 680]
-          .map(w => {
-            const u = `${import.meta.env.BASE_URL}/opt/inspirations/voyager-golden-record-${w}.webp`.replace(/\/+/g, '/');
-            return `${u} ${w}w`;
-          })
-          .join(', ')
-      }
-      sizes="(max-width: 750px) calc(100vw - 48px), 680px"
-    />
-    <img
-      src={`${import.meta.env.BASE_URL}/opt/inspirations/voyager-golden-record-680.jpg`.replace(/\/+/g, '/')}
-      alt="The Voyager Golden Record, a gold-plated copper disk carrying sounds and images of life on Earth"
-      style="max-width: 100%; border-radius: 8px; border: 1px solid oklch(0.32 0.022 252);"
-      loading="lazy"
-      width="680"
-      height="680"
-    />
-  </picture>
+  <Img
+    src={voyager}
+    alt="The Voyager Golden Record, a gold-plated copper disk carrying sounds and images of life on Earth"
+    quality={55}
+  />
   <figcaption>
-    <strong>Plate II — Voyager Golden Record, flight disc (1977).</strong>
-    {' '}Gold-plated copper disc carrying sounds, images, and coordinates of Earth; aluminium cover with binary-encoded playback instructions.
-    {' '}Launched aboard Voyager 1 (5 Sep 1977) and Voyager 2 (20 Aug 1977). Now in interstellar space.
-    {' '}NASA / JPL-Caltech.
+    The Voyager Golden Record, NASA/JPL, 1977.
     {' '}
-    <a href="https://science.nasa.gov/mission/voyager/golden-record/" target="_blank" rel="noopener noreferrer">Source: NASA Golden Record mission archive</a>
-    {' '}·{' '}
-    <em>United States Government work; no copyright under 17 U.S.C. § 105.</em>
+    <a href="https://science.nasa.gov/mission/voyager/golden-record/" target="_blank" rel="noopener noreferrer">Source: NASA/JPL</a>
   </figcaption>
 </figure>
 
-I realized those two things are the same thing. Both are points of light against a void. Both are someone deciding to build something carefully, honestly, and meant to last longer than they will. That is the whole reason this site looks the way it does. A million points of light, a star living its life, and a black hole at the bottom. I wanted to make Luminet's drawing move.
+I realized those two things are the same thing. Both are points of light against a void. Both are someone deciding to build something carefully, honestly, and meant to last longer than they will. That is the whole reason this site looks the way it does. A million points of light, a star living its life in reverse, and the black hole right at the top — the page opens on the collapse and rewinds to a lone pale blue dot at the bottom. I wanted to make Luminet's drawing move.
 
 But once the star existed, the metaphor started telling me the truth.
 
@@ -158,4 +64,4 @@ I think this matters more now, not less. Anyone can generate infinite code. What
 
 So that is what this is. Not a highlight reel. A full lifecycle, drawn dot by dot, meant to last a little while and be honest about what didn't.
 
-This ends at the end on purpose. The collapse comes last — you scroll the full lifecycle toward it, nebula to black hole — because that is usually where the honest part is.
+This begins at the end on purpose. The collapse comes first, because that is usually where the honest part is.

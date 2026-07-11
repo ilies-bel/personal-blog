@@ -7,8 +7,21 @@ export const SITE_TITLE = 'Iliès';
 export const SITE_DESCRIPTION =
   'Technical writing on web development, tooling, and software craft, by Iliès. Plus a scroll-scrubbed black-hole hero.';
 export const SITE_LANG = 'en';
-// OG locale format uses underscore-separated BCP 47 (e.g. en_US), not just 'en'.
-export const SITE_OG_LOCALE = 'en_US';
+
+// Proper-case legal/author name for structured data (JSON-LD Person, article
+// author fields). BRAND_NAME below is the all-caps display lockup — keep the
+// two separate so styling never leaks into metadata.
+export const AUTHOR_NAME = 'Iliès Beldjilali';
+
+/**
+ * Join a path onto the configured BASE_URL, collapsing duplicate slashes.
+ * The single sanctioned way to build a base-relative href — with base '/'
+ * naive concatenation yields protocol-relative '//path' URLs that browsers
+ * resolve against a bogus host (the favicon bug this replaced).
+ */
+export function withBase(path: string): string {
+  return `${import.meta.env.BASE_URL}/${path}`.replace(/\/+/g, '/');
+}
 
 // The signature brand lockup — the hero's persistent identity (name + role).
 // Used as the SAME mark everywhere: the home scene (HeroIdentity), the reading-
@@ -26,15 +39,15 @@ export const SOCIALS = {
 // Default social-share image (lives in /public). Replace with your own.
 export const DEFAULT_OG_IMAGE = 'og-default.png';
 
-// Site owner — used in Person JSON-LD schema and as author in BlogPosting.
-// The canonical profile URL is constructed at runtime from Astro.site so that
-// changing the site domain in astro.config.mjs keeps everything in sync.
-export const SITE_OWNER = {
-  name: 'Iliès Beldjilali',
-  jobTitle: 'Software Engineer',
-  // sameAs: authoritative external profiles for deduplication by search engines.
-  sameAs: [
-    'https://github.com/ilies-bel',
-    'https://x.com/ilies_without_y',
-  ],
-} as const;
+// Availability readout for the /contact route — the mono instrument rows the
+// page renders as a <dl>. Safe defaults pending the owner's confirmation
+// (tracked in docs/INPUTS-NEEDED.md, P13): status/note/location are the
+// fields most likely to change; edit HERE and the contact page follows.
+export const AVAILABILITY = {
+  status: 'open' as 'open' | 'limited' | 'closed',
+  note: 'Open to interesting engagements',
+  location: 'France',
+  timezone: 'Europe/Paris (CET/CEST)',
+  engagements: ['Frontend & creative development', 'Web performance', 'Design engineering'],
+  responseTime: 'Usually within 48 hours',
+};

@@ -1,5 +1,5 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
-import { Color, HalfFloatType, MathUtils, Mesh, NoToneMapping, PerspectiveCamera, PlaneGeometry, Raycaster, Scene, ShaderMaterial, Sphere, SRGBColorSpace, Vector2, Vector3, Vector4, WebGLRenderer, WebGLRenderTarget } from 'three';
+import * as THREE from 'three';
 import { CFG, resolveParticleRTScale, resolveRgGranBake, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
@@ -21,7 +21,7 @@ import { buildPostChain } from './buildPostChain';
 import { WebGLUnavailableError, type SceneHandle, type SceneHooks, type DiveOptions, type Rig } from './types';
 
 /**
- * Lightweight WebGL-availability probe, run BEFORE constructing WebGLRenderer.
+ * Lightweight WebGL-availability probe, run BEFORE constructing THREE.WebGLRenderer.
  * The renderer needs at least a WebGL1 context (the GPGPU collapse sim wants WebGL2
  * but already degrades to a no-op when float targets are missing — see gravitySim),
  * so we only require that SOME webgl context is obtainable. We make a throwaway
@@ -111,7 +111,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // --- renderer / scene / camera ---
   // GRACEFUL WebGL FAILURE. The renderer is the FIRST resource built, so nothing
   // needs disposing if it fails — but we still fail cleanly: probe for a context up
-  // front (so a no-WebGL device never even constructs WebGLRenderer), and wrap
+  // front (so a no-WebGL device never even constructs THREE.WebGLRenderer), and wrap
   // the construction itself in try/catch (some environments pass the probe but still
   // throw on the real renderer — context-creation race, lost GPU). Either way we
   // throw a TYPED WebGLUnavailableError (never a raw GL string) so HeroIsland's
@@ -122,9 +122,9 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   if (!isWebGLAvailable()) {
     throw new WebGLUnavailableError();
   }
-  let renderer: WebGLRenderer;
+  let renderer: THREE.WebGLRenderer;
   try {
-    renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   } catch (error: unknown) {
     // Nothing else is built yet, so there is nothing to dispose; surface the typed
     // error (preserving the original cause for diagnostics) for the caller to handle.
@@ -137,13 +137,13 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // Boot clear is plain black; from the first applyLook on, every frame clears to
   // the scene's own near-black ROOM TINT (look.roomTint — see lifecycle.ts).
   renderer.setClearColor(0x000000, 1);
-  const roomTintColor = new Color();
-  renderer.toneMapping = NoToneMapping;
-  renderer.outputColorSpace = SRGBColorSpace;
+  const roomTintColor = new THREE.Color();
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
-  const scene = new Scene();
-  const camera = new PerspectiveCamera(CFG.fovDeg, window.innerWidth / window.innerHeight, 0.1, 4000);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(CFG.fovDeg, window.innerWidth / window.innerHeight, 0.1, 4000);
   // ---- renderers ----
   // Each piece (disk / starfield / warp arcs / photon ring / post chain) is now
   // built by its own build*() factory above (mirroring buildSunRig). The rigs own
@@ -320,7 +320,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // --- lens uniforms (recomputed each frame from camera geometry) ---
   function updateLensUniforms(): void {
     const aspect = window.innerWidth / window.innerHeight;
-    const fovY = MathUtils.degToRad(camera.fov);
+    const fovY = THREE.MathUtils.degToRad(camera.fov);
     const cameraDistance = camera.position.length();
     const shadowAng = CFG.coreSize / cameraDistance;
     const ndcShadow = shadowAng / Math.tan(fovY / 2);
@@ -421,11 +421,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const DOLLY_CHAPTER_END = 0.15; // raw progress: black-hole chapter upper edge (ITEM 9: 0-15%)
   const DOLLY_FADE_END = 0.21;  // raw progress: offset fully faded out by here (no pop)
   // Scratch vectors reused each frame so the dolly never allocates on the hot path.
-  const dollyDir = new Vector3();
-  const dollyTarget = new Vector3();
+  const dollyDir = new THREE.Vector3();
+  const dollyTarget = new THREE.Vector3();
   // Reused each frame for the red-giant→yellow uGiantCenter shrink drift (set in place,
   // never re-allocated) so the hot-path stays allocation-free. Defaults to origin → no-op.
-  const giantCenter = new Vector3(0, 0, 0);
+  const giantCenter = new THREE.Vector3(0, 0, 0);
 
   let mouseX = 0;
   let mouseY = 0;
@@ -451,19 +451,19 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const GIANT_ERUPT_LIFE = 5.5; // seconds; must match GIANT_ERUPT_LIFE in disk.glsl.ts
   const ERUPT_HOLD_MAX = 1.5; // seconds of hold that maps to a full-intensity blast
   interface Eruption {
-    dir: Vector3; // object-space unit direction of the eruption centre
+    dir: THREE.Vector3; // object-space unit direction of the eruption centre
     intensity: number; // 0 = free slot; >0 = active (click-hold scaled)
     age: number; // seconds since fired
   }
   const eruptPool: Eruption[] = Array.from({ length: sunRig.surfaceMat.uniforms.uErupt.value.length }, () => ({
-    dir: new Vector3(0, 1, 0),
+    dir: new THREE.Vector3(0, 1, 0),
     intensity: 0,
     age: 0,
   }));
   // Reused across pointer events / frames so the hot path never allocates.
-  const eruptRaycaster = new Raycaster();
-  const eruptPointerNdc = new Vector2();
-  const eruptLocalDir = new Vector3();
+  const eruptRaycaster = new THREE.Raycaster();
+  const eruptPointerNdc = new THREE.Vector2();
+  const eruptLocalDir = new THREE.Vector3();
   // Updated every frame from the render loop: true only when the star mesh is shown
   // AND fully formed (not growing) — i.e. the settled yellow star or the red-giant
   // hold when the mesh is visible. The pointerdown handler reads it before raycasting.
@@ -471,7 +471,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // Pending hold: set on a pointerdown that HIT the sun, cleared on up/cancel. Stores
   // the object-space eruption direction captured at press time and the press timestamp.
   let holdStart = 0;
-  let holdDir: Vector3 | null = null;
+  let holdDir: THREE.Vector3 | null = null;
 
   // --- CLICK ERUPTIONS on the PARTICLE red giant (geyser jet + surface ripple) ----
   // The red giant is a DIFFERENT body from the yellow star: it's the ~1.2M-point GPU
@@ -484,16 +484,16 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // effects decoupled (mesh and giant are never on screen at once). The same shape as
   // the mesh pool above so the spawn/age/copy logic is identical.
   const giantEruptPool: Eruption[] = Array.from(
-    { length: (diskMatPrimary.uniforms.uErupt.value as Vector4[]).length },
-    () => ({ dir: new Vector3(0, 1, 0), intensity: 0, age: 0 }),
+    { length: (diskMatPrimary.uniforms.uErupt.value as THREE.Vector4[]).length },
+    () => ({ dir: new THREE.Vector3(0, 1, 0), intensity: 0, age: 0 }),
   );
   // Reused instances (no per-frame / hot-path allocation): the giant's raycast sphere,
   // a scratch world hit point, and the tilted spin axis (MUST match the disk vertex
   // shader's spinAxis = normalize(vec3(0.39,0.92,0.0)) and uGiantSpin so the stored
   // local dir un-rotates exactly onto the spinning photosphere — see disk.glsl.ts).
-  const giantSphere = new Sphere(new Vector3(0, 0, 0), 1);
-  const giantHitPoint = new Vector3();
-  const giantSpinAxis = new Vector3(0.39, 0.92, 0.0).normalize();
+  const giantSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+  const giantHitPoint = new THREE.Vector3();
+  const giantSpinAxis = new THREE.Vector3(0.39, 0.92, 0.0).normalize();
   // Updated every frame from the render loop: true only when the settled, full-size,
   // idle red giant is the visible body (not the yellow swap, the collapse, the nebula,
   // the dot, or the yellow mesh). The pointerdown handler reads it before raycasting.
@@ -501,11 +501,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // Pending hold on the giant (mutually exclusive with holdDir — the two bodies are
   // never both clickable). Stores the UNSPUN local-frame eruption dir + press time.
   let holdStartGiant = 0;
-  let holdDirGiant: Vector3 | null = null;
+  let holdDirGiant: THREE.Vector3 | null = null;
 
   // Write an eruption into the oldest/free slot of the pool (free slots first, else
   // the slot nearest the end of its life) so rapid clicks stack instead of replacing.
-  const spawnEruption = (dir: Vector3, intensity: number): void => {
+  const spawnEruption = (dir: THREE.Vector3, intensity: number): void => {
     let slot = 0;
     let oldest = -1;
     for (let i = 0; i < eruptPool.length; i++) {
@@ -528,7 +528,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // Same free/oldest-slot policy as spawnEruption, but into the GIANT'S pool. `dir`
   // is the UNSPUN local-frame eruption centre (the shader re-tracks it on the spinning
   // surface), so rapid clicks stack into separate plumes/ripples on the red giant.
-  const spawnGiantEruption = (dir: Vector3, intensity: number): void => {
+  const spawnGiantEruption = (dir: THREE.Vector3, intensity: number): void => {
     let slot = 0;
     let oldest = -1;
     for (let i = 0; i < giantEruptPool.length; i++) {
@@ -628,7 +628,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       // current uGiantSpin about the SAME tilted axis the shader uses, so the stored dir
       // is in the giant's UNSPUN frame (the shader compares it against the unspun sphere
       // dir, cancelling the spin — see disk.glsl.ts's eruption block).
-      const giantDir: Vector3 = giantHitPoint.clone().sub(giantSphere.center).normalize();
+      const giantDir: THREE.Vector3 = giantHitPoint.clone().sub(giantSphere.center).normalize();
       giantDir.applyAxisAngle(giantSpinAxis, -(diskMatPrimary.uniforms.uGiantSpin.value as number));
       holdDirGiant = giantDir;
       holdStartGiant = performance.now();
@@ -746,16 +746,16 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // Scratch vectors created ONCE (the dive must not allocate on the hot path). The
   // FROM pose is snapshotted from the live camera at beginDive() so the plunge
   // starts seamlessly from wherever the scroll pose currently is.
-  const diveFromPos = new Vector3();
-  const diveFromTarget = new Vector3();
+  const diveFromPos = new THREE.Vector3();
+  const diveFromTarget = new THREE.Vector3();
   // The world point the dive AIMS at — derived ONCE in beginDive() by unprojecting
   // the caller's targetNdc onto the star's depth plane (so it sits directly under the
   // clicked marker, at the same distance from camera as the world origin). The dive
   // turns the look target toward it as it falls in, so an off-centre marker centres +
   // grows. Defaults to the world origin (a centred plunge) when no targetNdc is given.
-  const diveTargetWorld = new Vector3();
+  const diveTargetWorld = new THREE.Vector3();
   // Scratch only for the unproject math in beginDive(); never read on the hot path.
-  const diveAimScratch = new Vector3();
+  const diveAimScratch = new THREE.Vector3();
   // The 0..1 overlay strength published via diveOnProgress; 0 whenever no dive runs.
   let diveStrength = 0;
   // Plunge timing. The apex (bloom peak / navigate point) lands at 82% of the run,
@@ -804,7 +804,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // plunge that still keeps the bright disk filling the frame deep into the fall (a
   // larger overshoot flies out the far side into empty starfield before the bloom lands).
   // The look target settles on the exact origin so the fall stays aimed down the throat.
-  const DIVE_THROUGH_POS = new Vector3(0, 0, -2);
+  const DIVE_THROUGH_POS = new THREE.Vector3(0, 0, -2);
   // PER-STATE SURFACE STOP — never clip INSIDE a star. The through-point above is right
   // for the black hole (no surface — falling through the horizon IS the shot) and
   // harmless for the nebula/dot (gas / a speck). But the red giant is a solid 10.5-unit
@@ -841,7 +841,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const DIVE_ORBIT_DEG = -14;
   // The world up-axis the dive's orbital arc rotates the camera around. Constant vector,
   // never mutated (applyAxisAngle reads it), so it is safe to share across frames.
-  const WORLD_UP = new Vector3(0, 1, 0);
+  const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
   // --- supernova whiteout: a SCROLL-anchored flash envelope, NO clock ---
   // `nova` (0..1) is now a deterministic Gaussian in `stage`, centred on the
@@ -854,8 +854,8 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // still computed for clarity; the whiteout never fires. See the block in frame().
   let prevNebulaStage = stage;
   const NEBULA_FLASH_TRIGGER = 3.5;
-  const frameLookTarget = new Vector3();
-  const flashOrigin = new Vector3();
+  const frameLookTarget = new THREE.Vector3();
+  const flashOrigin = new THREE.Vector3();
   const onVisibilityChange = (): void => {
     if (!document.hidden && !stopped && raf === 0) frame();
   };
@@ -1592,11 +1592,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     //   • the hyperspace-streak direction latch + its gas-dim multiplier.
     const growing = look.starFormed > 0 && look.starFormed < 1;
     // the glow shell cools blue→gold with the star as it grows. setRGB mutates the
-    // existing Color in place (no allocation); the settled branch only writes
+    // existing THREE.Color in place (no allocation); the settled branch only writes
     // when it actually changes (`glowSettled` latch) so the constant gold isn't
     // re-set every frame while the star holds. STATEFUL (latch across frames) → here.
     if (growing) {
-      (sunRig.glowMat.uniforms.uColor.value as Color).setRGB(
+      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(
         0.35 + 0.65 * look.starFormed,
         0.55 * look.starFormed + 0.55 * (1 - look.starFormed),
         0.16 + 0.74 * (1 - look.starFormed),
@@ -1606,7 +1606,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       // settled yellow star: a PALE-GOLD halo (still lifted off orange so the rim
       // reads yellow-white, not amber), but dimmed ~28% from the old blinding value
       // so the solid→particle handoff is a calm dissolve, not a glare bloom.
-      (sunRig.glowMat.uniforms.uColor.value as Color).setRGB(0.72, 0.56, 0.24);
+      (sunRig.glowMat.uniforms.uColor.value as THREE.Color).setRGB(0.72, 0.56, 0.24);
       glowSettled = true;
     }
 
@@ -1947,7 +1947,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       // never animates, so this only runs in the live, motion-on path.
       if (!reduced) {
         const dt = Math.min(Math.max(ut - prevEruptT, 0), 0.1); // clamp tab-switch jumps
-        const uErupt = sunRig.surfaceMat.uniforms.uErupt.value as Vector4[];
+        const uErupt = sunRig.surfaceMat.uniforms.uErupt.value as THREE.Vector4[];
         const uEruptAge = sunRig.surfaceMat.uniforms.uEruptAge.value as number[];
         // DEBUG: window.__bhErupt holds a fixed camera-facing eruption (0..1 intensity)
         // so the geyser + ripple can be inspected without clicking. It commandeers the
@@ -1990,9 +1990,9 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // wired the listeners, so this only runs in the live, motion-on path.
     if (!reduced) {
       const dtGiant = Math.min(Math.max(ut - prevEruptT, 0), 0.1); // clamp tab-switch jumps
-      const gErupt = diskMatPrimary.uniforms.uErupt.value as Vector4[];
+      const gErupt = diskMatPrimary.uniforms.uErupt.value as THREE.Vector4[];
       const gEruptAge = diskMatPrimary.uniforms.uEruptAge.value as number[];
-      const gEruptSec = diskMatSecondary.uniforms.uErupt.value as Vector4[];
+      const gEruptSec = diskMatSecondary.uniforms.uErupt.value as THREE.Vector4[];
       const gEruptAgeSec = diskMatSecondary.uniforms.uEruptAge.value as number[];
       // DEBUG: window.__bhGiantErupt holds a fixed camera-facing eruption (0..1) on the
       // giant so the jet + ripple can be inspected without clicking (set __bhMorph to a
@@ -2158,8 +2158,8 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
         // throwaway render target during compile warms the exact Linear variants
         // frame() renders with, for EVERY material in the scene graph — visible or
         // not (compile() uses scene.traverse, not traverseVisible).
-        const warmRT = new WebGLRenderTarget(2, 2, { type: HalfFloatType });
-        const warmGeo = new PlaneGeometry(2, 2);
+        const warmRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
+        const warmGeo = new THREE.PlaneGeometry(2, 2);
         const compiles: Promise<unknown>[] = [];
         renderer.setRenderTarget(warmRT);
         try {
@@ -2173,32 +2173,32 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
           // first-frame task. Materials stay owned by their passes (never disposed
           // here); only the throwaway warm scene/geometry are ours.
           // (All of the composer's offscreen pass materials are ShaderMaterials —
-          // typed as such because Material doesn't resolve under this
+          // typed as such because THREE.Material doesn't resolve under this
           // project's @types/three + TS combination; the codebase convention is
           // ShaderMaterial throughout.)
-          const rtPassMaterials: ShaderMaterial[] = [gradePass.material];
+          const rtPassMaterials: THREE.ShaderMaterial[] = [gradePass.material];
           if (bloom) {
             const b = bloom as unknown as {
-              materialHighPassFilter?: ShaderMaterial;
-              separableBlurMaterials?: ShaderMaterial[];
-              compositeMaterial?: ShaderMaterial;
-              blendMaterial?: ShaderMaterial;
+              materialHighPassFilter?: THREE.ShaderMaterial;
+              separableBlurMaterials?: THREE.ShaderMaterial[];
+              compositeMaterial?: THREE.ShaderMaterial;
+              blendMaterial?: THREE.ShaderMaterial;
             };
             if (b.materialHighPassFilter) rtPassMaterials.push(b.materialHighPassFilter);
             if (Array.isArray(b.separableBlurMaterials)) rtPassMaterials.push(...b.separableBlurMaterials);
             if (b.compositeMaterial) rtPassMaterials.push(b.compositeMaterial);
             if (b.blendMaterial) rtPassMaterials.push(b.blendMaterial);
           }
-          const warmRtScene = new Scene();
-          for (const mat of rtPassMaterials) warmRtScene.add(new Mesh(warmGeo, mat));
+          const warmRtScene = new THREE.Scene();
+          for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
           compiles.push(renderer.compileAsync(warmRtScene, camera));
         } finally {
           renderer.setRenderTarget(null);
         }
         // (3) the nova pass is the one material that renders TO SCREEN
         // (renderToScreen = true) → compile its sRGB variant with NO target bound.
-        const warmScreenScene = new Scene();
-        warmScreenScene.add(new Mesh(warmGeo, novaPass.material));
+        const warmScreenScene = new THREE.Scene();
+        warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
         compiles.push(renderer.compileAsync(warmScreenScene, camera));
         await Promise.all(compiles);
         warmGeo.dispose();
@@ -2337,6 +2337,6 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
 //
 //  The copy itself (the ManifestoBeat shape + the BEATS array) lives colocated
 //  per scene in ./sceneTable, and the scroll-track geometry (SCROLL_SECTION_COUNT
-//  / STAGE_COUNT / BUILT_STAGES) in ./timeline, so the SSR fallback and scroll
+//  / BUILT_STAGES) in ./timeline, so the SSR fallback and scroll
 //  track in index.astro share one source of truth with this live overlay.
 // ---------------------------------------------------------------------------

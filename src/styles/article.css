@@ -49,13 +49,7 @@
   position: absolute;
   inset: 0 auto auto 0;
   width: 1px;
-  /* Use transform: scaleY instead of animating height — GPU-composited, no layout
-     paint. The element is always full-height; scaleY(progress) controls visible
-     extent from the top edge. transform-origin: top so it grows top→down.
-     Backlog rule: no height-based transitions (EXP-037 detector). */
-  height: 100%;
-  transform: scaleY(var(--scene-progress, 0));
-  transform-origin: top center;
+  height: calc(var(--scene-progress, 0) * 100%);
   background: linear-gradient(
     180deg,
     var(--accent-strong),
@@ -63,7 +57,7 @@
   );
   /* A faint bloom off the leading edge so the gauge reads as lit, like the hero rail. */
   box-shadow: 0 0 8px color-mix(in oklch, var(--accent) 60%, transparent);
-  transition: transform 0.12s linear;
+  transition: height 0.12s linear;
 }
 
 /* The READOUT — vertical mono caps, set sideways like an instrument label down the
@@ -94,7 +88,10 @@
   font-size: var(--text-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--hud-rail-dim);
+  /* P8 contrast fix: --hud-rail-dim is a FILLS/decoration-only token (2.6:1 vs
+     --bg — see tokens.css) and this is REAL readout text; the interactive-text
+     rung (--hud-rail-dim-text, 6.5:1) is the correct dim-text token. */
+  color: var(--hud-rail-dim-text);
 }
 /* Bright-zone parity with the hero: when the article's scene window scrubs through a
    bright beat (supernova flash / yellow star), flip the readout to a dark graphite
@@ -122,11 +119,8 @@
     height: 2px;
   }
   .article-hud-rail-fill {
-    /* On mobile the rail is horizontal; scaleX grows left→right from the origin. */
-    width: 100%;
+    width: calc(var(--scene-progress, 0) * 100%);
     height: 2px;
-    transform: scaleX(var(--scene-progress, 0));
-    transform-origin: left center;
   }
   .article-hud-readout { display: none; }
 }
@@ -225,10 +219,13 @@ body.article-page .prose[data-scene-journey] {
 }
 
 /* ===========================================================================
-   MDX FIGURE: <SceneFigure/> — an inline mini-canvas pinning one lifecycle beat.
-   The contained version of the hero engine, at reading scale, framed like a plate.
+   MDX FIGURE: <SceneFigure/> — one lifecycle beat pinned inside the prose.
+   P4: a BUILD-TIME CAPTURE of the engine frame by default (an <img>, zero
+   WebGL), with an opt-in "Run live" chip that mounts the real engine into the
+   same plate under the GL governor's 2-context budget. Framed like a plate.
    =========================================================================== */
 .scene-figure {
+  position: relative; /* anchors the Run-live chip over the plate's corner */
   margin: 2.25rem 0;
 }
 .scene-figure-stage {
@@ -238,7 +235,29 @@ body.article-page .prose[data-scene-journey] {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+  /* Quiet starfield placeholder underneath everything, so a figure whose capture
+     has not been generated yet (or failed to load) is never an empty black box. */
+  background:
+    radial-gradient(1px 1px at 20% 30%, var(--fg-faint), transparent),
+    radial-gradient(1px 1px at 70% 60%, var(--fg-faint), transparent),
+    radial-gradient(1px 1px at 45% 80%, var(--hud-rail-dim), transparent),
+    radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+}
+/* The build-time capture: the same engine frame, shot by scripts/capture-figures.mjs
+   at this plate's own aspect. Fills the frame; sits UNDER the live canvas so the
+   live → still swap never flashes an empty plate. */
+.scene-figure-capture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+/* The live host (mounted only while a governor token is held) covers the capture. */
+.scene-figure-live {
+  position: absolute;
+  inset: 0;
 }
 /* The engine appends its own <canvas> into the stage host; pin it to fill the frame. */
 .scene-figure-stage canvas {
@@ -247,15 +266,42 @@ body.article-page .prose[data-scene-journey] {
   width: 100% !important;
   height: 100% !important;
 }
-/* Idle / static (reduced motion or no WebGL): a quiet starfield placeholder so the
-   plate is never an empty black box. */
-.scene-figure[data-mode='static'] .scene-figure-stage,
-.scene-figure[data-mode='idle'] .scene-figure-stage {
-  background:
-    radial-gradient(1px 1px at 20% 30%, var(--fg-faint), transparent),
-    radial-gradient(1px 1px at 70% 60%, var(--fg-faint), transparent),
-    radial-gradient(1px 1px at 45% 80%, var(--hud-rail-dim), transparent),
-    radial-gradient(120% 90% at 50% 45%, var(--bg-soft), var(--bg));
+/* The Run-live chip — a small instrument-language control on the plate's top-right.
+   A real <button> OUTSIDE the aria-hidden stage (keyboard + SR reachable), floated
+   over the plate corner. Mono caps like every other HUD affordance. */
+.scene-figure-run {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 1;
+  padding: 0.3rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  background: color-mix(in oklch, var(--bg) 78%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: color 0.3s var(--ease-out-quint), border-color 0.3s var(--ease-out-quint);
+}
+.scene-figure-run:hover {
+  color: var(--fg);
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line));
+}
+.scene-figure-run:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* While live, the chip reads as the active state (aria-pressed drives it). */
+.scene-figure-run[aria-pressed='true'] {
+  color: var(--accent-strong);
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--line));
+}
+/* The quiet status note ("live view busy…") appended inside the caption. */
+.scene-figure-note {
+  color: var(--fg-faint);
 }
 .prose .scene-figure-caption {
   margin: 0.75rem 0 0;
@@ -386,15 +432,70 @@ body.article-page .prose[data-scene-journey] {
 }
 
 /* Reduced motion: no HUD boot slide, no panel/dot easing — instant, calm states. */
-@media (prefers-reduced-motion: reduce) {
-  .article-hud { animation: none; }
-  .article-hud-rail-fill,
-  .islands-demo,
-  .islands-demo-dot,
-  .islands-demo-button,
-  .signals-readout,
-  .signals-readout-dot,
-  .signals-readout-button { transition: none; }
+:where(html[data-motion='reduced']) .article-hud { animation: none; }
+:where(html[data-motion='reduced']) .article-hud-rail-fill,
+:where(html[data-motion='reduced']) .islands-demo,
+:where(html[data-motion='reduced']) .islands-demo-dot,
+:where(html[data-motion='reduced']) .islands-demo-button,
+:where(html[data-motion='reduced']) .signals-readout,
+:where(html[data-motion='reduced']) .signals-readout-dot,
+:where(html[data-motion='reduced']) .signals-readout-button { transition: none; }
+
+/* --- EVIDENCE — the artifacts backing a piece (P13) --------------------------
+   Rendered from post frontmatter `evidence` by posts/[...slug].astro: the
+   original publication, upstream bug threads, profiler captures — receipts,
+   not decoration. Speaks the specimen-card grammar (graveyard-lesson): a quiet
+   bordered plate with a mono-caps record label, since the list IS a record of
+   real artifacts. Absent entirely when a post declares none. */
+.article-evidence {
+  margin-top: clamp(2.5rem, 7vh, 4rem);
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--bg-soft) 55%, transparent);
+}
+
+.article-evidence-title {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--highlight);
+}
+
+.article-evidence-list {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.article-evidence-list li {
+  margin: 0 0 0.4rem;
+  color: var(--fg-dim);
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+}
+
+.article-evidence-list li:last-child {
+  margin-bottom: 0;
+}
+
+.article-evidence-list li::marker {
+  color: var(--fg-faint);
+}
+
+.article-evidence-list a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.article-evidence-list a:hover {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
 }
 
 /* --- CONTINUATION — the "next note" block closing every article -------------
@@ -411,13 +512,15 @@ body.article-page .prose[data-scene-journey] {
   border-top: 1px solid color-mix(in oklch, var(--accent) 18%, var(--line));
 }
 
+/* Eyebrow — quiet plain dim text (P9 typography hygiene): the "Next note"
+   line is section scaffolding, not a readout, so it drops the mono-caps
+   instrument voice (and the gold — signal belongs to the interactive title). */
 .article-next-eyebrow {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--highlight);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.01em;
+  color: var(--fg-chrome-dim);
 }
 
 .article-next-link {

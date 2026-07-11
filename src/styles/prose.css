@@ -4,22 +4,12 @@
 .prose {
   position: relative;
   z-index: 1;
-  /* --rhy-measure is declared per route in route-typography.css.
-     On prose routes (article-page, behind-the-build) this resolves to a
-     65–75ch value; the 680px fallback keeps non-route uses unaffected. */
-  max-width: var(--rhy-measure, 680px);
+  max-width: 680px;
   margin-inline: auto;
   padding-top: clamp(2.5rem, 8vw, 5rem);
   /* Body sentence lands on the --text-body rung (16px) with the prose leading. */
   font-size: var(--text-body);
   line-height: var(--leading-body);
-  /* Long technical identifiers (class paths, URLs, package names) must wrap
-     inside the column rather than pushing the document wider than the viewport.
-     overflow-wrap: break-word allows an emergency break anywhere in a run when
-     no softer break opportunity exists — without splitting regular prose words
-     mid-syllable (hyphens remain off). Code blocks opt out below via
-     overflow-wrap: normal so they still scroll horizontally. */
-  overflow-wrap: break-word;
 }
 /* The article header is a page-hero in the same language as the writing index
    and About: a mono kicker (one rare gold signal), a display title at the
@@ -66,16 +56,19 @@
   border-radius: 3px;
 }
 
-/* Chrome-ramp mono kicker, matching .writing-kicker — gold is reserved for
-   signal (current section, hover, readouts), not page scaffolding. */
+/* Article kicker — QUIET plain dim text (P9 typography hygiene). The old
+   treatment was tiny mono uppercase, which spent the site's instrument voice
+   on mere section scaffolding; mono caps are now reserved for real state /
+   records / measurement (dates in lists, specimen records, HUD readouts,
+   code). The kicker keeps its slot and its content (the date IS still here),
+   just in the body face at a whisper — context, not a control. */
 .article-header .article-kicker {
   margin: 0 0 0.85rem;
   width: max-content;
   max-width: 100%;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.01em;
   color: var(--fg-chrome-dim);
 }
 .article-header h1 {
@@ -128,28 +121,33 @@
   letter-spacing: 0.08em;
   color: var(--fg-faint);
 }
+/* Byline + provenance (P6, both .article-meta) read as ONE record block when
+   stacked — collapse the inter-line gap so they don't float apart. */
+.article-header .article-byline + .article-provenance {
+  margin-top: 0.35rem;
+}
+/* The provenance link stays in the meta line's quiet register (the sitewide
+   .prose a weight is for running-copy links, too loud for an instrument row). */
+.article-header .article-provenance a {
+  color: var(--fg-faint);
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.article-header .article-provenance a:hover {
+  color: var(--fg-dim);
+}
+/* Long unbroken tokens (fully-qualified class names, JVM flags) also appear in
+   running prose as <em>/plain text, not only <code>. overflow-wrap is inherited,
+   so one declaration lets ANY descendant break an oversized token instead of
+   pushing the line box past the viewport (body clips overflow-x, so at
+   320-430px the overflow read as silently amputated text). break-word only
+   fires when a token can't fit — normal typography is untouched. */
+.prose { overflow-wrap: break-word; }
 .prose p { margin: 1.3rem 0; color: #c7bfb4; }
 .prose h2 { font-size: var(--text-title); margin: 2.75rem 0 1rem; }
 .prose h3 { font-size: var(--text-subtitle); margin: 2rem 0 0.75rem; }
 .prose a { font-weight: 600; }
-/* EXP-013: 44-px accessible touch target for inline article links.
-   display: inline-block lets padding-block register in getBoundingClientRect()
-   height; negative margin-block holds surrounding text flow in place.
-   At 12 px text (0.9 rem pad each side): 14.4 + 20.4 + 14.4 ≈ 49 px.
-   At 16 px text: 14.4 + 27.2 + 14.4 ≈ 56 px.  Both clear the 44 px minimum.
-   .article-back and other classed links opt out below via their own display rule. */
-article a {
-  display: inline-block;
-  padding-block: 0.9rem;
-  margin-block: -0.9rem;
-}
-/* article-back is a standalone navigation link — it sets its own layout and must
-   not inherit the touch-target padding expansion. */
-.article-back {
-  display: inline-flex;
-  padding-block: 0;
-  margin-block-start: 0;
-}
 .prose ul, .prose ol { padding-left: 1.4rem; }
 .prose li { margin: 0.4rem 0; }
 /* A quiet full-border panel on the panel tint, set apart by background + a
@@ -187,9 +185,6 @@ article a {
   overflow-x: auto;
   font-size: 0.92rem;
   line-height: 1.6;
-  /* Code blocks scroll horizontally — never wrap. Overrides the overflow-wrap:
-     break-word inherited from .prose so long lines stay intact and readable. */
-  overflow-wrap: normal;
 }
 .prose pre code {
   background: none;

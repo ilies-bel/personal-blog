@@ -39,7 +39,7 @@
 // anything itself — the caller flips uGranBakeReady only when isBaked() reports
 // success, so any failure (lost context, missing float-renderability) simply
 // leaves the analytic path running: today's exact rendering.
-import { BufferAttribute, BufferGeometry, HalfFloatType, LinearFilter, Mesh, OrthographicCamera, RGBAFormat, Scene, ShaderMaterial, Sphere, Texture, Vector3, WebGLCubeRenderTarget, WebGLRenderer } from 'three';
+import * as THREE from 'three';
 import { GRAN_FIELD_GLSL, GRAN_NOISE_GLSL, SUN_NOISE_GLSL } from '../shaders/disk.glsl';
 import type { Rig } from './types';
 
@@ -48,7 +48,7 @@ export const GRAN_BAKE_FACE_SIZE = 512;
 
 export interface GranBakeRig extends Rig {
   /** The baked cubemap (the render target's texture). Valid AFTER isBaked(). */
-  texture: Texture;
+  texture: THREE.Texture;
   /** Render all six faces (idempotent — later calls are no-ops, success or fail).
    *  Six tiny fullscreen draws; the GPU does the noise math once, off the hot path. */
   bake: () => void;
@@ -58,18 +58,18 @@ export interface GranBakeRig extends Rig {
 }
 
 export function buildGranBake(
-  renderer: WebGLRenderer,
+  renderer: THREE.WebGLRenderer,
   granScale: number,
   size: number = GRAN_BAKE_FACE_SIZE,
 ): GranBakeRig {
   // No depth, no mips: the disk samples this from a VERTEX shader (implicit lod 0),
   // so mip levels would never be read. Linear filtering is core for 16F in WebGL2,
   // and WebGL2 cube sampling is seamless across face edges by spec.
-  const target = new WebGLCubeRenderTarget(size, {
-    format: RGBAFormat,
-    type: HalfFloatType,
-    minFilter: LinearFilter,
-    magFilter: LinearFilter,
+  const target = new THREE.WebGLCubeRenderTarget(size, {
+    format: THREE.RGBAFormat,
+    type: THREE.HalfFloatType,
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
     generateMipmaps: false,
     depthBuffer: false,
     stencilBuffer: false,
@@ -77,14 +77,14 @@ export function buildGranBake(
 
   // Fullscreen triangle (same construction as buildParticlePass's composite quad):
   // clip coords written directly, camera transform bypassed.
-  const geo = new BufferGeometry();
+  const geo = new THREE.BufferGeometry();
   geo.setAttribute(
     'position',
-    new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3),
+    new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3),
   );
-  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e6);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
 
-  const mat = new ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms: {
       uGranScale: { value: granScale },
       uFace: { value: 0 },
@@ -129,12 +129,12 @@ export function buildGranBake(
     depthTest: false,
   });
 
-  const quad = new Mesh(geo, mat);
+  const quad = new THREE.Mesh(geo, mat);
   quad.frustumCulled = false;
-  const bakeScene = new Scene();
+  const bakeScene = new THREE.Scene();
   bakeScene.add(quad);
   // Dummy camera — the vertex shader writes clip coords directly.
-  const bakeCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const bakeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
   let attempted = false;
   let baked = false;

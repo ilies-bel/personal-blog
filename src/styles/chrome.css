@@ -21,9 +21,7 @@
   transition: transform 0.15s ease;
 }
 .skip-link:focus { transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) {
-  .skip-link { transition: none; }
-}
+:where(html[data-motion='reduced']) .skip-link { transition: none; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Sub-page HUD nav (.subnav) — the standard reading-page header rebuilt in the
@@ -33,7 +31,7 @@
    as the same family: a single top hairline rule, brand lockup hard-left, a glyph
    + mono-uppercase rail hard-right, hairline dividers, target-lock on the current
    section. Mirrors the .overlay-blog hover micro-interaction (icon brighten +
-   underline sweep) and respects prefers-reduced-motion.
+   underline sweep) and respects the resolved reduced-motion preference.
    ────────────────────────────────────────────────────────────────────────── */
 .subnav {
   display: flex;
@@ -124,10 +122,6 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  /* EXP-013: min-height 2.75rem (44 px) satisfies the project touch-target policy
-     without forcing a fixed height on the subnav strip — the flex container
-     expands to fit. Horizontal padding kept at 0.95rem for the lock-frame geometry. */
-  min-height: 2.75rem;
   padding: 0.5rem 0.95rem;
   /* Chrome ramp (cool-neutral bone) — the same temperature the hero's chrome
      reads over the void, so the reading nav is the same instrument. */
@@ -206,10 +200,8 @@
   background-size: 100% 1px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .subnav-label,
-  .subnav-lock { transition: none; }
-}
+:where(html[data-motion='reduced']) .subnav-label,
+:where(html[data-motion='reduced']) .subnav-lock { transition: none; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Site footer — the subnav's closing counterpart: one quiet instrument row
@@ -236,10 +228,7 @@
 }
 .site-footer-links {
   display: flex;
-  /* Allow links to wrap onto new rows at narrow viewports so the footer never
-     pushes the document wider than the viewport (EXP-012). */
-  flex-wrap: wrap;
-  gap: 0.75rem 1.6rem;
+  gap: 1.6rem;
 }
 
 .site-footer a {
@@ -280,9 +269,7 @@
 }
 .site-footer a:hover .site-footer-label,
 .site-footer a:focus-visible .site-footer-label { background-size: 100% 1px; }
-@media (prefers-reduced-motion: reduce) {
-  .site-footer-label { transition: none; }
-}
+:where(html[data-motion='reduced']) .site-footer-label { transition: none; }
 
 @media (max-width: 40rem) {
   .subnav {
@@ -319,18 +306,5 @@
      divider; pull the socials in line with the labels' left padding. */
   .subnav-socials {
     margin-left: 0;
-  }
-}
-
-/* ≤ 14rem (224 px) — 200 % zoom equivalents of the narrowest phone viewports.
-   The standard subnav layout holds down to 20 rem (320 px / 100 % zoom); below
-   that each label must be allowed to wrap so a single nav item with white-space:
-   nowrap never causes horizontal document overflow (EXP-012). Reduced padding
-   keeps the tap target proportionate at these extreme viewport widths. */
-@media (max-width: 14rem) {
-  .subnav-link {
-    padding: 0.25rem 0.4rem;
-    white-space: normal;
-    word-break: break-word;
   }
 }

@@ -1,5 +1,7 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
+import { projectSchema, graveyardSchema } from './lib/contentSchemas';
+import { AUTHOR_NAME } from './consts';
 
 // Blog posts live in src/content/posts/*.mdx
 // The frontmatter schema below is validated at build time AND feeds the SEO
@@ -14,18 +16,34 @@ const posts = defineCollection({
     // Relative to /public, e.g. "og-mypost.png". Optional; falls back to default.
     ogImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
-    // Editorial classification — readers use this to orient at a glance.
-    // Required on every post: forces explicit classification at authoring time.
-    //   investigation — a live debugging or research case study ("I found X and here is how")
-    //   build-note    — construction diary / technical decisions behind a shipped thing
-    //   essay         — reflection, philosophy, or long-form argument
-    //   failure       — a project or approach that didn't survive; kept and owned
-    type: z.enum(['investigation', 'build-note', 'essay', 'failure']),
-    // Subject-matter facets exposed on the writing index for orientation.
-    // Distinct from tags (which are legacy / SEO-facing): topics are the handful
-    // of concepts a reader would use to decide "is this for me?"
-    topics: z.array(z.string()).default([]),
+    // EDITORIAL TYPE (P13) — what kind of piece this is, rendered as a quiet
+    // record label on /writing rows and used to shelve the Articles index by
+    // type once more than one type exists there. 'essay' is the default
+    // because it is the loosest claim: an investigation/failure-story/build-log
+    // label promises artifacts, so it must be authored deliberately.
+    type: z.enum(['investigation', 'essay', 'failure-story', 'build-log']).default('essay'),
     draft: z.boolean().default(false),
+    // EVIDENCE SHELL (P13) — the artifacts backing the piece (original
+    // publication, upstream bug threads, profiler captures…), rendered as an
+    // "Evidence" aside by the post layout. Same honesty posture as the project
+    // claims ledger: list only what actually exists; an empty array renders
+    // nothing (no placeholder box). The owner's real investigation artifacts
+    // slot in here later (docs/INPUTS-NEEDED.md #7).
+    evidence: z
+      .array(z.object({ label: z.string(), url: z.string().url().optional() }))
+      .default([]),
+    // FORMALIZED CO-AUTHORSHIP (P6): every author of the piece, site owner
+    // included. Flows into the BlogPosting JSON-LD author array (BaseHead) and
+    // the visible byline on the article page when there is more than one name.
+    authors: z.array(z.string()).min(1).default([AUTHOR_NAME]),
+    // Where the piece first ran, when that was elsewhere. Replaces the old
+    // hardcoded `origins` map in writing.astro — one source of truth, in data.
+    provenance: z
+      .object({
+        note: z.string(),
+        url: z.string().url().optional(),
+      })
+      .optional(),
     // Optional per-post backdrop override. When set, the post layout swaps the
     // default dimmed live <BlackHole backdrop> photon-ring scene for a bespoke
     // backdrop layer. 'tesseract' = the Interstellar bookcase-corridor image
@@ -56,125 +74,26 @@ const posts = defineCollection({
   }),
 });
 
-// ---------------------------------------------------------------------------
-// Projects — shipped tools and products (CON-001 evidence schema).
-// All evidence fields are optional so missing data is explicit, never invented.
-// ---------------------------------------------------------------------------
+// Shipped / delivered work — src/content/projects/*.mdx. The schema (see
+// src/lib/contentSchemas.ts) ENFORCES the evidence contract at build time:
+// any factual claim with evidence.type 'none' while draftEvidence is false
+// fails the build naming the claim, and a shipped project must list at least
+// one limitation. The MDX body carries the entry's running copy; the figure
+// (screenshot filename or diagram name) is declared in frontmatter `media`.
+// (Screenshots are validated filenames, NOT the image() helper — see the
+// dist-weight rationale at the top of contentSchemas.ts.)
 const projects = defineCollection({
-  loader: glob({ pattern: '**/*.json', base: './src/content/projects' }),
-  schema: z.object({
-    // Display identity
-    name: z.string(),
-    order: z.number().default(0),
-    isPrivate: z.boolean().default(false),
-    privateNote: z.string().optional(),
-
-    // External links (github, npm, live demo, etc.)
-    links: z
-      .array(
-        z.object({
-          href: z.string(),
-          label: z.string(),
-          type: z.enum(['github', 'npm', 'live', 'other']),
-        }),
-      )
-      .optional(),
-    npmPackage: z.string().optional(),
-
-    // CON-001 evidence fields — all optional; absent = evidence not yet captured.
-    problem: z.string().optional(),
-    role: z.string().optional(),
-    team: z.string().optional(),
-    stack: z.string().optional(),
-    constraints: z.string().optional(),
-    decisiveChoice: z.string().optional(),
-    rejectedPath: z.string().optional(),
-    outcome: z
-      .object({
-        summary: z.string(),
-        baseline: z.string().optional(),
-        source: z.string().optional(),
-      })
-      .optional(),
-    proofLinks: z.array(z.string()).optional(),
-    status: z.string().optional(),
-    limitation: z.string().optional(),
-
-    // Figure — screenshot or the topology-svg (Mars-specific inline SVG)
-    figureType: z.enum(['screenshot', 'topology-svg']),
-    figure: z.object({
-      src: z.string().optional(), // relative to /public (screenshot only)
-      alt: z.string(),
-      caption: z.string(),
-      // Intrinsic pixel dimensions of the screenshot (PERF-005 / CLS gate).
-      // Supplied on <img> so the browser reserves the 16:9-ish box before the
-      // file decodes; CSS (.projects-screenshot { width:100%; height:auto })
-      // scales it responsively while the ratio is held pre-load. Optional so
-      // the topology-svg figure (no raster) need not carry them.
-      width: z.number().optional(),
-      height: z.number().optional(),
-      // Responsive-source widths generated by scripts/optimize-media.mjs
-      // (PERF-005/PERF-006). Drives the AVIF/WebP <source srcset>. Must mirror
-      // the `widths` for this source in optimize-media.mjs; largest entry is the
-      // <img> fallback (opt/<base>-<maxWidth>.jpg). Optional (topology-svg has none).
-      widths: z.array(z.number()).optional(),
-    }),
-
-    // Body copy and optional proof/note callout
-    body: z.array(z.string()),
-    proofStatement: z.string().optional(),
-    proofLabel: z.string().optional(),
-  }),
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/projects' }),
+  schema: projectSchema,
 });
 
-// ---------------------------------------------------------------------------
-// Graveyard — projects that didn't survive.
-// Evidence fields aligned with CON-001 spirit; all optional.
-// ---------------------------------------------------------------------------
+// Dead projects — src/content/graveyard/*.mdx. MDX (not yaml/json) on purpose:
+// the specimens' prose is long-form and will grow richer in P13; the loader and
+// body handling stay consistent with `posts`. Frontmatter carries the specimen
+// record (interred/cause/lesson/…); the body carries the story paragraphs.
 const graveyard = defineCollection({
-  loader: glob({ pattern: '**/*.json', base: './src/content/graveyard' }),
-  schema: z.object({
-    // Display identity
-    name: z.string(),
-    order: z.number().default(0),
-
-    // Link to the (often still-alive) domain
-    link: z.object({
-      href: z.string(),
-      label: z.string(),
-    }),
-
-    // Specimen image
-    image: z.object({
-      src: z.string(), // relative to /public (source raster; rendering uses the
-                       // optimised opt/graveyard/<id>-<w> variants from PERF-006)
-      alt: z.string(),
-      caption: z.string(),
-      // Intrinsic size of the 768-wide optimised fallback, carried so the <img>
-      // can reserve space and prevent CLS (PERF-006). Optional: entries without
-      // a generated raster simply omit the reservation.
-      width: z.number().optional(),
-      height: z.number().optional(),
-    }),
-
-    // Death certificate fields — these are required; they're what make a specimen
-    interred: z.string(), // year of death / abandonment
-    cause: z.string(),   // short mono-caps cause-of-death tag
-
-    // Evidence-aligned optional fields (not yet filled; kept explicit)
-    premise: z.string().optional(),        // the original hypothesis
-    warningSign: z.string().optional(),    // what should have been spotted earlier
-    causeOfDeath: z.string().optional(),   // longer form than `cause`
-    survivingInsight: z.string().optional(), // what's still valuable
-    artifact: z.string().optional(),       // link to any remaining public artifact
-
-    // Status classification (private / redacted / public)
-    status: z.string().optional(),
-
-    // Body paragraphs and the lesson
-    body: z.array(z.string()),
-    lesson: z.string(),
-  }),
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/graveyard' }),
+  schema: graveyardSchema,
 });
 
 export const collections = { posts, projects, graveyard };

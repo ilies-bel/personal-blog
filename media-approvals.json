@@ -1,9 +1,0 @@
-{
-  "_comment": "Approval entries for assets that: (a) exceed the 500 KB raster limit, or (b) are loaded by script and not detectable via HTML/CSS scan. Keys are paths relative to dist/.",
-  "_unusedOk_comment": "Set unusedOk: true for large assets not reachable via HTML/CSS scan (e.g. loaded by Three.js or other JS at runtime).",
-
-  "assets/posters/poster-2-red-giant.webp": {
-    "reason": "Loaded at runtime by PosterSlideshow.tsx (the reduced-motion hero fallback slideshow). Not referenced in static HTML/CSS — the src is constructed dynamically from the POSTERS constant in src/hero/components/reduced-motion/PosterSlideshow.tsx.",
-    "unusedOk": true
-  }
-}

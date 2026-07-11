@@ -1,0 +1,81 @@
+---
+// AmbientBackdrop — the ZERO-JavaScript celestial wallpaper for reading routes.
+//
+// P4 replaces the inner routes' full-engine backdrops (<BlackHole backdrop /> =
+// three.js + createScene + a live GL context idling behind static copy) with
+// this pure Astro layer: a still capture/poster of the SAME lifecycle frame the
+// engine used to pin, graded by layered CSS gradients in the site palette, with
+// a slow transform-only drift gated on html[data-motion='full']. Reading routes
+// now ship zero three.js bytes and zero WebGL contexts — the room still reads
+// as the hero's, just printed instead of simulated.
+//
+// It deliberately keeps the .bh-root--backdrop / .bh-stage / .bh-backdrop class
+// contract of the old live layer, so every existing page-scoped treatment
+// applies verbatim: About's vignette wash, the projects/writing ledger scrim,
+// the body.backdrop-off corner toggle, and each page's opacity/filter dim (all
+// in hero.css). The variant only picks the poster + the palette grade on top.
+//
+// Variants (P9 art direction — one lifecycle frame per route family):
+//   nebula       — the calm smoky-blue nebula frame (about / writing; the
+//                  engine's stage 3.5, same beat the reduced-motion hero
+//                  poster carries). About re-grades it WARMER, Writing keeps
+//                  the cool gas — both via body[data-route] in hero.css.
+//   star         — the settled yellow-star frame (projects; the engine's
+//                  stage 2.9, captured by scripts/capture-figures.mjs). P9
+//                  adds the sustained-orbit drift on top (hero.css).
+//   transmission — the pale-blue-dot frame (contact; the engine's closing
+//                  stage-4.7 beat, poster-4-dot). hero.css lays static signal
+//                  rings + a slow motion-gated radial pulse over it.
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  variant: 'nebula' | 'star' | 'transmission';
+}
+
+const { variant } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+// The star frame is a build-time capture of the live engine (committed by
+// scripts/capture-figures.mjs). Globbed with a poster fallback so a fresh
+// checkout that predates the capture still builds and shows a warm star.
+const captures = import.meta.glob<{ default: ImageMetadata }>(
+  '../assets/backdrops/*.webp',
+  { eager: true },
+);
+const starCapture = captures['../assets/backdrops/backdrop-star.webp']?.default ?? null;
+
+const POSTER_BY_VARIANT: Record<Props['variant'], string> = {
+  nebula: `${base}assets/posters/poster-3-nebula.webp`.replace(/\/+/g, '/'),
+  star: starCapture?.src ?? `${base}assets/posters/poster-2-red-giant.webp`.replace(/\/+/g, '/'),
+  transmission: `${base}assets/posters/poster-4-dot.webp`.replace(/\/+/g, '/'),
+};
+const poster = POSTER_BY_VARIANT[variant];
+---
+
+{/* Same fixed, inert layering contract as the old live backdrop (hero.css):
+    the wrapper is fixed/inset:0/pointer-events:none so this subtree can never
+    own a flow box behind the reading column (CLS 0 by construction). */}
+<div
+  class="bh-root bh-root--backdrop ambient-backdrop"
+  data-variant={variant}
+  aria-hidden="true"
+>
+  <div class="bh-stage bh-backdrop ambient-backdrop-stage">
+    <img
+      class="ambient-backdrop-poster"
+      src={poster}
+      alt=""
+      width="1920"
+      height="1080"
+      decoding="async"
+      loading="eager"
+      fetchpriority="low"
+      draggable="false"
+    />
+    {/* Palette grade: variant-tinted light pools + a floor gradient, layered
+        OVER the poster and UNDER the page-scoped vignette/scrim pseudo-elements
+        hero.css already hangs on .bh-backdrop. Styled in hero.css (the ambient
+        section) next to the rest of the backdrop treatment. */}
+    <div class="ambient-backdrop-grade"></div>
+  </div>
+</div>

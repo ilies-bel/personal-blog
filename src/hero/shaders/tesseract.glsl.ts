@@ -1,4 +1,9 @@
-// Tesseract beam shader — the GLSL for the SOLID-BEAM lattice rig (buildTesseract.ts).
+// Tesseract beam shader — the GLSL for the SOLID-BEAM lattice look. The live rig
+// that compiled it was retired (the article backdrop ships as a poster now); the
+// fragment shader below is kept as a REAL, readable artifact for the shader
+// catalog on /behind-the-build (src/lib/shaderCatalog.ts excerpts it). Its
+// companion vertex/glow passes were deleted with the rig — see git history
+// (P11 knip cleanup) to resurrect the full pipeline.
 //
 // This is NOT a raymarch. The geometry is a single InstancedMesh of unit boxes; each
 // instance is one long shelf-back BEAM placed in a nested-frame "bookcase tunnel". The
@@ -20,56 +25,6 @@
 // Per-instance varyings ride in on custom InstancedBufferAttributes set up by the rig
 // (aBeamAxis = the beam's local long axis, aHue = warm/cool offset, aStreak = streak
 // amount, aDepth = normalised depth of the frame this beam belongs to).
-
-const tesseractBeamVert = /* glsl */ `
-  precision highp float;
-
-  attribute vec3 aBeamAxis;   // unit local long axis of THIS beam, in object space
-  attribute float aHue;       // -1..1 warm(-)→cool(+) per-beam tint offset
-  attribute float aStreak;    // 0..1 how streaked/elongated this beam reads
-  attribute float aDepth;     // 0..1 normalised depth of the frame (0 near → 1 far)
-
-  uniform float uTime;
-
-  varying vec3 vWorldNormal;
-  varying vec3 vViewPos;      // view-space position (core light + depth haze)
-  varying vec3 vColor;        // per-instance base colour (instanceColor)
-  varying float vLong;        // 0..1 along the beam's long axis
-  varying float vAcross;      // 0..1 across the beam's short axes (edge-leak rim)
-  varying float vHue;
-  varying float vStreak;
-  varying float vDepth;
-  varying float vFaceLong;    // 1 on the long side faces, 0 on the end caps
-
-  void main() {
-    #ifdef USE_INSTANCING_COLOR
-      vColor = instanceColor;
-    #else
-      vColor = vec3(0.5);
-    #endif
-    vHue = aHue;
-    vStreak = aStreak;
-    vDepth = aDepth;
-
-    // Local position on the unit box (BoxGeometry is centred, half-extent 0.5).
-    float longProj = dot(position, aBeamAxis);            // -0.5..0.5 along length
-    vLong = clamp(longProj + 0.5, 0.0, 1.0);
-    vec3 acrossVec = position - aBeamAxis * longProj;      // residual in the short plane
-    vAcross = clamp(length(acrossVec) * 2.0, 0.0, 1.0);    // 0 centre → ~1 at short edges
-
-    // Long side faces (normal perpendicular to the long axis) carry the edge-leak rim.
-    vFaceLong = 1.0 - step(0.5, abs(dot(normalize(normal), aBeamAxis)));
-
-    mat4 mv = modelViewMatrix * instanceMatrix;
-    vec4 mvPos = mv * vec4(position, 1.0);
-    vViewPos = mvPos.xyz;
-
-    mat3 nm = mat3(mv);
-    vWorldNormal = normalize(nm * normal);
-
-    gl_Position = projectionMatrix * mvPos;
-  }
-`;
 
 export const tesseractBeamFrag = /* glsl */ `
   precision highp float;
@@ -184,39 +139,5 @@ export const tesseractBeamFrag = /* glsl */ `
     outc = outc / (outc + vec3(1.6)) * 1.55;
 
     gl_FragColor = vec4(outc, 1.0);
-  }
-`;
-
-// A fullscreen vanishing-point GLOW pass, composited additively AFTER the beam scene so
-// the centre of the tunnel reads as a bright leaking core (light pouring up the shaft)
-// independent of where the beams happen to land. Dimmed by the same uDim.
-const tesseractGlowVert = /* glsl */ `
-  precision highp float;
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = vec4(position.xy, 0.0, 1.0);
-  }
-`;
-
-const tesseractGlowFrag = /* glsl */ `
-  precision highp float;
-  varying vec2 vUv;
-  uniform vec2 uLook;        // -1..1 pointer offset (the glow tracks the camera pan)
-  uniform float uAspect;
-  uniform vec3 uCoreColor;
-  uniform float uDim;
-  uniform float uGlow;
-  void main() {
-    vec2 p = (vUv - 0.5);
-    p.x *= uAspect;
-    vec2 c = vec2(uLook.x * 0.12 * uAspect, uLook.y * 0.10); // vanishing point slides
-    float d = length(p - c);
-    // TIGHT core glow only — a small bright pool at the vanishing point, no broad veil
-    // (a wide falloff washes the whole reading area warm and kills the contrast).
-    float core = exp(-d * d * 22.0) * uGlow;
-    core += exp(-d * d * 5.0) * uGlow * 0.25;
-    vec3 col = uCoreColor * core * uDim;
-    gl_FragColor = vec4(col, 1.0);
   }
 `;

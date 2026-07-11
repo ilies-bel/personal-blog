@@ -34,7 +34,12 @@
      improves (was pinned at 4.5:1). These two are INTERACTIVE-text-only tokens —
      decorative fills keep --hud-rail-dim above. */
   --hud-rail-dim-text: oklch(0.66 0.012 78); /* resting nav number/title text */
-  --hud-rail-dim-sub: oklch(0.43 0.012 78); /* dimmest non-current subtext */
+  /* -sub RAISED again for P8 (0.43 → 0.575): the dimmest rung still LABELS real
+     nav subtext (.hud-nav-destination on non-current rows), and 0.43 measured
+     2.48:1 against --bg — under the WCAG AA 4.5:1 floor test/contrast.test.mjs
+     now enforces. 0.575 is the minimal lightness that clears it (4.60:1) while
+     staying plainly the dimmest text rung (dim-text 0.66, current row 0.92). */
+  --hud-rail-dim-sub: oklch(0.575 0.012 78); /* dimmest non-current subtext */
   /* INTERACTIVE HUD resting foreground — the interaction layer's answer to
      --fg-faint. The compass idle readout, the arc gauge's station digits/label
      caption and other CLICKABLE/actionable HUD text rest here (~15-20% brighter
@@ -61,15 +66,7 @@
      belongs to the ink, not to the interface. Contrast vs --bg (L 0.13):
      dim ≈ 9.9:1, faint ≈ 4.6:1 (faint stays micro-label-only, as today). */
   --fg-chrome: var(--fg-overlay);            /* chrome bright — current/hover */
-  /* EXP-013: raised from oklch(0.75) → oklch(0.84) to clear the 4.5:1 AA
-     threshold for small (11 px) identity-role text against the Black Hole
-     backdrop (bg ≈ rgb(64,67,71)) and the Red Giant backdrop (bg ≈ rgb(79,75,71)).
-     At 0.75 the measured ratios were 4.49:1 / 4.15:1 — just below the floor.
-     At 0.84 they become ≥ 4.9:1 / ≥ 4.6:1 even accounting for ±5-unit per-channel
-     WebGL frame-timing variation in the bg.  All downstream chrome-ramp usages
-     (subnav, article kicker, HUD overlay) benefit: contrast vs --bg only rises.
-     The step to chrome-bright (--fg-chrome = oklch(0.92)) remains clearly felt. */
-  --fg-chrome-dim: oklch(0.84 0.01 250);     /* chrome resting text */
+  --fg-chrome-dim: oklch(0.75 0.01 250);     /* chrome resting text */
   --fg-chrome-faint: oklch(0.59 0.01 250);   /* chrome micro labels / captions */
 
   /* Brand */
@@ -78,6 +75,17 @@
   --highlight: oklch(0.78 0.085 72);    /* white-hot gold, rare readout signal */
   --ember: oklch(0.58 0.08 48);         /* red-giant residue, surface wash only */
   --link: var(--accent);
+
+  /* FOCUS RING PAIR (P8) — the sitewide keyboard-focus treatment is a DOUBLE
+     RING: a 2px --focus-ring outline (offset 2px) over a 2px --focus-halo
+     box-shadow that fills the offset gap. The gold ring carries focus on the
+     dark room; the near-black halo separates the ring from BRIGHT grounds (the
+     supernova whiteout, the yellow star, gold button fills), so the indicator
+     reads on any surface the scene can produce. Consumed by base.css's global
+     :focus-visible rule; inside .bh-root[data-zone='bright'] the ring rides the
+     flipped dark --accent automatically (a dark ring on the bleached canvas). */
+  --focus-ring: var(--accent);
+  --focus-halo: oklch(0.13 0.008 80 / 0.92);
 
   /* HUD text-shadow tint — the inner legibility halo behind the floating HUD/manifesto
      text. Defaults to neutral black; the per-scene blocks (hero.css [data-scene]) can
@@ -154,61 +162,6 @@
   /* Easing — confident ease-out curves; no bounce, no elastic. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* Motion verb easing — shared physics grammar (EXP-037).
-     The house curve --ease-out-quint is the default for all verbs; the peel
-     verb uses a spec-mandated override (slower start, sharp settle) that
-     reinforces the geological cross-section reading direction. */
-  --ease-verb-peel: cubic-bezier(0.2, 0, 0.1, 1); /* BtB peel: spec-mandated */
-
-  /* Transition duration tokens — navigation and interaction choreography.
-     SINGLE CSS SOURCE OF TRUTH. Every other stylesheet must read from these;
-     no stylesheet may hard-code its own duration literal for a named transition.
-     JS mirrors live in src/lib/transitionDurations.ts (any change here must be
-     reflected there, and vice versa).
-
-     Governance: all --transition-dur-* values for DESTINATION and INTERACTION
-     transitions must be <= 700ms. The JS unit test (test/transitionDurations.test.mjs)
-     asserts this for every token; see transitionDurations.ts for the full contract.
-
-     SET-PIECE tokens (warp jump-out) are NOT listed here because the canvas
-     animation is driven entirely from JavaScript; only the JS module is the
-     source for those values.
-
-     DESTINATION — transitions that reveal content at the arrival page:
-       vt-settle  : outgoing content settles quickly so the incoming rise owns the moment
-       vt-rise    : incoming content rises into place (the primary arrival move)
-       warp-arrive: warp-streak overlay fades over already-loaded About content
-
-     ENTRANCE — hard-load-only visual choreography; content is already in the DOM.
-       page-enter     : hero block stagger (kicker, h1, lead)
-       page-enter-rows: first-6-row stagger for list/archive pages */
-  --transition-dur-settle: 0.25s;           /* vt-settle outgoing (250ms) */
-  --transition-dur-rise: 0.45s;             /* vt-rise incoming (450ms) */
-  --transition-dur-page-enter: 0.6s;        /* hard-load hero block (600ms) */
-  --transition-dur-page-enter-rows: 0.5s;   /* hard-load row stagger (500ms) */
-
-  /* Verb INTERACTION duration tokens — all <= 700ms (destination-transition cap).
-     CSS mirrors for VERB_*_MS constants in src/lib/transitionDurations.ts.
-     Any change here must be reflected in transitionDurations.ts, and vice versa.
-     Governance: docs/specs/transition-contract.md §Duration token rule. */
-  --verb-dur-arc: 0.35s;              /* Projects arc hover (350ms) */
-  --verb-dur-coalesce-pull: 0.3s;     /* Writing coalesce sibling pull (300ms) */
-  --verb-dur-contract: 0.2s;          /* Graveyard contract hover (200ms) */
-  --verb-dur-peel: 0.35s;             /* Behind the Build peel hover (350ms) */
-  --verb-dur-settle-hover: 0.25s;     /* About settle hover brightening (250ms) */
-  --verb-dur-transmit-ripple: 0.4s;   /* Contact transmit field ripple (400ms) */
-  --verb-dur-transmit-shift: 0.3s;    /* Contact transmit submit shift (300ms) */
-
-  /* Verb ENTRANCE duration tokens — exempt from cap (content pre-rendered).
-     Not in DESTINATION_TOKENS; the unit test does not enforce the cap here.
-     Mirrors: VERB_*_ENTRY_MS constants in src/lib/transitionDurations.ts. */
-  --verb-dur-arc-entry: 0.5s;         /* Projects stagger arc entry (500ms) */
-  --verb-dur-coalesce-entry: 0.6s;    /* Writing coalesce page-entry drift (600ms) */
-  --verb-dur-contract-entry: 0.9s;    /* Graveyard contract fade per specimen (900ms) */
-  --verb-dur-peel-entry: 0.45s;       /* Behind the Build peel stagger slide (450ms) */
-  --verb-dur-settle-entry: 0.7s;      /* About settle page entry (700ms) */
-  --verb-dur-transmit-entry: 0.5s;    /* Contact transmit convergence entry (500ms) */
-
   /* Boot-to-HUD intro glide timing — the SINGLE source for the readout's downward
      travel from loader-centre to the bottom HUD slot, shared by hud.css (the glide
      transition itself) and scene.css (which sequences the loader fades around it).
@@ -250,5 +203,32 @@
   --bloom-red: oklch(0.88 0.075 47);         /* red-giant ember */
   --bloom-end: var(--bloom);                 /* black hole → warm bone (default) */
 
+  /* ROUTE ACCENT TOKENS (P9) — the per-route tint seam. BaseLayout stamps
+     body[data-route] from the URL; the overrides below shift these two tokens
+     per route so each section's furniture (route-ending hairlines/arrows, the
+     behind-the-build measurement ticks, the graveyard grain) carries its own
+     temperature. FILLS-ONLY, like --hud-rail-dim: neither token may ever
+     colour text — the audited pairs in test/contrast.test.mjs stay the whole
+     text story. Subtle by design: a tint shift inside the one brand system,
+     never a theme swap. */
+  --route-accent: var(--accent);   /* decorative hairlines / rules / glyph fills */
+  --route-grain: 0;                /* film-grain overlay opacity (graveyard only) */
+
   color-scheme: dark;
 }
+
+/* Per-route accent shifts (fills-only — see the token comment above).
+   work            sustained orbit — the settled star's gold, unchanged.
+   writing         coalescing nebula — a cool slate pulled from the gas.
+   graveyard       cooling residue — ember with the heat gone, plus grain.
+   behind-the-build exposed anatomy — the instrument gold, a touch brighter.
+   about           human scale — warmer, toward the ember.
+   contact         transmission — the pale-blue-dot's cool signal. */
+body[data-route='writing'] { --route-accent: oklch(0.68 0.045 245); }
+body[data-route='graveyard'] {
+  --route-accent: oklch(0.6 0.035 55);
+  --route-grain: 0.12;
+}
+body[data-route='behind-the-build'] { --route-accent: oklch(0.76 0.095 80); }
+body[data-route='about'] { --route-accent: oklch(0.72 0.08 62); }
+body[data-route='contact'] { --route-accent: oklch(0.74 0.05 242); }

@@ -6,8 +6,11 @@ import {
   SITE_TITLE,
   SITE_DESCRIPTION,
   DEFAULT_OG_IMAGE,
-  SITE_OG_LOCALE,
-  SITE_OWNER,
+  SITE_LANG,
+  AUTHOR_NAME,
+  BRAND_ROLE,
+  SOCIALS,
+  withBase,
 } from '../consts';
 // Import the above-the-fold faces so Vite resolves their final fingerprinted,
 // base-prefixed URLs (?url guarantees the href can never drift from the URL
@@ -24,111 +27,188 @@ interface Props {
   description?: string;
   // Path of the OG image relative to /public, or an absolute URL.
   ogImage?: string;
-  // OG image dimensions in pixels (defaults: 1200×630, the standard card size).
-  // Pass explicit values when a page uses a non-standard image.
-  ogImageWidth?: number;
-  ogImageHeight?: number;
-  // Alt text for the OG / Twitter card image (used by screen readers and
-  // unfurlers that surface image descriptions).
-  ogImageAlt?: string;
   // 'website' for index/listing pages, 'article' for posts.
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
-  // When true, emits `noindex, nofollow` so crawlers skip this page (e.g. 404).
+  // Extra schema.org nodes a page wants to append to the JSON-LD @graph
+  // (e.g. a project page adding CreativeWork/SoftwareSourceCode).
+  structuredData?: Record<string, unknown>[];
+  // Article author names (defaults to the site owner). Co-authors listed
+  // in post frontmatter flow through here into the BlogPosting author array.
+  authors?: string[];
+  // Error/utility pages (404): noindex + no canonical — the page is served at
+  // arbitrary URLs, so a canonical to /404/ would point at a non-route.
   noindex?: boolean;
-  // Emit a Person schema block (home, about) alongside the default page schema.
-  withPerson?: boolean;
-  // Emit a CreativeWork schema block (projects page).
-  withCreativeWork?: boolean;
 }
 
 const {
   title,
   description = SITE_DESCRIPTION,
   ogImage = DEFAULT_OG_IMAGE,
-  ogImageWidth = 1200,
-  ogImageHeight = 630,
-  ogImageAlt,
   type = 'website',
   publishedTime,
   modifiedTime,
+  structuredData = [],
+  authors = [AUTHOR_NAME],
   noindex = false,
-  withPerson = false,
-  withCreativeWork = false,
 } = Astro.props;
 
 // Canonical URL resolved against `site` + `base` from astro.config.
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 
-// Normalize BASE_URL: strip trailing slash so `${base}/path` never produces
-// `//path` (a protocol-relative URL) when Astro is configured with base: '/'.
-// Example: BASE_URL='/' → base='', so `${base}/favicon.svg` = '/favicon.svg'. ✓
-// Example: BASE_URL='/personal-blog/' → base='/personal-blog'. ✓
-const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-
 // Resolve OG image to an absolute URL (required by Open Graph).
 const ogImageURL = ogImage.startsWith('http')
   ? ogImage
-  : new URL(`${base}/${ogImage}`, Astro.site).href;
+  : new URL(`${import.meta.env.BASE_URL}/${ogImage}`.replace(/\/+/g, '/'), Astro.site).href;
 
 const fullTitle = title === SITE_TITLE ? title : `${title} · ${SITE_TITLE}`;
 
-// The site owner as a schema.org Person — reused as the author in BlogPosting
-// and as a standalone Person node on the home/about pages.
-// The canonical profile URL is the about page on the live site.
-const personNode = {
+// JSON-LD structured data — one @graph carrying every node so a page has a
+// single, complete machine-readable identity: the site owner (Person), the
+// WebSite, a BreadcrumbList on inner routes, BlogPosting on articles, plus
+// whatever page-specific nodes arrive via the structuredData prop.
+const siteURL = Astro.site ? new URL('/', Astro.site).href : canonicalURL.href;
+const personId = `${siteURL}#person`;
+
+const personLd = {
   '@type': 'Person',
-  name: SITE_OWNER.name,
-  jobTitle: SITE_OWNER.jobTitle,
-  url: new URL('/about/', Astro.site).href,
-  sameAs: [...SITE_OWNER.sameAs],
+  '@id': personId,
+  name: AUTHOR_NAME,
+  jobTitle: BRAND_ROLE,
+  url: siteURL,
+  email: `mailto:${SOCIALS.email}`,
+  sameAs: [SOCIALS.github, SOCIALS.twitter].filter(Boolean),
 };
 
-// JSON-LD structured data: WebSite for general pages, BlogPosting for articles.
-const jsonLd =
+const websiteLd = {
+  '@type': 'WebSite',
+  name: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  url: siteURL,
+  author: { '@id': personId },
+  publisher: { '@id': personId },
+};
+
+// Breadcrumbs for inner routes: Home → (section) → page. The /posts/* URLs
+// belong editorially to the /writing hub, so that segment maps to Writing.
+const SEGMENT_LABELS: Record<string, { name: string; href: string }> = {
+  posts: { name: 'Writing', href: '/writing' },
+  writing: { name: 'Writing', href: '/writing' },
+  projects: { name: 'Work', href: '/projects' },
+  graveyard: { name: 'Graveyard', href: '/graveyard' },
+  about: { name: 'About', href: '/about' },
+  contact: { name: 'Contact', href: '/contact' },
+  'behind-the-build': { name: 'Behind the Build', href: '/behind-the-build' },
+};
+
+const pathSegments = Astro.url.pathname.split('/').filter(Boolean);
+const breadcrumbLd =
+  !noindex && pathSegments.length > 0 && Astro.site
+    ? {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: siteURL },
+          ...pathSegments.map((segment, i) => {
+            const isLast = i === pathSegments.length - 1;
+            const mapped = SEGMENT_LABELS[segment];
+            const name = isLast ? title : (mapped?.name ?? segment);
+            const item = isLast
+              ? canonicalURL.href
+              : new URL(mapped?.href ?? `/${pathSegments.slice(0, i + 1).join('/')}`, Astro.site).href;
+            return { '@type': 'ListItem', position: i + 2, name, item };
+          }),
+        ],
+      }
+    : null;
+
+const articleLd =
   type === 'article'
     ? {
-        '@context': 'https://schema.org',
         '@type': 'BlogPosting',
         headline: title,
         description,
         image: ogImageURL,
         datePublished: publishedTime?.toISOString(),
         dateModified: (modifiedTime ?? publishedTime)?.toISOString(),
-        author: personNode,
         mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalURL.href },
+        author: authors.map((name) =>
+          name === AUTHOR_NAME ? { '@id': personId } : { '@type': 'Person', name },
+        ),
+        publisher: { '@id': personId },
       }
-    : {
-        '@context': 'https://schema.org',
-        '@type': 'WebSite',
-        name: SITE_TITLE,
-        description: SITE_DESCRIPTION,
-        url: canonicalURL.href,
-      };
+    : null;
 
-// Optional Person schema (home + about pages).
-const personJsonLd = withPerson
-  ? { '@context': 'https://schema.org', ...personNode }
-  : null;
-
-// Optional CreativeWork schema (projects page).
-const creativeWorkJsonLd = withCreativeWork
-  ? {
-      '@context': 'https://schema.org',
-      '@type': 'CreativeWork',
-      name: fullTitle,
-      description,
-      url: canonicalURL.href,
-      author: personNode,
-    }
-  : null;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [personLd, websiteLd, breadcrumbLd, articleLd, ...structuredData].filter(Boolean),
+};
 ---
 
 <!-- Charset & viewport -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="generator" content={Astro.generator} />
+
+<!-- Defense-in-depth CSP, baked into the HTML so it also protects requests that
+     bypass the Cloudflare edge (e.g. hitting the GitHub Pages origin directly).
+     The FULL policy lives in the Cloudflare Response Header Transform rule —
+     exact value generated by scripts/gen-csp-hashes.mjs into
+     docs/SECURITY-HEADERS.md. This meta tag carries only the subset that is
+     (a) legal in a meta tag and (b) stable across builds:
+       • NO script-src / default-src — the inline-script sha256 hashes (the
+         pre-paint script below + Astro's island/router runtime scripts) only
+         exist after the build bundles and minifies, so this component cannot
+         know them at render time; hardcoding them would break on any Astro
+         upgrade, and a hash-less default-src 'self' would block the site's own
+         inline scripts. Script-src enforcement therefore lives ONLY in the
+         edge header, which the gen-csp-hashes --check CI gate keeps current.
+       • NO frame-ancestors — ignored in meta CSP by spec (header-only).
+       • style-src keeps 'unsafe-inline' deliberately: build.inlineStylesheets
+         'always' ships each page's CSS as inline <style>, and React islands
+         set style attributes; hashing the elements would disable
+         'unsafe-inline' and break the attribute styles.
+       • img-src allows data: for the inline SVG grain/placeholder data-URIs.
+     Directives omitted here (script-src, worker-src, …) simply fall through to
+     "allow" in this meta layer — the edge header closes them. -->
+<meta
+  http-equiv="Content-Security-Policy"
+  content="object-src 'none'; base-uri 'self'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self'; upgrade-insecure-requests"
+/>
+
+<!-- Pre-paint environment flags, set before first paint so CSS can branch on
+     them with zero flash:
+       • html.js          — JavaScript is running. The immersive layers (intro
+                            loader, 1800svh scroll track) are gated on this class
+                            so a no-JS visitor gets the static edition instead of
+                            an opaque loader that never lifts.
+       • html[data-motion] — resolved motion preference ('full' | 'reduced'):
+                            manual override (the 'bh:reduced-motion' localStorage
+                            key the hero's corner toggle writes) if set, else the
+                            OS preference. The single source of truth every
+                            JS/CSS consumer reads (see src/lib/motion.ts, which
+                            owns the key + keeps the attribute in sync with OS
+                            changes at runtime — keep the literals aligned).
+     Must stay is:inline (pre-paint, unbundled) and tiny. -->
+<script is:inline>
+  document.documentElement.classList.add('js');
+  (function () {
+    var motion = null;
+    try {
+      var stored = window.localStorage.getItem('bh:reduced-motion');
+      if (stored === 'true') motion = 'reduced';
+      else if (stored === 'false') motion = 'full';
+    } catch (e) {
+      /* private mode — fall through to the OS preference */
+    }
+    if (!motion) {
+      motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'reduced'
+        : 'full';
+    }
+    document.documentElement.dataset.motion = motion;
+  })();
+</script>
 
 <!-- Preload the two above-the-fold faces (Space Grotesk latin for display/body,
      IBM Plex Mono latin for the wordmark + role line) to minimize the FOUT swap
@@ -141,35 +221,34 @@ const creativeWorkJsonLd = withCreativeWork
 <title>{fullTitle}</title>
 <meta name="title" content={fullTitle} />
 <meta name="description" content={description} />
-<link rel="canonical" href={canonicalURL} />
-<meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
+{!noindex && <link rel="canonical" href={canonicalURL} />}
+<meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow'} />
 
-<!-- Icons -->
+<!-- Icons. hrefs go through withBase() — naive `${BASE_URL}/x` concatenation
+     with base '/' produced protocol-relative '//x' URLs that browsers resolved
+     against a bogus host, so every icon 404'd. -->
 <!-- SVG first: modern browsers use it and it self-inverts via its own @media rule. -->
-<link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+<link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
 <!-- 32×32 raster: light/dark variants served by OS color-scheme. -->
-<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: light)" href={`${base}/favicon-32x32.png`} />
-<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)"  href={`${base}/favicon-32x32-dark.png`} />
+<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: light)" href={withBase('favicon-32x32.png')} />
+<link rel="icon" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)"  href={withBase('favicon-32x32-dark.png')} />
 <!-- 16×16 raster: light/dark variants. -->
-<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: light)" href={`${base}/favicon-16x16.png`} />
-<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: dark)"  href={`${base}/favicon-16x16-dark.png`} />
+<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: light)" href={withBase('favicon-16x16.png')} />
+<link rel="icon" type="image/png" sizes="16x16" media="(prefers-color-scheme: dark)"  href={withBase('favicon-16x16-dark.png')} />
 <!-- .ico last: universal fallback for browsers that ignore the above (light default). -->
-<link rel="icon" href={`${base}/favicon.ico`} sizes="any" />
+<link rel="icon" href={withBase('favicon.ico')} sizes="any" />
 <!-- Apple touch icon: light/dark variants (iOS, opaque background required). -->
-<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: light)" href={`${base}/apple-touch-icon.png`} />
-<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: dark)"  href={`${base}/apple-touch-icon-dark.png`} />
+<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: light)" href={withBase('apple-touch-icon.png')} />
+<link rel="apple-touch-icon" sizes="180x180" media="(prefers-color-scheme: dark)"  href={withBase('apple-touch-icon-dark.png')} />
 
 <!-- Open Graph -->
 <meta property="og:type" content={type} />
 <meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
-<meta property="og:url" content={canonicalURL} />
+{!noindex && <meta property="og:url" content={canonicalURL} />}
 <meta property="og:image" content={ogImageURL} />
-<meta property="og:image:width" content={String(ogImageWidth)} />
-<meta property="og:image:height" content={String(ogImageHeight)} />
-{ogImageAlt && <meta property="og:image:alt" content={ogImageAlt} />}
 <meta property="og:site_name" content={SITE_TITLE} />
-<meta property="og:locale" content={SITE_OG_LOCALE} />
+<meta property="og:locale" content={SITE_LANG} />
 {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
 {modifiedTime && <meta property="article:modified_time" content={modifiedTime.toISOString()} />}
 
@@ -178,12 +257,9 @@ const creativeWorkJsonLd = withCreativeWork
 <meta name="twitter:title" content={fullTitle} />
 <meta name="twitter:description" content={description} />
 <meta name="twitter:image" content={ogImageURL} />
-{ogImageAlt && <meta name="twitter:image:alt" content={ogImageAlt} />}
 
 <!-- Structured data -->
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
-{personJsonLd && <script type="application/ld+json" set:html={JSON.stringify(personJsonLd)} />}
-{creativeWorkJsonLd && <script type="application/ld+json" set:html={JSON.stringify(creativeWorkJsonLd)} />}
 
 <!-- Theme color + scheme: the blue-hour-terminal dark room (--bg). The site is
      dark everywhere, so the browser chrome is told to match the room. -->

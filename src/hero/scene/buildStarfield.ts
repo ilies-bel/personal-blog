@@ -1,19 +1,19 @@
 // Lensed starfield + plain distant-star rigs.
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, Scene, ShaderMaterial, Sphere, UniformsUtils, Vector3 } from 'three';
+import * as THREE from 'three';
 import { CFG, densityCompensation } from '../lib/config';
 import { starVertexShader, starFragmentShader, distantStarVertexShader, distantStarFragmentShader } from '../shaders/star.glsl';
 import type { Uniforms, UniformRig } from './types';
 
 export interface StarRig extends UniformRig {
-  pts: Points; // primary lensed starfield (frame toggles .visible)
-  secPts: Points; // secondary image (kept hidden — caustic pile-up)
-  geo: BufferGeometry;
-  mat: ShaderMaterial;
-  matSec: ShaderMaterial; // secondary material (cloned uniforms, sign -1)
+  pts: THREE.Points; // primary lensed starfield (frame toggles .visible)
+  secPts: THREE.Points; // secondary image (kept hidden — caustic pile-up)
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
+  matSec: THREE.ShaderMaterial; // secondary material (cloned uniforms, sign -1)
   uniforms: Uniforms; // primary's shared block (matSec clones it)
   dispose: () => void;
 }
-export function buildStarfield(scene: Scene, particleCount: number, pixelRatio: number, lowTier = false): StarRig {
+export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false): StarRig {
   const starN = Math.max(2500, Math.floor(particleCount * 0.11 * CFG.starDensity));
   // Low-tier density compensation, gated on the explicit lowTier flag (the tier
   // signal) so the starfield brightens in lockstep with the disk on the low fallback
@@ -34,10 +34,10 @@ export function buildStarfield(scene: Scene, particleCount: number, pixelRatio: 
     starPos[i * 3 + 2] = r * s * Math.sin(t);
     starSeed[i] = Math.random();
   }
-  const geo = new BufferGeometry();
-  geo.setAttribute('position', new BufferAttribute(starPos, 3));
-  geo.setAttribute('aSeed', new BufferAttribute(starSeed, 1));
-  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e7);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(starSeed, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
   // ~one revolution every 1200s (~20 min) — very slow, subtle drift to reveal the lensing warp.
   const STAR_ORBIT_SPEED = (Math.PI * 2) / 1200; // (2π)/1200 ≈ 0.00524 rad/s
@@ -54,23 +54,23 @@ export function buildStarfield(scene: Scene, particleCount: number, pixelRatio: 
     uHole: { value: 0.12 },
     uRotSpeed: { value: STAR_ORBIT_SPEED },
   };
-  const mat = new ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: starVertexShader,
     fragmentShader: starFragmentShader,
     transparent: true,
-    blending: AdditiveBlending,
+    blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
   const matSec = mat.clone();
-  matSec.uniforms = UniformsUtils.clone(uniforms);
+  matSec.uniforms = THREE.UniformsUtils.clone(uniforms);
   matSec.uniforms.uImageSign.value = -1.0;
 
-  const pts = new Points(geo, mat);
+  const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
   scene.add(pts);
-  const secPts = new Points(geo, matSec);
+  const secPts = new THREE.Points(geo, matSec);
   secPts.frustumCulled = false;
   secPts.visible = false; // secondary point image piles into a hot point near the caustic
   scene.add(secPts);
@@ -86,11 +86,11 @@ export function buildStarfield(scene: Scene, particleCount: number, pixelRatio: 
   return { pts, secPts, geo, mat, matSec, uniforms, dispose };
 }
 export interface DistantStarRig extends UniformRig {
-  pts: Points;
-  geo: BufferGeometry;
-  mat: ShaderMaterial;
+  pts: THREE.Points;
+  geo: THREE.BufferGeometry;
+  mat: THREE.ShaderMaterial;
 }
-export function buildDistantStar(scene: Scene, pixelRatio: number): DistantStarRig {
+export function buildDistantStar(scene: THREE.Scene, pixelRatio: number): DistantStarRig {
   const N = 9;
   const pos = new Float32Array(N * 3);
   const shard = new Float32Array(N);
@@ -99,11 +99,11 @@ export function buildDistantStar(scene: Scene, pixelRatio: number): DistantStarR
     shard[i] = i / (N - 1);
     seed[i] = Math.random();
   }
-  const geo = new BufferGeometry();
-  geo.setAttribute('position', new BufferAttribute(pos, 3));
-  geo.setAttribute('aShard', new BufferAttribute(shard, 1));
-  geo.setAttribute('aSeed', new BufferAttribute(seed, 1));
-  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e7);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aShard', new THREE.BufferAttribute(shard, 1));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e7);
 
   const uniforms: Uniforms = {
     uTime: { value: 0 },
@@ -115,16 +115,16 @@ export function buildDistantStar(scene: Scene, pixelRatio: number): DistantStarR
     uHole: { value: 0.12 },
     uPresence: { value: 1.0 },
   };
-  const mat = new ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: distantStarVertexShader,
     fragmentShader: distantStarFragmentShader,
     transparent: true,
-    blending: AdditiveBlending,
+    blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
-  const pts = new Points(geo, mat);
+  const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
   scene.add(pts);
 

@@ -32,42 +32,21 @@
   text-wrap: balance;
 }
 
-/* Sections — a display-scale shelf header over a hairline list. Hierarchy
-   comes from size and spacing, not from mono-uppercase scaffolding. */
+/* Sections — a QUIET shelf label over a hairline list (P9 typography hygiene:
+   the shelf names are scaffolding, so they speak the body face plainly; mono
+   caps stay reserved for the real records in the rows — dates, read times,
+   entry kinds). Chrome ramp, not gold (gold is signal, not scaffolding). */
 .writing-section + .writing-section {
   margin-top: clamp(2.75rem, 7vw, 4.5rem);
 }
 
 .writing-section-title {
   margin: 0 0 1rem;
-  font-family: var(--font-display);
-  font-size: var(--text-subtitle);
-  font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-tight);
-  color: var(--fg-dim);
-}
-
-/* Type group — a named shelf within the Articles section. Hierarchy through
-   size and weight, not through mono-uppercase caps. A top margin separates
-   consecutive groups while the first group abuts the section title. */
-.writing-type-group + .writing-type-group {
-  margin-top: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-.writing-type-heading {
-  margin: 0 0 0.75rem;
-  font-family: var(--font-display);
-  font-size: var(--text-body-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--tracking-normal);
-  /* EXP-013: raised from --fg-faint → --fg-dim.  At --fg-faint (oklch 0.62,
-     WCAG L ≈ 0.24) the 4.5:1 AA threshold requires bg L ≤ 0.014 — achievable
-     only if the RouteBackdrop noise grain is near zero at every sample position.
-     Promoting to --fg-dim (oklch 0.777, WCAG L ≈ 0.47) clears 4.5:1 against
-     the worst-case noise-brightened backdrop (bg ≈ sRGB rgb(65), L ≈ 0.059:
-     0.523/0.109 = 4.8:1).  The category heading remains clearly a supporting
-     role vs the --fg section title one step above it. */
-  color: var(--fg-dim);
+  letter-spacing: 0.01em;
+  color: var(--fg-chrome-dim);
 }
 
 .writing-list {
@@ -183,15 +162,16 @@
   line-height: 1.58;
 }
 
-/* Topic facets — a dot-separated list of subject-matter terms (e.g.
-   "java · jvm · debugging"). Same mono-micro register as the origin note;
-   chrome-faint so it doesn't compete with the description. */
+/* Topics readout (P13) — the post's tags as a quiet mono line under the
+   summary: same rung as the provenance footnote, slightly less faint so the
+   two read as distinct records when both are present. */
 .writing-row-topics {
+  margin-top: 0.2rem;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--fg-chrome-faint);
+  color: var(--fg-faint);
 }
 
 /* Provenance readout — "First published on Medium, in French" — a quiet mono
@@ -242,315 +222,17 @@
   text-transform: uppercase;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .writing-row-copy,
-  .writing-row:hover .writing-row-copy,
-  .writing-row:active .writing-row-copy {
-    transform: none;
-  }
-
-  /* The trailing ↗ still appears (it is an affordance, not decoration) but
-     without the diagonal travel. */
-  .writing-row::after {
-    transform: none;
-  }
+/* Reduced motion — resolved via html[data-motion] (see src/lib/motion.ts). */
+:where(html[data-motion='reduced']) .writing-row-copy,
+:where(html[data-motion='reduced']) .writing-row:hover .writing-row-copy,
+:where(html[data-motion='reduced']) .writing-row:active .writing-row-copy {
+  transform: none;
 }
 
-/* ==========================================================================
-   VIEW TOGGLE — EXP-027
-   Two first-class equivalent views: list (default) and nebula map.
-   The list is the keyboard / screen-reader path; the map is the visual
-   knowledge cluster. Both carry all articles.
-   ========================================================================== */
-
-/* Toggle button group — sits between the hero headline and the article panels.
-   Matches the page's mono-uppercase instrument language. */
-.writing-view-controls {
-  width: min(68rem, calc(100vw - var(--gutter) - var(--gutter)));
-  margin-inline: auto;
-  margin-bottom: clamp(1.25rem, 3vw, 2rem);
-  display: flex;
-  gap: 0.5rem;
-}
-
-.writing-view-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--fg-chrome-dim);
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    color 0.18s ease,
-    border-color 0.18s ease,
-    background-color 0.18s ease;
-}
-
-.writing-view-btn:hover {
-  color: var(--fg-chrome);
-  border-color: color-mix(in oklch, var(--accent) 40%, var(--line));
-}
-
-.writing-view-btn.is-active,
-.writing-view-btn[aria-pressed="true"] {
-  color: var(--fg-chrome);
-  border-color: var(--accent);
-  background: color-mix(in oklch, var(--accent) 10%, transparent);
-}
-
-/* Panel visibility — driven by data-active-view on #writing-views.
-   The inactive list panel stays in the flow at 1×1 px so screen readers
-   always find the canonical list navigation. The inactive map panel is
-   display:none because it is aria-hidden and has no AT value when off. */
-[data-active-view="map"] [data-panel="list"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
-
-[data-active-view="list"] [data-panel="map"] {
-  display: none;
-}
-
-/* ==========================================================================
-   NEBULA MAP — EXP-027 (dispersed matter coalescing)
-   Articles cluster by editorial type (EXP-016). Cluster boundaries are
-   whitespace only — no drawn borders. Density is data. Color: teal-to-indigo
-   (nebula room tint). Zero Three.js (PERF-002).
-   ========================================================================== */
-
-/* Nebula map grid — clusters arrange in a 2-column layout.
-   grid-auto-flow: dense fills sparse layouts without forcing equal sizes. */
-.nebula-map {
-  --nebula-teal:   oklch(0.90 0.09 195);   /* EXP-013 fix: raised from oklch(0.72) → oklch(0.90) so cluster
-                                              labels clear WCAG 2.2 AA 4.5:1 against the dark writing-room
-                                              backdrop (bg ≈ rgb(42,42,46), L≈0.026). At 0.72 the teal resolved
-                                              to rgb(49,115,130) → 2.66:1; at 0.90 the pale teal clears ≥ 5:1.
-                                              Chroma reduced to 0.09 (from 0.11) so the lighter hue stays in
-                                              gamut across display profiles. */
-  --nebula-indigo: oklch(0.60 0.13 275);   /* indigo — card accent edge */
-  --nebula-card-bg: oklch(0.17 0.018 240 / 0.55); /* semi-transparent cool surface */
-  --nebula-card-edge: oklch(0.50 0.08 240 / 0.25); /* dissolving card border */
-
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: clamp(2.5rem, 6vw, 4rem) clamp(2rem, 5vw, 3.5rem);
-  align-items: start;
-}
-
-/* Cluster — a named spatial region. Whitespace is the only boundary;
-   no solid box, no full-perimeter stroke. */
-.nebula-cluster {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-/* Cluster label — dissolves into the background at the cluster edge.
-   Uppercase mono, teal tint so the cluster is identifiable without color. */
-.nebula-cluster-label {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  font-weight: 400;
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--nebula-teal);
-  opacity: 0.85;
-}
-
-/* Card stack — flex-column within a cluster so multiple articles stack
-   with inter-card breathing room (density as information). */
-.nebula-cluster-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-/* ── Nebula card ─────────────────────────────────────────────────────────── */
-
-/* Coalesce entry animation — cards begin 6 px outward from final position
-   and drift inward. Physical law: dispersed matter coalescing. 600 ms ease-out
-   per the route-physical-laws.md spec. Staggered by DOM order so the cloud
-   settles progressively. */
-@keyframes nebula-coalesce {
-  from {
-    transform: translateY(6px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.nebula-card {
-  display: grid;
-  gap: 0.5rem 0;
-  padding: 1.1rem 1.25rem;
-  border: 1px solid var(--nebula-card-edge);
-  border-radius: var(--radius-md);
-  background: var(--nebula-card-bg);
-  /* Semi-transparent per spec — may overlap slightly at cluster edge. */
-  backdrop-filter: blur(2px);
-  color: inherit;
-  text-decoration: none;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    transform 0.22s var(--ease-out-quint);
-  animation: nebula-coalesce 600ms var(--ease-out-quint) both;
-}
-
-/* Stagger the coalesce animation by card index within the cluster.
-   Four rungs: card 1 is instant, each subsequent card is 80 ms later. */
-.nebula-card:nth-child(2) { animation-delay: 80ms; }
-.nebula-card:nth-child(3) { animation-delay: 160ms; }
-.nebula-card:nth-child(4) { animation-delay: 240ms; }
-.nebula-card:nth-child(5) { animation-delay: 320ms; }
-
-/* Hover state — card brightens slightly (its cluster is "active"). */
-.nebula-card:hover,
-.nebula-card:focus-visible {
-  border-color: color-mix(in oklch, var(--nebula-indigo) 60%, transparent);
-  background: color-mix(in oklch, var(--nebula-card-bg) 85%, var(--nebula-indigo) 15%);
-  outline: none;
-}
-
-/* Hover gravity — sibling cards shift ≤ 4 px toward the hovered card.
-   Implemented with :has() CSS so cards that precede the hovered one pull
-   downward (toward it) and cards that follow pull upward. Pure CSS, no JS. */
-.nebula-cluster-cards:has(.nebula-card:hover) .nebula-card:not(:hover) {
-  transform: translateY(-2px);
-}
-
-.nebula-cluster-cards:has(.nebula-card:hover) .nebula-card:hover ~ .nebula-card {
-  transform: translateY(2px);
-}
-
-/* Focus ring — visible, cool-tinted, does not obscure content. */
-.nebula-card:focus-visible {
-  box-shadow: 0 0 0 2px var(--nebula-indigo);
-}
-
-/* ── Card content ────────────────────────────────────────────────────────── */
-
-/* Type badge — tiny mono label, same language as the list shelf headings.
-   Teal register so the cluster context is readable at a glance. */
-.nebula-card-type {
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  font-weight: 400;
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--nebula-teal);
-}
-
-/* Title — secondary display rung, same as list row titles.
-   Metadata (type badge, date, read time) is ANCHORED and does not drift
-   (route-physical-laws.md constraint). */
-.nebula-card-title {
-  display: block;
-  color: var(--fg);
-  font-family: var(--font-display);
-  font-size: var(--text-title);
-  font-weight: var(--weight-display);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-tight);
-  text-wrap: balance;
-  transition: color 0.16s ease;
-}
-
-.nebula-card:hover .nebula-card-title,
-.nebula-card:focus-visible .nebula-card-title {
-  color: oklch(0.88 0.06 220); /* cool-tinted hover — nebula room */
-}
-
-/* Meta row — date + reading time on one line.
-   Anchored metadata: no animation, no drift (spec constraint). */
-.nebula-card-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
-}
-
-.nebula-card-meta time {
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-chrome-faint);
-}
-
-.nebula-card-read {
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--fg-faint);
-}
-
-/* Topics — dot-separated, same register as the list view's topic chips. */
-.nebula-card-topics {
-  display: block;
-  margin-top: 0.2rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--fg-chrome-faint);
-}
-
-/* Description — secondary summary, matches list row's writing-row-description. */
-.nebula-card-description {
-  display: block;
-  margin-top: 0.3rem;
-  color: var(--fg-dim);
-  font-size: var(--text-body-sm);
-  line-height: 1.58;
-}
-
-/* ── Reduced-motion overrides ──────────────────────────────────────────────
-   Per route-physical-laws.md: all drift and pull collapses to opacity
-   transitions only. Entry positions are final positions from first paint. */
-@media (prefers-reduced-motion: reduce) {
-  .nebula-card {
-    animation: none;
-  }
-
-  .nebula-card,
-  .nebula-cluster-cards:has(.nebula-card:hover) .nebula-card:not(:hover),
-  .nebula-cluster-cards:has(.nebula-card:hover) .nebula-card:hover ~ .nebula-card {
-    transform: none;
-    transition: border-color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
-  }
-
-  .nebula-cluster-cards:has(.nebula-card:hover) .nebula-card:not(:hover) {
-    opacity: 0.8;
-  }
-}
-
-/* ── Narrow-viewport overrides ────────────────────────────────────────────
-   Single-column map on narrow screens; clusters stack vertically. */
-@media (max-width: 48rem) {
-  .nebula-map {
-    grid-template-columns: 1fr;
-  }
-
-  .writing-view-controls {
-    width: min(100%, calc(100vw - 2rem));
-  }
+/* The trailing ↗ still appears (it is an affordance, not decoration) but
+   without the diagonal travel. */
+:where(html[data-motion='reduced']) .writing-row::after {
+  transform: none;
 }
 
 @media (max-width: 40rem) {

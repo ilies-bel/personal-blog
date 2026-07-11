@@ -20,10 +20,11 @@
 // Elements must contain plain text only (no element children); every current
 // consumer (nav labels, footer labels, back-links, contact links, HUD rail
 // titles) satisfies this.
-import { resolveMotionPreference } from '../lib/motionPreference';
-import { DECODE_HOVER_MS as DURATION_MS } from '../lib/transitionDurations';
+
+import { getMotion } from '../lib/motion';
 
 const GLYPHS = '#/\\|<>[]{}=+*%$@!?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const DURATION_MS = 300;
 
 /** Per-element churn pool. Mono labels can churn through anything (fixed
  *  advance), but display-font titles (writing rows, entry names) would jitter
@@ -39,6 +40,8 @@ function poolFor(original: string): string {
  *  can cancel. WeakMap: nodes swapped out by ClientRouter just fall away. */
 const running = new WeakMap<HTMLElement, number>();
 
+// Resolved motion preference (manual override ?? OS) from the sitewide module.
+const prefersReducedMotion = (): boolean => getMotion() === 'reduced';
 
 function stop(el: HTMLElement): void {
   const raf = running.get(el);
@@ -52,7 +55,7 @@ function stop(el: HTMLElement): void {
 }
 
 function start(el: HTMLElement): void {
-  if (resolveMotionPreference()) return;
+  if (prefersReducedMotion()) return;
   if (running.has(el)) return; // already decoding — let it finish
   // Capture the true label PER RUN (not once): dynamic readouts (the graveyard
   // HUD name, scroll-spied titles) change their text between hovers, and a

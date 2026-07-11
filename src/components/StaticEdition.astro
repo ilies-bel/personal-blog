@@ -1,0 +1,58 @@
+---
+// The static edition of the homepage — the authored fallback that carries the
+// full identity, primary navigation, and the complete manifesto arc as real
+// server-rendered HTML. One component, three duties:
+//   • no-JS visitors (html lacks the .js class): this IS the homepage — the
+//     intro loader and the 1800svh scroll track are hidden by CSS, and this
+//     renders in normal flow from the first viewport.
+//   • crawlers / reader modes: complete indexable copy, same BEATS source as
+//     the live overlay so the two can never drift.
+//   • (Phase 3 extends this to the no-WebGL and screen-reader editions.)
+//
+// Every beat is an <h2>: the page's single <h1> is the sr-only brand line in
+// index.astro, present with or without JS — no duplicate/competing headings.
+import { BEATS } from '../hero/sceneTable';
+import { BRAND_NAME, BRAND_ROLE, withBase } from '../consts';
+
+// Primary destinations, in the canonical IA order (the same four rows
+// SiteNav renders). Labels stay conventional — celestial names live only
+// inside the live scene.
+const DESTINATIONS = [
+  { label: 'Work', href: withBase('projects') },
+  { label: 'Writing', href: withBase('writing') },
+  { label: 'About', href: withBase('about') },
+  { label: 'Contact', href: withBase('contact') },
+];
+---
+
+<div class="scene-fallback static-edition measure">
+  <p class="scene-fallback-name">{BRAND_NAME}</p>
+  <p class="scene-fallback-role">{BRAND_ROLE}</p>
+
+  {/* Identity + every primary destination inside the FIRST viewport: a no-JS
+      visitor can reach any section without scrolling past the manifesto. */}
+  <nav class="static-edition-nav" aria-label="Primary">
+    <ul>
+      {DESTINATIONS.map((d) => (
+        <li><a href={d.href}>{d.label}</a></li>
+      ))}
+    </ul>
+  </nav>
+
+  {/* The manifesto arc, top-to-bottom in the same reversed physical order the
+      live scene plays (black hole first, pale blue dot last). slice() first —
+      never mutate BEATS. */}
+  {BEATS.slice()
+    .reverse()
+    .map((beat) => (
+      <Fragment>
+        <h2>{beat.down}</h2>
+        <p>{beat.whisper}</p>
+      </Fragment>
+    ))}
+
+  <p>
+    Make it last, or don't make it. Sounds interesting?
+    <a href={withBase('contact')}> Get in touch.</a>
+  </p>
+</div>

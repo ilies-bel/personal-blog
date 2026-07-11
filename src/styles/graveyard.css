@@ -37,36 +37,51 @@ body.graveyard-page .wrap {
   opacity: 0.55;
 }
 
-/* SCROLL REVEAL — entries cool into visibility as they enter the spy window.
-   The contract verb (EXP-037): specimens appear as if cooling from black —
-   a pure opacity fade, no slide, no bounce (route-physical-laws.md §Graveyard).
-   The script in graveyard.astro toggles [data-revealed] on each entry via
-   IntersectionObserver, providing the 120ms natural stagger as entries enter
-   the viewport sequentially.
-   Duration: --verb-dur-contract-entry (900ms, tokens.css).
-   Hover contract transition is also listed here so one declaration covers both
-   interactions without cascade conflicts with motion-verbs.css.
-   Reduced motion gates everything off (rules in @media block at the bottom). */
+/* SCROLL REVEAL — DRAWER PULLS (P9). Each entry slides OUT of the cabinet as it
+   enters the spy window: a horizontal pull from the left rail (with a whisper of
+   settle), not the generic rise every other list uses — the specimen drawers are
+   this route's own gesture. The script in graveyard.astro toggles [data-revealed]
+   on each entry; the transform/opacity transition is on this attribute. Reduced
+   motion gates the transition off (rules at the bottom) and ships the entries in
+   place instantly. The token --ease-out-quint is the project's standard ease. */
 .graveyard-entry {
   opacity: 0;
+  transform: translate(-22px, 4px);
   transition:
-    opacity var(--verb-dur-contract-entry, 0.9s) var(--ease-out-quint),
-    transform var(--verb-dur-contract, 0.2s) var(--ease-out-quint);
+    opacity 0.55s var(--ease-out-quint),
+    transform 0.65s var(--ease-out-quint);
 }
 .graveyard-entry[data-revealed='true'] {
   opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* COOLING RESIDUE — FILM GRAIN (P9). A static luminance-noise sheet fixed over
+   the whole frame (fixed ::before on the page shell — body::before/::after are
+   the sitewide lift/grid), opacity driven by the fills-only --route-grain token
+   (tokens.css; 0 everywhere but this route). The grain is the route's grayscale
+   fingerprint: even with colour stripped, /graveyard reads as the cold, grainy
+   archival print next to the clean pages. Pure CSS, no request, never animated. */
+body[data-route='graveyard'] .wrap::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: var(--route-grain, 0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
 
 /* NO-JS / SSR FALLBACK — the inline script sets data-revealed; without JS the
    entries must still be readable. The `.no-js` class isn't used elsewhere, so
    the simpler defence is a `<noscript>` style block in the page itself. We
-   ALSO honour prefers-reduced-motion below: instant in, no rise. */
+   ALSO honour the resolved reduced-motion preference below: instant in, no rise. */
 
-/* Reduced motion: ship the entries in instantly — only the visual transition is
-   gated off. The IntersectionObserver still runs to keep the HUD accurate. */
-@media (prefers-reduced-motion: reduce) {
-  .graveyard-entry {
-    opacity: 1;
-    transition: none;
-  }
+/* Reduced motion (html[data-motion], see src/lib/motion.ts): ship the entries in
+   instantly — only the visual transition is gated off. */
+:where(html[data-motion='reduced']) .graveyard-entry {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }

@@ -11,7 +11,7 @@
 // buildCockpit's HUD mesh with cockpitHudVertexShader/FragmentShader. Each
 // vertex carries aFollow: 1 = star-anchored (authored origin-relative),
 // 0 = fixed (authored in absolute design px).
-import { BufferAttribute, BufferGeometry, Sphere, Vector3 } from 'three';
+import * as THREE from 'three';
 import { COCKPIT_W } from '../cockpitGeometry';
 
 type Pt = [number, number];
@@ -141,7 +141,7 @@ function hudLines(): HudLine[] {
 
 /** Extrude the HUD lines into a ribbon geometry (aPos/aNorm/aSide/aHalf/
  *  aFollow) for buildCockpit's HUD mesh. Same miter scheme as the struts. */
-export function buildHudGeometry(): BufferGeometry {
+export function buildHudGeometry(): THREE.BufferGeometry {
   const lines = hudLines();
   const pos: number[] = [];
   const norm: number[] = [];
@@ -191,14 +191,14 @@ export function buildHudGeometry(): BufferGeometry {
     }
   }
 
-  const geo = new BufferGeometry();
-  geo.setAttribute('aPos', new BufferAttribute(new Float32Array(pos), 2));
-  geo.setAttribute('aNorm', new BufferAttribute(new Float32Array(norm), 2));
-  geo.setAttribute('aSide', new BufferAttribute(new Float32Array(side), 1));
-  geo.setAttribute('aHalf', new BufferAttribute(new Float32Array(half), 1));
-  geo.setAttribute('aFollow', new BufferAttribute(new Float32Array(follow), 1));
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('aPos', new THREE.BufferAttribute(new Float32Array(pos), 2));
+  geo.setAttribute('aNorm', new THREE.BufferAttribute(new Float32Array(norm), 2));
+  geo.setAttribute('aSide', new THREE.BufferAttribute(new Float32Array(side), 1));
+  geo.setAttribute('aHalf', new THREE.BufferAttribute(new Float32Array(half), 1));
+  geo.setAttribute('aFollow', new THREE.BufferAttribute(new Float32Array(follow), 1));
   geo.setAttribute('position', geo.getAttribute('aPos'));
   geo.setIndex(idx);
-  geo.boundingSphere = new Sphere(new Vector3(960, 540, 0), 4000);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(960, 540, 0), 4000);
   return geo;
 }

@@ -26,16 +26,15 @@ interface Props {
   title: string;
   description?: string;
   ogImage?: string;
-  ogImageWidth?: number;
-  ogImageHeight?: number;
-  ogImageAlt?: string;
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
-  // When true, passes noindex to BaseHead so crawlers skip this page (e.g. 404).
+  // Error/utility pages (404): emit robots noindex and no canonical URL.
   noindex?: boolean;
-  withPerson?: boolean;
-  withCreativeWork?: boolean;
+  // Extra schema.org nodes appended to BaseHead's JSON-LD @graph.
+  structuredData?: Record<string, unknown>[];
+  // Article author names (defaults to the site owner in BaseHead).
+  authors?: string[];
   // `bare` strips the standard reading chrome (gutter shell + footer) and shows
   // only the fixed corner overlay: brand top-left, the blog micro-nav top-right.
   // Used by the home page, whose whole canvas is the scroll-scrubbed scene.
@@ -66,34 +65,35 @@ const isCurrentPage = (p: string) =>
 // page already passes, so the layout API stays unchanged.
 const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
 
+// ROUTE IDENTITY (P9) — one `data-route` attribute on <body>, derived from the
+// URL, so every stylesheet can scope a route's art direction (accent tokens,
+// backdrop treatments, entry rhythm) without inventing another body class per
+// page. The ids are the site's own section names (the /projects URL is the
+// "Work" section). Route-scoped tokens live in tokens.css and are FILLS-ONLY
+// (hairlines, washes, grain) — never text colour — so the audited contrast
+// pairs are untouched.
+const routeId = (() => {
+  // Strip the deploy base (import.meta.env.BASE_URL) so the ids hold under a
+  // sub-path deploy too, then take the first path segment.
+  const rel = (currentPath.startsWith(base) ? currentPath.slice(base.length) : currentPath)
+    .replace(/^\/+/, '');
+  const head = rel.split('/')[0];
+  if (!head) return 'home';
+  if (head === 'posts') return 'post';
+  if (head === 'projects') return 'work';
+  const KNOWN = ['writing', 'graveyard', 'behind-the-build', 'about', 'contact', '404'];
+  return KNOWN.includes(head) ? head : 'page';
+})();
+
 ---
 
 <!doctype html>
-<html lang={SITE_LANG} class={bare ? 'no-js is-bare' : 'no-js'}>
+<html lang={SITE_LANG} class={bare ? 'is-bare' : undefined}>
   <head>
     <BaseHead {...props} />
     <ClientRouter />
-    {/* ENG-001 — no-JS loader/track fix.
-        The html element starts with class="no-js" so that CSS rules keyed on
-        html.no-js can hide the fixed loader cover and the ~1800svh scroll track
-        before any paint occurs (no flash for JS users). This IIFE removes the
-        class synchronously in <head> — before the browser can paint any body
-        content — so JS-enabled visitors never see the no-JS layout. The
-        astro:page-load listener re-removes it after every ClientRouter SPA swap
-        because swapRootAttributes copies the server-rendered class (which still
-        includes "no-js") from the incoming document's <html> onto the live one;
-        without the listener a back-nav to "/" would re-impose the no-JS layout
-        on JS users. The listener is bound ONCE here and persists across swaps
-        (document is not replaced by ClientRouter). */}
-    <script is:inline>
-      (function () {
-        function removeNoJs() { document.documentElement.classList.remove('no-js'); }
-        removeNoJs();
-        document.addEventListener('astro:page-load', removeNoJs);
-      }());
-    </script>
   </head>
-  <body class={bodyClasses}>
+  <body class={bodyClasses} data-route={routeId}>
     {/* Cinematic dive overlay — a single full-viewport bloom layer present on EVERY
         page, persisted across ClientRouter swaps (transition:persist) so the home
         page's dive can ramp its opacity to a soft, capped veil (never full white) — in
@@ -210,7 +210,11 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               // restored from an old session can't wedge mid-sequence.
               const BOOTING_CLASS = 'hud-booting';
               const SHUTDOWN_CLASS = 'hud-shutting-down';
-              const STATE_KEY = 'hud-state'; // HUD_STATE_STORAGE_KEY
+              // localStorage key persisting the HUD power state across reloads: a
+              // small JSON blob `{ powered: boolean }` written on every transition
+              // and restored on init. This inline script OWNS the literal (it can't
+              // import src/hero/lib/constants.ts — no bundler on is:inline).
+              const STATE_KEY = 'hud-state';
 
               // RE-QUERY the per-swap DOM each init. body / btn are replaced when
               // ClientRouter swaps the document, so capturing them once (the old
@@ -333,7 +337,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             initHudFsm();
           </script>
 
-          <main id="main-content" class="bare-main" tabindex="-1">
+          <main id="main-content" class="bare-main">
             <slot />
           </main>
         </Fragment>
@@ -359,7 +363,7 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             <SiteNav surface="page" />
           </header>
 
-          <main id="main-content" tabindex="-1">
+          <main id="main-content">
             <slot />
           </main>
 
@@ -368,8 +372,8 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
               link labels right (same underline-sweep hover as .subnav-link). Pinned
               across SPA swaps like the header (transition:name + animate none) so
               the chrome holds still while only the page content moves. Carries the
-              two social profiles plus the Behind the Build case study, surfaced
-              site-wide. */}
+              two social profiles, the Behind the Build case study (a secondary
+              destination, surfaced site-wide), and Contact. */}
           <footer class="site-footer" transition:name="site-footer" transition:animate="none">
             <span class="site-footer-brand">© {year} — {BRAND_NAME}</span>
             <nav class="site-footer-links" aria-label="Footer links">
@@ -379,6 +383,10 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
                 href={href('behind-the-build')}
                 aria-current={isCurrentPage('behind-the-build') ? 'page' : undefined}
               ><span class="site-footer-label" data-decode>Behind the build</span></a>
+              <a
+                href={href('contact')}
+                aria-current={isCurrentPage('contact') ? 'page' : undefined}
+              ><span class="site-footer-label" data-decode>Contact</span></a>
             </nav>
           </footer>
         </div>
@@ -418,15 +426,15 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
           // Arriving from a dive: the overlay is sitting at its capped soft veil →
           // ease it out + rise the content. The body[data-resurface] attribute gates
           // the content keyframe in hero.css (and is auto-removed when that animation
-          // ends). The recede is lengthened to 0.8s and reuses the project's eased
-          // curve (--ease-out-quint, resolved from the computed root style so we don't
-          // re-literalise the cubic-bezier) — a softer, gentler dissolve that matches
-          // the lower-peak veil instead of the old abrupt 0.6s ease-out.
+          // ends). The recede reuses the project's eased curve (--ease-out-quint,
+          // resolved from the computed root style so we don't re-literalise the
+          // cubic-bezier); 0.7s matches the dive-resurface keyframe and keeps the
+          // arrival tail inside the P9 sub-700ms route-transition budget.
           const easeQuint =
             getComputedStyle(document.documentElement)
               .getPropertyValue('--ease-out-quint')
               .trim() || 'ease-out';
-          overlay.style.transition = `opacity 0.8s ${easeQuint}`;
+          overlay.style.transition = `opacity 0.7s ${easeQuint}`;
           requestAnimationFrame(() => {
             overlay.style.opacity = '0';
           });
@@ -464,6 +472,34 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
         delete overlay.dataset.bloomState;
         overlay.style.removeProperty('--bloom-x');
         overlay.style.removeProperty('--bloom-y');
+      });
+    </script>
+
+    {/* FOCUS AFTER SPA NAVIGATION (P8) — Astro's ClientRouter announces the new
+        route to assistive tech but leaves keyboard focus wherever the old page
+        put it (usually <body> after the swap destroys the focused node), so a
+        keyboard user's next Tab starts from nowhere. On every astro:page-load
+        AFTER the initial hard load, move focus to the swapped-in #main-content
+        (tabindex="-1" so it's programmatically focusable without joining the tab
+        order; preventScroll so the scroll restoration/anchor position is never
+        disturbed). Programmatic focus on a non-interactive target doesn't match
+        :focus-visible's heuristics, so mouse navigations never flash a ring —
+        and the global focus ring only styles interactive elements anyway.
+        Bundled module: executes once, the listener survives every swap. */}
+    <script>
+      let firstPageLoad = true;
+      document.addEventListener('astro:page-load', () => {
+        if (window.self !== window.top) return; // dev pre-load iframe — not a nav
+        if (firstPageLoad) {
+          // Initial hard load: the browser's own focus handling (URL fragment /
+          // sequential start-of-document) is correct — don't fight it.
+          firstPageLoad = false;
+          return;
+        }
+        const main = document.getElementById('main-content');
+        if (!main) return;
+        if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+        main.focus({ preventScroll: true });
       });
     </script>
 
@@ -540,47 +576,6 @@ const isAboutOverlay = (bodyClass ?? '').split(/\s+/).includes('about-page');
             overlay.style.removeProperty('--bloom-y');
           }
         }
-      });
-    </script>
-
-    {/* SPA NAVIGATION FOCUS MANAGEMENT — A11Y-006
-        After every ClientRouter swap move keyboard focus to the new page's first
-        h1 (or #main-content itself as a fallback) so screen-reader and keyboard
-        users start reading from the top of the incoming page instead of a stale
-        or now-detached trigger element.
-
-        Detection: the astro:before-swap handler stamps html[data-astro-nav] on
-        the INCOMING document, which swapRootAttributes copies to the live root
-        before astro:page-load fires.  The attribute is absent on a hard (non-SPA)
-        load, so the check below is exactly "is this a ClientRouter navigation?"
-        without any extra flags or counters.
-
-        Framed guard mirrors the resurface script: the Astro dev iframe pre-loads
-        client:only islands in a hidden same-origin frame that also runs this
-        event — the frame must never steal focus from the real page. */}
-    <script>
-      document.addEventListener('astro:page-load', () => {
-        if (window.self !== window.top) return;
-        // Absent on initial hard load; present on every SPA swap.
-        if (!document.documentElement.hasAttribute('data-astro-nav')) return;
-
-        const main = document.getElementById('main-content');
-        if (!main) return;
-
-        // Prefer the first heading so AT users get a meaningful announcement.
-        // Fall back to <main> itself when the page has no h1 (e.g. the 3-D home).
-        const h1 = main.querySelector<HTMLElement>('h1');
-        const target = h1 ?? main;
-
-        // tabindex="-1" makes a non-interactive element programmatically
-        // focusable without inserting it into the natural Tab sequence.
-        if (!target.hasAttribute('tabindex')) {
-          target.setAttribute('tabindex', '-1');
-        }
-
-        // rAF defers focus until after the current rendering frame so any
-        // pending view-transition snapshots and React flushes complete first.
-        requestAnimationFrame(() => target.focus({ preventScroll: false }));
       });
     </script>
   </body>

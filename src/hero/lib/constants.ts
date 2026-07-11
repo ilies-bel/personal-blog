@@ -75,15 +75,18 @@ export const WEBGL_UNAVAILABLE_BODY_CLASS = 'webgl-unavailable';
  *  until the loader is gone. */
 export const LOADER_GONE_BODY_CLASS = 'loader-gone';
 /** Minimum time (ms) the instant intro loader is held on the FIRST load of a
- *  browser session, so the boot sequence (LOADING → READY → glide-to-HUD) reads
- *  fully even when the scene paints fast. It is a FLOOR, never a cap: on first
- *  load the loader lifts at `max(scene:ready, LOADER_MIN_MS)`; a slower scene
- *  still waits for its real first frame. Kept comfortably under the 8s safety
- *  backstop (see the inline script in index.astro) so the two compose cleanly —
- *  the floor raises the early bound, the safety caps the late bound. Spelled here
- *  once and passed into the inline loader script via define:vars so there is no
- *  inline magic number. */
-export const LOADER_MIN_MS = 2500;
+ *  browser session, so the boot readout gets ONE legible beat even when the
+ *  scene paints fast. It is a FLOOR, never a cap: on first load the loader
+ *  lifts at `max(scene:ready, LOADER_MIN_MS)`; a slower scene still waits for
+ *  its real first frame. HONESTY BUDGET (P7): the floor is capped at ≤1s — the
+ *  old 2.5s theater hold made visitors wait on a scene that was already
+ *  painted, so it now covers only the readout's read time, and the visible
+ *  "Skip intro" control (index.astro) bypasses even that. Kept far under the
+ *  8s safety backstop (see the loader script in index.astro) so the two
+ *  compose cleanly — the floor raises the early bound, the safety caps the
+ *  late bound. Spelled here once and imported by the bundled loader script so
+ *  there is no inline magic number. */
+export const LOADER_MIN_MS = 900;
 /** sessionStorage key recording that the minimum-time loader has already played
  *  once THIS browser session. On first load the key is absent → apply the
  *  LOADER_MIN_MS floor, then set it; on subsequent loads in the same session
@@ -94,19 +97,12 @@ export const LOADER_MIN_MS = 2500;
  *  mode / disabled storage must never throw). Spelled here once and passed into
  *  the inline loader script via define:vars. */
 export const LOADER_SEEN_STORAGE_KEY = 'loader-seen';
-/** localStorage key persisting the chosen exploration-HUD target.
- *  @public — used as a string literal in non-bundled inline scripts that cannot
- *  import this module; kept exported so the value is spelled once and stays
- *  consistent with those scripts. */
-export const HUD_SELECTED_STORAGE_KEY = 'hud-selected';
-/** localStorage key persisting the visitor's MANUAL reduced-motion override (a
- *  bare 'true'/'false' string). When present it WINS over the OS
- *  prefers-reduced-motion default and survives reloads + in-app navigations;
- *  when absent the OS preference is the source of truth. Written by the corner
- *  reduce-motion toggle (useReducedMotionPreference). Access is wrapped in
- *  try/catch (private mode / disabled storage must never throw).
- *  @public — string literal cross-reference for inline scripts. */
-export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
+/* The manual reduced-motion override key ('bh:reduced-motion') is owned by the
+ * sitewide motion module — see src/lib/motion.ts (and its pre-paint twin in
+ * BaseHead.astro).
+ * The HUD power-state key ('hud-state') is owned by the inline power FSM in
+ * BaseLayout.astro — an is:inline script can't import this module, so the
+ * literal lives there (with its semantics documented at the spelling site). */
 /** localStorage flag (a bare 'true') recording that the one-time OS-driven
  *  reduced-motion EXPLANATION modal has been shown. The page never animates for an
  *  OS reduced-motion visitor, so this explanatory modal ("you're seeing the still
@@ -115,20 +111,6 @@ export const REDUCED_MOTION_STORAGE_KEY = 'bh:reduced-motion';
  *  separate and always shows on the click. Access wrapped in try/catch (private mode
  *  / disabled storage must never throw). */
 export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
-/** localStorage key persisting the HUD power state across reloads. The power FSM
- *  writes a small JSON blob `{ powered: boolean }` here on every transition and
- *  restores it on init, so a returning visitor finds the HUD lit (or dark) exactly
- *  as they left it. The HUD is OFF BY DEFAULT: absence of a stored blob (a
- *  first-time visitor, or a private-mode visitor whose read throws) is read as
- *  un-powered, so only an explicit stored `{ powered: true }` lights the HUD on
- *  load — the visitor meets the bare spectacle and the first power press plays
- *  the decloak. Legacy blobs carried extra flags (`forced` / `userChosen` from
- *  the old scroll auto-boot); they are simply ignored — only `powered` is read.
- *  All access is wrapped in try/catch (private mode / disabled storage must
- *  never throw).
- *  @public — string literal cross-reference for inline scripts that cannot import
- *  this module (no bundler on is:inline); must stay in sync with BaseLayout. */
-export const HUD_STATE_STORAGE_KEY = 'hud-state';
 
 // --- cross-layer events ----------------------------------------------------
 /** The window CustomEvent the scene dispatches ONCE, after its first frame has
@@ -139,31 +121,6 @@ export const HUD_STATE_STORAGE_KEY = 'hud-state';
  *  this module — no bundler on an is:inline script — so it spells the SAME literal
  *  and MUST be kept in sync with this value. */
 export const SCENE_READY_EVENT = 'scene:ready';
-
-/** Window CustomEvent fired when the user presses the "skip to content" button that
- *  is always visible in the loader from the first frame. The index.astro loader
- *  script handles it by lifting the loader immediately (bypassing the animation-gated
- *  loader-gone delay) so navigation becomes accessible at once. HeroIsland listens too:
- *  if the engine has not yet resolved it falls back to revealWithoutWebgl() so no blank
- *  canvas is left behind. */
-export const LOADER_SKIP_EVENT = 'loader:skip';
-
-/** Window CustomEvent fired by the index.astro loader's hard 8 s safety timeout when
- *  the scene has NOT dispatched scene:ready — i.e. the engine never painted. HeroIsland
- *  listens and calls revealWithoutWebgl() so the visitor always reaches a usable page
- *  (manifesto copy + section nav) rather than being blocked by a stalled canvas. */
-export const LOADER_TIMEOUT_EVENT = 'loader:timeout';
-
-/** Body class added by HeroIsland when the engine chunk dynamic-import begins.
- *  The loader's phase label CSS keys off this to show "Loading engine…" during the
- *  download window. Cleared when the import resolves or a failure reveal fires. */
-export const LOADER_PHASE_FETCHING_BODY_CLASS = 'loader-phase-fetching';
-
-/** Body class added by HeroIsland when the engine module has arrived and createScene
- *  is actively building the scene (typed-array rigs, shader compile). The loader's
- *  phase label CSS keys off this to show "Building scene…". Cleared on first frame
- *  (the loader lifts) or on any failure reveal. */
-export const LOADER_PHASE_COMPILING_BODY_CLASS = 'loader-phase-compiling';
 
 // --- scroll direction ------------------------------------------------------
 export type ScrollDirection = 'down' | 'up';

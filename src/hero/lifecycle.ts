@@ -80,7 +80,7 @@ export interface LifecycleInput {
   stage: number;
   /** seconds since scene start, for the resting rotation drift. */
   t: number;
-  /** prefers-reduced-motion → freeze to the settled frame. */
+  /** resolved reduced-motion preference → freeze to the settled frame. */
   reduced: boolean;
   /** supernova whiteout envelope (0..1) from the time-based clock in frame(). */
   nova: number;
@@ -150,7 +150,8 @@ export interface StarState {
   nebFade: number;
 
   // --- supernova flash (rides the time-based nova envelope) ---
-  /** particle-side shock-breakout glow: 1.45 * nova. uFlash. */
+  /** particle-side shock-breakout glow: (1.45 + 0.4·nova) · nova — the P9
+   *  crescendo lifts the exact apex superlinearly. uFlash. */
   flash: number;
 
   // --- yellow ⇄ red flash-swap ---
@@ -345,7 +346,10 @@ export function lifecycle(input: LifecycleInput): StarState {
   // particle blast is deterministic and reversible ---
   // the particle-side shock-breakout glow follows the SAME envelope as the
   // whiteout, so the additive blast core peaks together with the screen flash.
-  const flash = 1.45 * nova;
+  // P9 crescendo: the superlinear term (+0.4·nova²) lifts the blast core an
+  // extra ~28% at the exact apex only — the shoulders keep the original curve,
+  // so the peak reads as a crest, not a longer flash.
+  const flash = (1.45 + 0.4 * nova) * nova;
 
   // --- transitions 3-5: yellow star → nebula → pale blue dot ---
   // REVIEW MODE (placeholders, no real morph): the new states HARD-SWAP — each
@@ -792,6 +796,21 @@ export function lifecycle(input: LifecycleInput): StarState {
   } else {
     bloomRadius = cfg.bloomRad;
   }
+
+  // --- P9: SUPERNOVA CRESCENDO — the homepage's SECOND peak ------------------
+  // The arc opens on the black hole (peak one) and needs a felt CLIMAX at its
+  // midpoint: the supernova crossing. The nova envelope already fires the
+  // whiteout + the uFlash particle punch; this keyframe rides the SAME
+  // scroll-anchored envelope (so it is deterministic, reversible, and zero
+  // under reduced motion where frame() pins nova to 0) but SQUARES it into a
+  // tighter crest and briefly intensifies the frame around the blast: bloom
+  // surges, the halo widens, exposure lifts. Applied AFTER the grade branches
+  // so no state branch (the red-giant grade owns this stage band) can swallow
+  // it. Cheap — three scalar ops per frame, no new uniforms, no new passes.
+  const novaCrest = nova * nova;
+  bloomStrength += 0.45 * novaCrest;
+  bloomRadius += 0.16 * novaCrest;
+  exposure *= 1 + 0.28 * novaCrest;
 
   // --- black-hole geometric shrink (drives uBlackHoleScale on the disk) -------
   // The HOLE physically CONTRACTS as it implodes (stage ~0.10 → 0.46): full disk down

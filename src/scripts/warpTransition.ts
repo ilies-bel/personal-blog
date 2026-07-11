@@ -23,42 +23,41 @@
 // Reduced motion: the whole streak animation is skipped. The click just navigates
 // (BaseLayout's resurface handler no-ops the deceleration too), so a reduced-motion
 // visitor gets a plain, instant swap with no light show.
-import { resolveMotionPreference } from '../lib/motionPreference';
-import {
-  WARP_JUMP_MS as JUMP_MS,
-  WARP_ARRIVE_MS as ARRIVE_MS,
-  WARP_NAV_BEFORE_END_MS as NAV_BEFORE_END_MS,
-} from '../lib/transitionDurations';
+
+import { getMotion } from '../lib/motion';
 
 const WARP_FLAG = 'bh:warp';
 
 // --- Timing (ms) -----------------------------------------------------------
-// Durations are imported from src/lib/transitionDurations.ts — the single
-// source of truth for every timed transition on the site. See that module for
-// the governance contract (cap, interruptibility, reduced-motion rules).
+// The jump-out: the field starts almost DARK (a few faint drifting sparks — the
+// ship still at sub-light), then accelerates HARD into the light and slams into
+// the white flash. We navigate at the flash apex so the swap is hidden behind
+// the brightest frame.
 //
-// JUMP_MS (= WARP_JUMP_MS): the jump-out set-piece. The field starts almost
-// DARK, holds a beat while the HUD flickers, then accelerates into the white
-// flash. Longer than a snappy nav on purpose — this is a narrative experience,
-// not a page turn. Exempt from the 700ms destination cap.
-//
-// ARRIVE_MS (= WARP_ARRIVE_MS): the arrival fade-out. Streaks stay stretched
-// and the field dissolves as the About content shows through. Content is in
-// the DOM from the moment the SPA swap fires; this overlay merely fades.
-// Must be <= 700ms (currently 700ms — enforced by the unit test).
-//
-// NAV_BEFORE_END_MS (= WARP_NAV_BEFORE_END_MS): navigate this many ms before
-// the jump nominally ends, right at the white-flash apex.
+// P9 BUDGET: route transitions must stay UNDER 700ms PERCEIVED. The About copy
+// is on screen the moment the swap lands (JUMP_MS - NAV_BEFORE_END_MS ≈ 450ms)
+// and the arrival fade only dissolves the residual streaks OVER the already-
+// readable page, so the perceived transition is ~JUMP_MS (≤ 700). The old
+// 1500/750 set-piece read as a loading screen; the same acceleration curve at
+// this length reads as a cut. test/route-transitions.test.mjs pins these.
+const JUMP_MS = 560;
+// The arrival: the streaks STAY fully stretched (no decelerate / contract-back)
+// and the whole field simply fades out as the About content shows through — the
+// jump carries its momentum right onto the page instead of braking.
+const ARRIVE_MS = 380;
+// Navigate this long before the jump animation nominally ends, i.e. right at the
+// white-flash apex, so the (already-prepared) swap lands under the peak brightness.
+const NAV_BEFORE_END_MS = 110;
 
 // The body class that gates the sitewide HUD flicker (hud.css) for the jump.
 const WARP_ACTIVE_CLASS = 'warp-active';
 
 // The bottom-centre readout copy, swapped across the jump so the instrument
 // narrates the jump like a cockpit callout. Timed as fractions of JUMP_MS.
+// Two lines only at the P9 length — three callouts in ~560ms was unreadable.
 const WARP_LINES: Array<{ at: number; label: string }> = [
   { at: 0, label: 'ENGAGING HYPERDRIVE' },
-  { at: 0.34, label: 'BEGINNING LIGHTSPEED TRAVEL' },
-  { at: 0.72, label: 'PUNCH IT' },
+  { at: 0.5, label: 'PUNCH IT' },
 ];
 
 // --- Starfield geometry ----------------------------------------------------
@@ -485,10 +484,10 @@ function navigateNow(href: string): void {
 }
 
 // --- Reduced motion --------------------------------------------------------
-// Delegate to the centralized service so manual overrides and live OS changes
-// are both honoured. The service's resolveMotionPreference() is the single source
-// of truth (manualOverride ?? osPreference).
-const prefersReduced = resolveMotionPreference;
+// Resolved motion preference (manual override ?? OS) from the sitewide module.
+function prefersReduced(): boolean {
+  return getMotion() === 'reduced';
+}
 
 // --- Click interception ----------------------------------------------------
 // Capture-phase so we run before any other click handler / the router's own link

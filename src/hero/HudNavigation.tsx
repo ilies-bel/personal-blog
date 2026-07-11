@@ -36,7 +36,7 @@ export const HUD_NAV_BY_ID = HUD_NAV_ITEMS.reduce<Record<HudTargetId, HudNavItem
 
 interface HudNavigationProps {
   visible: boolean;
-  /** prefers-reduced-motion: travel jumps instead of smooth-scrolling. */
+  /** resolved reduced-motion preference: travel jumps instead of smooth-scrolling. */
   reduced: boolean;
   /** The target the current scroll position maps to (scroll-spy "you are here").
    *  Drives a quiet ambient marker so the rail reflects scroll position. */

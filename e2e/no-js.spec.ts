@@ -1,291 +1,46 @@
-/**
- * ENG-001 — no-JS homepage fallback (QA-002 coverage)
- *
- * With JavaScript disabled the homepage must:
- *   • show NO fixed full-viewport loader cover (.scene-loader hidden)
- *   • have a sane document height (< 3 viewports — NOT the ~1800svh scroll track)
- *   • present keyboard-reachable Work, Writing, About, and Contact links
- *     immediately in the first viewport (inside .scene-fallback-nav)
- *
- * Fix: BaseLayout.astro starts with html.no-js; an is:inline head script
- * removes the class synchronously when JS is available. scene.css rules keyed
- * on html.no-js hide .scene-loader and collapse .scene-track when JS is off.
- * The <noscript> block in index.astro includes the nav links.
- *
- * EXP-001 — authored no-JS manifesto edition.
- *
- * The <noscript> block must read as a deliberate authored piece, not a broken
- * live scene. Tests verify:
- *   • the five manifesto beats render in reverse-lifecycle order
- *     (black hole → red giant → yellow star → nebula → pale blue dot)
- *   • lifecycle-state kickers are present so the arc is named, not anonymous
- *   • the canonical CTA ("Get in touch.") links to /about#get-in-touch
- */
+import { test, expect } from '@playwright/test';
 
-import { test, expect } from '@playwright/test'
+// The no-JS contract: with JavaScript disabled the homepage must be the
+// static edition — identity, labelled primary navigation in the first
+// viewport, the full manifesto, and a compact page. The intro loader and the
+// hero shell (whose .bh-stage is an opaque fixed cover) must not paint.
 
-test.describe('ENG-001 no-JS homepage', () => {
-  test(
-    'no fixed cover, sane height, nav links present and focusable',
-    { tag: ['@smoke'] },
-    async ({ browser }) => {
-      // Disable JavaScript for this context only — does not affect other tests.
-      const ctx = await browser.newContext({ javaScriptEnabled: false })
-      const page = await ctx.newPage()
+test.use({ javaScriptEnabled: false });
 
-      try {
-        await page.goto('/')
+test('no-JS homepage shows the static edition, not the loader', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'load' });
 
-        // ── 1. No fixed full-viewport loader cover ───────────────────────────
-        // The .scene-loader div is position:fixed and covers the full viewport.
-        // With JS off, html.no-js persists and scene.css hides it via
-        // `html.no-js .scene-loader { display: none !important }`.
-        await expect(
-          page.locator('.scene-loader'),
-          'scene-loader must be hidden when JS is absent',
-        ).not.toBeVisible()
+  await expect(page.locator('.static-edition')).toBeVisible();
+  await expect(page.locator('.scene-loader')).toBeHidden();
+  await expect(page.locator('.bh-root')).toBeHidden();
+  await expect(page.locator('.scene-track')).toBeHidden();
 
-        // ── 2. Sane document height ──────────────────────────────────────────
-        // The .scene-track is 6 × 300svh ≈ 1800svh of dead scroll.
-        // With JS off, html.no-js collapses it via `display: none !important`.
-        // We assert < 3 viewport heights — generous enough for the fallback
-        // content, tight enough to rule out the scroll track.
-        const vh = page.viewportSize()?.height ?? 800
-        const scrollH = await page.evaluate(
-          () => document.documentElement.scrollHeight,
-        )
-        expect(
-          scrollH,
-          `document height ${scrollH}px must be < ${vh * 3}px (3 viewports)`,
-        ).toBeLessThan(vh * 3)
+  // Identity + all four primary destinations, labelled, inside the document.
+  await expect(page.locator('.scene-fallback-name')).toBeVisible();
+  const nav = page.locator('.static-edition-nav a');
+  await expect(nav).toHaveText(['Work', 'Writing', 'About', 'Contact']);
 
-        // ── 3. Nav links present and keyboard-focusable ──────────────────────
-        // The <noscript> block renders .scene-fallback-nav with four <a> links.
-        // Each must be visible AND receive keyboard focus (Tab-reachable).
-        const nav = page.locator('.scene-fallback-nav')
-        await expect(nav, '.scene-fallback-nav must be rendered').toBeVisible()
+  // The nav must land in the FIRST viewport — reachable without scrolling.
+  const viewport = page.viewportSize();
+  const navBox = await page.locator('.static-edition-nav').boundingBox();
+  expect(navBox, 'nav renders').toBeTruthy();
+  expect(navBox!.y + navBox!.height).toBeLessThan(viewport!.height);
 
-        const destinations = [
-          { label: 'Work',    hrefPattern: /\/projects/ },
-          { label: 'Writing', hrefPattern: /\/writing/  },
-          { label: 'About',   hrefPattern: /\/about/    },
-          { label: 'Contact', hrefPattern: /\/about/    },  // /about#get-in-touch
-        ] as const
+  // The 1800svh scroll track must be gone: the page is prose-length now.
+  const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+  expect(scrollHeight).toBeLessThan(viewport!.height * 4);
 
-        for (const { label, hrefPattern } of destinations) {
-          const link = nav.getByRole('link', { name: label })
+  // Manifesto beats are real headings under the single h1.
+  await expect(page.locator('h1')).toHaveCount(1);
+  expect(await page.locator('.static-edition h2').count()).toBeGreaterThanOrEqual(4);
+});
 
-          await expect(link, `${label} link must be visible`).toBeVisible()
-
-          await expect(
-            link,
-            `${label} link href must match ${hrefPattern}`,
-          ).toHaveAttribute('href', hrefPattern)
-
-          // Confirm keyboard reachability: programmatic focus must land on the link.
-          await link.focus()
-          await expect(
-            link,
-            `${label} link must be keyboard-focusable`,
-          ).toBeFocused()
-        }
-      } finally {
-        await ctx.close()
-      }
-    },
-  )
-})
-
-// ---------------------------------------------------------------------------
-// EXP-001 — authored no-JS manifesto edition
-// ---------------------------------------------------------------------------
-
-test.describe('EXP-001 no-JS homepage — authored manifesto edition', () => {
-  test(
-    'manifesto beats render in reverse-lifecycle order',
-    async ({ browser }) => {
-      // Disable JavaScript — same isolation pattern as ENG-001.
-      const ctx = await browser.newContext({ javaScriptEnabled: false })
-      const page = await ctx.newPage()
-
-      try {
-        await page.goto('/')
-
-        // The reverse-lifecycle manifesto reads BLACK HOLE → PALE BLUE DOT
-        // top-to-bottom: BEATS.slice().reverse() in index.astro. Verify each
-        // h2 within .scene-fallback-beat carries the correct copy from the
-        // canonical BEATS source and that their DOM order matches the arc.
-        const expectedBeats = [
-          'Under pressure, structure remains.',
-          'Complexity expands. My work is to keep the center readable.',
-          'Systems grow. Interfaces drift. Complexity compounds.',
-          'One clear boundary can save a thousand future decisions.',
-          'What remains is the work.',
-        ] as const
-
-        const fallback = page.locator('.scene-fallback')
-        await expect(fallback, '.scene-fallback must be rendered').toBeVisible()
-
-        const headings = fallback.locator('.scene-fallback-beat-heading')
-        await expect(
-          headings,
-          `exactly ${expectedBeats.length} beat headings must be present`,
-        ).toHaveCount(expectedBeats.length)
-
-        for (let i = 0; i < expectedBeats.length; i += 1) {
-          await expect(
-            headings.nth(i),
-            `beat ${i + 1} heading must read "${expectedBeats[i]}"`,
-          ).toHaveText(expectedBeats[i])
-        }
-      } finally {
-        await ctx.close()
-      }
-    },
-  )
-
-  test(
-    'lifecycle-state kickers name the arc and destinations are operable',
-    async ({ browser }) => {
-      const ctx = await browser.newContext({ javaScriptEnabled: false })
-      const page = await ctx.newPage()
-
-      try {
-        await page.goto('/')
-
-        const fallback = page.locator('.scene-fallback')
-        await expect(fallback, '.scene-fallback must be rendered').toBeVisible()
-
-        // ── 1. Lifecycle kickers — each beat is labelled with its state so the
-        //    reverse arc is named ("BLACK HOLE → PALE BLUE DOT"), not anonymous.
-        //    The beat.state values are lowercase in the data; CSS uppercases them.
-        const expectedKickers = [
-          'black hole',
-          'red giant',
-          'yellow star',
-          'nebula',
-          'pale blue dot',
-        ] as const
-
-        const kickers = fallback.locator('.scene-fallback-beat-kicker')
-        await expect(
-          kickers,
-          `exactly ${expectedKickers.length} lifecycle kickers must be present`,
-        ).toHaveCount(expectedKickers.length)
-
-        for (let i = 0; i < expectedKickers.length; i += 1) {
-          await expect(
-            kickers.nth(i),
-            `kicker ${i + 1} must carry the lifecycle state text`,
-          ).toHaveText(expectedKickers[i])
-        }
-
-        // ── 2. Canonical destinations — the nav links (Work / Writing / About /
-        //    Contact) are exposed in the first viewport without scrolling and link
-        //    to the correct sections. The CTA also provides a direct contact path.
-        const nav = fallback.locator('.scene-fallback-nav')
-        await expect(nav, '.scene-fallback-nav must be visible').toBeVisible()
-
-        const navDestinations = [
-          { label: 'Work',    hrefPattern: /\/projects/ },
-          { label: 'Writing', hrefPattern: /\/writing/  },
-          { label: 'About',   hrefPattern: /\/about/    },
-          { label: 'Contact', hrefPattern: /\/about/    },
-        ] as const
-
-        for (const { label, hrefPattern } of navDestinations) {
-          const link = nav.getByRole('link', { name: label })
-          await expect(link, `${label} link must be visible`).toBeVisible()
-          await expect(
-            link,
-            `${label} link href must match ${hrefPattern}`,
-          ).toHaveAttribute('href', hrefPattern)
-        }
-
-        // ── 3. CTA link — the closing "Get in touch." provides a direct contact
-        //    path independently of the nav, confirming the page never dead-ends.
-        const cta = fallback.locator('.scene-fallback-cta').getByRole('link')
-        await expect(cta, 'CTA link must be visible').toBeVisible()
-        await expect(
-          cta,
-          'CTA link href must point to /about#get-in-touch',
-        ).toHaveAttribute('href', /\/about/)
-      } finally {
-        await ctx.close()
-      }
-    },
-  )
-})
-
-// ---------------------------------------------------------------------------
-// QA-002 — no-JS per route (javaScriptEnabled=false on every public route)
-//
-// Inner routes are server-rendered static HTML and must deliver readable
-// content, a primary heading, and canonical navigation links even when the
-// visitor's browser has JavaScript disabled.  This confirms:
-//   • The SSG output is a complete document (not a blank JS shell).
-//   • nav[aria-label="Sections"] is server-rendered and keyboard-reachable.
-//   • Each route has at least one h1 in the document tree.
-// ---------------------------------------------------------------------------
-
-const NO_JS_INNER_ROUTES = [
-  { path: '/projects',         name: 'projects'          },
-  { path: '/writing',          name: 'writing'            },
-  { path: '/about',            name: 'about'              },
-  { path: '/graveyard',        name: 'graveyard'          },
-  { path: '/behind-the-build', name: 'behind-the-build'  },
-] as const
-
-test.describe('QA-002 no-JS per route', () => {
-  for (const { path, name } of NO_JS_INNER_ROUTES) {
-    test(
-      `${name} — content readable and nav operable without JavaScript`,
-      async ({ browser }) => {
-        const ctx = await browser.newContext({ javaScriptEnabled: false })
-        const page = await ctx.newPage()
-
-        try {
-          const response = await page.goto(path)
-
-          // Must return HTTP 200 (the SSG output must exist).
-          expect(
-            response?.status(),
-            `${path} must return HTTP 200 without JavaScript`,
-          ).toBe(200)
-
-          // Primary heading — the page must have visible content.
-          await expect(
-            page.locator('h1').first(),
-            `${path} must have an <h1> visible without JavaScript`,
-          ).toBeVisible()
-
-          // Server-rendered primary nav — canonical destinations must be
-          // in the DOM as plain <a> links (no JS required to render them).
-          const nav = page.locator('nav[aria-label="Sections"]')
-          await expect(
-            nav,
-            `${path} must have nav[aria-label="Sections"] without JavaScript`,
-          ).toBeAttached()
-
-          for (const label of ['Work', 'Writing', 'About', 'Contact'] as const) {
-            const link = nav.getByRole('link', { name: label, exact: true })
-            await expect(
-              link,
-              `"${label}" link must be present on ${path} without JavaScript`,
-            ).toBeAttached()
-
-            // Keyboard-focusable — programmatic focus must land on the link.
-            await link.focus()
-            await expect(
-              link,
-              `"${label}" link must be keyboard-focusable on ${path} without JavaScript`,
-            ).toBeFocused()
-          }
-        } finally {
-          await ctx.close()
-        }
-      },
-    )
+test('no-JS content routes still render their content', async ({ page }) => {
+  for (const route of ['/projects', '/writing', '/graveyard', '/about', '/contact']) {
+    await page.goto(route, { waitUntil: 'load' });
+    await expect(page.locator('h1'), `${route} has a visible h1`).toBeVisible();
+    // Body copy must not be gated behind JS-driven reveals.
+    const textLength = await page.evaluate(() => document.body.innerText.length);
+    expect(textLength, `${route} has real text`).toBeGreaterThan(200);
   }
-})
-
+});

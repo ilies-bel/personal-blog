@@ -29,7 +29,7 @@
 // there is no pop when uSimBlend ramps up from 0 at stage 3.5.
 // ===========================================================================
 
-import { DataTexture, FloatType, HalfFloatType, RGBAFormat, Texture, WebGLRenderer, WebGLRenderTarget } from 'three';
+import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
 
 // The Variable returned by addVariable() (typed via three's bundled JSDoc).
@@ -362,8 +362,8 @@ const seedVelocityShader = /* glsl */ `
 
 /** The two baked snapshot textures bracketing a scroll position, plus the blend. */
 export interface SimSample {
-  texA: Texture;
-  texB: Texture;
+  texA: THREE.Texture;
+  texB: THREE.Texture;
   /** 0 → fully texA, 1 → fully texB. */
   mix: number;
 }
@@ -394,7 +394,7 @@ export interface GravitySim {
 const FIXED_DT = 1 / 60;
 
 interface GravitySimParams {
-  renderer: WebGLRenderer;
+  renderer: THREE.WebGLRenderer;
   count: number;
   aSeed: Float32Array;
   aU: Float32Array;
@@ -427,7 +427,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
 
   const { width, height } = simDimensions(count);
   const gpu = new GPUComputationRenderer(width, height, renderer);
-  if (halfFloat) gpu.setDataType(HalfFloatType);
+  if (halfFloat) gpu.setDataType(THREE.HalfFloatType);
 
   // bake per-particle (aSeed, aU, aPhase) into a seed texture sampled by the
   // seed passes; tail texels (index ≥ count) get zeros (harmless dead particles).
@@ -438,7 +438,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
     seedData[i * 4 + 2] = aPhase[i];
     seedData[i * 4 + 3] = 1;
   }
-  const seedTex = new DataTexture(seedData, width, height, RGBAFormat, FloatType);
+  const seedTex = new THREE.DataTexture(seedData, width, height, THREE.RGBAFormat, THREE.FloatType);
   seedTex.needsUpdate = true;
 
   // shared GLSL prelude for every compute shader (noise + the placement fn).
@@ -573,7 +573,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
   // persistent snapshot render targets — one per baked frame. Built via the GPGPU's
   // own factory so they match its targets EXACTLY (RGBA, same float/half-float type,
   // NearestFilter, ClampToEdge, no depth) — we sample them by exact texel UV.
-  const snaps: WebGLRenderTarget[] = [];
+  const snaps: THREE.WebGLRenderTarget[] = [];
 
   // a trivial blit material that copies the GPGPU position texture into a snapshot RT.
   const copyMat = gpu.createShaderMaterial(
@@ -581,7 +581,7 @@ export function buildGravitySim(params: GravitySimParams): GravitySim {
       uniform sampler2D uSrc;
       void main(){ gl_FragColor = texture2D(uSrc, gl_FragCoord.xy / resolution.xy); }
     `,
-    { uSrc: { value: null as Texture | null } },
+    { uSrc: { value: null as THREE.Texture | null } },
   );
 
   // INCREMENTAL bake: ~200 compute passes over a 1.2M-texel sim crammed into one frame

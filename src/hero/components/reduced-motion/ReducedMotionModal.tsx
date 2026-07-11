@@ -12,8 +12,12 @@
 //     OS users understand the lighter view and can opt into the full hero.
 //
 // Accessibility: role="dialog" aria-modal, a focus trap, Escape cancels, backdrop
-// click cancels (the safe / no-change option), and a visible focus ring. The modal is
-// itself reduced-motion-friendly — a simple opacity fade, no transform-heavy motion.
+// click cancels (the safe / no-change option), a visible focus ring, and the
+// BACKGROUND page is made `inert` while the dialog is up (every <body> child that
+// doesn't contain the dialog — so the corner nav, skip link, scene chrome and page
+// content are unreachable by Tab, click AND assistive-tech navigation, matching
+// what aria-modal announces). The modal is itself reduced-motion-friendly — a
+// simple opacity fade, no transform-heavy motion.
 import { useEffect, useRef } from 'react';
 
 export type ReducedMotionModalMode = 'confirm' | 'explain';
@@ -63,29 +67,30 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
   // the modal is self-contained — the parent only owns its open/closed state.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    confirmRef.current?.focus();
 
-    // BACKGROUND INERT — make every body-level subtree outside this dialog
-    // inaccessible to assistive technology while the modal is open.
-    //
-    // `aria-modal="true"` tells well-behaved ATs to ignore the rest of the
-    // page, but the HTML `inert` attribute is the robust, author-controlled
-    // equivalent: it removes every inerted element from the AT tree AND the
-    // Tab sequence, regardless of AT implementation quality.
-    //
-    // Strategy: walk up from the dialog element to the direct child of
-    // <body> that contains it (the Astro island wrapper), then set `inert`
-    // on every OTHER direct body child.  We record which siblings were
-    // already inert so the cleanup only removes the attribute from the ones
-    // WE added it to — never stripping an attribute another actor set.
-    const dialog = dialogRef.current;
-    let container: Element | null = dialog;
-    while (container && container.parentElement !== document.body) {
-      container = container.parentElement;
+    // INERT BACKGROUND (P8): while the dialog is up, everything OUTSIDE its own
+    // ancestor chain is made inert — removed from the tab order, hit-testing and
+    // the accessibility tree — so the "modal" the ARIA claims is real. The dialog
+    // lives deep inside the hero island's subtree, so a body-children sweep alone
+    // would leave the island's own chrome (identity, HUD, markers) live; instead
+    // we walk UP from the backdrop to <body>, inerting every element sibling at
+    // each level (the classic make-inert-outside). Only the elements WE inerted
+    // are restored on close (a pre-existing inert attribute is left as found).
+    const backdropEl = dialogRef.current?.closest('.bh-rm-modal-backdrop') ?? dialogRef.current;
+    const inerted: HTMLElement[] = [];
+    for (
+      let node: HTMLElement | null = backdropEl as HTMLElement | null;
+      node && node !== document.body && node.parentElement;
+      node = node.parentElement
+    ) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue;
+        sibling.inert = true;
+        inerted.push(sibling);
+      }
     }
-    const siblings = Array.from(document.body.children).filter(el => el !== container);
-    const wasInert = siblings.map(el => el.hasAttribute('inert'));
-    siblings.forEach(el => el.setAttribute('inert', ''));
+
+    confirmRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -94,9 +99,9 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
         return;
       }
       if (event.key !== 'Tab') return;
-      const dlg = dialogRef.current;
-      if (!dlg) return;
-      const focusable = dlg.querySelectorAll<HTMLElement>(
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = dialog.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
@@ -115,12 +120,9 @@ export default function ReducedMotionModal({ mode, onConfirm, onCancel }: Reduce
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      // Restore each sibling's inert state to exactly what it was before the
-      // modal opened — only remove the attribute from siblings WE added it to.
-      siblings.forEach((el, i) => {
-        if (!wasInert[i]) el.removeAttribute('inert');
-      });
-      // Restore focus to whatever opened the modal (the corner toggle) on close.
+      // Un-inert the background FIRST (an inert ancestor would swallow the focus
+      // restore), then hand focus back to whatever opened the modal (the toggle).
+      for (const el of inerted) el.inert = false;
       previouslyFocused?.focus?.();
     };
   }, [onCancel]);

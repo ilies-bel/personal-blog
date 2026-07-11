@@ -42,7 +42,7 @@
 // (createScene short-circuits at scale === 1 — no layer moves, no extra target,
 // no composite object, no per-frame branch cost — the original single-pass path,
 // byte-identical). ?prtres=1 forces that path for A/B (see resolveParticleRTScale).
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, HalfFloatType, Mesh, PerspectiveCamera, Scene, ShaderMaterial, Sphere, Vector3, WebGLRenderer, WebGLRenderTarget } from 'three';
+import * as THREE from 'three';
 import type { Rig } from './types';
 
 /** The scene layer the half-res rigs live on. The camera's default mask (layer 0)
@@ -54,25 +54,25 @@ export interface ParticlePassRig extends Rig {
   /** The additive upsample-composite fullscreen triangle (a SCENE object, renderOrder
    *  -1 so it occupies the disk's old first-in-the-transparent-queue slot). frame()
    *  toggles `.visible` to whether any half-res rig drew this frame. */
-  quad: Mesh;
+  quad: THREE.Mesh;
   /** The offscreen half-res HalfFloat target the heavy rigs render into. */
-  target: WebGLRenderTarget;
+  target: THREE.WebGLRenderTarget;
   /** Resize on the composer's resize path: `scale` × (css size × pixel ratio) —
    *  i.e. it tracks the composer's render-target size (DPR included) automatically. */
   setSize: (w: number, h: number, pixelRatio: number) => void;
   /** Render the PARTICLE_RT_LAYER subset of `scene` into the half-res target.
    *  Saves/restores the renderer's clear colour (the room tint), autoClear, the
    *  bound target and the camera's layer mask — the caller's state is untouched. */
-  renderInto: (renderer: WebGLRenderer, scene: Scene, camera: PerspectiveCamera) => void;
+  renderInto: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) => void;
   dispose: () => void;
 }
 
-export function buildParticlePass(scene: Scene, scale: number): ParticlePassRig {
+export function buildParticlePass(scene: THREE.Scene, scale: number): ParticlePassRig {
   // No depth/stencil: every rig routed here is depthTest:false + depthWrite:false
   // (see the header). LinearFilter (the render-target default) gives the bilinear
   // upsample when the full-res composite samples it.
-  const target = new WebGLRenderTarget(2, 2, {
-    type: HalfFloatType,
+  const target = new THREE.WebGLRenderTarget(2, 2, {
+    type: THREE.HalfFloatType,
     depthBuffer: false,
     stencilBuffer: false,
   });
@@ -80,14 +80,14 @@ export function buildParticlePass(scene: Scene, scale: number): ParticlePassRig 
   // Fullscreen triangle (covers clip space; fragments outside the viewport are
   // clipped). The vertex shader writes clip coords directly — the camera transform
   // is bypassed, so the triangle composites 1:1 in screen space.
-  const geo = new BufferGeometry();
+  const geo = new THREE.BufferGeometry();
   geo.setAttribute(
     'position',
-    new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3),
+    new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3),
   );
-  geo.boundingSphere = new Sphere(new Vector3(0, 0, 0), 1e6);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
 
-  const mat = new ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms: { uTex: { value: target.texture } },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -108,12 +108,12 @@ export function buildParticlePass(scene: Scene, scale: number): ParticlePassRig 
       }
     `,
     transparent: true, // joins the transparent queue, where renderOrder -1 leads it
-    blending: AdditiveBlending,
+    blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
 
-  const quad = new Mesh(geo, mat);
+  const quad = new THREE.Mesh(geo, mat);
   quad.frustumCulled = false;
   quad.renderOrder = -1; // the disk's old slot: first in the transparent queue, under the mesh
   quad.visible = false; // frame() reveals it only when a half-res rig actually drew
@@ -129,12 +129,12 @@ export function buildParticlePass(scene: Scene, scale: number): ParticlePassRig 
   // Scratch for the clear-colour save/restore (the renderer clears to the per-scene
   // room tint; the particle target must clear to transparent black so the additive
   // composite adds ONLY particle light — the tint would otherwise be added twice).
-  const savedClearColor = new Color();
+  const savedClearColor = new THREE.Color();
 
   const renderInto = (
-    renderer: WebGLRenderer,
-    sceneRef: Scene,
-    camera: PerspectiveCamera,
+    renderer: THREE.WebGLRenderer,
+    sceneRef: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
   ): void => {
     const savedMask = camera.layers.mask;
     const savedAlpha = renderer.getClearAlpha();

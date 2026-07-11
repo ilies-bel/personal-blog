@@ -9,22 +9,14 @@
 // body the dim caption) — so no two surfaces can disagree about what the
 // sections are called or where they sit.
 //
-// The model is four primary destinations — Work, Writing, About, Contact.
-//   Work     → /projects  (URL is stable; label is the user-facing name)
-//   Writing  → /writing   (prose hub: articles + Behind the Build + Graveyard)
-//   About    → /about
-//   Contact  → /about#get-in-touch  (anchor until a dedicated /contact route ships)
-// Graveyard and Behind the Build are meaningful secondary destinations surfaced
-// through Writing (writing.astro lists them) and the sitewide footer — they are
-// NOT orphaned but are deliberately kept off the primary rail so the top-level
-// navigation stays four items wide, all signal, no noise.
-// WRITING lights for the whole /posts/ subtree and for Behind the Build.
-// The graveyard has no top-nav item and claims none: no section reads as current
-// there (aria-current is a true-path statement, not a "nearest section" hint).
-// Contact has no /contact route yet, so active is always false — About holds
-// the current-section signal when on /about.
-// The hero's vertical rail still walks all five lifecycle scenes; a menu does
-// not need to mirror the scene order.
+// The model is four primary destinations — Work, Writing, About, Contact (the
+// conventional portfolio IA; Work keeps its /projects path). WRITING is a prose
+// menu (src/pages/writing.astro) that hubs the written material — the posts and
+// Behind the Build — so the old separate INDEX (/archive) entry is gone and
+// Writing lights for those pages. The graveyard has no top-nav item and claims
+// none: no section reads as current there (aria-current is a true-path statement,
+// not a "nearest section" hint). The hero's vertical rail still walks all five
+// lifecycle scenes; a menu doesn't need to mirror the scene order.
 //
 // The two surfaces keep their own CSS skins on purpose (the scene overlay floats
 // over a live canvas and boot-gates its brightness; the reading rail is a sticky
@@ -84,10 +76,7 @@ const rows: NavRow[] = [
   { href: href('projects'), label: 'Work', active: isActive('projects') },
   { href: href('writing'), label: 'Writing', active: isWritingActive },
   { href: href('about'), label: 'About', active: isActive('about') },
-  // Contact points at the About contact section until a dedicated /contact route
-  // ships (EXP-010). active is always false — no /contact path exists yet, and
-  // About already holds aria-current when the visitor is on /about.
-  { href: `${href('about')}#get-in-touch`, label: 'Contact', active: false },
+  { href: href('contact'), label: 'Contact', active: isActive('contact') },
 ];
 
 // Official simple-icons brand paths (GitHub octocat, X logo), fill=currentColor
@@ -151,7 +140,7 @@ const X_PATH =
           type="button"
           class="overlay-blog-power"
           aria-pressed="false"
-          aria-label="Toggle navigation controls"
+          aria-label="Power the navigation HUD"
         >
           {/* IEC power glyph: an open ring broken at the top by a vertical line. */}
           <svg class="overlay-blog-icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -168,7 +157,7 @@ const X_PATH =
           type="button"
           class="scene-toggle"
           aria-pressed="false"
-          aria-label="Toggle background animation"
+          aria-label="Toggle background scene"
         >
           {/* Celestial glyph — a ringed body with its core; the slash appears
               when the scene is parked (aria-pressed=true, scene.css). */}
@@ -229,7 +218,7 @@ const X_PATH =
           type="button"
           class="scene-toggle"
           aria-pressed="false"
-          aria-label="Toggle background animation"
+          aria-label="Toggle background scene"
         >
           {/* Celestial glyph — a ringed body with its core; the slash appears
               when the scene is parked (aria-pressed=true, scene.css). */}

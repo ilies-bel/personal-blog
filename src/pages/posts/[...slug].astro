@@ -5,6 +5,8 @@ import IslandsDemo from '../../components/mdx/IslandsDemo.tsx';
 import SceneFigure from '../../components/mdx/SceneFigure.tsx';
 import SignalsReadout from '../../components/mdx/SignalsReadout.tsx';
 import { stationForStage } from '../../hero/sceneTable';
+import { AUTHOR_NAME } from '../../consts';
+import { ogCardFor } from '../../lib/ogCard';
 
 // Pre-render one static HTML page per post at build time (SSG → SEO-ready).
 export async function getStaticPaths() {
@@ -36,6 +38,14 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+// FORMALIZED CO-AUTHORSHIP (P6). `authors` defaults to the site owner in the
+// schema; when a post lists more names, the co-authors get a visible byline
+// below the description and the full array flows into the BlogPosting JSON-LD
+// (BaseLayout spreads `authors` into BaseHead). The provenance note ("first
+// ran elsewhere") is post data too — same source /writing renders.
+const coAuthors = post.data.authors.filter((name) => name !== AUTHOR_NAME);
+const provenance = post.data.provenance;
+
 // MDX component map: in-prose islands authors can drop into a post. Each hydrates on
 // its own (client:* in the MDX), keeping the surrounding prose zero-JS — the islands
 // thesis, demonstrated. Passed to <Content components={...} /> below.
@@ -50,10 +60,11 @@ const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
 <BaseLayout
   title={post.data.title}
   description={post.data.description}
-  ogImage={post.data.ogImage}
+  ogImage={post.data.ogImage ?? ogCardFor(`post-${post.id}`)}
   type="article"
   publishedTime={post.data.pubDate}
   modifiedTime={post.data.updatedDate}
+  authors={post.data.authors}
   bodyClass="article-page"
 >
   <article class="prose">
@@ -68,8 +79,24 @@ const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
           physically travels into this headline — browser-back reverses it. */}
       <h1 transition:name={`post-title-${post.id}`}>{post.data.title}</h1>
       <p class="article-description">{post.data.description}</p>
+      {/* Visible co-author byline + provenance (P6) — rendered from post data,
+          in the quiet instrument-readout register (.article-meta). Solo posts
+          by the site owner show neither line. */}
+      {coAuthors.length > 0 && (
+        <p class="article-meta article-byline">Co-written with {coAuthors.join(', ')}</p>
+      )}
+      {provenance && (
+        <p class="article-meta article-provenance">
+          {provenance.url ? (
+            <a href={provenance.url} rel="noopener noreferrer">{provenance.note}</a>
+          ) : (
+            provenance.note
+          )}
+        </p>
+      )}
       {post.data.tags.length > 0 && (
-        <p class="article-tags" aria-label="Tags">
+        <p class="article-tags">
+          <span class="sr-only">Tags: </span>
           {post.data.tags.map((tag) => <span>{tag}</span>)}
         </p>
       )}
@@ -80,6 +107,27 @@ const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
       }
     </header>
     <Content components={mdxComponents} />
+
+    {/* EVIDENCE (P13) — the artifacts backing the piece, from frontmatter
+        `evidence` (original publication, upstream bug threads, profiler
+        captures…). Same honesty grammar as the project claims ledger: the
+        aside renders only when artifacts exist — no placeholder box. */}
+    {post.data.evidence.length > 0 && (
+      <aside class="article-evidence" aria-labelledby="article-evidence-title">
+        <p class="article-evidence-title" id="article-evidence-title">Evidence</p>
+        <ul class="article-evidence-list">
+          {post.data.evidence.map((item) => (
+            <li>
+              {item.url ? (
+                <a href={item.url} rel="noopener noreferrer">{item.label}</a>
+              ) : (
+                item.label
+              )}
+            </li>
+          ))}
+        </ul>
+      </aside>
+    )}
 
     {/* CONTINUATION — the journey keeps moving at the article's end instead of
         stopping on the copyright line. The next note's title carries ITS OWN

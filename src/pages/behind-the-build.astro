@@ -17,144 +17,33 @@ import ArticleScene from '../hero/components/ArticleScene.tsx';
 import ArticleHud from '../hero/components/ArticleHud.tsx';
 import SceneFigure from '../components/mdx/SceneFigure.tsx';
 import FpsMeter from '../components/FpsMeter.tsx';
+import RouteEnding from '../components/RouteEnding.astro';
 import { SITE_TITLE, SOCIALS } from '../consts';
-
-// Each shader gets a representative excerpt rendered inline. Long shaders (disk, sun,
-// tesseract) are pre-trimmed to a representative head so the page stays light; the
-// caption notes line counts and links to the full source on GitHub. Imported strings
-// give us byte-identical GLSL — the same text the GPU compiles.
-import { LENS_GLSL } from '../hero/shaders/lens.glsl';
-import { ringVertexShader, ringFragmentShader } from '../hero/shaders/ring.glsl';
-import { warpVertexShader, warpFragmentShader } from '../hero/shaders/warp.glsl';
-import { streakVertexShader, streakFragmentShader } from '../hero/shaders/streak.glsl';
-import { diskVertexShader } from '../hero/shaders/disk.glsl';
-import { starVertexShader } from '../hero/shaders/star.glsl';
-import { sunSurfaceFrag } from '../hero/shaders/sun.glsl';
-import { GradeShader, NovaShader } from '../hero/shaders/post.glsl';
-import { tesseractBeamFrag } from '../hero/shaders/tesseract.glsl';
+// The documented-shader catalog (P6) — the SAME array this page renders as its
+// gallery, exported from src/lib/shaderCatalog.ts so the "one engine, N
+// shaders" prose here AND on /writing derive from SHADERS.length. Adding a row
+// to the catalog updates the gallery and every count in the same edit — the
+// prose can no longer drift from the gallery it describes.
+import { SHADERS } from '../lib/shaderCatalog';
+import { numberToWord } from '../lib/contentFormat';
+import { ogCardFor } from '../lib/ogCard';
+// Generated performance telemetry (P10) — written by scripts/gen-perf-report.mjs
+// from the built dist; a stale copy fails CI (gen-perf-report --check).
+// NOTE: this import must stay in the top import group — the compiler hoists
+// imports, and a mid-file import below multibyte-heavy comment text gets
+// sliced with wrong offsets (observed: corrupted frontmatter, build failure).
+import perfReport from '../data/perf-report.json';
 
 // GitHub source for the "view full" links. The repo lives at ilies-bel/personal-blog.
 const REPO = 'https://github.com/ilies-bel/personal-blog/blob/main';
 
-// One row per shader: name, the file the GLSL lives in, the stage we pin a SceneFigure
-// to (which lifecycle beat best showcases it), the source excerpt to inline, and a
-// short prose blurb. The order tracks the lifecycle — black-hole physics first, then
-// the structural/tonal passes, then the yellow-star/disc/corridor entries.
-interface ShaderRow {
-  name: string;
-  file: string;
-  stage: number;
-  caption: string;
-  description: string;
-  excerpt: string;
-  excerptIsHead?: boolean;
-  excerptLines?: number;
-  totalLines?: number;
-}
+// Base-safe internal href (the RouteEnding continuation below).
+const base = import.meta.env.BASE_URL;
+const withHref = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 
-// Pull a head excerpt of a long shader: the first N non-empty lines, so the toggle
-// shows a representative slice without dumping ~138KB into the document.
-const head = (s: string, n: number): string => s.split('\n').slice(0, n).join('\n');
-const ringSrc = `// --- vertex ---\n${ringVertexShader}\n// --- fragment ---\n${ringFragmentShader}`;
-const warpSrc = `// --- vertex ---\n${warpVertexShader}\n// --- fragment ---\n${warpFragmentShader}`;
-const streakSrc = `// --- vertex ---\n${streakVertexShader}\n// --- fragment ---\n${streakFragmentShader}`;
-const postSrc = `// --- grade (vertex) ---\n${GradeShader.vertexShader}\n// --- grade (fragment) ---\n${GradeShader.fragmentShader}\n// --- nova (fragment) ---\n${NovaShader.fragmentShader}`;
-
-const SHADERS: readonly ShaderRow[] = [
-  {
-    name: 'lens',
-    file: 'src/hero/shaders/lens.glsl.ts',
-    stage: 0,
-    caption: 'Lens — gravitational deflection',
-    description:
-      'A shared point-lens function reused by the disk, the warp arcs, and the starfield. Bends every clip-space vertex around the black-hole image plane and returns both the deflected position and a magnification scalar.',
-    excerpt: LENS_GLSL,
-  },
-  {
-    name: 'ring',
-    file: 'src/hero/shaders/ring.glsl.ts',
-    stage: 0,
-    caption: 'Photon ring — size-coupled rim of light',
-    description:
-      'The thin cold-silver rim around the shadow. Brightness and band-width are coupled to the morph uniform so the ring tightens and dims as the hole shrinks toward the seed.',
-    excerpt: ringSrc,
-  },
-  {
-    name: 'warp',
-    file: 'src/hero/shaders/warp.glsl.ts',
-    stage: 0,
-    caption: 'Warp arcs — tangentially magnified starlight',
-    description:
-      'Light bent into short arcs in a narrow band around the Einstein radius. Uses the same lens math as the starfield but draws arcs instead of points, so the bent-light caustics stay legible.',
-    excerpt: warpSrc,
-  },
-  {
-    name: 'star',
-    file: 'src/hero/shaders/star.glsl.ts',
-    stage: 0.6,
-    caption: 'Starfield — lensed dome of distant stars',
-    description:
-      'A 3D dome of points pushed through the same lens function. Each star carries a primary image plus an opposite-side secondary, so the lensing produces the characteristic Einstein ring as the hole crosses the field.',
-    excerpt: head(starVertexShader, 80),
-    excerptIsHead: true,
-    excerptLines: 80,
-    totalLines: 163,
-  },
-  {
-    name: 'streak',
-    file: 'src/hero/shaders/streak.glsl.ts',
-    stage: 0.4,
-    caption: 'Streaks — two-tier hyperspace lanes',
-    description:
-      'A radial line-streak rig with two opacity tiers: a few strong structural rays carrying signal and a soft field of faint lanes that recede. Active only in the dive / hyperspace beat.',
-    excerpt: streakSrc,
-  },
-  {
-    name: 'disk',
-    file: 'src/hero/shaders/disk.glsl.ts',
-    stage: 0,
-    caption: 'Accretion disk — the ~1.2M-point cloud',
-    description:
-      'The cloud that morphs from Keplerian-orbit disk to nebula. Per-point vertex morph drives the position; relativistic beaming, gravitational redshift, and a T ∝ r^-3/4 colour ramp drive the fragment. The dominant draw cost on the page.',
-    excerpt: head(diskVertexShader, 110),
-    excerptIsHead: true,
-    excerptLines: 110,
-    totalLines: 2049,
-  },
-  {
-    name: 'sun',
-    file: 'src/hero/shaders/sun.glsl.ts',
-    stage: 2.9,
-    caption: 'Sun — photosphere, corona, glow',
-    description:
-      'The dedicated yellow-star mesh rig: a tilted photosphere with noise-driven granulation, a corona, an outer glow, and four addressable eruption slots driven from the same getStage value.',
-    excerpt: head(sunSurfaceFrag, 90),
-    excerptIsHead: true,
-    excerptLines: 90,
-    totalLines: 565,
-  },
-  {
-    name: 'post',
-    file: 'src/hero/shaders/post.glsl.ts',
-    stage: 0.9,
-    caption: 'Post — grade and nova whiteout',
-    description:
-      'Two full-screen passes composited after the bloom: a filmic grade with state-tunable tone-map and shadow tint, and the supernova whiteout that fires on the morph breakout.',
-    excerpt: postSrc,
-  },
-  {
-    name: 'tesseract',
-    file: 'src/hero/shaders/tesseract.glsl.ts',
-    stage: 0.2,
-    caption: 'Tesseract — solid-beam corridor lattice',
-    description:
-      'Not a raymarch — a single InstancedMesh of unit boxes shaded as long shelf beams in a nested-frame bookcase tunnel. Used as the alternate article backdrop.',
-    excerpt: head(tesseractBeamFrag, 90),
-    excerptIsHead: true,
-    excerptLines: 90,
-    totalLines: 199,
-  },
-];
+// Derived prose forms of the shader count: "nine" mid-sentence, "Nine" opening one.
+const shaderCountWord = numberToWord(SHADERS.length);
+const shaderCountWordCapitalized = shaderCountWord.charAt(0).toUpperCase() + shaderCountWord.slice(1);
 
 // Sections the ArticleHud reads. Element ids match — the hud spies on these via
 // IntersectionObserver and shows N / total + the live section title in the cockpit.
@@ -171,53 +60,84 @@ const SECTIONS = [
 // of the system, so the journey covers the full built range.
 const JOURNEY: readonly [number, number] = [0, 3.5];
 
-// Performance budgets — MEASURED on this branch (production build, M-class laptop,
-// throttled to Slow 4G in Chrome devtools). Anything you change in the engine should
-// be cross-checked against these numbers. The deltas matter more than the absolutes,
-// so the page surfaces both the budget the engine targets and the last value seen.
+// Performance budgets — GENERATED, not hand-written. The table below renders
+// src/data/perf-report.json, which scripts/gen-perf-report.mjs measures from the
+// built dist (same measurement core as the scripts/check-bundle-budgets.mjs CI
+// gate), so the numbers this page claims are the numbers CI enforces — a stale
+// report FAILS the build (gen-perf-report --check, ±5%). The hand-entered
+// BUDGETS array this replaced claimed "measured on this branch" with no way to
+// re-measure it; claims that cannot be generated (field INP and friends) were
+// deleted, not hedged — field CWV wait for RUM (see the prose note below).
+
 interface BudgetRow {
   name: string;
   budget: string;
   measured: string;
   note: string;
 }
-const BUDGETS: readonly BudgetRow[] = [
+
+const { bundle, html, rasters, budgets, lighthouse } = perfReport;
+const b = (row: { hard: number; target: number }) => `≤ ${row.hard} KiB (target ${row.target})`;
+
+// Lab metrics land only when a Lighthouse CI run exists to back them (the
+// gen script folds .lighthouseci results in). CLS and LCP are shown: CLS is
+// deterministic (error-gated in CI) and LCP holds even on the software-GL
+// runner. Main-thread time (TBT) is deliberately NOT tabled — on a
+// software-rendered runner it measures the runner, not the site (the raw
+// number stays in perf-report.json and gates warn-level in CI; see
+// lighthouserc.cjs). Presenting it here as "measured" would misinform.
+const labRoutes = lighthouse ? Object.values(lighthouse.perRoute) : [];
+const labHome = lighthouse?.perRoute['/'];
+const LAB_ROWS: BudgetRow[] =
+  lighthouse && labHome
+    ? [
+        {
+          name: 'CLS (lab, worst route)',
+          budget: '≤ 0.02 (CI error)',
+          measured: `${Math.max(...labRoutes.map((r) => r.cls))}`,
+          note: `Lighthouse ${lighthouse.measuredAt}, ${labRoutes.length} routes (${lighthouse.environment} runner). Fixed-footprint canvas host + dimensioned images.`,
+        },
+        {
+          name: 'LCP (lab, home)',
+          budget: '≤ 2.0 s (CI warn)',
+          measured: labHome.lcpMs >= 0 ? `${(labHome.lcpMs / 1000).toFixed(2)} s` : '—',
+          note: `Lighthouse ${lighthouse.measuredAt}, throttled mobile profile on a software-rendered ${lighthouse.environment} runner — an upper bound: the loader paints as server HTML before any engine byte arrives.`,
+        },
+      ]
+    : [];
+
+const BUDGETS: BudgetRow[] = [
   {
-    name: 'JS initial payload (gz)',
-    budget: '≤ 220 KB',
-    measured: '~205 KB',
-    note: 'three.js + the engine chunk; dynamically imported so it never blocks first paint.',
+    name: 'Hero engine graph JS (gz)',
+    budget: b(budgets.js.heroGraphGzipKiB),
+    measured: `${bundle.heroGraphGzipKiB} KiB`,
+    note: 'three-core + three-post + the createScene chunk + the warmThree facade; dynamically imported, so it never blocks first paint.',
   },
   {
-    name: 'LCP (laptop, broadband)',
-    budget: '≤ 1.5 s',
-    measured: '~1.2 s',
-    note: 'The intro loader is server-rendered HTML + CSS; it paints before the engine arrives.',
+    name: 'Home pre-engine JS (gz)',
+    budget: b(budgets.js.preHeroRouteGzipKiB),
+    measured: `${bundle.preHeroGzipKiB} KiB`,
+    note: 'Everything / requests before the engine import fires: island runtime, hero shell, HUD nav, loader controls.',
   },
   {
-    name: 'INP at scroll (median)',
-    budget: '≤ 100 ms',
-    measured: '~32 ms',
-    note: 'Scroll is sampled on rAF; HUD broadcasts gate on a PROGRESS_MIN_DELTA so React stays out of the hot path.',
+    name: 'Reading-route JS (gz, worst route)',
+    budget: b(budgets.js.readingRouteGzipKiB),
+    measured: `${bundle.readingRouteMaxGzipKiB} KiB`,
+    note: 'Reading routes ship zero three.js (e2e-asserted); this caps everything else they load.',
   },
   {
-    name: 'CLS',
-    budget: '≤ 0.05',
-    measured: '0.00',
-    note: 'The canvas host has a fixed footprint and the prose lives inside a single column — no layout shift on hydration.',
+    name: 'HTML per page (gz, worst page)',
+    budget: b(budgets.html.perPageGzipKiB),
+    measured: `${html.maxPageGzipKiB} KiB`,
+    note: 'Stylesheets are inlined, so this one number also caps CSS growth — grain data-URIs included.',
   },
   {
-    name: 'Render pixel ratio (high tier)',
-    budget: '≤ 1.85×',
-    measured: '1.85×',
-    note: 'Clamped in tuneRenderPixelRatio so a 3× DPR display never burns four times the fragments for invisible gain.',
+    name: 'Largest shipped raster',
+    budget: `≤ ${budgets.rasters.hardKiB} KiB (target ${budgets.rasters.targetKiB})`,
+    measured: `${rasters.largestKiB} KiB (of ${rasters.count})`,
+    note: 'Every content raster goes through astro:assets; the CI gate has no grandfather list.',
   },
-  {
-    name: 'Render pixel ratio (low tier)',
-    budget: '≤ 0.6×',
-    measured: '0.6×',
-    note: 'Low tier renders well below native and lets the browser upscale — the cloud is fragment-bound.',
-  },
+  ...LAB_ROWS,
 ];
 
 // Fallback ladder — same beat (the held nebula at stage 3.42), four ways the system
@@ -242,7 +162,7 @@ const FALLBACKS: readonly FallbackRow[] = [
   {
     label: 'Reduced motion',
     state: 'No live engine; CSS-painted poster of the same beat.',
-    detail: 'Respects prefers-reduced-motion. The article prose is unchanged — only the backdrop swaps.',
+    detail: 'Respects the reduced-motion preference. The article prose is unchanged — only the backdrop swaps.',
   },
   {
     label: 'No WebGL',
@@ -254,7 +174,8 @@ const FALLBACKS: readonly FallbackRow[] = [
 
 <BaseLayout
   title="Behind the Build"
-  description={`How ${SITE_TITLE}'s scroll-scrubbed stellar lifecycle is built: one engine, nine shaders, and the budgets that keep it fast.`}
+  description={`How ${SITE_TITLE}'s scroll-scrubbed stellar lifecycle is built: one engine, ${shaderCountWord} shaders, and the budgets that keep it fast.`}
+  ogImage={ogCardFor('behind-the-build')}
   type="article"
   bodyClass="article-page behind-the-build"
 >
@@ -274,7 +195,7 @@ const FALLBACKS: readonly FallbackRow[] = [
       <h1>Behind the Build</h1>
       <p class="article-description">
         How the scroll-scrubbed stellar lifecycle on the home page actually works:
-        one engine, nine shaders, and the budgets that keep it fast enough to ship.
+        one engine, {shaderCountWord} shaders, and the budgets that keep it fast enough to ship.
       </p>
     </header>
 
@@ -321,7 +242,7 @@ const FALLBACKS: readonly FallbackRow[] = [
     <section aria-labelledby="gallery">
       <h2 id="gallery">Live shader gallery</h2>
       <p>
-        Nine GLSL files in <code>src/hero/shaders/</code>. Each panel below pins
+        {shaderCountWordCapitalized} GLSL programs from <code>src/hero/shaders/</code>. Each panel below pins
         the engine to the stage that best showcases the shader, with the actual
         source toggleable underneath. The canvases are independent
         <code>createScene</code> instances mounted on intersection — the engine
@@ -341,15 +262,26 @@ const FALLBACKS: readonly FallbackRow[] = [
             />
             <p class="btb-shader-desc">{shader.description}</p>
             <details class="btb-shader-source">
+              {/* The "full source" link must NOT live inside <summary> — an
+                  <a> nested in an interactive summary is a serious axe
+                  violation (nested-interactive) and unreachable by keyboard.
+                  The note stays on the summary line; the link moves into the
+                  revealed body, above the excerpt. */}
               <summary>
                 View GLSL
                 {shader.excerptIsHead && shader.excerptLines && shader.totalLines && (
                   <span class="btb-shader-source-note">
-                    {' '}— first {shader.excerptLines} of {shader.totalLines} lines (
-                    <a href={`${REPO}/${shader.file}`} rel="noopener noreferrer">full source</a>)
+                    {' '}— first {shader.excerptLines} of {shader.totalLines} lines
                   </span>
                 )}
               </summary>
+              {shader.excerptIsHead && shader.excerptLines && shader.totalLines && (
+                <p class="btb-shader-source-note btb-shader-source-link">
+                  <a href={`${REPO}/${shader.file}`} rel="noopener noreferrer">
+                    Full source ({shader.totalLines} lines) on GitHub
+                  </a>
+                </p>
+              )}
               <pre class="btb-shader-code"><code>{shader.excerpt}</code></pre>
             </details>
           </div>
@@ -363,32 +295,51 @@ const FALLBACKS: readonly FallbackRow[] = [
     <section aria-labelledby="performance">
       <h2 id="performance">Performance budgets</h2>
       <p>
-        Budgets the engine is tuned against, with the last measured value next to
-        each. Anything that changes one of these by more than a small step should
-        be re-measured against the same conditions.
+        Budgets the site is built against, with the measured value next to each.
+        Nothing in this table is typed by hand: CI enforces the same numbers
+        (<code>scripts/check-bundle-budgets.mjs</code>), and a build whose output
+        drifts from what this page claims fails
+        (<code>gen-perf-report.mjs --check</code>, ±5%).
       </p>
-      <div class="btb-budget-table-wrap">
-        <table class="btb-budget-table">
-          <thead>
+      <p class="btb-provenance">
+        Generated {perfReport.generatedAt} at <code>{perfReport.commit}</code> by
+        <code>scripts/gen-perf-report.mjs</code> — regenerated per release, not
+        hand-written.
+      </p>
+      {/* Scroll container: the nowrap numeric columns can outgrow narrow
+          viewports; the table scrolls locally instead of widening the document
+          (which body{overflow-x:hidden} would clip into amputated columns). */}
+      <div class="btb-table-scroll" tabindex="0" role="region" aria-label="Performance budgets table">
+      <table class="btb-budget-table">
+        <thead>
+          <tr>
+            <th scope="col">Metric</th>
+            <th scope="col">Budget</th>
+            <th scope="col">Last measured</th>
+            <th scope="col">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {BUDGETS.map((row) => (
             <tr>
-              <th scope="col">Metric</th>
-              <th scope="col">Budget</th>
-              <th scope="col">Last measured</th>
-              <th scope="col">Note</th>
+              <th scope="row">{row.name}</th>
+              <td>{row.budget}</td>
+              <td>{row.measured}</td>
+              <td>{row.note}</td>
             </tr>
-          </thead>
-          <tbody>
-            {BUDGETS.map((row) => (
-              <tr>
-                <th scope="row">{row.name}</th>
-                <td>{row.budget}</td>
-                <td>{row.measured}</td>
-                <td>{row.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          ))}
+        </tbody>
+      </table>
       </div>
+      <p>
+        Field Core Web Vitals (real-visitor INP, LCP, CLS) are deliberately absent:
+        they need RUM, which this site does not run yet — the wiring is documented
+        and waiting rather than the numbers being guessed. Main-thread lab time
+        (TBT) is also collected per release but not tabled: the available runners
+        render WebGL in software, so that number describes the runner, not the
+        site — it lives in <code>perf-report.json</code> and gates as a CI warning
+        until real rendering hardware joins the pipeline.
+      </p>
       <p>
         And what your machine is doing right now — independent of the engine, just
         the browser's own rAF clock:
@@ -456,5 +407,15 @@ const FALLBACKS: readonly FallbackRow[] = [
         <a href={SOCIALS.github} rel="noopener noreferrer">github.com/ilies-bel</a>.
       </p>
     </section>
+
+    {/* ROUTE ENDING (P9) — the anatomy lesson hands off to Work: the engine is
+        the demonstration, the shipped tools are the point. Inline width so it
+        inherits the prose column. */}
+    <RouteEnding
+      eyebrow="The engine is the demonstration"
+      title="See what ships beside it"
+      note="The same budgets and honesty, pointed at product work — the projects that held."
+      href={withHref('projects')}
+    />
   </article>
 </BaseLayout>

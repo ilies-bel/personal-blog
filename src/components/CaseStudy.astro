@@ -1,0 +1,551 @@
+---
+// CASE STUDY (P13) — one project entry rendered as a proof-first case study on
+// /projects: header + meta, the figure column, then the copy column running
+// problem → decisive choice → outcome (the MDX body, restructured under quiet
+// h3 sections; role lives in the meta strip) → PROOF (the claims ledger) →
+// DECISIONS & CONSEQUENCES (paths not taken / known limits / current status).
+//
+// Everything below the MDX body renders straight from the evidence schema
+// (src/lib/contentSchemas.ts): a claim with real evidence shows its backing
+// (type, source, link, date) adjacent to the statement; a claim still under
+// `draftEvidence` renders its hedged statement with a small honest mono note —
+// "evidence being gathered" — never a placeholder box. Sections with no data
+// are simply absent (rejectedPaths/limitations/currentStatus are optional), so
+// the layout degrades gracefully with today's content and grows with proof
+// (docs/EVIDENCE-SCHEMA.md — retiring the debt swaps the note for the record).
+//
+// The MDX body arrives through the default slot (projects.astro renders
+// <Content/> into it), keeping this component free of astro:content types.
+import type { ImageMetadata } from 'astro';
+import type { CollectionEntry } from 'astro:content';
+import { Picture } from 'astro:assets';
+import MarsTopology from './MarsTopology.astro';
+
+interface Props {
+  entry: CollectionEntry<'projects'>;
+}
+
+const { entry } = Astro.props;
+const { data } = entry;
+
+// Hand-authored diagram components a project can declare as its figure
+// (media.kind 'diagram'). The enum in the schema and this registry must agree —
+// a typo'd name fails schema validation before it can reach this map.
+const DIAGRAMS = { 'mars-topology': MarsTopology } as const;
+const Diagram = data.media?.kind === 'diagram' ? DIAGRAMS[data.media.diagram] : null;
+
+// SCREENSHOT RESOLUTION — frontmatter declares a validated FILENAME (schema:
+// assetFilename), resolved here against src/assets/projects/ via
+// import.meta.glob. NOT the content-collection image() helper: that route
+// statically imports every original through .astro/content-assets.mjs and
+// ships the raw pngs into dist (P5 gate violation) — this glob + <Picture>
+// path emits only the transformed rungs, exactly like the pre-P6 direct
+// import did. A filename that misses the glob throws HERE, at prerender, so a
+// bad reference still fails the build with a named error.
+const projectShots = import.meta.glob<{ default: ImageMetadata }>(
+  '../assets/projects/*.{png,jpg,jpeg,webp,avif}',
+  { eager: true },
+);
+const resolveShot = (filename: string): ImageMetadata => {
+  const mod = projectShots[`../assets/projects/${filename}`];
+  if (!mod) {
+    throw new Error(
+      `projects media image "${filename}" not found in src/assets/projects/ ` +
+        `(known: ${Object.keys(projectShots).join(', ')})`,
+    );
+  }
+  return mod.default;
+};
+
+// SCREENSHOT DELIVERY — same astro:assets contract as the graveyard specimens
+// (P5): AVIF/WebP + WebP fallback, sized for the figure column of the 1:1.5
+// entry-body grid (~26rem desktop, ≤36rem stacked under 58rem → 1x/2x rungs).
+const SCREENSHOT_WIDTHS = [432, 864, 1152];
+// Hardcoded fallback rung, NOT Math.min(image.width, …): reading any
+// property off imported image metadata marks the original as referenced and
+// ships the raw png into dist (see src/components/mdx/Img.astro).
+const SCREENSHOT_FALLBACK_WIDTH = 1152;
+const SCREENSHOT_SIZES = '(max-width: 58rem) min(100vw - 2rem, 36rem), 26rem';
+
+// Mono display label for a repo link: the URL minus its protocol.
+const linkLabel = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+// Evidence-kind display labels for the ledger's mono record line.
+const EVIDENCE_LABEL: Record<string, string> = {
+  metric: 'Metric',
+  testimonial: 'Testimonial',
+  link: 'Link',
+  screenshot: 'Screenshot',
+};
+
+const hasDecisions =
+  data.rejectedPaths.length > 0 || data.limitations.length > 0 || Boolean(data.currentStatus);
+---
+
+<article class="projects-entry" id={entry.id}>
+  <header class="projects-entry-header">
+    <h2 class="projects-entry-name">
+      <span data-decode>{data.title}</span>
+      {data.status === 'private' && <span class="projects-badge">private</span>}
+    </h2>
+    {(data.links?.github || data.links?.npm) && (
+      <div class="projects-entry-links">
+        {data.links.github && (
+          <a href={data.links.github} class="projects-link" target="_blank" rel="noopener noreferrer">{linkLabel(data.links.github)}</a>
+        )}
+        {data.links.github && data.links.npm && (
+          <span class="projects-link-sep" aria-hidden="true">/</span>
+        )}
+        {data.links.npm && (
+          <span class="projects-pkg"><span class="projects-pkg-label">npm</span> {data.links.npm}</span>
+        )}
+      </div>
+    )}
+    {data.privateNote && <span class="projects-private-note">{data.privateNote}</span>}
+    <dl class="projects-meta">
+      <div class="projects-meta-item">
+        <dt>Role</dt>
+        <dd>{data.role}</dd>
+      </div>
+      <div class="projects-meta-item">
+        <dt>Stack</dt>
+        <dd>{data.stack.join(' · ')}</dd>
+      </div>
+      <div class="projects-meta-item">
+        <dt>Status</dt>
+        <dd>{data.statusLabel}</dd>
+      </div>
+    </dl>
+  </header>
+
+  <div class="projects-entry-body">
+    {data.media && (
+      <figure class="projects-figure">
+        {data.media.kind === 'image' ? (
+          <Picture
+            src={resolveShot(data.media.image)}
+            alt={data.media.alt}
+            class="projects-screenshot"
+            width={SCREENSHOT_FALLBACK_WIDTH}
+            widths={SCREENSHOT_WIDTHS}
+            sizes={SCREENSHOT_SIZES}
+            formats={['avif', 'webp']}
+            fallbackFormat="webp"
+            quality={70}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          Diagram && <Diagram />
+        )}
+        <figcaption>{data.media.caption}</figcaption>
+      </figure>
+    )}
+
+    <div class="projects-copy">
+      {/* The running copy: the MDX body's problem → decisive choice → outcome
+          sections (### headings, styled below via :global). */}
+      <slot />
+
+      {/* PROOF — every factual claim the entry makes, with its backing rendered
+          adjacent. `draftEvidence` claims show the honest debt note instead;
+          e2e/content.spec.ts pins that marker's exact text and count. */}
+      {data.claims.length > 0 && (
+        <section class="projects-proof" aria-label={`${data.title}: claims and evidence`}>
+          <h3 class="projects-section-title">Proof</h3>
+          <ul class="projects-claims">
+            {data.claims.map((claim) => (
+              <li class="projects-claim">
+                <p class="projects-claim-statement">{claim.statement}</p>
+                {claim.evidence.type === 'none' ? (
+                  <p class="projects-claim-pending">evidence being gathered</p>
+                ) : (
+                  <p class="projects-claim-evidence">
+                    <span class="projects-claim-kind">{EVIDENCE_LABEL[claim.evidence.type]}</span>
+                    {claim.evidence.url ? (
+                      <a href={claim.evidence.url} rel="noopener noreferrer">
+                        {claim.evidence.source ?? linkLabel(claim.evidence.url)}
+                      </a>
+                    ) : (
+                      claim.evidence.source
+                    )}
+                    {claim.evidence.date && <span class="projects-claim-date">· {claim.evidence.date}</span>}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* DECISIONS & CONSEQUENCES — the honest engineering record from the
+          schema's honesty fields. Groups render only when the data exists. */}
+      {hasDecisions && (
+        <section class="projects-decisions" aria-label={`${data.title}: decisions and consequences`}>
+          <h3 class="projects-decisions-title">Decisions &amp; consequences</h3>
+          {data.rejectedPaths.length > 0 && (
+            <div class="projects-decisions-group">
+              <h4>Paths not taken</h4>
+              <ul>
+                {data.rejectedPaths.map((path) => <li>{path}</li>)}
+              </ul>
+            </div>
+          )}
+          {data.limitations.length > 0 && (
+            <div class="projects-decisions-group">
+              <h4>Known limits</h4>
+              <ul>
+                {data.limitations.map((limit) => <li>{limit}</li>)}
+              </ul>
+            </div>
+          )}
+          {data.currentStatus && (
+            <div class="projects-decisions-group">
+              <h4>Current status</h4>
+              <p>{data.currentStatus}</p>
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  </div>
+</article>
+
+<style>
+  .projects-entry {
+    padding: clamp(2rem, 6vw, 3.5rem) 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .projects-entry-header {
+    margin-bottom: 1.75rem;
+  }
+
+  .projects-entry-name {
+    margin: 0 0 0.5rem;
+    /* Entry headline — the shared secondary display rung (cards, rows). */
+    font-size: var(--text-display);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .projects-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-chrome-faint);
+    vertical-align: middle;
+  }
+
+  .projects-entry-links {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+  }
+
+  .projects-link {
+    color: var(--accent-strong);
+    text-decoration: none;
+    transition: color 0.16s ease;
+  }
+
+  .projects-link:hover {
+    color: var(--fg);
+    text-decoration: underline;
+  }
+
+  .projects-link-sep {
+    color: var(--fg-chrome-faint);
+  }
+
+  .projects-pkg {
+    color: var(--fg-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .projects-pkg-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-chrome-faint);
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+  }
+
+  .projects-private-note {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: var(--fg-chrome-faint);
+  }
+
+  /* Metadata strip — quiet mono fact row under each project headline (the
+     grammar contact.css scales up to full rows). fg-faint labels, no box. */
+  .projects-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0;
+    margin: 0.6rem 0 0;
+    padding: 0;
+    font-family: var(--font-mono);
+  }
+
+  .projects-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45em;
+    padding: 0 0.75rem;
+  }
+
+  .projects-meta-item:first-child {
+    padding-left: 0;
+  }
+
+  .projects-meta-item:not(:first-child) {
+    border-left: 1px solid var(--line);
+  }
+
+  .projects-meta dt {
+    font-size: 0.65rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--fg-chrome-faint);
+    font-weight: 400;
+    margin: 0;
+    padding: 0;
+  }
+
+  .projects-meta dd {
+    color: var(--fg-chrome-dim);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    margin: 0;
+    padding: 0;
+  }
+
+  .projects-entry-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: clamp(1.5rem, 5vw, 3rem);
+    align-items: start;
+  }
+
+  .projects-figure {
+    margin: 0;
+    position: sticky;
+    top: 5rem;
+  }
+
+  .projects-screenshot {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    /* Square-cut instrument plate — the room's corner grammar. */
+    border-radius: 2px;
+    background: var(--bg-soft);
+  }
+
+  .projects-figure figcaption {
+    margin-top: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: 0.06em;
+    color: var(--fg-chrome-faint);
+    line-height: 1.4;
+  }
+
+  .projects-copy {
+    display: grid;
+    gap: 0;
+  }
+
+  /* The running copy is MDX body content (rendered <Content/> in the slot), so
+     its elements carry no Astro scope attribute — matched via :global from the
+     scoped .projects-copy wrapper. */
+  .projects-copy :global(p) {
+    margin: 0 0 1.15rem;
+    color: var(--fg-dim);
+    font-size: 1.04rem;
+    line-height: 1.72;
+    text-wrap: pretty;
+  }
+
+  .projects-copy :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  /* Case-study section heads (P13) — the MDX body's problem / decisive choice /
+     outcome markers. Quiet plain sans (the same rung as the writing shelf
+     labels): these are scaffolding, so no mono caps (P9 typography hygiene). */
+  .projects-copy :global(h3),
+  .projects-section-title {
+    margin: 1.9rem 0 0.7rem;
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.01em;
+    line-height: 1.3;
+    color: var(--fg-chrome-dim);
+  }
+
+  .projects-copy :global(h3:first-child) {
+    margin-top: 0;
+  }
+
+  /* PROOF — the claims ledger: hairline record rows, statement in body voice,
+     the backing (or the honest debt note) directly underneath. */
+  .projects-claims {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .projects-claim {
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .projects-claim-statement {
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: 0.98rem;
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+
+  /* The honest marker for draftEvidence claims — a small mono note, truthful
+     and quiet, never a placeholder box. Mono because it IS a real record: the
+     machine-visible debt flag (draftEvidence) rendered for the reader. */
+  .projects-claim-pending {
+    margin: 0.4rem 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.06em;
+    color: var(--fg-faint);
+  }
+
+  /* The evidence record for a backed claim: kind, source (linked when a URL
+     exists), capture date. Mono caps on the kind — real record state. */
+  .projects-claim-evidence {
+    margin: 0.4rem 0 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.04em;
+    color: var(--fg-faint);
+  }
+
+  .projects-claim-kind {
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--fg-chrome-faint);
+  }
+
+  .projects-claim-evidence a {
+    color: var(--accent-strong);
+    text-decoration: none;
+  }
+
+  .projects-claim-evidence a:hover {
+    color: var(--fg);
+    text-decoration: underline;
+  }
+
+  /* DECISIONS & CONSEQUENCES — replaces the old "what I'm proud of" panel in
+     the same visual slot: a quiet bordered plate carrying the honest record. */
+  .projects-decisions {
+    margin-top: 1.9rem;
+    padding: 1.1rem 1.2rem 1.2rem;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: color-mix(in oklch, var(--bg-soft) 70%, transparent);
+  }
+
+  .projects-decisions-title {
+    margin: 0 0 0.85rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--highlight);
+  }
+
+  .projects-decisions-group + .projects-decisions-group {
+    margin-top: 0.9rem;
+  }
+
+  .projects-decisions-group h4 {
+    margin: 0 0 0.35rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    font-weight: 400;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--fg-chrome-faint);
+  }
+
+  .projects-decisions-group ul {
+    margin: 0;
+    padding-left: 1.1em;
+  }
+
+  .projects-decisions-group li {
+    margin: 0 0 0.35rem;
+    color: var(--fg-dim);
+    font-size: var(--text-body-sm);
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+
+  .projects-decisions-group li::marker {
+    color: var(--fg-faint);
+  }
+
+  .projects-decisions-group li:last-child {
+    margin-bottom: 0;
+  }
+
+  .projects-decisions-group p {
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: var(--text-body-sm);
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+
+  @media (max-width: 58rem) {
+    .projects-entry-body {
+      grid-template-columns: 1fr;
+    }
+
+    .projects-figure {
+      position: static;
+      max-width: 36rem;
+    }
+  }
+</style>

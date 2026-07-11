@@ -22,7 +22,6 @@ import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { dwellForScene, sceneForProgress } from '../sceneTable';
 import { PresentationClock, type PresentationState } from '../presentationClock';
 import { detectDeviceTier } from '../lib/config';
-import { acquire, release } from '../scene/contextRegistry';
 import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
@@ -40,10 +39,6 @@ import {
   HUD_ACTIVE_BODY_CLASS,
   WEBGL_UNAVAILABLE_BODY_CLASS,
   REDUCED_MOTION_EXPLAINED_STORAGE_KEY,
-  LOADER_SKIP_EVENT,
-  LOADER_TIMEOUT_EVENT,
-  LOADER_PHASE_FETCHING_BODY_CLASS,
-  LOADER_PHASE_COMPILING_BODY_CLASS,
   readDebugNumber,
 } from '../lib/constants';
 // createScene (and, transitively, three.js + GPUComputationRenderer + UnrealBloom
@@ -54,9 +49,18 @@ import {
 // initial bundle and block first paint. Only the TYPE is imported eagerly (types
 // are erased at build time, so this costs nothing at runtime). See the effect.
 import { isWebGLUnavailableError, type SceneHandle, type MarkerFrame } from '../scene/types';
-import { SceneStateProvider, type FinaleCounts } from './SceneStateContext';
+// The sitewide 2-context WebGL budget (see glGovernor.ts). BOTH construction
+// sites in this island acquire a token BEFORE the engine chunk is imported:
+// the live hero at PRIORITY_HERO (never evicted in practice — nothing on the
+// site outranks it) and the pinned backdrop branch at PRIORITY_AMBIENT (one
+// ambient layer per reading page). Tokens are released on the same cleanup
+// paths that dispose the renderer; a lost-then-restored GL context keeps its
+// token (the restore path revives the same renderer).
+import { glGovernor, PRIORITY_HERO, PRIORITY_AMBIENT } from '../lib/glGovernor';
+import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
+import type { LedgerCounts } from './FinaleLedger';
 import ExplorationHud from './ExplorationHud';
 import CockpitFrame from './CockpitFrame';
 import StarMarker from './StarMarker';
@@ -81,11 +85,6 @@ declare global {
   }
 }
 
-/** Zeros passed to FinaleLedger when the island is mounted without finaleCounts
- *  (e.g. the about page backdrop) so the overlay never renders stale hardcoded
- *  numbers on a page that doesn't show the finale UI at all. */
-const DEFAULT_FINALE_COUNTS: FinaleCounts = { projectCount: 0, articleCount: 0, specimenCount: 0 };
-
 interface HeroIslandProps {
   /** Backdrop mode: render only the scene canvas (no manifesto beats, no chrome,
    *  no scroll subscription) pinned to a fixed lifecycle frame. Used by reading
@@ -97,11 +96,16 @@ interface HeroIslandProps {
    *  coolest, most on-palette still, so reading copy sits over atmosphere, not a
    *  hot disk. */
   backdropStage?: number;
-  /** Build-time content counts derived in index.astro from the data modules and
-   *  the posts collection. Threaded into SceneStateContext so FinaleLedger can
-   *  render dynamic counts without any runtime data fetching. */
-  finaleCounts?: FinaleCounts;
+  /** Collection-derived counts for the finale ledger (P6). REQUIRED on the
+   *  full-hero mount: index.astro computes getCounts() server-side and passes
+   *  it in, so the ledger notes always match the real content collections.
+   *  Backdrop mode renders no overlay, so its callers omit it; the default is
+   *  a defensive zero so a hypothetical countless full mount reads as obviously
+   *  wrong ('0 shipped') rather than plausibly stale. */
+  counts?: LedgerCounts;
 }
+
+const ZERO_COUNTS: LedgerCounts = { shipped: 0, dead: 0, posts: 0 };
 
 // React only needs a perceptual scroll snapshot for DOM copy/chrome. The scene
 // render loop reads exact progress from progressRef, so this gate cuts context
@@ -159,7 +163,7 @@ const DATA_SCENE_BY_ID: Record<HudTargetId, 'blackhole' | 'red-giant' | 'yellow-
   beginning: 'final',
 };
 
-export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, finaleCounts }: HeroIslandProps = {}) {
+export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Frame-cadence marker data from the scene (position of the star object in CSS px).
   // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
@@ -184,13 +188,18 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   const lastProgressRef = useRef(0);
   const [direction, setDirection] = useState<ScrollDirection>(SCROLL_DOWN);
   // The RESOLVED reduced-motion preference (manual override ?? OS preference) and a
-  // setter. This single value is the source of truth for BOTH the mount decision
-  // below (live WebGL hero vs the still poster slideshow) AND the corner toggle — it
-  // is threaded into the context state/actions so the button and the engine never
-  // disagree. The hook owns the matchMedia listener, so HeroIsland keeps no
-  // motion-preference effect of its own. `fromOsOnly` is true when the reduced state
-  // comes purely from the OS (no manual override yet) — it gates the one-time
-  // explanatory modal below.
+  // setter, backed by the sitewide motion module (src/lib/motion.ts → useMotion).
+  // This single value is the source of truth for BOTH the mount decision below
+  // (live WebGL hero vs the still poster slideshow) AND the corner toggle — it is
+  // threaded into the context state/actions so the button and the engine never
+  // disagree. Hydration-safe: the hydration render matches the server HTML ('full'
+  // branch) and React reconciles to the real client value before paint, so the old
+  // React #418-class mismatch for OS-reduced visitors is gone. The module owns the
+  // one matchMedia listener, so HeroIsland keeps no motion-preference effect of its
+  // own — an OS flip mid-session streams in here, re-runs the mount effect via the
+  // `reduced` dependency, and swaps engine <-> poster live, no reload. `fromOsOnly`
+  // is true when the reduced state comes purely from the OS (no manual override
+  // yet) — it gates the one-time explanatory modal below.
   const { reduced, fromOsOnly, setReduced } = useReducedMotionPreference();
   // The reduced-motion modal: which copy to show, or null when closed.
   //   'confirm' — opened by a corner-toggle click that turns reduced motion ON.
@@ -214,16 +223,16 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    // Resolve the reduced-motion preference SYNCHRONOUSLY from the live client
-    // environment (manual override ?? OS media query) rather than trusting React's
-    // `reduced` state, which under `client:visible` can be a stale `false` on the very
-    // first client render (the island is SSR'd with window undefined, so the hook
-    // seeds false and only reconciles true in a post-mount effect). Reading the true
-    // value here is what guarantees we NEVER import + build a WebGL canvas when the
-    // resolved preference is reduced — closing the "canvas mounts then is torn down"
-    // gap. `reduced` is still in this effect's dependency list, so flipping the corner
-    // toggle re-runs the effect and re-reads the (now updated) value, re-mounting or
-    // tearing down the scene as appropriate. The two agree once reconciled.
+    // Resolve the reduced-motion preference SYNCHRONOUSLY from the pre-paint
+    // <html data-motion> attribute (manual override ?? OS — see src/lib/motion.ts)
+    // rather than trusting React's `reduced` state, which under `client:visible` is
+    // deliberately 'full'-shaped on the hydration render (it must match the server
+    // HTML). Reading the true value here is what guarantees we NEVER import + build
+    // a WebGL canvas when the resolved preference is reduced — closing the "canvas
+    // mounts then is torn down" gap. `reduced` is still in this effect's dependency
+    // list, so a corner-toggle flip OR a live OS preference change re-runs the
+    // effect and re-reads the (now updated) value, re-mounting or tearing down the
+    // scene as appropriate. The two agree once reconciled.
     const isReduced = resolveReducedMotionNow();
     // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
     // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,
@@ -242,6 +251,21 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // Backdrop mode: no scroll, no morph timeline. The scene is pinned to a fixed
     // lifecycle frame and rendered as a static, dimmed atmosphere behind page copy.
     if (backdrop) {
+      // One ambient context per page, budgeted. A denied grant simply leaves
+      // this layer blank — the page's own CSS backdrop treatment stands, same
+      // as the no-WebGL path below.
+      const glToken = glGovernor.acquire({
+        priority: PRIORITY_AMBIENT,
+        onEvict: () => {
+          // Bumped by a higher-priority holder: dispose the renderer now (the
+          // token is already released by the governor) and cancel any boot
+          // still in flight so a late handle can never mount tokenless.
+          cancelled = true;
+          disposeRef?.();
+          disposeRef = null;
+        },
+      });
+      if (!glToken) return;
       const fallback = Math.min(BUILT_STAGES, Math.max(0, backdropStage));
       // window.__bhBackdropStage lets a capture script A/B the pinned frame live
       // (mirrors the home's __bhMorph debug hook). Defaults to the prop.
@@ -254,16 +278,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // the hydration/effect flush (same shape as the live path below). createScene
       // is async (sliced boot), so a teardown racing the build disposes the fresh
       // handle the moment it resolves.
-      //
-      // Acquire a context slot from the site-wide registry (cap = 2).  If the cap
-      // is already full the backdrop simply stays blank — the page's own copy is
-      // fully readable without the atmosphere layer.
-      let backdropSlot = false;
-      if (acquire()) {
-        backdropSlot = true;
-      }
       const engineKickoff = window.setTimeout(() => {
-        if (!backdropSlot || cancelled) return;
         void import('../scene/createScene')
           .then(async ({ createScene }) => {
             if (cancelled) return;
@@ -288,7 +303,8 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         cancelled = true;
         window.clearTimeout(engineKickoff);
         disposeRef?.();
-        if (backdropSlot) { release(); backdropSlot = false; }
+        disposeRef = null;
+        glGovernor.release(glToken);
       };
     }
 
@@ -426,6 +442,37 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       };
     }
 
+    // GL BUDGET: the live hero claims its context slot BEFORE the engine chunk
+    // is even requested. PRIORITY_HERO outranks every other holder on the site,
+    // so this either grants immediately or (when the page is somehow full at
+    // equal-or-higher priority — not reachable with today's priority table)
+    // falls back exactly like a no-WebGL device: reveal the scroll-driven DOM.
+    const glToken = glGovernor.acquire({
+      priority: PRIORITY_HERO,
+      onEvict: () => {
+        // Honour the contract even though nothing outranks the hero today: the
+        // governor has already released the token; cancel any in-flight boot,
+        // dispose the renderer and reveal the no-canvas fallback so the page
+        // stays usable.
+        cancelled = true;
+        disposeRef?.();
+        disposeRef = null;
+        sceneHandleRef.current = null;
+        revealWithoutWebgl();
+      },
+    });
+    if (!glToken) {
+      revealWithoutWebgl();
+      return () => {
+        cancelled = true;
+        unsubClock();
+        clock.stop();
+        unsub();
+        tracker.stop();
+        document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
+      };
+    }
+
     // Pull in the three.js engine asynchronously, THEN build the scene. The scroll
     // tracker above is pure JS and stays synchronous, so scroll is wired the instant
     // the island hydrates; only the heavy GPU scene waits for its own chunk. The
@@ -448,61 +495,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     //     rig construction arrives as a series of sub-tasks too.
     // The loader (scene:ready contract, index.astro) covers this whole window, so
     // none of the added task boundaries are visible.
-    // Track whether the live-scene branch holds a context registry slot so the
-    // cleanup can release it unconditionally. Set synchronously inside the
-    // engine kickoff (before the first await) so cleanup always sees the
-    // correct state regardless of when the component unmounts.
-    let liveSlot = false;
-
-    // --- EXP-006: loader interruptibility -----------------------------------
-    // The hard 8 s loader timeout (index.astro) dispatches LOADER_TIMEOUT_EVENT
-    // when scene:ready has never fired — meaning the engine genuinely stalled.
-    // Respond with revealWithoutWebgl() so the visitor reaches the usable
-    // manifesto + section-nav edition instead of staying behind a blank canvas.
-    // The `cancelled` guard prevents a stale listener from acting after unmount.
-    const onLoaderTimeout = (): void => {
-      if (!cancelled) revealWithoutWebgl();
-    };
-    window.addEventListener(LOADER_TIMEOUT_EVENT, onLoaderTimeout, { once: true });
-
-    // When the visitor presses "Skip to content" while the engine is still
-    // loading, the loader lifts immediately (index.astro handles the visual
-    // side). HeroIsland must also resolve to a usable edition so the blank
-    // canvas is not left frozen behind the dismissed loader. Only act here if
-    // the scene has not yet painted (sceneHandleRef is still null) — once the
-    // scene IS running its frame loop, a skip changes nothing meaningful.
-    const onLoaderSkip = (): void => {
-      if (!cancelled && sceneHandleRef.current === null) revealWithoutWebgl();
-    };
-    window.addEventListener(LOADER_SKIP_EVENT, onLoaderSkip, { once: true });
-    // --- end EXP-006 interruptibility ----------------------------------------
-
     const engineKickoff = window.setTimeout(() => {
       void (async (): Promise<void> => {
-        // Acquire a site-wide WebGL context slot (cap = 2). The live hero is
-        // the primary consumer on the home page; if somehow the cap is already
-        // full, degrade gracefully rather than exceeding the limit.
-        if (!acquire()) {
-          if (!cancelled) revealWithoutWebgl();
-          return;
-        }
-        liveSlot = true; // set synchronously — cleanup sees it before any await
-
-        // EXP-006 phase label: mark that the engine chunk download has started
-        // so the loader's phase label CSS shows "Loading engine…". Cleared in
-        // cleanup (unmount) and on the transition to the compiling phase below.
-        document.body.classList.add(LOADER_PHASE_FETCHING_BODY_CLASS);
-
         await import('../scene/warmThree'); // 1st eval task: three core, alone
         await new Promise<void>((resolve) => { window.setTimeout(resolve, 0); }); // task boundary
         const { createScene } = await import('../scene/createScene'); // 2nd: addons + scene code
-
-        // EXP-006 phase label: engine chunk resolved — swap to "Building scene…"
-        // so the loader reflects that we are now constructing GPU rigs and compiling
-        // shaders, not waiting on the network. Both classes are cleared in cleanup.
-        document.body.classList.remove(LOADER_PHASE_FETCHING_BODY_CLASS);
-        document.body.classList.add(LOADER_PHASE_COMPILING_BODY_CLASS);
-
         if (cancelled) return;
         const dispose = await createScene(host, isReduced, {
           getStage,
@@ -572,12 +569,6 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // torn-down mount; the `cancelled` flag already guards every continuation, this
       // just saves the wasted import.
       window.clearTimeout(engineKickoff);
-      // Remove EXP-006 loader interruptibility listeners so they don't fire on stale
-      // mounts (e.g. SPA navigation away and back). The `cancelled` flag also guards
-      // them, but explicit removal is belt-and-suspenders and avoids keeping the closure
-      // alive in the event-listener registry.
-      window.removeEventListener(LOADER_TIMEOUT_EVENT, onLoaderTimeout);
-      window.removeEventListener(LOADER_SKIP_EVENT, onLoaderSkip);
       document.removeEventListener('astro:before-swap', onBeforeSwap);
       unsubClock();
       clock.stop();
@@ -590,10 +581,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // (We dispose via disposeRef, not a `dispose` local, because createScene now
       // resolves inside the dynamic import's .then() and is out of scope here.)
       disposeRef?.();
-      // Release the context registry slot so other pages / gallery figures can
-      // acquire a renderer after navigation.  Only released if successfully
-      // acquired (liveSlot guards the double-release case).
-      if (liveSlot) { release(); liveSlot = false; }
+      disposeRef = null;
+      // Return the context slot to the sitewide budget (idempotent — an evicted
+      // token was already released by the governor).
+      glGovernor.release(glToken);
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
       // ONLY the island-owned chrome class (is-scrolled). We deliberately do NOT
       // touch hud-active / hud-booting / hud-shutting-down: those are owned by the
@@ -608,15 +599,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // clean slate instead of inheriting a stale "unavailable" note. If WebGL is still
       // unavailable the next mount simply re-adds it. (SCENE_READY stays owned by the
       // loader script — we never strip it here.)
-      // Also clear the EXP-006 phase classes — a re-mount starts from PENDING again.
-      document.body.classList.remove(
-        SCROLLED_BODY_CLASS,
-        AT_OPENING_BODY_CLASS,
-        WEBGL_UNAVAILABLE_BODY_CLASS,
-        DIVING_BODY_CLASS,
-        LOADER_PHASE_FETCHING_BODY_CLASS,
-        LOADER_PHASE_COMPILING_BODY_CLASS,
-      );
+      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
     };
   }, [backdrop, backdropStage, reduced]);
 
@@ -765,7 +748,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
 
   return (
     <SceneStateProvider
-      state={{ progress, stage, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base, finaleCounts: finaleCounts ?? DEFAULT_FINALE_COUNTS }}
+      state={{ progress, stage, direction, reduced, explorationMode, scrollHudId, sceneId, dataScene, brightZone, base }}
       actions={{ beginDive, requestReducedMotion }}
     >
       {/* data-zone="bright" over the supernova flash + yellow-star beat flips the
@@ -809,7 +792,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             where there is no scene to light it (static frame, CSS crossfade). */}
         {reduced && <CockpitFrame />}
         <HeroIdentity />
-        <ManifestoOverlay />
+        <ManifestoOverlay counts={counts} />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
             black hole. Shown only while body.at-opening (the opening hold); fades out
             once the visitor scrolls past. aria-hidden — pure decoration. (Under reduced

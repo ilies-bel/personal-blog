@@ -76,8 +76,26 @@ body.archive-page::before { display: none; }
 
 a { color: var(--link); text-underline-offset: 0.2em; }
 a:hover { color: var(--fg); }
+
+/* Sitewide keyboard-focus DOUBLE RING (P8): a 2px gold outline offset 2px, with
+   the offset gap filled by a 2px near-black halo (box-shadow spread) so the
+   ring stays visible over BOTH the dark room and the bright stellar states
+   (whiteout flash / yellow star) that any fixed single color would wash out on.
+   Applies to every interactive element — including the canvas-adjacent HUD
+   chrome; component rules may re-tint the outline (same 2px grammar) but no
+   rule anywhere sets outline:none without an equivalent replacement. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-halo);
+}
 a:focus-visible {
-  outline: 2px solid var(--accent);
   outline-offset: 3px;
   border-radius: var(--radius-sm);
 }
@@ -123,12 +141,17 @@ h3 { line-height: 1.15; font-weight: var(--weight-bold); letter-spacing: -0.01em
 }
 
 /* Global reduced-motion: kill animation/transition and instant-scroll everywhere.
-   Concern-specific reduced-motion (hero, hud) lives with those stylesheets. */
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
+   Keyed on html[data-motion='reduced'] — the resolved preference (manual override
+   ?? OS) stamped pre-paint by BaseHead and kept live by src/lib/motion.ts — so the
+   manual toggle governs CSS too. :where() keeps the original specificity; the
+   bare html[...] selector also covers html itself (the old `*` did). Concern-
+   specific reduced-motion (hero, hud) lives with those stylesheets. */
+html:where([data-motion='reduced']) { scroll-behavior: auto; }
+html:where([data-motion='reduced']),
+:where(html[data-motion='reduced']) *,
+:where(html[data-motion='reduced']) *::before,
+:where(html[data-motion='reduced']) *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
 }

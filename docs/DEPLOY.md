@@ -1,7 +1,8 @@
 # Deploying the blog
 
-The site is a static Astro build published to **GitHub Pages** at
-<https://ilies-bel.github.io/personal-blog/>.
+The site is a static Astro build published to **GitHub Pages** on the custom
+apex domain <https://ilies-bel.dev> (Cloudflare handles DNS; `public/CNAME`
+binds the domain on every deploy).
 
 ## How deploys are triggered
 
@@ -23,6 +24,10 @@ git push origin v1.0.0
 Any tag matching `v*` (`v1.0.0`, `v2`, `v1.2.3-rc1`, …) fires the
 `.github/workflows/deploy.yml` workflow, which builds with Astro and publishes
 `dist/` to Pages.
+
+Because deploys are tag-triggered, every published build is **immutable and
+re-runnable**: rolling back means re-running the deploy workflow on the
+previous good tag (see `docs/RUNBOOK.md`).
 
 ### Manual deploy (no tag)
 
@@ -46,6 +51,11 @@ the repo is ever recreated.
   gh api --method PUT repos/ilies-bel/personal-blog/pages -f build_type=workflow
   ```
 
+- **Custom domain**: `ilies-bel.dev` is set as the Pages custom domain (with
+  *Enforce HTTPS* on) and `public/CNAME` contains the same value so a deploy
+  can never unbind it. DNS lives at Cloudflare: apex A/AAAA records to GitHub
+  Pages' IPs, `www` CNAME to `ilies-bel.github.io`.
+
 ## The workflow, in short
 
 `.github/workflows/deploy.yml`:
@@ -64,11 +74,45 @@ the repo is ever recreated.
 
 ## URLs and base path
 
-`astro.config.mjs` sets `base: '/personal-blog'` and
-`site: 'https://ilies-bel.github.io'` because this is a **project page**. If the
-site ever moves to a user page (`https://ilies-bel.github.io`) or a custom
-domain, set `base` to `'/'` and update `site` — links, sitemap, and canonical
-URLs all follow from those two values.
+`astro.config.mjs` sets `site: 'https://ilies-bel.dev'` and `base: '/'` because
+the site lives at the root of a custom domain. Links, the sitemap, canonical
+URLs, and icon hrefs (via `withBase()` in `src/consts.ts`) all follow from
+those two values.
+
+> **History:** this used to be a *project page* at
+> `https://ilies-bel.github.io/personal-blog/` with `base: '/personal-blog'`.
+> If you ever see that base path in docs, configs, or scripts, it is stale —
+> `playwright.config.ts` and this file carried it for a while after the move.
+
+## Staging (recommendation — owner-actioned, not yet set up)
+
+There is currently no staging environment: tags deploy straight to
+production. The recommended staging setup is **Cloudflare Pages preview
+deployments** — the DNS already lives at Cloudflare, previews are free, and
+each one gets an isolated URL with production-like edge behaviour (including
+the Response Header Transform rules if scoped to the zone). Outline
+(dashboard actions, tracked as part of `docs/INPUTS-NEEDED.md` #9):
+
+1. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to
+   Git** → select the `personal-blog` repo.
+2. Build settings: framework preset **Astro**, build command `pnpm build`,
+   output directory `dist`, environment variable `NODE_VERSION=22` (and
+   nothing else — the build is self-contained).
+3. **Production branch**: set it to a branch that never advances (e.g. a
+   dedicated `cf-pages-prod` placeholder) so Cloudflare Pages never competes
+   with GitHub Pages for "production" — you only want the *preview*
+   deployments, one per pushed branch/PR, at
+   `https://<hash>.<project>.pages.dev`.
+4. Review flow: push a branch → CI runs the gates → open the Pages preview
+   URL for visual/manual review on real devices → merge → cut a tag when
+   ready (production deploy stays the tag-triggered GitHub Pages workflow).
+5. Caveats: preview URLs run under `*.pages.dev` (not the custom domain), so
+   absolute-URL features (canonical, OG images, JSON-LD `@id`s) will point at
+   production — correct for review purposes, just don't index previews
+   (Cloudflare Pages sends `X-Robots-Tag: noindex` on previews by default).
+   The security headers from `docs/SECURITY-HEADERS.md` are zone-scoped
+   transform rules and do NOT apply on `pages.dev`; header verification
+   happens against production (the weekly prod-crawl workflow).
 
 ## Watching a deploy
 

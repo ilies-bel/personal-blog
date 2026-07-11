@@ -89,6 +89,10 @@ body.at-opening .hud-system[data-visible='true'] {
   width: 1px;
   background: linear-gradient(180deg, transparent, var(--hud-line) 20%, var(--hud-line) 80%, transparent);
   pointer-events: none;
+  /* Grow the line smoothly as new rows are discovered (mirrors the number
+     fade-in at 0.45s ease-out-quint).  Only the height is transitioned — the
+     top/mask geometry is static. */
+  transition: height 0.45s var(--ease-out-quint);
   /* Transparent gaps at each glyph center, recomputed from the rail-geometry
      knobs so they track the bigger rows. The element runs from -1.5rem above the
      nav top to +1.5rem below it. First glyph center is --rail-first-center from
@@ -680,20 +684,21 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot):not(.warp-readout) {
 .hud-compass--boot[data-reduced='true'] .hud-compass-arrow {
   animation: none;
 }
-@media (prefers-reduced-motion: reduce) {
-  .hud-compass--boot {
-    animation: none;
-  }
-  /* Cancel the lift AND the glide transition — more specific than the [data-glide] lift /
-     glide-target rules above so the readout stays in its bottom slot calmly while the loader
-     fades over it, even if React's data-reduced flag hasn't applied yet. */
-  .hud-compass--boot[data-glide='false'],
-  .hud-compass--boot[data-glide='true'] {
-    transform: translate(-50%, 0);
-    transition: none;
-  }
-  .hud-compass--boot .hud-compass-arrow { animation: none; }
+/* Reduced motion — resolved via html[data-motion] (see src/lib/motion.ts);
+   :where() keeps the original specificity so source order still decides. */
+:where(html[data-motion='reduced']) .hud-compass--boot {
+  animation: none;
 }
+/* Cancel the lift AND the glide transition — later in source than the [data-glide]
+   lift / glide-target rules above (same specificity) so the readout stays in its
+   bottom slot calmly while the loader fades over it, even if React's data-reduced
+   flag hasn't applied yet. */
+:where(html[data-motion='reduced']) .hud-compass--boot[data-glide='false'],
+:where(html[data-motion='reduced']) .hud-compass--boot[data-glide='true'] {
+  transform: translate(-50%, 0);
+  transition: none;
+}
+:where(html[data-motion='reduced']) .hud-compass--boot .hud-compass-arrow { animation: none; }
 .hud-compass-read,
 .hud-compass-dest {
   margin: 0;
@@ -901,11 +906,8 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   }
   .hud-nav-button {
     grid-template-columns: 2.35rem minmax(0, 1fr);
-    /* EXP-013: raised from 2.45 × 2.55 rem (39 × 41 px) to 2.75 × 2.75 rem
-       (44 × 44 px) — project-policy minimum touch target on coarse-pointer
-       mobile layouts. */
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 2.45rem;
+    height: 2.55rem;
   }
   .hud-nav-button:hover,
   .hud-nav-button:focus-visible {
@@ -913,7 +915,7 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   }
   /* On the horizontal mobile rail, hud-active keeps the buttons as collapsed
      icons — the mobile readout below carries the text. */
-  body.hud-active .hud-nav-button { width: 2.75rem; }
+  body.hud-active .hud-nav-button { width: 2.45rem; }
   body.hud-active .hud-nav-copy { max-width: 0; opacity: 0; }
   .hud-nav-button::before {
     left: 1.15rem;
@@ -970,27 +972,25 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hud-system,
-  .hud-system[data-visible='true'] {
-    transform: none;
-  }
-  .hud-nav-glyph {
-    animation: none !important;
-  }
-  /* Progressive-discovery reveal (FIX 2) SNAPS under reduced motion — no opacity
-     transition — consistent with the cascade being dropped below. The number still
-     hides until discovered (opacity gated above); it just appears instantly. */
-  .hud-nav-number {
-    transition: none;
-  }
-  .hud-compass {
-    transition: none;
-  }
+:where(html[data-motion='reduced']) .hud-system,
+:where(html[data-motion='reduced']) .hud-system[data-visible='true'] {
+  transform: none;
 }
-@media (prefers-reduced-motion: reduce) and (max-width: 60rem) {
-  .hud-system,
-  .hud-system[data-visible='true'] {
+:where(html[data-motion='reduced']) .hud-nav-glyph {
+  animation: none !important;
+}
+/* Progressive-discovery reveal (FIX 2) SNAPS under reduced motion — no opacity
+   transition — consistent with the cascade being dropped below. The number still
+   hides until discovered (opacity gated above); it just appears instantly. */
+:where(html[data-motion='reduced']) .hud-nav-number {
+  transition: none;
+}
+:where(html[data-motion='reduced']) .hud-compass {
+  transition: none;
+}
+@media (max-width: 60rem) {
+  :where(html[data-motion='reduced']) .hud-system,
+  :where(html[data-motion='reduced']) .hud-system[data-visible='true'] {
     transform: none;
   }
 }
@@ -1020,16 +1020,14 @@ body:not(.scene-ready) .hud-compass:not(.hud-compass--boot) .hud-compass-cta {
   100% { opacity: 1; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  /* The compass readout still lights gold on lock (colour is fine), but drop the
-     fade so the activation is instant rather than animated. */
-  .hud-compass-read,
-  .hud-compass-dest,
-  .hud-compass-label,
-  .hud-compass-prompt,
-  .hud-compass-arrow {
-    transition: none;
-  }
+/* The compass readout still lights gold on lock (colour is fine), but drop the
+   fade so the activation is instant rather than animated. */
+:where(html[data-motion='reduced']) .hud-compass-read,
+:where(html[data-motion='reduced']) .hud-compass-dest,
+:where(html[data-motion='reduced']) .hud-compass-label,
+:where(html[data-motion='reduced']) .hud-compass-prompt,
+:where(html[data-motion='reduced']) .hud-compass-arrow {
+  transition: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1661,27 +1659,28 @@ body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marke
 /* Focus ring: keyboard focus also engages the locked state (see component:
    onFocus sets focusedRef → rAF loop locks). The reticle box gets the ring. */
 .star-marker:focus-visible {
-  outline: 1px solid var(--marker-gold);
+  /* 2px + the near-black halo (base.css double-ring grammar): the marker floats
+     over ANY scene brightness, so the gold ring alone isn't guaranteed to read. */
+  outline: 2px solid var(--marker-gold);
   outline-offset: 0.35rem;
   border-radius: var(--radius-sm);
 }
 
 /* Reduced motion: the dot still escalates (snap, not animate) so the marker stays
    usable — only the transitions are dropped. */
-@media (prefers-reduced-motion: reduce) {
-  .star-marker-dot,
-  .star-marker-plate,
-  .star-marker-microlabel,
-  .star-marker-leader,
-  .star-marker-card {
-    transition: none;
-  }
-  /* The designation ping is a pure grace note — drop it entirely. Full selector
-     repeated: the ping rule's specificity is high, and a media query adds none. */
-  body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marker-dot::after {
-    animation: none;
-    content: none;
-  }
+:where(html[data-motion='reduced']) .star-marker-dot,
+:where(html[data-motion='reduced']) .star-marker-plate,
+:where(html[data-motion='reduced']) .star-marker-microlabel,
+:where(html[data-motion='reduced']) .star-marker-leader,
+:where(html[data-motion='reduced']) .star-marker-card {
+  transition: none;
+}
+/* The designation ping is a pure grace note — drop it entirely. Full selector
+   repeated: the ping rule's specificity is high, and the :where() motion gate
+   adds none — later source order wins. */
+:where(html[data-motion='reduced']) body.hud-active .star-marker[data-visible='true'][data-state='idle'] .star-marker-dot::after {
+  animation: none;
+  content: none;
 }
 /* Manual reduced-motion override (data-reduced) mirrors the OS path: no ping.
    [data-reduced] appended to the ping's own chain so this outranks it. */
@@ -1784,12 +1783,11 @@ body.hud-active .star-marker[data-reduced='true'][data-visible='true'][data-stat
    reduced-motion blocks above — the card snaps in. Gated on the SAME narrow-OR-
    coarse condition as the sheet itself so the snap applies in the width-gated path
    too. Covers BOTH the OS media query and the JS-driven data-reduced flag. */
-@media (max-width: 60rem) and (prefers-reduced-motion: reduce),
-  (pointer: coarse) and (prefers-reduced-motion: reduce) {
-  .star-marker-card,
-  .star-marker[data-side='right'] .star-marker-card,
-  .star-marker[data-side='left'] .star-marker-card,
-  .star-marker[data-locked='true'] .star-marker-card {
+@media (max-width: 60rem), (pointer: coarse) {
+  :where(html[data-motion='reduced']) .star-marker-card,
+  :where(html[data-motion='reduced']) .star-marker[data-side='right'] .star-marker-card,
+  :where(html[data-motion='reduced']) .star-marker[data-side='left'] .star-marker-card,
+  :where(html[data-motion='reduced']) .star-marker[data-locked='true'] .star-marker-card {
     transform: none;
   }
 }
@@ -2049,13 +2047,11 @@ body.bh-diving .hud-frame-readout {
 /* Reduced motion: the decloak strobe is theatrics — the class flip alone (a
    plain fade through the existing opacity transitions) carries the power
    change for every console surface. */
-@media (prefers-reduced-motion: reduce) {
-  body.hud-active .hud-frame,
-  body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout),
-  body.hud-active .hud-arc,
-  body.hud-active .bh-finale-ledger[data-visible='true'] {
-    animation: none;
-  }
+:where(html[data-motion='reduced']) body.hud-active .hud-frame,
+:where(html[data-motion='reduced']) body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout),
+:where(html[data-motion='reduced']) body.hud-active .hud-arc,
+:where(html[data-motion='reduced']) body.hud-active .bh-finale-ledger[data-visible='true'] {
+  animation: none;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -2219,13 +2215,11 @@ body.hud-active .hud-arc-station:nth-of-type(3) text { transition-delay: 0.47s; 
 body.hud-active .hud-arc-station:nth-of-type(4) text { transition-delay: 0.59s; }
 body.hud-active .hud-arc-station:nth-of-type(5) text { transition-delay: 0.71s; }
 body.hud-active .hud-arc-label { transition-delay: 0.85s; }
-@media (prefers-reduced-motion: reduce) {
-  /* No cascade: everything snaps to the powered state together. */
-  body.hud-active .hud-arc-station:nth-of-type(n) line,
-  body.hud-active .hud-arc-station:nth-of-type(n) text,
-  body.hud-active .hud-arc-label {
-    transition: none;
-  }
+/* No cascade: everything snaps to the powered state together. */
+:where(html[data-motion='reduced']) body.hud-active .hud-arc-station:nth-of-type(n) line,
+:where(html[data-motion='reduced']) body.hud-active .hud-arc-station:nth-of-type(n) text,
+:where(html[data-motion='reduced']) body.hud-active .hud-arc-label {
+  transition: none;
 }
 
 /* Breakpoint swap: the arc is the DESKTOP instrument; the old vertical rail list
@@ -2359,15 +2353,13 @@ body.scene-ready.hud-active .bh-cockpit {
   fill: rgb(2 2 4 / 0.78);
   stroke: none;
 }
-@media (prefers-reduced-motion: reduce) {
-  /* No unzoom: a plain crossfade between the same two resting states. */
-  .bh-cockpit {
-    transform: none;
-    transition: opacity 0.35s ease, visibility 0s 0.35s;
-  }
-  body.scene-ready.hud-active .bh-cockpit {
-    transition: opacity 0.35s ease, visibility 0s;
-  }
+/* No unzoom: a plain crossfade between the same two resting states. */
+:where(html[data-motion='reduced']) .bh-cockpit {
+  transform: none;
+  transition: opacity 0.35s ease, visibility 0s 0.35s;
+}
+:where(html[data-motion='reduced']) body.scene-ready.hud-active .bh-cockpit {
+  transition: opacity 0.35s ease, visibility 0s;
 }
 /* The canopy is a DESKTOP instrument (same 60rem seam as the arc gauge): on the
    compact layout it would crowd the whole frame. */
@@ -2408,9 +2400,7 @@ body.hud-active .bh-beat:not(.bh-beat--finale) {
 body.scene-ready.at-opening .bh-focus-dot {
   animation: bh-focus-pulse 2.8s ease-in-out infinite;
 }
-@media (prefers-reduced-motion: reduce) {
-  .star-marker-dot,
-  body.scene-ready.at-opening .bh-focus-dot {
-    animation: none;
-  }
+:where(html[data-motion='reduced']) .star-marker-dot,
+:where(html[data-motion='reduced']) body.scene-ready.at-opening .bh-focus-dot {
+  animation: none;
 }

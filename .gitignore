@@ -23,6 +23,9 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 
+# lighthouse ci local results (lab numbers fold into src/data/perf-report.json)
+/.lighthouseci/
+
 # playwright
 /test-results/
 /playwright-report/

@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-07-11T00:38:18.455Z",
+  "commit": "5e83f65",
+  "note": "Shot inventory for scripts/shoot-submission.mjs. The pixels live in scratchpad/submission/ (gitignored — regenerated per release, archived with the judged build per docs/RUNBOOK.md); this manifest is the committed record of what the suite produces.",
+  "stillSize": "1600x1200",
+  "feedPreviewSize": "800x600",
+  "shots": [
+    {
+      "file": "main/main-01-black-hole.png",
+      "feedPreview": "feed/main-01-black-hole-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 513,
+      "note": "Black hole opening frame (scroll 0)"
+    },
+    {
+      "file": "main/main-02-supernova-crest.png",
+      "feedPreview": "feed/main-02-supernova-crest-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 1072,
+      "note": "Supernova shock-breakout, ejecta shell + radial fingers (stage 0.72)"
+    },
+    {
+      "file": "main/main-03-red-giant.png",
+      "feedPreview": "feed/main-03-red-giant-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 1849,
+      "note": "Red giant held beat, parked vast-limb framing (stage 2.05)"
+    },
+    {
+      "file": "main/main-04-finale-ledger.png",
+      "feedPreview": "feed/main-04-finale-ledger-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 119,
+      "note": "Finale: pale blue dot + the honest ledger (shipped/dead counts, replay)"
+    },
+    {
+      "file": "stills/still-01-collapse.png",
+      "feedPreview": "feed/still-01-collapse-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 1317,
+      "note": "Core collapse between blast and horizon (stage 0.9)"
+    },
+    {
+      "file": "stills/still-02-yellow-star.png",
+      "feedPreview": "feed/still-02-yellow-star-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 292,
+      "note": "Yellow star / sun rig (stage 2.9)"
+    },
+    {
+      "file": "stills/still-03-nebula.png",
+      "feedPreview": "feed/still-03-nebula-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 1651,
+      "note": "Nebula gas, pre-contraction (stage 3.4)"
+    },
+    {
+      "file": "stills/still-04-pale-blue-dot.png",
+      "feedPreview": "feed/still-04-pale-blue-dot-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 81,
+      "note": "The lone pale blue dot the arc resolves to (stage 4.7)"
+    },
+    {
+      "file": "stills/still-05-projects.png",
+      "feedPreview": "feed/still-05-projects-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 490,
+      "note": "Work ledger over the sustained-orbit star backdrop"
+    },
+    {
+      "file": "stills/still-06-graveyard.png",
+      "feedPreview": "feed/still-06-graveyard-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 1333,
+      "note": "Graveyard cabinet over the live cooling-residue journey"
+    },
+    {
+      "file": "stills/still-07-behind-the-build.png",
+      "feedPreview": "feed/still-07-behind-the-build-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 726,
+      "note": "Behind the Build anatomy: shader plates + measurement rules"
+    },
+    {
+      "file": "stills/still-08-contact.png",
+      "feedPreview": "feed/still-08-contact-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 577,
+      "note": "Contact transmission frame: signal rings + open channel"
+    },
+    {
+      "file": "stills/still-09-mobile-hero.png",
+      "feedPreview": "feed/still-09-mobile-hero-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 385,
+      "note": "Mobile 390×844 opening frame (framed)"
+    },
+    {
+      "file": "stills/still-10-mobile-finale.png",
+      "feedPreview": "feed/still-10-mobile-finale-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 177,
+      "note": "Mobile 390×844 finale ledger (framed)"
+    },
+    {
+      "file": "stills/still-11-reduced-motion.png",
+      "feedPreview": "feed/still-11-reduced-motion-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 180,
+      "note": "Reduced-motion poster edition of the hero"
+    },
+    {
+      "file": "stills/still-12-static-edition.png",
+      "feedPreview": "feed/still-12-static-edition-feed.png",
+      "width": 1600,
+      "height": 1200,
+      "kb": 140,
+      "note": "No-JS static edition (the trust-repair fallback, shipped)"
+    }
+  ]
+}

@@ -58,14 +58,13 @@ export default function PosterSlideshow({ progress, base }: PosterSlideshowProps
           src={resolveHref(base, poster.src)}
           alt={poster.alt}
           style={{ opacity: opacityFor(index, progress) }}
-          draggable={false}
-          decoding="async"
-          // Intrinsic dimensions prevent the browser reserving no space before the
-          // WebP loads. The CSS (.bh-poster: position:absolute; inset:0; object-fit:cover)
-          // overrides these at runtime, but the attributes allow the browser to know the
-          // native aspect ratio (16:9 / 1920×1080) before the first byte arrives.
+          // Intrinsic dimensions of the capture files (all four posters are
+          // 1920×1080) — the layout is fixed/cover so these never size the box,
+          // but the sitewide contract (P5) is that every <img> declares them.
           width={1920}
           height={1080}
+          draggable={false}
+          decoding="async"
           // The first poster is the opening frame, so load it eagerly; the rest are
           // below the initial fold of the cut and can defer.
           loading={index === 0 ? 'eager' : 'lazy'}

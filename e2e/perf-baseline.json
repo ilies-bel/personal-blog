@@ -1,0 +1,9 @@
+{
+  "comments": "FPS regression baseline for e2e/perf.spec.ts. Measured in the CI-class environment (headless chromium on SwiftShader software GL — /opt/pw-browsers/chromium in the sandbox), NOT on real hardware: the number is only meaningful as a regression reference for the same environment, which is why the enforced floor sits at 60% of the measured median (absorbs scheduler variance; still fails on a real engine regression). Regenerate per the comment block in e2e/perf.spec.ts: run the spec 3x, take the median of the printed 'measured N fps' values, set medianFps to it and floorFps to round(0.6 * medianFps), and commit alongside the engine change that moved it.",
+  "project": "chromium",
+  "url": "/?tier=low",
+  "measuredAt": "PENDING",
+  "runs": [0, 0, 0],
+  "medianFps": 0,
+  "floorFps": 1
+}

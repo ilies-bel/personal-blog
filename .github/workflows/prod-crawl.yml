@@ -1,0 +1,152 @@
+name: Production crawl
+
+# Weekly health crawl of the LIVE site (https://ilies-bel.dev) — uptime, HTTPS,
+# key routes, honest 404, sitemap, sitemap-wide link check, security headers.
+#
+# Design rules:
+#   • curl-only, no build, no browsers — this watches production, not the code.
+#   • Every check retries transient network errors before judging, and failure
+#     output says exactly what was expected vs observed.
+#   • Security headers are WARN-ONLY until the owner applies the Cloudflare
+#     Response Header Transform rules from docs/SECURITY-HEADERS.md
+#     (docs/INPUTS-NEEDED.md #9). Flip WARN_ONLY_HEADERS to false afterwards
+#     to make missing headers a real failure.
+on:
+  schedule:
+    # Mondays 06:30 UTC — quiet hour, before any workday deploy.
+    - cron: '30 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SITE: https://ilies-bel.dev
+  WARN_ONLY_HEADERS: 'true'
+
+jobs:
+  crawl:
+    name: Crawl the live site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apex responds 200 over HTTPS
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 --max-time 30 "$SITE/")
+          if [ "$code" != "200" ]; then
+            echo "::error::Apex check failed: GET $SITE/ returned HTTP $code (expected 200). Site may be down — see docs/RUNBOOK.md incident quick-checks."
+            exit 1
+          fi
+          echo "apex OK (200)"
+
+      - name: HTTP redirects to HTTPS
+        run: |
+          # http:// must land on https:// (Pages "Enforce HTTPS" + Cloudflare).
+          final=$(curl -sS -o /dev/null -w '%{url_effective}' -L --retry 3 --retry-delay 5 --max-time 30 "http://ilies-bel.dev/")
+          case "$final" in
+            https://*) echo "http→https OK ($final)";;
+            *) echo "::error::HTTPS not enforced: http://ilies-bel.dev/ ended at $final (expected an https:// URL). Check Pages 'Enforce HTTPS' and Cloudflare SSL mode."; exit 1;;
+          esac
+
+      - name: www state (documented expectation = redirect to apex)
+        run: |
+          # www.ilies-bel.dev is a CNAME to ilies-bel.github.io; GitHub Pages
+          # redirects it to the apex custom domain. Warn-only: a www hiccup is
+          # not an outage of the published apex URL.
+          final=$(curl -sS -o /dev/null -w '%{http_code} %{url_effective}' -L --max-time 30 "https://www.ilies-bel.dev/" || echo "000 unreachable")
+          code=${final%% *}; url=${final#* }
+          if [ "$code" = "200" ] && [ "${url#https://ilies-bel.dev}" != "$url" ]; then
+            echo "www OK: redirects to apex ($url)"
+          else
+            echo "::warning::www.ilies-bel.dev did not land 200 on the apex (got: $final). Expected: redirect to https://ilies-bel.dev/. Check the www CNAME → ilies-bel.github.io and the Pages custom domain."
+          fi
+
+      - name: Key routes respond 200
+        run: |
+          fail=0
+          for route in / /projects/ /writing/ /graveyard/ /about/ /contact/ /behind-the-build/; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 --max-time 30 "$SITE$route")
+            if [ "$code" != "200" ]; then
+              echo "::error::Route check failed: $route returned HTTP $code (expected 200)."
+              fail=1
+            else
+              echo "OK  $route"
+            fi
+          done
+          exit $fail
+
+      - name: Unknown URLs return a real 404
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 --max-time 30 "$SITE/this-route-does-not-exist-$(date +%s)/")
+          if [ "$code" != "404" ]; then
+            echo "::error::404 check failed: a nonexistent URL returned HTTP $code (expected 404 — the branded 404.html should be served with a real 404 status)."
+            exit 1
+          fi
+          echo "404 OK"
+
+      - name: Sitemap reachable
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 --max-time 30 "$SITE/sitemap-index.xml")
+          if [ "$code" != "200" ]; then
+            echo "::error::Sitemap check failed: $SITE/sitemap-index.xml returned HTTP $code (expected 200)."
+            exit 1
+          fi
+          echo "sitemap OK"
+
+      - name: Every sitemap URL responds 200 (live link check)
+        run: |
+          # Lightweight live-site complement to scripts/check-links.mjs (which
+          # gates the BUILD): expand sitemap-index → child sitemaps → URLs and
+          # HEAD each one. The sitemap only lists own-origin pages, so this
+          # stays a handful of requests.
+          set -o pipefail
+          tmp=$(mktemp -d)
+          curl -sS --retry 2 --max-time 30 "$SITE/sitemap-index.xml" -o "$tmp/index.xml"
+          grep -o '<loc>[^<]*</loc>' "$tmp/index.xml" | sed 's/<[^>]*>//g' > "$tmp/sitemaps.txt"
+          : > "$tmp/urls.txt"
+          while read -r sm; do
+            curl -sS --retry 2 --max-time 30 "$sm" | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' >> "$tmp/urls.txt"
+          done < "$tmp/sitemaps.txt"
+          total=$(wc -l < "$tmp/urls.txt")
+          if [ "$total" -eq 0 ]; then
+            echo "::error::Sitemap link check: expanded 0 URLs from $SITE/sitemap-index.xml — sitemap shape changed?"
+            exit 1
+          fi
+          fail=0
+          while read -r url; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -I --retry 2 --retry-delay 5 --max-time 30 "$url")
+            # A HEAD-hostile edge would 405; fall back to GET before judging.
+            if [ "$code" != "200" ]; then
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 --max-time 30 "$url")
+            fi
+            if [ "$code" != "200" ]; then
+              echo "::error::Sitemap URL broken: $url returned HTTP $code (expected 200)."
+              fail=1
+            else
+              echo "OK  $url"
+            fi
+          done < "$tmp/urls.txt"
+          echo "checked $total sitemap URL(s)"
+          exit $fail
+
+      - name: Security headers present
+        run: |
+          # Values documented in docs/SECURITY-HEADERS.md; applied at the edge
+          # by the owner (Cloudflare Response Header Transform rules).
+          headers=$(curl -sS -D - -o /dev/null --retry 2 --retry-delay 5 --max-time 30 "$SITE/")
+          missing=""
+          for h in content-security-policy strict-transport-security x-content-type-options referrer-policy permissions-policy; do
+            if ! printf '%s' "$headers" | grep -qi "^$h:"; then
+              missing="$missing $h"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            msg="Security headers missing on $SITE/:$missing — apply the Cloudflare rules from docs/SECURITY-HEADERS.md (INPUTS-NEEDED #9)."
+            if [ "$WARN_ONLY_HEADERS" = "true" ]; then
+              echo "::warning::$msg (warn-only until the rules are applied; then set WARN_ONLY_HEADERS=false in prod-crawl.yml)"
+            else
+              echo "::error::$msg"
+              exit 1
+            fi
+          else
+            echo "all security headers present"
+          fi

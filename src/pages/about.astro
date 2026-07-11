@@ -1,10 +1,36 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import RouteBackdrop from '../components/RouteBackdrop.astro';
-import { SITE_TITLE, SOCIALS } from '../consts';
+import AmbientBackdrop from '../components/AmbientBackdrop.astro';
+import RouteEnding from '../components/RouteEnding.astro';
+import { SITE_TITLE, SOCIALS, BRAND_ROLE, AVAILABILITY } from '../consts';
+import { HUD_NAV_ITEMS } from '../hero/sceneTable';
+import { getCounts } from '../lib/contentStats';
+import { numberToWord } from '../lib/contentFormat';
+import { ogCardFor } from '../lib/ogCard';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+
+// THE "NOW" BLOCK (P13) — role / location / availability / proof, compact and
+// early so the answer to "who is this and can I hire them" fits the first two
+// phone viewports (e2e-pinned at 390×844 in content.spec.ts). Every value is a
+// real record from its single source of truth: BRAND_ROLE + AVAILABILITY
+// (src/consts.ts — the same data /contact renders) and the derived project
+// count (src/lib/contentStats.ts — the same count the finale ledger shows).
+const { shipped } = await getCounts();
+const shippedWord = numberToWord(shipped);
+const shippedLine =
+  `${shippedWord.charAt(0).toUpperCase()}${shippedWord.slice(1)} ` +
+  `${shipped === 1 ? 'tool' : 'tools'} shipped, claims and limits on the record`;
+const AVAILABILITY_LABEL: Record<typeof AVAILABILITY.status, string> = {
+  open: 'Open',
+  limited: 'Limited',
+  closed: 'Closed',
+};
+
+// The credits' imagery line points at the essay where both pictures appear
+// with their source links — same nav-derived id writing.astro uses.
+const inspirationHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? 'writing';
 ---
 
 {/* About reads as an overlay panel floating in the same room as the hero: the
@@ -16,16 +42,19 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
 <BaseLayout
   title="About"
   description={`About ${SITE_TITLE}: engineer, writer, and builder of small clever things on the web.`}
+  ogImage={ogCardFor('about')}
   type="website"
   bare
-  withPerson
   bodyClass="about-page"
 >
-  {/* Lightweight CSS backdrop — dark event-horizon atmosphere (stage 0, black
-     hole).  Zero Three.js bytes (PERF-002).  The `variant` prop is the seam for
-     EXP-020/EXP-035 art direction — restyle without re-plumbing the page. */}
-  <RouteBackdrop variant="dark" />
+  {/* The calm nebula frame as quiet atmosphere — a still of the hero's own
+     stage 3.5 beat, graded in CSS. Zero JavaScript, zero WebGL: reading routes
+     no longer ship the three.js engine (P4); the dim wash + vignette in
+     hero.css apply to this layer exactly as they did to the live one. */}
+  <AmbientBackdrop variant="nebula" />
 
+  {/* A <div>, not <main> — BaseLayout's bare branch already provides the page's
+      single <main id="main-content">; a second one nests landmarks. */}
   <div class="about-shell">
     <article class="about-panel">
       <p class="about-kicker">About</p>
@@ -34,6 +63,32 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         Hi, I'm {SITE_TITLE}. I build software for the web and write about how it
         works underneath.
       </h1>
+
+      {/* THE "NOW" BLOCK (P13) — the hiring facts up front: role, where and
+          when I work, whether I'm taking things on, and the proof line back to
+          the work. Real records (consts + derived counts) → mono-caps terms,
+          the contact-page dl grammar compressed to panel width. */}
+      <dl class="about-now">
+        <div class="about-now-row">
+          <dt>Role</dt>
+          <dd>{BRAND_ROLE} — {AVAILABILITY.engagements.join(' · ').toLowerCase()}</dd>
+        </div>
+        <div class="about-now-row">
+          <dt>Base</dt>
+          <dd>{AVAILABILITY.location} · {AVAILABILITY.timezone}</dd>
+        </div>
+        <div class="about-now-row">
+          <dt>Availability</dt>
+          <dd>
+            {AVAILABILITY_LABEL[AVAILABILITY.status]} — {AVAILABILITY.note.toLowerCase()}.
+            {' '}<a href={href('contact')}>Start a conversation</a>.
+          </dd>
+        </div>
+        <div class="about-now-row">
+          <dt>Proof</dt>
+          <dd>{shippedLine} — <a href={href('projects')}>see the work</a>.</dd>
+        </div>
+      </dl>
 
       <p class="about-body">
         This is my corner of the internet: technical articles, notes from rabbit
@@ -57,7 +112,9 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         and left readable, because owning the dead ends is part of the craft.
       </p>
 
-      <div class="about-principles" aria-label="Working principles">
+      {/* role="group" makes the aria-label valid (a bare div can't carry one)
+          and announces the trio as one named cluster. */}
+      <div class="about-principles" role="group" aria-label="Working principles">
         <div>
           <span>Fast by default</span>
           <p>Interactivity earns its bytes, and text should not wait for JavaScript.</p>
@@ -75,10 +132,14 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
       {/* The personal moment: a sign-off in Instrument Serif italic with a hand-
          drawn flourish underline. Reads as "this is a person, with a name", not a
          styled bio. On view, the name reveals (clip-path) and the flourish strokes
-         itself in; under prefers-reduced-motion or no-JS, both render statically
+         itself in; under reduced motion or no-JS, both render statically
          from the first frame — same composition, no movement. The screen-reader
          label flattens it to "Signed, Iliès" so it isn't read as a stray word. */}
-      <p class="about-signature" aria-label="Signed, Iliès">
+      {/* A paragraph can't carry aria-label; the sr-only span provides the
+          flattened reading ("Signed, Iliès") while the visual name + flourish
+          stay aria-hidden. */}
+      <p class="about-signature">
+        <span class="sr-only">Signed, Iliès</span>
         <span class="about-signature-name" aria-hidden="true">Iliès</span>
         <svg
           class="about-signature-flourish"
@@ -108,6 +169,56 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
           {SOCIALS.twitter && <li><a href={SOCIALS.twitter} data-decode>Twitter / X</a></li>}
           {SOCIALS.email && <li><a href={`mailto:${SOCIALS.email}`} data-decode>Email</a></li>}
         </ul>
+        {/* ROUTE ENDING (P9) — About hands off to Contact: the quick links stay
+            (this section long WAS the site's contact surface); the ending points
+            at the full channel readout — availability, timezone, terms. */}
+        <RouteEnding
+          eyebrow="Availability, timezone, and what I take on"
+          title="Start a conversation"
+          href={href('contact')}
+        />
+      </section>
+
+      {/* CREDITS & PROVENANCE (P13) — who and what this site stands on, stated
+          plainly. Factual only: the co-author is in the article's byline and
+          JSON-LD (P6); the imagery attributions mirror the essay's own
+          figcaptions; the font licenses ship with the fonts
+          (src/styles/fonts/LICENSES.md — OFL 1.1 for all three faces). */}
+      <section class="about-credits" aria-labelledby="about-credits-title">
+        <h2 class="about-credits-title" id="about-credits-title">Credits &amp; provenance</h2>
+        <dl class="about-credits-list">
+          <div class="about-credits-row">
+            <dt>Collaborators</dt>
+            <dd>
+              “Memory Leak: Search and Destroy” was co-written with Lansana
+              Diomande and first published in French on Takima's Medium
+              publication.
+            </dd>
+          </div>
+          <div class="about-credits-row">
+            <dt>Imagery</dt>
+            <dd>
+              The Voyager Golden Record photograph — NASA/JPL, 1977. The first
+              black-hole simulation — Jean-Pierre Luminet / Observatoire de
+              Paris / CNRS, 1979. Both appear, with source links, in{' '}
+              <a href={href(inspirationHref)}>the essay on why this site exists</a>.
+            </dd>
+          </div>
+          <div class="about-credits-row">
+            <dt>Type</dt>
+            <dd>
+              Space Grotesk (Florian Karsten), IBM Plex Mono (IBM), and
+              Instrument Serif (Instrument, Rodrigo Fuenzalida) — self-hosted
+              under the{' '}
+              <a href="https://openfontlicense.org" rel="noopener noreferrer">SIL Open Font License 1.1</a>;
+              the license text ships with the fonts in this site's repository.
+            </dd>
+          </div>
+          <div class="about-credits-row">
+            <dt>Tooling</dt>
+            <dd>Built with Astro, three.js, React, and Playwright.</dd>
+          </div>
+        </dl>
       </section>
     </article>
   </div>
@@ -118,16 +229,16 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
     as a broken box in the corner. Keyboard users reach the nav via the skip
     link / first Tab as on every other page. */}
 <script>
-  import { resolveMotionPreference } from '../lib/motionPreference';
   // The personal moment: tag <body> with .has-signature-anim so the signature
   // starts hidden (clip-path collapsed, flourish stroke offset), then drop the
-  // .is-drawn class on the signature when it enters the viewport. Under
-  // prefers-reduced-motion we skip the whole branch — the static state in CSS is
-  // the reduced-motion equivalent (signature visible from frame one). No-JS gets
-  // the same static state for free, since the tag is what *hides* the signature.
-  // resolveMotionPreference() honours both the OS preference AND the manual
-  // override (manualOverride ?? osPreference) via the centralized service.
-  const reduceMotion = resolveMotionPreference();
+  // .is-drawn class on the signature when it enters the viewport. Under the
+  // resolved reduced-motion preference (sitewide motion module) we skip the whole
+  // branch — the static state in CSS is the reduced-motion equivalent (signature
+  // visible from frame one). No-JS gets the same static state for free, since the
+  // tag is what *hides* the signature.
+  import { getMotion } from '../lib/motion';
+
+  const reduceMotion = getMotion() === 'reduced';
   if (!reduceMotion) {
     document.body.classList.add('has-signature-anim');
     const sig = document.querySelector('.about-signature');

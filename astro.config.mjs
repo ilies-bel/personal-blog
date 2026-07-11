@@ -5,48 +5,6 @@ import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 
 // ---------------------------------------------------------------------------
-// GLSL comment stripping — PERF-007
-//
-// GLSL shader sources are embedded as template-literal strings tagged with
-// `/* glsl */`. The content is sent verbatim to the GPU driver, which ignores
-// comments, but Vite's esbuild minifier cannot see inside string literals and
-// therefore cannot remove them.  This Vite transform plugin strips single-line
-// (`// …`) and multi-line (`/* … */`) comments from those strings at build
-// time, keeping the source files readable while eliminating dead bytes from the
-// production bundle.  Only files inside `src/hero/shaders/` are affected.
-// ---------------------------------------------------------------------------
-/** @returns {import('vite').Plugin} */
-function stripGlslComments() {
-  return {
-    name: 'strip-glsl-comments',
-    enforce: /** @type {'pre'} */ ('pre'),
-    transform(code, id) {
-      if (!id.includes('/shaders/')) return null;
-      if (!id.endsWith('.ts') && !id.endsWith('.js')) return null;
-
-      let changed = false;
-      const result = code.replace(
-        /\/\* glsl \*\/ `([\s\S]*?)`/g,
-        (_match, content) => {
-          const stripped = content
-            // strip GLSL single-line comments (keep the newline so line numbers
-            // roughly track — the GPU compiler never sees them anyway)
-            .replace(/[ \t]*\/\/[^\n]*/g, '')
-            // strip GLSL multi-line comments
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            // collapse runs of blank lines down to one
-            .replace(/\n{3,}/g, '\n\n');
-          if (stripped !== content) changed = true;
-          return '/* glsl */ `' + stripped + '`';
-        },
-      );
-
-      return changed ? { code: result, map: null } : null;
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
 // GitHub Pages config — custom domain
 // ---------------------------------------------------------------------------
 // The site is served from the apex custom domain `ilies-bel.dev` (GitHub Pages
@@ -63,26 +21,21 @@ function stripGlslComments() {
 const SITE = 'https://ilies-bel.dev';
 const BASE = '/';
 
-// ---------------------------------------------------------------------------
-// Dev-only route injection
-//
-// src/_dev-pages/dev-blueprint.astro is a measuring bench for cockpit geometry
-// that must never ship in production.  It lives OUTSIDE src/pages/ so the
-// production build never processes it (no HTML emitted, no sitemap entry, no
-// asset shipped).  During `astro dev` the integration below injects it back as
-// a live route so the page is reachable at /dev-blueprint.
-// ---------------------------------------------------------------------------
-/** @type {() => import('astro').AstroIntegration} */
-const devOnlyRoutes = () => ({
-  name: 'dev-only-routes',
+// Dev-only routes: pages that are measuring benches / design tooling, not
+// content. They live OUTSIDE src/pages (in src/dev-pages) so the production
+// build cannot emit them at all — previously /dev-blueprint shipped an empty
+// crawlable shell and landed in the sitemap. The integration injects them only
+// when the dev server is running.
+const devOnlyPages = () => ({
+  name: 'dev-only-pages',
   hooks: {
-    'astro:config:setup': ({ injectRoute, command }) => {
-      if (command === 'dev') {
-        injectRoute({
-          pattern: '/dev-blueprint',
-          entrypoint: 'src/_dev-pages/dev-blueprint.astro',
-        });
-      }
+    /** @param {{ command: string, injectRoute: (r: { pattern: string, entrypoint: string }) => void }} options */
+    'astro:config:setup': ({ command, injectRoute }) => {
+      if (command !== 'dev') return;
+      injectRoute({
+        pattern: '/dev-blueprint',
+        entrypoint: './src/dev-pages/dev-blueprint.astro',
+      });
     },
   },
 });
@@ -93,11 +46,11 @@ export default defineConfig({
   base: BASE,
   trailingSlash: 'ignore',
   integrations: [
-    devOnlyRoutes(),
     mdx(),
     react(),
-    // Belt-and-suspenders: even if /dev-blueprint were somehow built, exclude
-    // it from the sitemap so search engines never see it.
+    devOnlyPages(),
+    // Belt-and-braces: even if a dev-only route ever leaks into a build, keep
+    // it out of the sitemap.
     sitemap({ filter: (page) => !page.includes('/dev-blueprint') }),
   ],
   build: {
@@ -112,7 +65,6 @@ export default defineConfig({
     inlineStylesheets: 'always',
   },
   vite: {
-    plugins: [stripGlslComments()],
     build: {
       rollupOptions: {
         output: {
