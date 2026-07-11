@@ -2,11 +2,35 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import RouteEnding from '../components/RouteEnding.astro';
-import { SITE_TITLE, SOCIALS } from '../consts';
+import { SITE_TITLE, SOCIALS, BRAND_ROLE, AVAILABILITY } from '../consts';
+import { HUD_NAV_ITEMS } from '../hero/sceneTable';
+import { getCounts } from '../lib/contentStats';
+import { numberToWord } from '../lib/contentFormat';
 import { ogCardFor } from '../lib/ogCard';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
+
+// THE "NOW" BLOCK (P13) — role / location / availability / proof, compact and
+// early so the answer to "who is this and can I hire them" fits the first two
+// phone viewports (e2e-pinned at 390×844 in content.spec.ts). Every value is a
+// real record from its single source of truth: BRAND_ROLE + AVAILABILITY
+// (src/consts.ts — the same data /contact renders) and the derived project
+// count (src/lib/contentStats.ts — the same count the finale ledger shows).
+const { shipped } = await getCounts();
+const shippedWord = numberToWord(shipped);
+const shippedLine =
+  `${shippedWord.charAt(0).toUpperCase()}${shippedWord.slice(1)} ` +
+  `${shipped === 1 ? 'tool' : 'tools'} shipped, claims and limits on the record`;
+const AVAILABILITY_LABEL: Record<typeof AVAILABILITY.status, string> = {
+  open: 'Open',
+  limited: 'Limited',
+  closed: 'Closed',
+};
+
+// The credits' imagery line points at the essay where both pictures appear
+// with their source links — same nav-derived id writing.astro uses.
+const inspirationHref = HUD_NAV_ITEMS.find((item) => item.id === 'end')?.href ?? 'writing';
 ---
 
 {/* About reads as an overlay panel floating in the same room as the hero: the
@@ -39,6 +63,32 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
         Hi, I'm {SITE_TITLE}. I build software for the web and write about how it
         works underneath.
       </h1>
+
+      {/* THE "NOW" BLOCK (P13) — the hiring facts up front: role, where and
+          when I work, whether I'm taking things on, and the proof line back to
+          the work. Real records (consts + derived counts) → mono-caps terms,
+          the contact-page dl grammar compressed to panel width. */}
+      <dl class="about-now">
+        <div class="about-now-row">
+          <dt>Role</dt>
+          <dd>{BRAND_ROLE} — {AVAILABILITY.engagements.join(' · ').toLowerCase()}</dd>
+        </div>
+        <div class="about-now-row">
+          <dt>Base</dt>
+          <dd>{AVAILABILITY.location} · {AVAILABILITY.timezone}</dd>
+        </div>
+        <div class="about-now-row">
+          <dt>Availability</dt>
+          <dd>
+            {AVAILABILITY_LABEL[AVAILABILITY.status]} — {AVAILABILITY.note.toLowerCase()}.
+            {' '}<a href={href('contact')}>Start a conversation</a>.
+          </dd>
+        </div>
+        <div class="about-now-row">
+          <dt>Proof</dt>
+          <dd>{shippedLine} — <a href={href('projects')}>see the work</a>.</dd>
+        </div>
+      </dl>
 
       <p class="about-body">
         This is my corner of the internet: technical articles, notes from rabbit
@@ -127,6 +177,48 @@ const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
           title="Start a conversation"
           href={href('contact')}
         />
+      </section>
+
+      {/* CREDITS & PROVENANCE (P13) — who and what this site stands on, stated
+          plainly. Factual only: the co-author is in the article's byline and
+          JSON-LD (P6); the imagery attributions mirror the essay's own
+          figcaptions; the font licenses ship with the fonts
+          (src/styles/fonts/LICENSES.md — OFL 1.1 for all three faces). */}
+      <section class="about-credits" aria-labelledby="about-credits-title">
+        <h2 class="about-credits-title" id="about-credits-title">Credits &amp; provenance</h2>
+        <dl class="about-credits-list">
+          <div class="about-credits-row">
+            <dt>Collaborators</dt>
+            <dd>
+              “Memory Leak: Search and Destroy” was co-written with Lansana
+              Diomande and first published in French on Takima's Medium
+              publication.
+            </dd>
+          </div>
+          <div class="about-credits-row">
+            <dt>Imagery</dt>
+            <dd>
+              The Voyager Golden Record photograph — NASA/JPL, 1977. The first
+              black-hole simulation — Jean-Pierre Luminet / Observatoire de
+              Paris / CNRS, 1979. Both appear, with source links, in{' '}
+              <a href={href(inspirationHref)}>the essay on why this site exists</a>.
+            </dd>
+          </div>
+          <div class="about-credits-row">
+            <dt>Type</dt>
+            <dd>
+              Space Grotesk (Florian Karsten), IBM Plex Mono (IBM), and
+              Instrument Serif (Instrument, Rodrigo Fuenzalida) — self-hosted
+              under the{' '}
+              <a href="https://openfontlicense.org" rel="noopener noreferrer">SIL Open Font License 1.1</a>;
+              the license text ships with the fonts in this site's repository.
+            </dd>
+          </div>
+          <div class="about-credits-row">
+            <dt>Tooling</dt>
+            <dd>Built with Astro, three.js, React, and Playwright.</dd>
+          </div>
+        </dl>
       </section>
     </article>
   </div>

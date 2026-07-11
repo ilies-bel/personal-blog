@@ -14,7 +14,7 @@ links:
   npm: "@ilies-bel/fleet"
 media:
   kind: image
-  # Filename under src/assets/projects/ — resolved by projects.astro's
+  # Filename under src/assets/projects/ — resolved by CaseStudy.astro's
   # import.meta.glob (never the image() helper; see contentSchemas.ts).
   image: fleet.png
   alt: Fleet dashboard showing multiple feature branches running in parallel containers
@@ -28,14 +28,26 @@ claims:
       # draftEvidence to false. Until then the build only passes because the
       # debt is flagged explicitly.
       type: none
+# The honest engineering record (P13 — rendered by CaseStudy.astro as
+# "Decisions & consequences"). Everything here restates what the entry's own
+# prose already said; nothing is invented history.
+rejectedPaths:
+  - One shared local environment, torn down and rebuilt per branch — the workflow Fleet replaced. Rebuilding for every review is exactly the cost the tool exists to delete.
 limitations:
   - Niche by design — it only earns its keep when you review several branches in parallel; a one-branch-at-a-time workflow gains nothing.
   - Stack auto-detection covers the common setups; an exotic build still needs manual container config.
+currentStatus: Shipped and open source — the code and the npm package are public.
 draftEvidence: true
 ---
 
-An open-source tool that runs every feature branch of your app at the same time on localhost, each in its own container behind a gateway. One dashboard to spin them up, tail logs, preview the running app, diff UI states, and leave QA notes per feature. It auto-detects the stack and manages multiple repos through git worktrees.
+### The problem
 
-I built it because reviewing several branches at once meant constantly tearing down and rebuilding one local environment. Fleet just runs them all in parallel and lets you flip between them.
+Reviewing several feature branches at once meant constantly tearing down and rebuilding one local environment. Every switch threw away a working setup, and the rebuild ate the time the review was supposed to save.
 
-<p class="projects-proud"><span class="projects-proud-label">What I am proud of:</span> it is a real tool, not a demo, and it found its people. It is niche by design, built for engineers doing parallel QA, and it has users among them. The container orchestration, the gateway proxy, the stack auto-detection, and the diff view all had to work together, and they do.</p>
+### The decisive choice
+
+Stop rebuilding and run them all: every feature branch of your app at the same time on localhost, each in its own container behind a gateway. Fleet auto-detects the stack and manages multiple repos through git worktrees.
+
+### The outcome
+
+One dashboard to spin branches up, tail logs, preview the running app, diff UI states, and leave QA notes per feature — you flip between branches instead of rebuilding one. The container orchestration, the gateway proxy, the stack auto-detection, and the diff view all had to work together, and they do. It is a real tool, not a demo.

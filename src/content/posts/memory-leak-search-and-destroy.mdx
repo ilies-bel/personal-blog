@@ -3,7 +3,19 @@ title: "Memory Leak: Search and Destroy"
 description: "A production OutOfMemoryError, a heap dump pulled from a cramped Alpine container, and the flamegraph that pointed at our own monitoring SDK."
 pubDate: 2023-12-11
 tags: ["java", "jvm", "debugging", "production"]
+type: investigation
 draft: false
+# EVIDENCE (P13) — the artifacts backing this investigation, rendered as an
+# aside by the post layout. Only what the article itself already references
+# lives here; the owner's profiler captures (flamegraph, retained-memory
+# table) join this list when supplied (docs/INPUTS-NEEDED.md #7).
+evidence:
+  - label: Original write-up (in French) — Takima on Medium, December 2023
+    url: https://medium.com/takima/memory-leak-search-and-destroy-9e70c5785cfb
+  - label: The sentry-java bug we hit — upstream issue #2496
+    url: https://github.com/getsentry/sentry-java/issues/2496
+  - label: The upstream fix, shipped in SDK 6.13 — PR #2505
+    url: https://github.com/getsentry/sentry-java/pull/2505
 # FORMALIZED CO-AUTHORSHIP (P6): both names flow into the BlogPosting JSON-LD
 # author array (BaseHead) and the visible byline on the article header. The
 # provenance block replaces the old italic first line of the body — the article

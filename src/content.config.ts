@@ -16,7 +16,22 @@ const posts = defineCollection({
     // Relative to /public, e.g. "og-mypost.png". Optional; falls back to default.
     ogImage: z.string().optional(),
     tags: z.array(z.string()).default([]),
+    // EDITORIAL TYPE (P13) — what kind of piece this is, rendered as a quiet
+    // record label on /writing rows and used to shelve the Articles index by
+    // type once more than one type exists there. 'essay' is the default
+    // because it is the loosest claim: an investigation/failure-story/build-log
+    // label promises artifacts, so it must be authored deliberately.
+    type: z.enum(['investigation', 'essay', 'failure-story', 'build-log']).default('essay'),
     draft: z.boolean().default(false),
+    // EVIDENCE SHELL (P13) — the artifacts backing the piece (original
+    // publication, upstream bug threads, profiler captures…), rendered as an
+    // "Evidence" aside by the post layout. Same honesty posture as the project
+    // claims ledger: list only what actually exists; an empty array renders
+    // nothing (no placeholder box). The owner's real investigation artifacts
+    // slot in here later (docs/INPUTS-NEEDED.md #7).
+    evidence: z
+      .array(z.object({ label: z.string(), url: z.string().url().optional() }))
+      .default([]),
     // FORMALIZED CO-AUTHORSHIP (P6): every author of the piece, site owner
     // included. Flows into the BlogPosting JSON-LD author array (BaseHead) and
     // the visible byline on the article page when there is more than one name.

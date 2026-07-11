@@ -84,6 +84,74 @@
   color: var(--fg);
   text-wrap: balance;
 }
+/* THE "NOW" BLOCK (P13) — the hiring facts directly under the lead: role,
+   base, availability, proof. The contact page's mono instrument-row grammar
+   compressed to panel width; terms are mono caps because these are real
+   records (the same AVAILABILITY data /contact renders + a derived count).
+   Sits inside the first two phone viewports by design (e2e-pinned). */
+.about-now {
+  display: grid;
+  gap: 0;
+  margin: 0 0 clamp(1.6rem, 4vh, 2.2rem);
+  border-top: 1px solid var(--line);
+}
+
+.about-now-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.2rem 1.1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.about-now dt {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  padding-top: 0.25em;
+}
+
+.about-now dd {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  text-wrap: pretty;
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+}
+
+.about-now dd a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  padding-bottom: 1px;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.about-now dd a:hover {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+
+.about-now dd a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (max-width: 34rem) {
+  .about-now-row {
+    grid-template-columns: 1fr;
+  }
+
+  .about-now dt {
+    padding-top: 0;
+  }
+}
+
 .about-body {
   margin: 0 0 1.2rem;
   font-size: var(--text-body);
@@ -241,6 +309,90 @@
 }
 /* (The old .about-contact-more pointer line was replaced by the sitewide
    RouteEnding block — About → Contact, P9.) */
+
+/* CREDITS & PROVENANCE (P13) — the quiet colophon closing the panel: who and
+   what the site stands on. Same hairline-row grammar as the "now" block, one
+   register quieter (faint terms, small body), because it is a footer record,
+   not a pitch. */
+.about-credits {
+  margin-top: clamp(2.5rem, 7vh, 4rem);
+  padding-top: clamp(1.2rem, 3vh, 1.8rem);
+  border-top: 1px solid var(--line);
+}
+
+.about-credits-title {
+  margin: 0 0 0.9rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.01em;
+  color: var(--fg-chrome-dim);
+}
+
+.about-credits-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.about-credits-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.2rem 1.1rem;
+  padding: 0.55rem 0;
+}
+
+.about-credits-row + .about-credits-row {
+  border-top: 1px solid var(--line);
+}
+
+.about-credits dt {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  padding-top: 0.25em;
+}
+
+.about-credits dd {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: var(--text-body-sm);
+  line-height: 1.55;
+  text-wrap: pretty;
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+}
+
+.about-credits dd a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  padding-bottom: 1px;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.about-credits dd a:hover {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+
+.about-credits dd a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (max-width: 34rem) {
+  .about-credits-row {
+    grid-template-columns: 1fr;
+  }
+
+  .about-credits dt {
+    padding-top: 0;
+  }
+}
 
 @media (max-width: 44rem) {
   .about-principles {

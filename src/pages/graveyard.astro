@@ -128,7 +128,44 @@ const resolveShot = (filename: string): ImageMetadata => {
           </figure>
 
           <div class="graveyard-copy">
+            {/* THE BET (P13) — the hypothesis stated before the story, so the
+                miss is auditable against what I believed going in. A real
+                record from the specimen's frontmatter → mono-caps label. */}
+            {s.data.hypothesis && (
+              <dl class="graveyard-record graveyard-record-bet">
+                <div class="graveyard-record-row">
+                  <dt>Hypothesis</dt>
+                  <dd>{s.data.hypothesis}</dd>
+                </div>
+              </dl>
+            )}
+
             <Content />
+
+            {/* THE AUTOPSY ROWS (P13) — what was visible before the end, and
+                what outlived the death. Rows render only when the specimen's
+                record carries them; both fields are optional in the schema. */}
+            {(s.data.warningSigns.length > 0 || s.data.survivingInsight) && (
+              <dl class="graveyard-record">
+                {s.data.warningSigns.length > 0 && (
+                  <div class="graveyard-record-row">
+                    <dt>Warning signs</dt>
+                    <dd>
+                      <ul>
+                        {s.data.warningSigns.map((sign) => <li>{sign}</li>)}
+                      </ul>
+                    </dd>
+                  </div>
+                )}
+                {s.data.survivingInsight && (
+                  <div class="graveyard-record-row">
+                    <dt>What survived</dt>
+                    <dd>{s.data.survivingInsight}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+
             <p class="graveyard-lesson">
               <span class="graveyard-lesson-label">What it taught me:</span>
               {' '}{s.data.lesson}
@@ -356,6 +393,76 @@ const resolveShot = (filename: string): ImageMetadata => {
 
   .graveyard-copy :global(p:last-child) {
     margin-bottom: 0;
+  }
+
+  /* SPECIMEN RECORD ROWS (P13) — hypothesis / warning signs / what survived,
+     straight from the specimen's frontmatter. Quiet hairline rows in the
+     drawer-label grammar: mono-caps term (a real archival record, same ramp as
+     INTERRED/CAUSE above), plain dim description. */
+  .graveyard-record {
+    display: grid;
+    gap: 0;
+    margin: 0 0 1.4rem;
+    border-top: 1px solid var(--line);
+  }
+
+  /* The bet reads BEFORE the story; the autopsy rows read after it. */
+  .graveyard-record:not(.graveyard-record-bet) {
+    margin-top: 1.4rem;
+  }
+
+  .graveyard-record-row {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    gap: 0.35rem 1.1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .graveyard-record dt {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    /* Optical alignment with the first description line. */
+    padding-top: 0.2em;
+  }
+
+  .graveyard-record dd {
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: var(--text-body-sm);
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+
+  .graveyard-record dd ul {
+    margin: 0;
+    padding-left: 1.1em;
+  }
+
+  .graveyard-record dd li {
+    margin: 0 0 0.3rem;
+  }
+
+  .graveyard-record dd li:last-child {
+    margin-bottom: 0;
+  }
+
+  .graveyard-record dd li::marker {
+    color: var(--fg-faint);
+  }
+
+  @media (max-width: 34rem) {
+    .graveyard-record-row {
+      grid-template-columns: 1fr;
+    }
+
+    .graveyard-record dt {
+      padding-top: 0;
+    }
   }
 
   .graveyard-lesson {

@@ -37,6 +37,35 @@ const articles = (await getCollection('posts', ({ data }) => !data.draft))
   .filter((post) => post.id !== inspirationId)
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
+// EDITORIAL TYPE (P13) — each row carries its piece's type as a quiet mono
+// record label (it IS a record: the frontmatter `type` field). While the
+// Articles shelf holds a single type, it stays one shelf; the moment a second
+// type ships, the shelf splits by type in this fixed editorial order — no
+// content change needed here, the grouping is derived.
+type PostType = (typeof articles)[number]['data']['type'];
+const TYPE_LABEL: Record<PostType, string> = {
+  investigation: 'Investigation',
+  essay: 'Essay',
+  'failure-story': 'Failure story',
+  'build-log': 'Build log',
+};
+const SHELF_LABEL: Record<PostType, string> = {
+  investigation: 'Investigations',
+  essay: 'Essays',
+  'failure-story': 'Failure stories',
+  'build-log': 'Build documentation',
+};
+const SHELF_ORDER: PostType[] = ['investigation', 'essay', 'failure-story', 'build-log'];
+const articleTypes = new Set(articles.map((post) => post.data.type));
+const shelves =
+  articleTypes.size > 1
+    ? SHELF_ORDER.filter((t) => articleTypes.has(t)).map((t) => ({
+        id: `shelf-${t}`,
+        title: SHELF_LABEL[t],
+        posts: articles.filter((post) => post.data.type === t),
+      }))
+    : [{ id: 'articles', title: 'Articles', posts: articles }];
+
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -66,28 +95,41 @@ const readMinutes = (body: string | undefined) =>
     <h1>Everything, in plain words.</h1>
   </header>
 
-  <section class="writing-section" aria-labelledby="articles-title">
-    <h2 class="writing-section-title" id="articles-title">Articles</h2>
-    <div class="writing-list">
-      {articles.map((post) => (
-        <a class="writing-row" href={href(`posts/${post.id}/`)}>
-          <span class="writing-row-left">
-            <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
-            <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
-          </span>
-          <span class="writing-row-copy">
-            {/* Per-post shared-element name → the article h1 (posts/[...slug]),
-                so the clicked title physically travels into the headline. */}
-            <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
-            <span class="writing-row-description">{post.data.description}</span>
-            {/* Provenance comes from the post's own frontmatter (P6) — the old
-                hardcoded per-id origins map is gone. */}
-            {post.data.provenance && <span class="writing-row-origin">{post.data.provenance.note}</span>}
-          </span>
-        </a>
-      ))}
-    </div>
-  </section>
+  {shelves.map((shelf) => (
+    <section class="writing-section" aria-labelledby={`${shelf.id}-title`}>
+      <h2 class="writing-section-title" id={`${shelf.id}-title`}>{shelf.title}</h2>
+      <div class="writing-list">
+        {shelf.posts.map((post) => (
+          <a class="writing-row" href={href(`posts/${post.id}/`)}>
+            <span class="writing-row-left">
+              <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+              {/* The row's record facts: editorial type + reading commitment —
+                  both real, derived (frontmatter type / body wordcount). Two
+                  spans so each reads on its own line in the left column. */}
+              <span class="writing-row-fact">{TYPE_LABEL[post.data.type]}</span>
+              <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
+            </span>
+            <span class="writing-row-copy">
+              {/* Per-post shared-element name → the article h1 (posts/[...slug]),
+                  so the clicked title physically travels into the headline. */}
+              <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
+              <span class="writing-row-description">{post.data.description}</span>
+              {/* Topics — the post's own tags, a quiet mono readout. */}
+              {post.data.tags.length > 0 && (
+                <span class="writing-row-topics">
+                  <span class="sr-only">Topics: </span>
+                  {post.data.tags.join(' · ')}
+                </span>
+              )}
+              {/* Provenance comes from the post's own frontmatter (P6) — the old
+                  hardcoded per-id origins map is gone. */}
+              {post.data.provenance && <span class="writing-row-origin">{post.data.provenance.note}</span>}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
 
   <section class="writing-section" aria-labelledby="graveyard-title">
     <h2 class="writing-section-title" id="graveyard-title">The graveyard</h2>

@@ -21,14 +21,26 @@ claims:
       # client testimonial or a dated usage note. Capture one, then flip
       # draftEvidence to false.
       type: none
+# The honest engineering record (P13 — rendered by CaseStudy.astro as
+# "Decisions & consequences"). Everything here restates what the entry's own
+# prose already said; nothing is invented history.
+rejectedPaths:
+  - Keeping a human in the loop for ordering and recovery — the point was AFK operation, so the task graph had to plan and run itself.
 limitations:
   - Private by contract — there is no public demo, so every capability claim rests on this page's word.
   - Recovery handles failed tasks, not failed PLANS — a mis-decomposed goal still needs a human to restate it.
+currentStatus: Private B2B product, delivered to its client — no public demo by contract.
 draftEvidence: true
 ---
 
-A local AFK agent swarm for software work. You give it a goal and it builds a web of tasks, figures out the order they have to run in, and executes the whole graph autonomously: writing code, recovering from failures, and chaining the follow-up work without a human in the loop. The topology view lets you watch the dependency web plan and run itself in real time.
+### The problem
 
-It is the most ambitious thing I have built. Coordinating many agents so they do the right work in the right order, and recover when a step fails, is a genuinely hard orchestration problem, and Mars does it.
+Coordinating many agents so they do the right work in the right order — and recover when a step fails — is a genuinely hard orchestration problem.
 
-<p class="projects-proud"><span class="projects-proud-label">Note:</span> a private product, so there is no public link. The diagram above mirrors the live topology view — nodes are tasks, edges are blocker dependencies, colours are lifecycle state, and the failed branch shows a recovered task picked up by a follow-up agent.</p>
+### The decisive choice
+
+Make the goal the only input. Give Mars a goal and it builds a web of tasks, figures out the order they have to run in, and executes the whole graph autonomously: writing code, recovering from failures, and chaining the follow-up work without a human in the loop.
+
+### The outcome
+
+A local AFK agent swarm for software work — the most ambitious thing I have built, and it does it. The topology view lets you watch the dependency web plan and run itself in real time; the diagram here mirrors it — nodes are tasks, edges are blocker dependencies, colours are lifecycle state, and the failed branch shows a recovered task picked up by a follow-up agent.

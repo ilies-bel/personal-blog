@@ -441,6 +441,63 @@ body.article-page .prose[data-scene-journey] {
 :where(html[data-motion='reduced']) .signals-readout-dot,
 :where(html[data-motion='reduced']) .signals-readout-button { transition: none; }
 
+/* --- EVIDENCE — the artifacts backing a piece (P13) --------------------------
+   Rendered from post frontmatter `evidence` by posts/[...slug].astro: the
+   original publication, upstream bug threads, profiler captures — receipts,
+   not decoration. Speaks the specimen-card grammar (graveyard-lesson): a quiet
+   bordered plate with a mono-caps record label, since the list IS a record of
+   real artifacts. Absent entirely when a post declares none. */
+.article-evidence {
+  margin-top: clamp(2.5rem, 7vh, 4rem);
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--bg-soft) 55%, transparent);
+}
+
+.article-evidence-title {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--highlight);
+}
+
+.article-evidence-list {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.article-evidence-list li {
+  margin: 0 0 0.4rem;
+  color: var(--fg-dim);
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+}
+
+.article-evidence-list li:last-child {
+  margin-bottom: 0;
+}
+
+.article-evidence-list li::marker {
+  color: var(--fg-faint);
+}
+
+.article-evidence-list a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.article-evidence-list a:hover {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+
 /* --- CONTINUATION — the "next note" block closing every article -------------
    The reading journey used to dead-end on the copyright line; this hands the
    visitor the next transmission instead. Speaks the site's two registers at

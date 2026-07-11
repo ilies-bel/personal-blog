@@ -162,6 +162,18 @@
   line-height: 1.58;
 }
 
+/* Topics readout (P13) — the post's tags as a quiet mono line under the
+   summary: same rung as the provenance footnote, slightly less faint so the
+   two read as distinct records when both are present. */
+.writing-row-topics {
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
 /* Provenance readout — "First published on Medium, in French" — a quiet mono
    footnote under the summary, chrome ramp like every metadata readout. */
 .writing-row-origin {
