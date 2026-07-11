@@ -132,4 +132,38 @@ run, quoted in the commit body, and reverted before commit.
   Release discipline itself (freeze schedule T−14/T−7/T−3, the RC checklist,
   the three-clean-RC rule, post-launch monitoring, archive procedure) is
   codified in `docs/RUNBOOK.md`.
-- P14: full-matrix RC run tied to one SHA + RC dossier in `docs/rc/`
+- ~~P14~~ landed: the RC procedure below, the degraded-mode sweep completions
+  (`e2e/no-webgl.spec.ts`: getContext-null → immediate on-brand fallback, and
+  the slow-network loader/skip smoke), the owner-session scripts in
+  `docs/validation/`, and RC-1 (`docs/rc/RC-1.md`).
+
+## Release-candidate (RC) procedure — added at P14
+
+An RC is ONE full-matrix validation run tied to ONE commit, recorded as a
+dossier in `docs/rc/RC-<n>.md`. The run, in order, against a single build of
+the candidate tree:
+
+1. `pnpm build && pnpm check && pnpm test && pnpm knip`
+2. All 8 dist gates (standing gates 5–10, 13, 14 — the exact command line is
+   in `docs/RUNBOOK.md` step 2) + `npx html-validate "dist/**/*.html"`
+3. The full Playwright suite — every project available on the runner
+   (chromium + mobile-chrome locally; the complete
+   chromium/firefox/webkit/mobile matrix once CI runs, INPUTS-NEEDED #1)
+4. Visual evidence: scroll-through full-page screenshots of all 10 routes at
+   1280 + 390 (scroll each page to the bottom and back BEFORE capturing —
+   lazy-loaded media must be painted) + regenerated grayscale contact sheets
+   (`node scripts/shoot-routes-grayscale.mjs`), human-reviewed; anything off
+   is either fixed (resets the run) or recorded in the dossier as a known
+   cosmetic item.
+
+If ANY step fails: fix, commit the fix, and RESTART the whole run — the
+dossier records only the final clean run. Because a dossier cannot contain
+its own commit SHA, each dossier identifies its run by parent SHA + commit
+title (the RC commit itself must change no product code relative to the
+validated tree beyond the dossier/evidence records).
+
+**Three-clean-RC rule** (from `docs/RUNBOOK.md`): the submission tag is cut
+only after three consecutive RCs pass with zero fixes in between; any fix
+resets the count. RC-1 = the P14 run. RC-2/RC-3 SHOULD run on real CI
+hardware (full browser matrix + Lighthouse wall-clock gates promoted) once
+the remote exists.

@@ -184,3 +184,22 @@ review", never "merged into main".
 The main working tree stays clean; every change lands through a worktree-isolated
 subagent, a human review, and only then a merge — never via a direct edit on `main`,
 and never via an unreviewed auto-merge.
+
+## SOTY program (2026-07) — where the program state lives
+
+A 14-phase Awwwards-SOTY-readiness program was executed on branch
+`soty/program` (P1–P14, complete). Before touching anything on that branch,
+read:
+
+- `docs/roadmaps/soty-execution-plan.md` — per-phase status + resume notes
+  (single source of truth for what happened and what's still owner-blocked).
+- `docs/roadmaps/acceptance-gates.md` — every standing gate a commit must
+  pass, plus the RC procedure.
+- `docs/rc/` — release-candidate dossiers (RC-1 = the P14 full-matrix run).
+- `docs/INPUTS-NEEDED.md` — the owner-blocked items; `docs/validation/` —
+  the owner-session scripts (screen reader, usability, devices, proxy jury).
+
+NOTE: this program ran, by the owner's explicit choice, as sequential commits
+on the single integration branch `soty/program` — superseding the per-task
+worktree rule above FOR THAT BRANCH ONLY. New work outside the program
+follows the worktree rule as usual.
