@@ -49,6 +49,13 @@ jobs:
       - name: Asset size gate
         run: node scripts/check-asset-sizes.mjs dist
 
+      - name: OG card gate
+        # Every page must advertise a resolvable og:image that is exactly
+        # 1200×630 and ≤300KB (share crawlers punish anything heavier). Cards
+        # are committed release assets — regenerate with: pnpm build &&
+        # node scripts/gen-og-cards.mjs && node scripts/optimize-public-images.mjs
+        run: node scripts/check-og-cards.mjs dist
+
       - name: Bundle budget gate (budgets.json)
         # gzip JS/HTML budgets over dist: hero engine graph, per-route eager
         # JS (engine vs reading routes), per-page HTML. Deterministic bytes —

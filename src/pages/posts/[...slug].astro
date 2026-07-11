@@ -6,6 +6,7 @@ import SceneFigure from '../../components/mdx/SceneFigure.tsx';
 import SignalsReadout from '../../components/mdx/SignalsReadout.tsx';
 import { stationForStage } from '../../hero/sceneTable';
 import { AUTHOR_NAME } from '../../consts';
+import { ogCardFor } from '../../lib/ogCard';
 
 // Pre-render one static HTML page per post at build time (SSG → SEO-ready).
 export async function getStaticPaths() {
@@ -59,7 +60,7 @@ const mdxComponents = { IslandsDemo, SceneFigure, SignalsReadout };
 <BaseLayout
   title={post.data.title}
   description={post.data.description}
-  ogImage={post.data.ogImage}
+  ogImage={post.data.ogImage ?? ogCardFor(`post-${post.id}`)}
   type="article"
   publishedTime={post.data.pubDate}
   modifiedTime={post.data.updatedDate}

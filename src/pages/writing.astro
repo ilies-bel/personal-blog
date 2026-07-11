@@ -14,6 +14,7 @@ import { HUD_NAV_ITEMS } from '../hero/sceneTable';
 import { SITE_TITLE } from '../consts';
 import { getCounts } from '../lib/contentStats';
 import { numberToWord } from '../lib/contentFormat';
+import { ogCardFor } from '../lib/ogCard';
 
 // Derived shader count (P6) — from the same catalog behind-the-build renders
 // as its gallery (see src/lib/shaderCatalog.ts), so the teaser line below can
@@ -47,6 +48,7 @@ const readMinutes = (body: string | undefined) =>
 <BaseLayout
   title="Writing"
   description={`Writing by ${SITE_TITLE}: articles, the graveyard of dead projects, and the notes on why this site exists and how it was built.`}
+  ogImage={ogCardFor('writing')}
   type="website"
   bodyClass="writing-page"
 >

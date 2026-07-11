@@ -90,7 +90,7 @@ schedule counted back from the **submission date (T)**:
 phase-exit criteria):
 
 1. `pnpm build && pnpm check && pnpm test && pnpm knip`
-2. `node scripts/check-links.mjs dist && node scripts/check-asset-sizes.mjs dist && node scripts/check-bundle-budgets.mjs dist && node scripts/gen-perf-report.mjs --check dist && node scripts/gen-csp-hashes.mjs --check dist && node scripts/optimize-public-images.mjs --check && node scripts/check-figure-staleness.mjs`
+2. `node scripts/check-links.mjs dist && node scripts/check-asset-sizes.mjs dist && node scripts/check-bundle-budgets.mjs dist && node scripts/gen-perf-report.mjs --check dist && node scripts/gen-csp-hashes.mjs --check dist && node scripts/optimize-public-images.mjs --check && node scripts/check-figure-staleness.mjs && node scripts/check-og-cards.mjs dist`
 3. `npx html-validate "dist/**/*.html"`
 4. Full Playwright matrix green (all projects in CI; chromium + mobile-chrome
    locally).
@@ -98,7 +98,12 @@ phase-exit criteria):
    `pnpm build && node scripts/gen-perf-report.mjs && pnpm build`, commit.
 6. If the CSP staleness gate fired: regenerate `docs/SECURITY-HEADERS.md` and
    **re-paste the CSP into the Cloudflare rule** before tagging.
-7. Manual pass: home scroll on a real device, one article, 404, no-JS.
+7. OG cards regenerated if the scene look changed since the last release
+   (same staleness philosophy as the figure captures — cards are committed
+   release assets): `pnpm build && node scripts/gen-og-cards.mjs &&
+   node scripts/optimize-public-images.mjs && pnpm build`, review, commit
+   `public/og/`.
+8. Manual pass: home scroll on a real device, one article, 404, no-JS.
 
 **Three-clean-RC rule**: the submission tag may only be cut after **three
 consecutive release candidates pass the full checklist with zero fixes in
@@ -143,11 +148,20 @@ tar -czf archive/site-$TAG-dist.tar.gz dist
 git checkout -
 ```
 
-Plus the **capture set** (stored alongside, not in the repo):
+Plus the **capture set** (stored alongside, not in the repo — the shots land
+in the gitignored `scratchpad/submission/`; run the tooling on real GPU
+hardware at the tagged SHA):
 
-- the submission stills/reel produced by the P12 capture tooling
-  (`scripts/shoot-submission.mjs`, `scripts/record-reel.mjs`),
-- a full-page screenshot of every route at 1920×1080 and 390×844,
+- the submission stills + feed previews from `scripts/shoot-submission.mjs`
+  (4 main-image candidates, 12 coverage stills, 800×600 feed previews; the
+  committed shot inventory is `docs/awwwards/captures/manifest.json` —
+  regenerate it in the same run so it records the archived commit),
+- the raw reel footage from `scripts/record-reel.mjs`
+  (`scratchpad/submission/reel-raw.webm` + mp4 when ffmpeg is present),
+- the route OG cards as shipped (`public/og/` — already in the source
+  archive; regenerated via `scripts/gen-og-cards.mjs` per the RC checklist),
+- the grayscale route sheets (`scripts/shoot-routes-grayscale.mjs` →
+  `scratchpad/p9/`) — a full-page shot of every route at desktop + 390px,
 - the RC dossier (`docs/rc/`) and the commit SHA the tag points at
   (`git rev-list -n1 $TAG`),
 - a copy of `docs/SECURITY-HEADERS.md` + a `curl -sI` header dump of the live

@@ -26,6 +26,7 @@ import { SITE_TITLE, SOCIALS } from '../consts';
 // prose can no longer drift from the gallery it describes.
 import { SHADERS } from '../lib/shaderCatalog';
 import { numberToWord } from '../lib/contentFormat';
+import { ogCardFor } from '../lib/ogCard';
 // Generated performance telemetry (P10) — written by scripts/gen-perf-report.mjs
 // from the built dist; a stale copy fails CI (gen-perf-report --check).
 // NOTE: this import must stay in the top import group — the compiler hoists
@@ -174,6 +175,7 @@ const FALLBACKS: readonly FallbackRow[] = [
 <BaseLayout
   title="Behind the Build"
   description={`How ${SITE_TITLE}'s scroll-scrubbed stellar lifecycle is built: one engine, ${shaderCountWord} shaders, and the budgets that keep it fast.`}
+  ogImage={ogCardFor('behind-the-build')}
   type="article"
   bodyClass="article-page behind-the-build"
 >

@@ -7,6 +7,7 @@ import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import MarsTopology from '../components/MarsTopology.astro';
 import RouteEnding from '../components/RouteEnding.astro';
 import { SITE_TITLE } from '../consts';
+import { ogCardFor } from '../lib/ogCard';
 
 const base = import.meta.env.BASE_URL;
 const href = (p: string) => `${base}/${p}`.replace(/\/+/g, '/');
@@ -70,6 +71,7 @@ const linkLabel = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/$/
 <BaseLayout
   title="Projects"
   description={`Shipped tools and products by ${SITE_TITLE}. The work that held.`}
+  ogImage={ogCardFor('projects')}
   type="website"
   bodyClass="projects-page"
 >

@@ -55,7 +55,15 @@ Jury-dependent rows require the owner-side sessions in `docs/INPUTS-NEEDED.md` (
     BaseHead pre-paint script changes, Astro/Vite is upgraded, or an island
     directive is added/removed. Fix: `pnpm build &&
     node scripts/gen-csp-hashes.mjs`, commit the doc, re-paste the rule.
-14. Playwright matrix (chromium/firefox/webkit/Pixel 7/iPhone 14): smoke, no-js,
+14. `node scripts/check-og-cards.mjs dist` (P12) — OG-card gate: every dist
+    page must advertise a same-origin og:image (twitter:image agreeing) that
+    resolves in dist, weighs ≤300KB, and is exactly 1200×630. The route cards
+    in `public/og/` are committed release assets (regenerated per release —
+    same staleness philosophy as the figure captures, but no hash gate: the
+    cards are editorial, any recent engine frame is honest). Fix:
+    `pnpm build && node scripts/gen-og-cards.mjs &&
+    node scripts/optimize-public-images.mjs && pnpm build`, commit public/og/.
+15. Playwright matrix (chromium/firefox/webkit/Pixel 7/iPhone 14): smoke, no-js,
     reduced-motion (incl. mid-session flip + zero-engine-chunks), loader honesty,
     axe WCAG 2.2 AA (serious/critical fail), reflow 320–430px, visual baselines
     (static edition + 404), WebGL governance (≤2 contexts, zero three.js on
@@ -70,7 +78,10 @@ Jury-dependent rows require the owner-side sessions in `docs/INPUTS-NEEDED.md` (
     regeneration steps are in the spec header), nav-before-engine (P10:
     loader spec proves labelled nav is visible AND clickable on desktop while
     the engine chunks are still held at the network edge — the stable-strong
-    form of the "navigation usable ≤2.5s" roadmap item)
+    form of the "navigation usable ≤2.5s" roadmap item),
+    og cards over HTTP (P12: e2e/og.spec.ts — every route's og:image is a
+    route-specific /og/ card, twitter:image agrees, and the URL serves an
+    image/png ≤300KB from the preview server)
 
 Unit-test layer additions (P9): `test/route-transitions.test.mjs` pins every
 time literal in transitions.css, the warpTransition JUMP/ARRIVE constants and
@@ -105,6 +116,11 @@ run, quoted in the commit body, and reverted before commit.
 - P10 → real-hardware follow-up: promote LCP/TBT/byte-weight Lighthouse
   assertions from warn to error; re-baseline e2e/perf-baseline.json on the
   real CI runner.
+- ~~P12~~ landed: standing gate 14 (OG cards) + the e2e og spec above. The
+  submission capture suite (`scripts/shoot-submission.mjs`,
+  `scripts/record-reel.mjs`) is release tooling, not a gate — its committed
+  record is `docs/awwwards/captures/manifest.json`, and the campaign
+  templates live in `docs/awwwards/`.
 - ~~P11~~ landed: standing gate 13 (CSP staleness) above, plus the scheduled
   production crawl `.github/workflows/prod-crawl.yml` (weekly cron +
   manual dispatch against https://ilies-bel.dev: apex 200, http→https,

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-10",
-  "commit": "d087a49",
+  "generatedAt": "2026-07-11",
+  "commit": "3f78679",
   "bundle": {
     "heroGraphGzipKiB": 232.4,
     "heroGraphFiles": [
@@ -9,7 +9,7 @@
         "gzipKiB": 124
       },
       {
-        "name": "createScene.QbZsSdvw.js",
+        "name": "createScene.658cBIe0.js",
         "gzipKiB": 103.5
       },
       {
@@ -27,62 +27,62 @@
       "/": {
         "kind": "engine",
         "jsGzipKiB": 93.6,
-        "htmlGzipKiB": 32.2
+        "htmlGzipKiB": 33
       },
       "/404.html": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 26.7
+        "htmlGzipKiB": 27.5
       },
       "/about/": {
         "kind": "reading",
         "jsGzipKiB": 15.6,
-        "htmlGzipKiB": 27.8
+        "htmlGzipKiB": 28.6
       },
       "/behind-the-build/": {
         "kind": "engine",
-        "jsGzipKiB": 89.5,
-        "htmlGzipKiB": 51.1
+        "jsGzipKiB": 89.4,
+        "htmlGzipKiB": 52
       },
       "/contact/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 27.3
+        "htmlGzipKiB": 28.1
       },
       "/graveyard/": {
         "kind": "engine",
         "jsGzipKiB": 82.6,
-        "htmlGzipKiB": 30.7
+        "htmlGzipKiB": 31.5
       },
       "/posts/memory-leak-search-and-destroy/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 31.3
+        "htmlGzipKiB": 32.2
       },
       "/posts/thanks-for-scrolling-to-the-bottom/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 29.2
+        "htmlGzipKiB": 30.1
       },
       "/projects/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 30.8
+        "htmlGzipKiB": 31.6
       },
       "/writing/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 27.8
+        "htmlGzipKiB": 28.6
       }
     }
   },
   "html": {
-    "maxPageGzipKiB": 51.1
+    "maxPageGzipKiB": 52
   },
   "rasters": {
-    "count": 47,
-    "largestKiB": 156.5,
-    "largest": "assets/posters/poster-2-red-giant.webp"
+    "count": 56,
+    "largestKiB": 197,
+    "largest": "og/graveyard.png"
   },
   "budgets": {
     "comments": {
@@ -119,7 +119,7 @@
     }
   },
   "lighthouse": {
-    "measuredAt": "2026-07-10",
+    "measuredAt": "2026-07-11",
     "environment": "local",
     "perRoute": {
       "/": {
