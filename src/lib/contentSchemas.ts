@@ -96,11 +96,41 @@ export const projectSchema = z
     /** What the project does NOT do well. Required (≥1) once shipped. */
     limitations: z.array(z.string()).default([]),
     currentStatus: z.string().optional(),
+    /** HOME FEATURE PROOF (PRD-003) — the narrow, validated projection that lets
+     *  the hero's single yellow-star Projects marker feature ONE shipped project
+     *  by name without hand-copying facts into sceneTable/StarMarker/CSS. Only a
+     *  project that opts in with `feature: true` is eligible; the featured
+     *  selection (and the "at most one public feature" invariant) is enforced by
+     *  getFeaturedProof() in contentStats.ts, which reads the whole collection.
+     *  The proof consumed by the hero is derived from THIS block plus the entry's
+     *  own title/status/links + collection-id-derived '#<id>' fragment — never a
+     *  scene literal — so evidence integrity survives content edits. */
+    heroProof: z
+      .object({
+        /** Opt-in eligibility for the single public home feature. */
+        feature: z.boolean().default(false),
+        /** One concise, factual proof line for the marker card (e.g. the
+         *  project's parallel-local-branch purpose). Kept short for the card. */
+        summary: z.string().min(1).max(120),
+        /** Approved short signal chips (e.g. 'Open source', 'Shipped'). Facts
+         *  only — no adoption/metric claim that the entry cannot back. */
+        signals: z.array(z.string().min(1)).min(1).max(4),
+      })
+      .optional(),
     /** Explicit debt flag: claims may carry evidence.type 'none' ONLY while
      *  this is true. Flipping it false with unevidenced claims fails the build. */
     draftEvidence: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
+    // A project may only feature itself on the home page if it is PUBLIC —
+    // a private/archived entry has no public /projects#<id> to land on.
+    if (data.heroProof?.feature && data.status !== 'shipped') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['heroProof', 'feature'],
+        message: `Only a 'shipped' project may set heroProof.feature ("${data.title}" is '${data.status}'). The home feature must land on a public /projects#<id>.`,
+      });
+    }
     if (!data.draftEvidence) {
       for (const [i, claim] of data.claims.entries()) {
         if (claim.evidence.type === 'none') {

@@ -101,3 +101,76 @@ export async function getFeaturedCards(): Promise<FeaturedCardData> {
       : { slug: '', title: '', description: '' },
   };
 }
+
+/** The validated home-feature proof (PRD-003) consumed by the hero's single
+ *  yellow-star Projects marker AND the SSR no-JS/no-WebGL fallback. Every field
+ *  is derived from the featured project's own content entry — never a scene
+ *  literal — so the marker's facts and destination can never drift from the
+ *  catalogue. `null` means no project opted in (the marker keeps its generic
+ *  Projects copy). */
+export interface HeroProofData {
+  /** Collection id of the featured project (also the article fragment target). */
+  id: string;
+  /** The project's real name (its frontmatter title), for the marker headline. */
+  name: string;
+  /** One concise factual proof line (heroProof.summary). */
+  summary: string;
+  /** Approved short signal chips (heroProof.signals). */
+  signals: readonly string[];
+  /** npm PACKAGE NAME, when the entry publishes one (links.npm). */
+  npm?: string;
+  /** Public source URL, when the entry publishes one (links.github). */
+  github?: string;
+  /** Base-relative href with the catalogue fragment, e.g. 'projects#fleet'.
+   *  Projects remains the route identity; the fragment lands on the entry's
+   *  <article id={id}> (CaseStudy.astro), which the build guarantees exists. */
+  href: string;
+  /** The bare '#<id>' fragment, for callers that already own the /projects path. */
+  fragment: string;
+}
+
+/** Derive the single validated home-feature proof from the projects collection.
+ *
+ *  The contract, enforced here at build time (a breach throws and FAILS THE
+ *  BUILD rather than silently reverting to stale generic marker text):
+ *   - AT MOST ONE project may set heroProof.feature — two is an authoring error.
+ *   - the featured project must be public ('shipped') and carry every proof
+ *     field (the schema already guarantees summary + ≥1 signal on any heroProof;
+ *     the 'shipped' gate is enforced by projectSchema.superRefine).
+ *   - the fragment is derived from the collection id, so it always matches the
+ *     rendered <article id> and can never point at a dead anchor.
+ *
+ *  Returns null when no project opts in — the caller then leaves the marker's
+ *  existing generic Projects copy untouched. */
+export async function getFeaturedProof(): Promise<HeroProofData | null> {
+  const projects = await getCollection('projects');
+  const featured = projects.filter((p) => p.data.heroProof?.feature === true);
+
+  if (featured.length === 0) return null;
+  if (featured.length > 1) {
+    const ids = featured.map((p) => p.id).join(', ');
+    throw new Error(
+      `Home feature contract: at most one project may set heroProof.feature, ` +
+        `but ${featured.length} do (${ids}). Feature exactly one, or none.`,
+    );
+  }
+
+  const entry = featured[0];
+  const proof = entry.data.heroProof;
+  // Defensive: the schema guarantees these, but a null proof here would be a
+  // silent regression — fail loudly instead.
+  if (!proof) {
+    throw new Error(`Featured project "${entry.id}" lost its heroProof after filtering.`);
+  }
+
+  return {
+    id: entry.id,
+    name: entry.data.title,
+    summary: proof.summary,
+    signals: proof.signals,
+    npm: entry.data.links?.npm,
+    github: entry.data.links?.github,
+    href: `projects#${entry.id}`,
+    fragment: `#${entry.id}`,
+  };
+}

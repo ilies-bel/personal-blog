@@ -837,6 +837,37 @@ body.bare.about-page .overlay-brand { display: inline-flex; }
   text-decoration-color: var(--fg-faint);
   text-underline-offset: 0.35em;
 }
+/* Featured-project proof (PRD-003) — one concrete, source-backed example inside
+   the no-JS homepage, on-brand with the manifesto copy. A quiet mono label + the
+   project name in bone, its signals in the faint uppercase ramp, and a gold link
+   to the /projects#<id> fragment. */
+.static-edition-featured {
+  margin: 0 0 2.2rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--fg-dim);
+}
+.static-edition-featured-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.static-edition-featured strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.static-edition-featured-signals {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-faint);
+}
 
 /* --- WebGL-unavailable fallback (index.astro .webgl-fallback) --------------- */
 /* Shown (display:flex) ONLY when body.webgl-unavailable is present — HeroIsland adds
@@ -901,6 +932,27 @@ body.webgl-unavailable .webgl-fallback {
   letter-spacing: 0.04em;
   color: var(--fg-faint);
   max-width: 46ch;
+}
+/* Featured-project proof (PRD-003) — the same Fleet evidence the live yellow
+   marker carries, as ordinary text in the no-WebGL edition. Mono metadata row
+   in the site palette; the signals sit in the faint mono ramp, the name in bone. */
+.webgl-fallback-proof {
+  margin: 0.7rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  color: var(--fg-dim);
+  max-width: 46ch;
+}
+.webgl-fallback-proof strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.webgl-fallback-proof-signals {
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
 /* Links inside the note re-enable pointer events (the container suppresses them) so
    the about / get-in-touch links are clickable, in the site's aged-gold link colour. */

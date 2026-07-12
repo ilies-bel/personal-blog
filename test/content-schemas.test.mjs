@@ -139,3 +139,54 @@ test('graveyard specimen: full record parses; lesson/cause/interred are required
   });
   assert.equal(missing.success, false);
 });
+
+// HOME FEATURE PROOF (PRD-003) — the heroProof projection contract.
+test('heroProof: a shipped project with a valid heroProof parses', () => {
+  const result = projects.safeParse({
+    ...baseProject,
+    heroProof: { feature: true, summary: 'Parallel branch environments, locally.', signals: ['Open source', 'Shipped'] },
+  });
+  assert.equal(result.success, true, result.success ? '' : JSON.stringify(result.error.issues));
+});
+
+test('heroProof: only a SHIPPED project may set feature:true', () => {
+  const result = projects.safeParse({
+    ...baseProject,
+    status: 'private',
+    statusLabel: 'Private · in use',
+    limitations: [],
+    heroProof: { feature: true, summary: 'x', signals: ['Private'] },
+  });
+  assert.equal(result.success, false, 'a private project cannot feature itself on the home');
+  assert.match(result.error.issues.map((i) => i.message).join('\n'), /shipped/i);
+});
+
+test('heroProof: a private project MAY carry a non-featured heroProof (feature:false)', () => {
+  const result = projects.safeParse({
+    ...baseProject,
+    status: 'private',
+    statusLabel: 'Private · in use',
+    limitations: [],
+    heroProof: { feature: false, summary: 'x', signals: ['Private'] },
+  });
+  assert.equal(result.success, true, 'the shipped-gate only bites when feature is true');
+});
+
+test('heroProof: summary and at least one signal are required', () => {
+  const noSummary = projects.safeParse({
+    ...baseProject,
+    heroProof: { feature: true, signals: ['Shipped'] },
+  });
+  assert.equal(noSummary.success, false, 'summary is required');
+
+  const noSignals = projects.safeParse({
+    ...baseProject,
+    heroProof: { feature: true, summary: 'x', signals: [] },
+  });
+  assert.equal(noSignals.success, false, 'at least one signal is required');
+});
+
+test('heroProof: is optional — a project without one parses', () => {
+  const result = projects.safeParse({ ...baseProject });
+  assert.equal(result.success, true);
+});

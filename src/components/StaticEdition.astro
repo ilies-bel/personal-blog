@@ -13,6 +13,7 @@
 // index.astro, present with or without JS — no duplicate/competing headings.
 import { BEATS } from '../hero/sceneTable';
 import { BRAND_NAME, BRAND_ROLE, withBase } from '../consts';
+import { getFeaturedProof } from '../lib/contentStats';
 
 // Primary destinations, in the canonical IA order (the same four rows
 // SiteNav renders). Labels stay conventional — celestial names live only
@@ -23,6 +24,14 @@ const DESTINATIONS = [
   { label: 'About', href: withBase('about') },
   { label: 'Contact', href: withBase('contact') },
 ];
+
+// Featured-project proof (PRD-003) — the SAME validated Fleet evidence the live
+// yellow-star marker carries, as ordinary server-rendered text/link so the no-JS
+// edition (this component IS the no-JS homepage) exposes the concrete example and
+// its /projects#<id> fragment with no canvas or client hero state. Omitted
+// entirely when nothing is featured (no placeholder box). Fetched here rather
+// than threaded as a prop so the fallback stays self-contained.
+const featured = await getFeaturedProof();
 ---
 
 <div class="scene-fallback static-edition measure">
@@ -38,6 +47,20 @@ const DESTINATIONS = [
       ))}
     </ul>
   </nav>
+
+  {/* Featured-project proof (PRD-003) — one concrete, source-backed example of
+      shipped work, so a no-JS visitor meets the evidence the live yellow marker
+      carries without a canvas. Facts come from the validated heroProof
+      projection; the link lands on the same /projects#<id> catalogue fragment.
+      Rendered only when a project is featured (no placeholder otherwise). */}
+  {featured && (
+    <p class="static-edition-featured">
+      <span class="static-edition-featured-label">Featured project</span>
+      <strong>{featured.name}</strong> — {featured.summary}{' '}
+      <span class="static-edition-featured-signals">{featured.signals.join(' · ')}</span>.{' '}
+      <a href={withBase(featured.href)}>See {featured.name} in Projects →</a>
+    </p>
+  )}
 
   {/* The manifesto arc, top-to-bottom in the same reversed physical order the
       live scene plays (black hole first, pale blue dot last). slice() first —

@@ -107,6 +107,61 @@ interface HeroIslandProps {
    *  Passed through to the finale section's three proof cards. Backdrop mode
    *  renders no overlay, so its callers omit it; the default is empty strings. */
   cards?: FeaturedCards;
+  /** Home-feature proof (PRD-003) — the ONE shipped project the yellow-star
+   *  Projects marker features by name. Validated + derived server-side by
+   *  getFeaturedProof() (index.astro) so the marker's facts and its
+   *  /projects#<id> destination come from the catalogue, never a scene literal.
+   *  null (or absent) leaves the marker's generic Projects copy untouched. */
+  featured?: HeroProof | null;
+}
+
+/** The shape of the validated home-feature proof, mirrored structurally from
+ *  contentStats.ts's HeroProofData (a type import would drag the server-only
+ *  `astro:content` module into this client bundle). index.astro serialises the
+ *  real projection into this prop. */
+export interface HeroProof {
+  id: string;
+  name: string;
+  summary: string;
+  signals: readonly string[];
+  npm?: string;
+  github?: string;
+  /** Base-relative href with the catalogue fragment, e.g. 'projects#fleet'. */
+  href: string;
+  fragment: string;
+}
+
+/** Apply the validated home-feature proof to the single yellow-star Projects
+ *  marker, leaving every other placement untouched. This is the ONE seam where
+ *  the featured project's real facts enter the scene: sceneTable stays the
+ *  geometry/placement source, and the marker's name/summary/signals/href/
+ *  accessible copy come from the projection. No proof → the placement's existing
+ *  generic Projects copy is used unchanged. */
+function withFeaturedProof(
+  placement: (typeof MARKER_PLACEMENTS)[number],
+  featured: HeroProof | null | undefined,
+): typeof placement {
+  if (!featured || placement.id !== 'yellow') return placement;
+  const signals = featured.signals.join(' · ');
+  // The anchor's accessible name is `${headline} ${body}` (StarMarker), so body
+  // must name the destination too — the a11y label then reads e.g.
+  // "Fleet. Parallel branch environments, locally. Featured project in Projects."
+  const body = `${featured.summary} Featured project in Projects.`;
+  return {
+    ...placement,
+    // Land on the catalogue fragment (Projects stays the route identity).
+    href: featured.href,
+    // Card copy — the featured project's real facts.
+    eyebrow: 'FEATURED PROJECT',
+    headline: `${featured.name}.`,
+    body,
+    tags: featured.npm ? [...featured.signals, `npm ${featured.npm}`] : featured.signals,
+    cta: `See ${featured.name} in Projects`,
+    // Compass fallback copy (used when eyebrow/headline/body are absent — here
+    // they are present, so these only feed the compass dest line).
+    title: featured.name,
+    subtitle: `${signals} — in Projects`,
+  };
 }
 
 const ZERO_COUNTS: LedgerCounts = { shipped: 0, dead: 0, posts: 0 };
@@ -171,7 +226,7 @@ const DATA_SCENE_BY_ID: Record<HudTargetId, 'blackhole' | 'red-giant' | 'yellow-
   beginning: 'final',
 };
 
-export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS, cards = EMPTY_CARDS }: HeroIslandProps = {}) {
+export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS, cards = EMPTY_CARDS, featured = null }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Frame-cadence marker data from the scene (position of the star object in CSS px).
   // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
@@ -788,7 +843,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
                 per-marker via the placement id. These ride the LIVE scene's per-frame
                 marker positions, so they only mount on the live (non-reduced) path. */}
             {MARKER_PLACEMENTS.map((placement) => (
-              <StarMarker key={placement.id} placement={placement} markerFrameRef={markerFrameRef} />
+              <StarMarker
+                key={placement.id}
+                placement={withFeaturedProof(placement, featured)}
+                markerFrameRef={markerFrameRef}
+              />
             ))}
           </>
         )}
