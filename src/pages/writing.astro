@@ -1,11 +1,20 @@
 ---
-// WRITING — a sectioned index, not a prose menu. Three quiet shelves:
-//   · Articles        → the on-site posts (a real archive list that scales)
-//   · The graveyard   → dead projects, kept and owned
-//   · About this site → the Inspiration essay + the Behind the Build case study
+// WRITING — two first-class views, always equivalent:
+//   · List view   → the conventional shelf: articles grouped by type
+//                   (typed posts: investigation / essay / failure-story / build-log).
+//                   This is the keyboard and screen-reader path; always in the DOM.
+//   · Map view    → the Nebular knowledge map (EXP-027): articles cluster by
+//                   editorial type using CSS spatial composition. Zero WebGL.
+//                   Generated client-side on first toggle from JSON data embedded
+//                   in the page — no duplicate DOM elements at initial load.
+//
+// Physical law: "dispersed matter coalescing" (route-physical-laws.md §Writing).
+// Clusters emerge from whitespace gravity, not drawn borders. Entry: 6 px
+// outward drift → centre, 600 ms ease-out. Hover: local pull ≤ 4 px.
+// Reduced-motion: opacity transitions only (html[data-motion='reduced']).
+//
 // The h1 and the nav active state carry the page's context — no kicker row, no
-// instrument numbering. Every destination is a real <a> with the site's
-// decode-hover convention on its title.
+// instrument numbering. Every destination is a real <a>.
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import AmbientBackdrop from '../components/AmbientBackdrop.astro';
@@ -72,6 +81,40 @@ const fmt = (d: Date) =>
 // Reading time: ~220 wpm over the raw MDX body — cheap, static, close enough.
 const readMinutes = (body: string | undefined) =>
   Math.max(1, Math.round((body ?? '').trim().split(/\s+/).length / 220));
+
+// Nebula map data — serialised as JSON for client-side map generation (EXP-027).
+// Built from the same SHELF_ORDER/SHELF_LABEL so labels and type values stay
+// consistent. Always uses type-specific labels so each cluster is identifiable.
+// topics comes from post.data.tags (the cloud schema field name).
+type ClusterData = {
+  type: string;
+  typeLabel: string;
+  posts: {
+    href: string;
+    title: string;
+    dateIso: string;
+    dateLabel: string;
+    readMinutes: number;
+    topics: string[];
+    description: string;
+  }[];
+};
+
+const nebulaData: ClusterData[] = SHELF_ORDER
+  .filter((t) => articleTypes.has(t))
+  .map((t) => ({
+    type: t,
+    typeLabel: SHELF_LABEL[t],
+    posts: articles.filter((p) => p.data.type === t).map((post) => ({
+      href: href(`posts/${post.id}/`),
+      title: post.data.title,
+      dateIso: post.data.pubDate.toISOString(),
+      dateLabel: fmt(post.data.pubDate),
+      readMinutes: readMinutes(post.body),
+      topics: post.data.tags,
+      description: post.data.description,
+    })),
+  }));
 ---
 
 <BaseLayout
@@ -95,42 +138,76 @@ const readMinutes = (body: string | undefined) =>
     <h1>Everything, in plain words.</h1>
   </header>
 
-  {shelves.map((shelf) => (
-    <section class="writing-section" aria-labelledby={`${shelf.id}-title`}>
-      <h2 class="writing-section-title" id={`${shelf.id}-title`}>{shelf.title}</h2>
-      <div class="writing-list">
-        {shelf.posts.map((post) => (
-          <a class="writing-row" href={href(`posts/${post.id}/`)}>
-            <span class="writing-row-left">
-              <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
-              {/* The row's record facts: editorial type + reading commitment —
-                  both real, derived (frontmatter type / body wordcount). Two
-                  spans so each reads on its own line in the left column. */}
-              <span class="writing-row-fact">{TYPE_LABEL[post.data.type]}</span>
-              <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
-            </span>
-            <span class="writing-row-copy">
-              {/* Per-post shared-element name → the article h1 (posts/[...slug]),
-                  so the clicked title physically travels into the headline. */}
-              <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
-              <span class="writing-row-description">{post.data.description}</span>
-              {/* Topics — the post's own tags, a quiet mono readout. */}
-              {post.data.tags.length > 0 && (
-                <span class="writing-row-topics">
-                  <span class="sr-only">Topics: </span>
-                  {post.data.tags.join(' · ')}
-                </span>
-              )}
-              {/* Provenance comes from the post's own frontmatter (P6) — the old
-                  hardcoded per-id origins map is gone. */}
-              {post.data.provenance && <span class="writing-row-origin">{post.data.provenance.note}</span>}
-            </span>
-          </a>
-        ))}
-      </div>
-    </section>
-  ))}
+  {/* ── View toggle ─────────────────────────────────────────────────────────
+      Two first-class equivalent orientations. List is the default — it is the
+      keyboard and screen-reader path. Map is the nebular cluster view (EXP-027).
+      aria-pressed on each button reflects which view is currently active.
+      The toggle is in the tab order; no spatial navigation is required to
+      discover the list alternative (backlog rule). */}
+  <div class="writing-view-controls" role="group" aria-label="Article view mode">
+    <button class="writing-view-btn is-active" data-view="list" aria-pressed="true">List</button>
+    <button class="writing-view-btn" data-view="map" aria-pressed="false">Map</button>
+  </div>
 
+  {/* ── Articles panels wrapper ───────────────────────────────────────────────
+      On initial load: only the list panel exists in the DOM.
+      On first "Map" click: the JS generator inserts the map panel here using
+      data from #writing-nebula-data. This keeps the DOM clean (no duplicate
+      links) for both screen readers and strict-mode test locators. */}
+  <div id="writing-views" data-active-view="list">
+
+    {/* ── LIST panel (always in DOM — the accessible representation) ───── */}
+    <div class="writing-view-panel" data-panel="list">
+
+      {shelves.map((shelf) => (
+        <section class="writing-section" aria-labelledby={`${shelf.id}-title`}>
+          <h2 class="writing-section-title" id={`${shelf.id}-title`}>{shelf.title}</h2>
+          <div class="writing-list">
+            {shelf.posts.map((post) => (
+              <a class="writing-row" href={href(`posts/${post.id}/`)} data-entry-type={post.data.type}>
+                <span class="writing-row-left">
+                  <time datetime={post.data.pubDate.toISOString()}>{fmt(post.data.pubDate)}</time>
+                  {/* The row's record facts: editorial type + reading commitment —
+                      both real, derived (frontmatter type / body wordcount). Two
+                      spans so each reads on its own line in the left column. */}
+                  <span class="writing-row-fact">{TYPE_LABEL[post.data.type]}</span>
+                  <span class="writing-row-fact">{readMinutes(post.body)} min read</span>
+                </span>
+                <span class="writing-row-copy">
+                  {/* Per-post shared-element name → the article h1 (posts/[...slug]),
+                      so the clicked title physically travels into the headline. */}
+                  <span class="writing-row-title" transition:name={`post-title-${post.id}`} data-decode>{post.data.title}</span>
+                  <span class="writing-row-description">{post.data.description}</span>
+                  {/* Topics — the post's own tags, a quiet mono readout. */}
+                  {post.data.tags.length > 0 && (
+                    <span class="writing-row-topics">
+                      <span class="sr-only">Topics: </span>
+                      {post.data.tags.join(' · ')}
+                    </span>
+                  )}
+                  {/* Provenance comes from the post's own frontmatter (P6) — the old
+                      hardcoded per-id origins map is gone. */}
+                  {post.data.provenance && <span class="writing-row-origin">{post.data.provenance.note}</span>}
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+
+    </div>
+
+    {/* ── MAP panel placeholder — filled by JS on first toggle ─────────── */}
+    {/* The map panel is injected here; initially absent to prevent duplicate
+        DOM links that would break strict-mode locators in existing tests. */}
+
+  </div>
+  {/* /writing-views */}
+
+  {/* ── Persistent destinations ───────────────────────────────────────────────
+      Graveyard and About this site are always visible outside the toggle region.
+      They are not article clusters — they are nav destinations. They remain
+      reachable in both views without any toggle interaction. */}
   <section class="writing-section" aria-labelledby="graveyard-title">
     <h2 class="writing-section-title" id="graveyard-title">The graveyard</h2>
     <div class="writing-list">
@@ -188,4 +265,172 @@ const readMinutes = (body: string | undefined) =>
     note="Shipped tools with their claims, limitations, and evidence — the part that had to survive contact with users."
     href={href('projects')}
   />
+
+  {/* ── Nebula map data — JSON payload for client-side map generation ─────────
+      Invisible to screen readers. Contains the same articles as the list panel
+      serialised for the JavaScript map builder. The map panel (data-panel="map")
+      is generated from this data on the first "Map" click, then cached. */}
+  <script type="application/json" id="writing-nebula-data" set:html={JSON.stringify(nebulaData)} />
 </BaseLayout>
+
+{/* ── View-toggle + map-generator script ───────────────────────────────────────
+    Lightweight: no framework, no bundler overhead. Runs once per navigation
+    via astro:page-load (ClientRouter-safe).
+
+    Responsibilities:
+      1. Toggle: update data-active-view, flip aria-pressed, flip aria-hidden.
+      2. Map generation: read JSON, build map panel HTML, insert into #writing-views
+         on the FIRST "Map" click (subsequent clicks reuse the cached panel).
+      3. Coalesce re-trigger: void + reflow + restore animation on each Map entry.
+
+    The list panel is the accessible canonical representation. The map panel is
+    a visual progressive enhancement — absent until explicitly requested, so the
+    initial DOM is clean for both AT and strict-mode test locators. */}
+<script>
+  // ---- Type matching the server-side ClusterData shape --------------------
+  interface NebulaPost {
+    href: string;
+    title: string;
+    dateIso: string;
+    dateLabel: string;
+    readMinutes: number;
+    topics: string[];
+    description: string;
+  }
+  interface NebulaCluster {
+    type: string;
+    typeLabel: string;
+    posts: NebulaPost[];
+  }
+
+  // ---- DOM helpers ---------------------------------------------------------
+
+  function esc(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Build the nebula card HTML for a single post.
+  function cardHTML(post: NebulaPost, typeLabel: string): string {
+    const topicsHTML = post.topics.length > 0
+      ? `<span class="nebula-card-topics">${esc(post.topics.join(' · '))}</span>`
+      : '';
+    return `
+<a class="nebula-card" href="${esc(post.href)}">
+  <span class="nebula-card-type">${esc(typeLabel)}</span>
+  <span class="nebula-card-title">${esc(post.title)}</span>
+  <span class="nebula-card-meta">
+    <time datetime="${esc(post.dateIso)}">${esc(post.dateLabel)}</time>
+    <span class="nebula-card-read">${post.readMinutes} min read</span>
+  </span>
+  ${topicsHTML}
+  <span class="nebula-card-description">${esc(post.description)}</span>
+</a>`.trim();
+  }
+
+  // Build the cluster HTML for one type group.
+  function clusterHTML(cluster: NebulaCluster): string {
+    const cards = cluster.posts.map((p) => cardHTML(p, cluster.typeLabel)).join('\n');
+    return `
+<div class="nebula-cluster" data-cluster-type="${esc(cluster.type)}">
+  <h3 class="nebula-cluster-label">${esc(cluster.typeLabel)}</h3>
+  <div class="nebula-cluster-cards">
+    ${cards}
+  </div>
+</div>`.trim();
+  }
+
+  // Build the full map panel HTML.
+  function buildMapPanel(clusters: NebulaCluster[]): string {
+    const clusterHTMLs = clusters.map(clusterHTML).join('\n');
+    return `
+<div class="writing-view-panel" data-panel="map" aria-hidden="true">
+  <section class="writing-section nebula-section" aria-labelledby="articles-map-title">
+    <h2 class="writing-section-title" id="articles-map-title">Articles</h2>
+    <div class="nebula-map">
+      ${clusterHTMLs}
+    </div>
+  </section>
+</div>`.trim();
+  }
+
+  // ---- Toggle logic --------------------------------------------------------
+
+  function initViewToggle(): void {
+    const views = document.getElementById('writing-views') as HTMLElement | null;
+    const btns = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.writing-view-btn')
+    );
+    if (!views || btns.length === 0) return;
+
+    // Load cluster data from the embedded JSON payload (once per page).
+    let clusters: NebulaCluster[] | null = null;
+    const dataEl = document.getElementById('writing-nebula-data');
+    if (dataEl?.textContent) {
+      try {
+        clusters = JSON.parse(dataEl.textContent) as NebulaCluster[];
+      } catch {
+        // Malformed JSON — map view unavailable; list remains the only view.
+        clusters = null;
+      }
+    }
+
+    // Whether the map panel has been generated and inserted yet.
+    let mapReady = false;
+
+    function ensureMapPanel(): void {
+      if (mapReady || !clusters) return;
+
+      const html = buildMapPanel(clusters);
+      // Parse via innerHTML so DOMParser isn't needed.
+      const frag = document.createElement('div');
+      frag.innerHTML = html;
+      const panel = frag.firstElementChild;
+      if (panel) views!.appendChild(panel);
+      mapReady = true;
+    }
+
+    function setView(view: string): void {
+      // Generate the map panel on first request.
+      if (view === 'map') ensureMapPanel();
+
+      views!.dataset.activeView = view;
+
+      btns.forEach((b) => {
+        const active = b.dataset.view === view;
+        b.setAttribute('aria-pressed', String(active));
+        b.classList.toggle('is-active', active);
+      });
+
+      // Update aria-hidden on panels.
+      document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
+        panel.setAttribute('aria-hidden', String(panel.dataset.panel !== view));
+      });
+
+      // Re-trigger the nebula coalesce animation each time the map becomes
+      // active so it always plays from the outward-drift start position.
+      if (view === 'map') {
+        document.querySelectorAll<HTMLElement>('.nebula-card').forEach((card) => {
+          card.style.animation = 'none';
+          // Force reflow so the browser registers the change before restoring.
+          void card.offsetHeight;
+          card.style.animation = '';
+        });
+      }
+    }
+
+    btns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = btn.dataset.view;
+        if (view) setView(view);
+      });
+    });
+  }
+
+  // ClientRouter-safe: runs after each in-page navigation as well as the
+  // initial page load.
+  document.addEventListener('astro:page-load', initViewToggle);
+</script>
