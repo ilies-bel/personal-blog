@@ -28,6 +28,15 @@ interface Props {
 const { entry } = Astro.props;
 const { data } = entry;
 
+// Render the slotted MDX body to a string and scope its auto-generated ids
+// ("the-problem", "the-outcome", …) with the entry id. Every case study body
+// uses the same ### section heads, so two entries on one page would otherwise
+// collide (html-validate no-dup-id). Nothing anchors to these ids today.
+const bodyHtml = (await Astro.slots.render('default')).replace(
+  /\bid="([^"]+)"/g,
+  (_, id) => `id="${entry.id}-${id}"`,
+);
+
 // Hand-authored diagram components a project can declare as its figure
 // (media.kind 'diagram'). The enum in the schema and this registry must agree —
 // a typo'd name fails schema validation before it can reach this map.
@@ -144,8 +153,10 @@ const hasDecisions =
 
     <div class="projects-copy">
       {/* The running copy: the MDX body's problem → decisive choice → outcome
-          sections (### headings, styled below via :global). */}
-      <slot />
+          sections (### headings, styled below via :global). Every entry's body
+          uses the same section headings, so the MDX-generated heading ids must
+          be scoped per entry or /projects ships duplicate ids (no-dup-id). */}
+      <Fragment set:html={bodyHtml} />
 
       {/* PROOF — every factual claim the entry makes, with its backing rendered
           adjacent. `draftEvidence` claims show the honest debt note instead;

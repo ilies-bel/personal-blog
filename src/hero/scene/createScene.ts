@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, resolveParticleRTScale, resolveRgGranBake, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
@@ -1197,6 +1197,39 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     requestAnimationFrame(tick);
   };
 
+  // The warm's bake chunks above (granulation cubemap, GPGPU collapse programs
+  // + snapshot FBOs) each hold the main thread for hundreds of ms. Started at
+  // first paint they land INSIDE the loader's ≤900ms floor window and starve
+  // the reveal timer — on a fast GPU the honest floor became a ~2.5s hold
+  // (e2e/loader.spec.ts fast-ready regime; software-GL CI can never reach that
+  // branch, so only real hardware sees it). So when this document has a live
+  // intro loader, the warm waits for the reveal (body.scene-ready) and rides
+  // the loader's compositor-driven opacity dissolve instead — still visually
+  // covered, no longer gating. Documents without a pending loader (reading-
+  // route scenes, warm back-navs where the class is already up) warm
+  // immediately, exactly as before. The 3s backstop covers the reveal-never-
+  // lands path (the loader's own 8s no-WebGL backstop): warming late under the
+  // loader still beats first-scroll bake stalls. scheduleGpuWarm is idempotent.
+  const scheduleGpuWarmAfterReveal = (): void => {
+    if (
+      document.body.classList.contains(SCENE_READY_BODY_CLASS) ||
+      !document.querySelector('.scene-loader') // class literal mirrors index.astro's loader markup
+    ) {
+      scheduleGpuWarm();
+      return;
+    }
+    const revealWatch = new MutationObserver(() => {
+      if (!document.body.classList.contains(SCENE_READY_BODY_CLASS)) return;
+      revealWatch.disconnect();
+      requestAnimationFrame(() => scheduleGpuWarm());
+    });
+    revealWatch.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    window.setTimeout(() => {
+      revealWatch.disconnect();
+      scheduleGpuWarm();
+    }, 3000);
+  };
+
   function frame(): void {
     if (stopped) return;
     if (document.hidden) {
@@ -2112,10 +2145,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     if (!firstFramePainted) {
       firstFramePainted = true;
       window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
-      // The loader now covers a PAINTED scene — spend that covered window warming
-      // the GPGPU collapse (programs + snapshot FBOs) so no scroll position ever
-      // pays a first-bake stall. Scheduled on its own rAF ticks, never this frame.
-      scheduleGpuWarm();
+      // Warm the GPGPU collapse (programs + snapshot FBOs) so no scroll position
+      // ever pays a first-bake stall — but only once the loader's reveal has
+      // landed, so the warm's heavy chunks can't starve the reveal timer (see
+      // scheduleGpuWarmAfterReveal). Scheduled on its own rAF ticks, never this frame.
+      scheduleGpuWarmAfterReveal();
     }
   }
 
