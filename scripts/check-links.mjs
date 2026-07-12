@@ -53,13 +53,17 @@ function resolvesInternally(urlPath) {
 
 // Pull candidate URLs out of an HTML document. Attribute-based extraction is
 // enough for a static Astro build (no client-side route generation to miss).
+// Inline <script> bodies are stripped first: client code that builds markup
+// from template literals (e.g. the writing nebula's card renderer) contains
+// href="${...}" as JS source text, which is not a document link.
 function extractRefs(html) {
   const refs = [];
+  const scriptFreeHtml = html.replace(/(<script\b[^>]*>)[\s\S]*?(<\/script>)/gi, '$1$2');
   const attrRe = /\b(?:href|src|poster)\s*=\s*["']([^"']+)["']/g;
-  for (const m of html.matchAll(attrRe)) refs.push(m[1]);
+  for (const m of scriptFreeHtml.matchAll(attrRe)) refs.push(m[1]);
   // srcset: comma-separated "url size" pairs.
   const srcsetRe = /\bsrcset\s*=\s*["']([^"']+)["']/g;
-  for (const m of html.matchAll(srcsetRe)) {
+  for (const m of scriptFreeHtml.matchAll(srcsetRe)) {
     for (const part of m[1].split(',')) {
       const url = part.trim().split(/\s+/)[0];
       if (url) refs.push(url);
@@ -67,7 +71,7 @@ function extractRefs(html) {
   }
   // Meta content URLs (og:image, twitter:image).
   const metaRe = /\bcontent\s*=\s*["'](https?:\/\/[^"']+|\/[^"']*)["']/g;
-  for (const m of html.matchAll(metaRe)) refs.push(m[1]);
+  for (const m of scriptFreeHtml.matchAll(metaRe)) refs.push(m[1]);
   return refs;
 }
 
