@@ -10,13 +10,17 @@
 // named artifact per SHA — see .github/workflows/ci.yml).
 //
 // THRESHOLDS (PERF-008):
-//   Metric  Hard limit  Record target
-//   LCP     2500 ms     2000 ms
-//   INP      200 ms      150 ms
-//   CLS       0.10        0.02
-//   TBT      200 ms      150 ms
+//   Metric  lhci ERROR (lighthouserc.cjs)        Script hard (standalone backstop)  Record target
+//   LCP     2500 ms (all routes except /)         2500 ms                            2000 ms
+//   INP      200 ms (all routes except /)          200 ms                             150 ms
+//   CLS       0.02 ERROR on ALL routes (P10)        0.10 (outer backstop)             0.02
+//   TBT      200 ms (all routes except /)          200 ms                             150 ms
 //
-// Hard limits are checked by `pnpm lhci` (lighthouserc.cjs assertions).
+//   Home route (/): LCP / INP / TBT are WARN-only in lhci (SwiftShader WebGL
+//   artifact; promoted to ERROR per INPUTS-NEEDED #8). CLS stays ERROR everywhere.
+//   See lighthouserc.cjs assertMatrix and RC-1 §3.
+//
+// Hard limits are checked by `pnpm lhci` (lighthouserc.cjs assertMatrix).
 // This script checks both tiers and exits 1 only if a hard limit is violated
 // (providing a second enforcement layer when run standalone).
 //

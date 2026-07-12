@@ -105,8 +105,14 @@ jobs:
     # Two-step enforcement (both must pass to green this job):
     #   1. `pnpm lhci` — Lighthouse CI collects 3 runs per route with the
     #      mid-range mobile throttle profile and exits 1 if any HARD LIMIT
-    #      (LCP 2.5s / INP 200ms / CLS 0.10 / TBT 200ms) is exceeded.
-    #      Thresholds and throttle config live in lighthouserc.cjs.
+    #      is exceeded. Thresholds vary by route (per P10 / RC-1 §3 —
+    #      software-GL caveats):
+    #        CLS  ≤0.02 ERROR on all routes (deterministic; SwiftShader-safe).
+    #        LCP / INP / TBT  ERROR on all routes except home (/);
+    #                         WARN only on home — WebGL boot inflates to
+    #                         nonsense on SwiftShader (TBT ~155 s observed).
+    #                         Promote to ERROR per INPUTS-NEEDED #8.
+    #      Full config in lighthouserc.cjs (assertMatrix).
     #   2. `node scripts/cwv-gate.mjs` — reads the LHCI report JSONs, checks
     #      the tighter RECORD TARGETS (LCP 2.0s / INP 150ms / CLS 0.02 /
     #      TBT 150ms), and archives a summary to evidence/performance/.
@@ -141,8 +147,9 @@ jobs:
 
       - name: Lighthouse CI — collect + enforce hard limits
         # lighthouserc.cjs: 9 public routes × 3 runs, mid-range mobile throttle
-        # (4× CPU, Slow 4G).  Hard limits: LCP 2.5s / INP 200ms / CLS 0.10 /
-        # TBT 200ms.  Exit 1 if any ERROR assertion is violated.
+        # (4× CPU, Slow 4G).  Per-route assertMatrix — CLS ≤0.02 ERROR on all
+        # routes; LCP/INP/TBT ERROR on non-home routes, WARN on / (SwiftShader
+        # WebGL artifact).  Exit 1 if any ERROR assertion is violated.
         run: pnpm lhci
 
       - name: CWV gate — record targets + evidence archive

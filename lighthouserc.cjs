@@ -16,20 +16,24 @@
 // perf events), so devtools throttle is not used even locally in this config.
 //
 // ASSERTION TIERS:
-//   ERROR (hard limit) — blocks CI. Values from PERF-008 blocking gates.
-//   WARN (record target) — NOT in this file; checked and reported separately
-//     by scripts/cwv-gate.mjs (LCP 2.0s / INP 150ms / CLS 0.02 / TBT 150ms).
+//   ERROR (hard limit) — blocks CI. See assertMatrix below for per-route split.
+//   WARN  (advisory)  — visible in report, never blocks CI.
+//   Record targets (LCP 2.0s / INP 150ms / CLS 0.02 / TBT 150ms) — checked
+//     separately by scripts/cwv-gate.mjs.
 //
-// CLS note: CLS is deterministic (server-rendered HTML, fixed-footprint canvas
-// host, dimensioned images), so the 0.10 hard limit is an outer backstop.
-// The 0.02 record target (tighter) is what the site should achieve and is
-// enforced at WARN level by the gate script.
+// PER-ROUTE SPLIT (P10 decision; see docs/rc/RC-1.md §3 — software-GL caveats):
 //
-// LCP / INP / TBT note: simulate-method numbers on software-rendered CI
-// measure the scheduler more than the site, but the hard limits (2.5s / 200ms /
-// 200ms) are generous enough to catch real regressions (new render-blocking
-// resources, large unoptimised LCP images, new synchronous JS payloads) without
-// producing coin-flip failures on swapping runner hardware.
+//   Route         CLS    LCP     INP     TBT
+//   /             ERROR  warn    warn    warn    ← WebGL boot inflates on SwiftShader
+//   all others    ERROR  ERROR   ERROR   ERROR   ← zero-WebGL, perf=100 on SwiftShader
+//
+//   CLS is deterministic (server-rendered HTML, fixed-footprint canvas host,
+//   dimensioned images) on every route — ERROR at 0.02 is safe everywhere.
+//   LCP / INP / TBT on the home route use SwiftShader (GitHub software-GL runner)
+//   to render the WebGL engine: observed TBT ~155 s lab, LCP inflated by the
+//   same artifact. These metrics stay WARN-only until INPUTS-NEEDED #8 (real
+//   rendering hardware). The reading routes render zero WebGL and score perf=100
+//   on SwiftShader, so hard ERROR limits are reliable there. RC-1 §3.
 module.exports = {
   ci: {
     collect: {
@@ -73,14 +77,34 @@ module.exports = {
       },
     },
     assert: {
-      // Hard limits — EXIT 1 if any route's median exceeds these.
+      // Per-route assertion matrix — see header comment for rationale.
       // Record targets (tighter) are checked by scripts/cwv-gate.mjs.
-      assertions: {
-        'cumulative-layout-shift':    ['error', { maxNumericValue: 0.10 }],
-        'largest-contentful-paint':   ['error', { maxNumericValue: 2500 }],
-        'interaction-to-next-paint':  ['error', { maxNumericValue: 200 }],
-        'total-blocking-time':        ['error', { maxNumericValue: 200 }],
-      },
+      assertMatrix: [
+        {
+          // All routes except home — zero WebGL, score perf=100 even on
+          // SwiftShader. Hard ERROR limits are reliable here. RC-1 §3.
+          matchingUrlPattern: 'http://localhost/.+',
+          assertions: {
+            'cumulative-layout-shift':   ['error', { maxNumericValue: 0.02 }],
+            'largest-contentful-paint':  ['error', { maxNumericValue: 2500 }],
+            'interaction-to-next-paint': ['error', { maxNumericValue: 200 }],
+            'total-blocking-time':       ['error', { maxNumericValue: 200 }],
+          },
+        },
+        {
+          // Home route (/) — WebGL engine boot inflates LCP and TBT to nonsense
+          // on SwiftShader (observed TBT ~155 s lab). CLS stays ERROR because it
+          // is deterministic and unaffected by WebGL rendering. LCP / INP / TBT
+          // are WARN-only until INPUTS-NEEDED #8 (real rendering hardware). RC-1 §3.
+          matchingUrlPattern: 'http://localhost/$',
+          assertions: {
+            'cumulative-layout-shift':   ['error', { maxNumericValue: 0.02 }],
+            'largest-contentful-paint':  ['warn',  { maxNumericValue: 2500 }],
+            'interaction-to-next-paint': ['warn',  { maxNumericValue: 200 }],
+            'total-blocking-time':       ['warn',  { maxNumericValue: 200 }],
+          },
+        },
+      ],
     },
     upload: {
       // Keep reports as local filesystem files; CI archives the whole dir.
