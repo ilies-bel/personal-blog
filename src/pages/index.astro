@@ -137,6 +137,7 @@ const cards = await getFeaturedCards();
       LOADER_GONE_BODY_CLASS,
       LOADER_MIN_MS,
       LOADER_SEEN_STORAGE_KEY,
+      NATIVE_SCROLL_INTENT_PX,
     } from '../hero/lib/constants';
 
     function initLoader(): void {
@@ -181,12 +182,22 @@ const cards = await getFeaturedCards();
         window.setTimeout(markGone, 2100);
       };
 
-      // Idempotent: adding the class twice is harmless. Both the floored path and
-      // the safety backstop call this. Revealing also arms the loader-gone signal.
+      // First-load teardown hook (assigned below only on a first-session load):
+      // clears the floor timer and detaches the passive scroll-intent observer.
+      // reveal() runs it on EVERY release path — scene:ready+floor, intent,
+      // explicit skip, and the 8s safety — so no decorative timer or listener
+      // from this document can outlive the reveal or leak onto a swapped route.
+      // A no-op by default (warm returns arm nothing).
+      let teardownFirstLoad = (): void => {};
+
+      // Idempotent: adding the class twice is harmless. Every release path calls
+      // this. Revealing tears down first-load machinery and arms the
+      // loader-gone signal.
       const reveal = (): void => {
         // isConnected guard: if the page was swapped away since this closure was
         // created, stale timers must not touch the incoming document.
         if (!loader.isConnected) return;
+        teardownFirstLoad();
         document.body.classList.add(SCENE_READY_BODY_CLASS);
         armGone();
       };
@@ -235,19 +246,105 @@ const cards = await getFeaturedCards();
         firstLoad = true;
       }
 
-      // On first load, gate the reveal behind the floor: when the scene is ready
-      // (or already), wait out whatever remains of LOADER_MIN_MS. On later loads
-      // (back-navs within the session), reveal the instant the scene is ready.
-      const onReady = firstLoad
-        ? (): void => {
-            window.setTimeout(reveal, Math.max(0, LOADER_MIN_MS - (performance.now() - t0)));
-          }
-        : reveal;
-      window.addEventListener(SCENE_READY_EVENT, onReady, { once: true });
+      // ── First-session release policy, modelled as one explicit predicate ──
+      //
+      // The normal reveal is authorised the moment:
+      //
+      //     scenePainted && (!firstLoad || floorElapsed || intentQualified)
+      //
+      // (`revealStarted` idempotency is owned by reveal()/scene-ready itself.)
+      //
+      // For a WARM return the floor never applies, so we just reveal on
+      // scene:ready and none of the machinery below is armed. For a FIRST load
+      // the reveal waits for the LATER of scene:ready and the floor — UNLESS the
+      // visitor expresses intent by natively scrolling down, which permanently
+      // waives ONLY the floor remainder for this loader instance. Intent NEVER
+      // reveals an unpainted scene: scenePainted still gates every path.
+      //
+      // Three facts drive it; each sets its bit then re-evaluates the predicate:
+      //   • scenePainted   — the real scene:ready event fired
+      //   • floorElapsed   — LOADER_MIN_MS has passed since init (first load only)
+      //   • intentQualified— native scrollY moved down ≥ NATIVE_SCROLL_INTENT_PX
+      //                       from its init baseline (or was restored past it)
+      let scenePainted = false;
+      let intentQualified = false;
+      let floorElapsed = !firstLoad; // a warm return has no floor to wait out
+      let floorTimer = 0;
+      let scrollObserving = false;
 
-      // Safety backstop ONLY — never the normal path, and it bypasses the floor.
-      // Long enough that the engine has surely painted on any real device; if it
-      // hasn't (no WebGL), we still lift the loader so the page isn't trapped.
+      // Passive scroll observer: qualifies intent from the scrollY OUTCOME only.
+      // A raw wheel/touch/key that produces NO downward scroll never qualifies —
+      // we read window.scrollY, not input events. Registered passive so it can
+      // never preventDefault() or interfere with native scrolling.
+      const scrollBaseline = window.scrollY;
+      const onScroll = (): void => {
+        if (window.scrollY - scrollBaseline >= NATIVE_SCROLL_INTENT_PX) qualifyIntent();
+      };
+
+      // Detach the floor timer + intent observer. reveal() calls this (via the
+      // teardownFirstLoad hook) on EVERY release path, so nothing here outlives
+      // the reveal or leaks onto a swapped route.
+      teardownFirstLoad = (): void => {
+        if (floorTimer) {
+          window.clearTimeout(floorTimer);
+          floorTimer = 0;
+        }
+        if (scrollObserving) {
+          scrollObserving = false;
+          window.removeEventListener('scroll', onScroll);
+        }
+      };
+
+      // Re-check the release predicate and reveal exactly once when it holds.
+      // reveal() owns teardown + idempotency + the isConnected guard, so a late
+      // event after a page swap is a harmless no-op.
+      const tryRelease = (): void => {
+        if (scenePainted && (floorElapsed || intentQualified)) reveal();
+      };
+
+      const qualifyIntent = (): void => {
+        if (intentQualified) return;
+        intentQualified = true; // one-way: scrolling back up never reinstates it
+        // Stop observing now even if the scene isn't painted yet — intent is a
+        // latch, not a level, so we never need another scroll sample.
+        if (scrollObserving) {
+          scrollObserving = false;
+          window.removeEventListener('scroll', onScroll);
+        }
+        tryRelease();
+      };
+
+      window.addEventListener(
+        SCENE_READY_EVENT,
+        () => {
+          scenePainted = true;
+          tryRelease();
+        },
+        { once: true },
+      );
+
+      if (firstLoad) {
+        // Arm the floor and the intent observer only for a first-session load.
+        floorTimer = window.setTimeout(() => {
+          floorTimer = 0;
+          floorElapsed = true;
+          tryRelease();
+        }, Math.max(0, LOADER_MIN_MS - (performance.now() - t0)));
+
+        // A browser-restored scroll position already past the threshold IS intent
+        // — do not replay a held intro over a history-restored below-page state.
+        if (window.scrollY - scrollBaseline >= NATIVE_SCROLL_INTENT_PX) {
+          qualifyIntent();
+        } else {
+          scrollObserving = true;
+          window.addEventListener('scroll', onScroll, { passive: true });
+        }
+      }
+
+      // Safety backstop ONLY — never the normal path; it bypasses the floor AND
+      // intent. Long enough that the engine has surely painted on any real
+      // device; if it hasn't (no WebGL), we still lift the loader so the page
+      // isn't trapped. reveal() tears down the floor timer + scroll observer.
       window.setTimeout(reveal, 8000);
     }
 

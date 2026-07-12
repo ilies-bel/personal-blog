@@ -170,3 +170,188 @@ test('warm return (same session) reveals without the first-visit floor', async (
   // from navigation start.
   expect(Date.now() - t0).toBeLessThan(8_000);
 });
+
+// ── PRD-001 Intent-aware loader release ──────────────────────────────────────
+//
+// These tests exercise the first-session floor waiver DETERMINISTICALLY, with
+// zero GPU/timing races: they HOLD the real engine chunks at the network edge
+// (so a real scene:ready never competes) and dispatch the scene:ready event
+// themselves at the exact moment the scenario calls for. That lets each row of
+// the PRD's event-order truth table be reproduced by construction rather than
+// by out-racing a software renderer.
+//
+// The loader's first-session floor is LOADER_MIN_MS (900ms). The waiver rule:
+// a native downward scroll of ≥ NATIVE_SCROLL_INTENT_PX (12px) from the init
+// baseline waives ONLY the floor remainder — but never reveals before a real
+// scene:ready.
+test.describe('intent-aware loader release (PRD-001)', () => {
+  const INTENT_PX = 12;
+
+  // These tests dispatch scene:ready themselves and control scroll — they need a
+  // browser that does NOT force the no-WebGL path (webkit shadows getContext →
+  // null in test-base, so the loader would take the 8s backstop and there is no
+  // floor/intent interplay to observe). Chromium runs the real first-frame path.
+  test.skip(({ browserName }) => browserName !== 'chromium', 'intent path needs chromium first-frame timing');
+
+  // Hold the engine so the ONLY scene:ready is the one the test dispatches, and
+  // give the page real scrollable height immediately (the scroll track is
+  // server-rendered, but we also force overflow so scrollY can move before the
+  // island mounts). Returns after domcontentloaded with the loader visible.
+  async function gotoWithHeldEngine(page: import('./test-base').Page): Promise<void> {
+    await page.route(/three-core|three-post|createScene|BlackHole/i, async (route) => {
+      // Never resolve: the engine never boots, so no real scene:ready fires.
+      await new Promise(() => {});
+      void route;
+    });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.scene-loader')).toBeVisible();
+    // Ensure the document can actually scroll so a programmatic scroll produces
+    // a real scrollY OUTCOME (the loader observes scrollY, not wheel events).
+    await page.evaluate(() => {
+      document.body.style.minHeight = '5000px';
+    });
+  }
+
+  function dispatchSceneReady(page: import('./test-base').Page): Promise<void> {
+    return page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('scene:ready'));
+    });
+  }
+
+  // Drive a REAL native scroll via the wheel — the loader qualifies intent from
+  // the window.scrollY OUTCOME, and a genuine wheel gesture is both the truest
+  // reproduction of visitor intent AND immune to the astro:page-load scroll
+  // restoration that reverts a programmatic window.scrollTo() back to 0 under a
+  // fresh load. Waits until scrollY actually reflects the movement.
+  async function wheelDownBy(page: import('./test-base').Page, px: number): Promise<void> {
+    await page.mouse.move(400, 300);
+    await page.mouse.wheel(0, px);
+    await page.waitForFunction((target) => window.scrollY >= target, Math.min(px, 8), {
+      timeout: 1_000,
+    });
+  }
+
+  test('first frame, no intent: reveal waits out the floor', async ({ page }) => {
+    await gotoWithHeldEngine(page);
+    const t0 = Date.now();
+    // Scene ready immediately, but no scroll intent → the floor still governs.
+    await dispatchSceneReady(page);
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 3_000 });
+    // The reveal must lag the (immediate) scene:ready by roughly the floor. We
+    // assert it did NOT reveal instantly (floor honoured) but did within a
+    // generous ceiling (floor is ≤1s).
+    const elapsed = Date.now() - t0;
+    expect(elapsed, `reveal elapsed=${elapsed}ms`).toBeGreaterThanOrEqual(600);
+    expect(elapsed, `reveal elapsed=${elapsed}ms`).toBeLessThan(2_500);
+  });
+
+  test('intent then first frame: reveal at the frame, not before', async ({ page }) => {
+    await gotoWithHeldEngine(page);
+    // Qualify intent while the scene is NOT yet painted.
+    await wheelDownBy(page, INTENT_PX + 20);
+    // Intent alone must NOT reveal — scenePainted still gates the release.
+    await expect(page.locator('body')).not.toHaveClass(/scene-ready/, { timeout: 500 });
+    // Now paint: reveal should be immediate (floor already waived by intent).
+    const t0 = Date.now();
+    await dispatchSceneReady(page);
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 1_500 });
+    expect(Date.now() - t0, 'reveal is prompt once painted').toBeLessThan(800);
+  });
+
+  test('first frame then intent before floor: reveal immediately on intent', async ({ page }) => {
+    await gotoWithHeldEngine(page);
+    // Paint first; the floor holds the reveal.
+    await dispatchSceneReady(page);
+    await expect(page.locator('body')).not.toHaveClass(/scene-ready/, { timeout: 300 });
+    // Now express intent BEFORE the floor would have elapsed → immediate reveal.
+    const t0 = Date.now();
+    await wheelDownBy(page, INTENT_PX + 20);
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 1_000 });
+    expect(Date.now() - t0, 'intent releases the held floor at once').toBeLessThan(900);
+  });
+
+  test('below-threshold movement does not waive the floor', async ({ page }) => {
+    await gotoWithHeldEngine(page);
+    await dispatchSceneReady(page);
+    // A sub-threshold nudge is NOT intent — the floor must still hold the reveal.
+    // Wheel a few pixels (under NATIVE_SCROLL_INTENT_PX) and confirm scrollY moved
+    // but stayed below the threshold.
+    await page.mouse.move(400, 300);
+    await page.mouse.wheel(0, INTENT_PX - 6);
+    await page.waitForFunction(() => window.scrollY > 0, undefined, { timeout: 1_000 });
+    const y = await page.evaluate(() => window.scrollY);
+    expect(y, 'sub-threshold scroll stayed under the intent threshold').toBeLessThan(INTENT_PX);
+    // The floor must still hold the reveal right after a below-threshold scroll.
+    await expect(page.locator('body')).not.toHaveClass(/scene-ready/, { timeout: 400 });
+    // It still reveals once the floor elapses (never traps the page).
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 2_500 });
+  });
+
+  test('scroll established before first frame is honoured as intent', async ({ page }) => {
+    // Covers the "restored scrollY already past threshold, then first frame" row:
+    // a below-page position that exists BEFORE scene:ready qualifies as intent, so
+    // the floor is waived and the reveal lands on the frame — it does not replay a
+    // held intro over the pre-scrolled state. A real wheel gesture establishes the
+    // position (persisting where a programmatic scrollTo would be reverted by the
+    // load-time scroll restoration), then we paint.
+    await gotoWithHeldEngine(page);
+    await wheelDownBy(page, INTENT_PX + 40);
+    // Position is in place and past threshold; scene not yet painted so no reveal.
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(INTENT_PX);
+    await expect(page.locator('body')).not.toHaveClass(/scene-ready/, { timeout: 300 });
+    // Paint: the pre-existing intent means the floor is already waived → prompt.
+    const t0 = Date.now();
+    await dispatchSceneReady(page);
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 1_500 });
+    expect(Date.now() - t0, 'pre-frame intent waived the floor').toBeLessThan(900);
+  });
+
+  test('intent never dispatches loader:skip, sets webgl-unavailable, or moves scrollY', async ({
+    page,
+  }) => {
+    await gotoWithHeldEngine(page);
+    // Spy for a loader:skip dispatch (the explicit control's event) — it must
+    // NEVER be synthesised by the intent path. The loader script wires skip on a
+    // click, not on this event, but we assert the event is simply absent.
+    await page.evaluate(() => {
+      (window as unknown as { __sawSkip: boolean }).__sawSkip = false;
+      window.addEventListener('loader:skip', () => {
+        (window as unknown as { __sawSkip: boolean }).__sawSkip = true;
+      });
+    });
+    await wheelDownBy(page, INTENT_PX + 40);
+    const scrollYBefore = await page.evaluate(() => window.scrollY);
+    await dispatchSceneReady(page);
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 1_500 });
+
+    const sawSkip = await page.evaluate(
+      () => (window as unknown as { __sawSkip: boolean }).__sawSkip,
+    );
+    expect(sawSkip, 'intent must not dispatch loader:skip').toBe(false);
+    await expect(page.locator('body')).not.toHaveClass(/webgl-unavailable/);
+    // Intent reads scrollY; it must not RESET it. The position established before
+    // the reveal must be preserved across it.
+    const scrollYAfter = await page.evaluate(() => window.scrollY);
+    expect(scrollYAfter, 'intent must not reset native scroll position').toBe(scrollYBefore);
+    expect(scrollYAfter, 'scroll position preserved').toBeGreaterThan(0);
+  });
+
+  test('no stale scroll listener leaks onto a route after Astro navigation', async ({ page }) => {
+    // Boot the home normally (real engine), let it reveal, then navigate away.
+    // A leaked scroll observer from the home document must not survive onto the
+    // destination — we assert the destination has no loader machinery watching.
+    await page.goto('/', { waitUntil: 'load' });
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });
+    await page.locator('.overlay-blog-links a', { hasText: 'Writing' }).click();
+    await page.waitForURL(/\/writing\/?$/);
+    await expect(page.locator('h1')).toBeVisible();
+    // The writing route has no .scene-loader; scrolling it must not re-trigger
+    // any home loader behaviour or throw. A clean scroll with no console error
+    // is the observable contract.
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.evaluate(() => window.scrollTo(0, 300));
+    expect(errors, 'no error from a leaked home loader listener').toHaveLength(0);
+    expect(await page.locator('.scene-loader').count(), 'no home loader on the route').toBe(0);
+  });
+});

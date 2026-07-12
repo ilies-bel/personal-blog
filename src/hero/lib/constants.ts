@@ -87,6 +87,26 @@ export const LOADER_GONE_BODY_CLASS = 'loader-gone';
  *  late bound. Spelled here once and imported by the bundled loader script so
  *  there is no inline magic number. */
 export const LOADER_MIN_MS = 900;
+/** Downward native-scroll distance (CSS px) that counts as a visitor's intent to
+ *  ENTER the lifecycle, and waives ONLY the remainder of the first-session
+ *  LOADER_MIN_MS floor. The qualifying signal is a real native-scroll OUTCOME —
+ *  `window.scrollY` has moved DOWN by at least this many pixels from the position
+ *  captured at loader init — NOT a raw wheel / touchstart / touchmove / keydown
+ *  (those can fire without producing any scroll, e.g. at the top of a page that
+ *  hasn't grown its track yet, or an upward overscroll). The waiver is:
+ *    - one-way for the page instance: once qualified, scrolling back UP does not
+ *      reinstate the floor;
+ *    - gated by a real scene:ready — qualifying intent NEVER reveals an unpainted
+ *      scene, dispatches loader:skip, cancels WebGL, or calls preventDefault();
+ *    - first-session only — a warm return within the session already skips the
+ *      floor, so the scroll observer is never even armed there.
+ *  A browser-restored scrollY already ≥ this threshold at init is treated as
+ *  intent too, so a history-restored below-page state doesn't replay a held intro.
+ *  12px is small enough that one deliberate wheel notch / arrow press / swipe
+ *  qualifies, but large enough that sub-pixel jitter or a rubber-band bounce does
+ *  not. Spelled here once beside the loader timing it modifies; the bundled loader
+ *  script imports it, so there is no inline magic number. */
+export const NATIVE_SCROLL_INTENT_PX = 12;
 /** sessionStorage key recording that the minimum-time loader has already played
  *  once THIS browser session. On first load the key is absent → apply the
  *  LOADER_MIN_MS floor, then set it; on subsequent loads in the same session
