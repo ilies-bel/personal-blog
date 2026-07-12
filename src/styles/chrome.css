@@ -228,7 +228,12 @@
 }
 .site-footer-links {
   display: flex;
-  gap: 1.6rem;
+  /* wrap + a modest row gap: at 320px the mono-caps link row sits within ~3px
+     of the viewport edge, and Linux font rasterization draws IBM Plex Mono a
+     hair wider than macOS — without wrap the last link crosses the edge and
+     becomes horizontal document overflow (e2e/reflow.spec.ts, CI-only). */
+  flex-wrap: wrap;
+  gap: 0.5rem 1.6rem;
 }
 
 .site-footer a {
