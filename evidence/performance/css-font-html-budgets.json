@@ -1,9 +1,9 @@
 {
-  "generated": "2026-07-10T17:41:00.924Z",
-  "dist": "/Users/ib472e5l/project/perso/personal-blog/.mars/worktrees/mars-52f16ed6/dist",
+  "generated": "2026-07-11T20:50:47.367Z",
+  "dist": "/Users/ib472e5l/project/perso/personal-blog/.mars/worktrees/mars-e9bd2537/dist",
   "css": {
     "strategy": "inlineStylesheets:always — no external .css files; CSS is embedded in <style> tags",
-    "maxGzKiB": 24.09,
+    "maxGzKiB": 24.65,
     "targetKiB": 35,
     "hardKiB": 50,
     "passTarget": true,
@@ -11,39 +11,39 @@
     "routes": [
       {
         "route": "projects/index.html",
-        "gzKiB": 24.09
+        "gzKiB": 24.65
       },
       {
         "route": "graveyard/index.html",
-        "gzKiB": 22.97
+        "gzKiB": 23.54
       },
       {
         "route": "404.html",
-        "gzKiB": 22.91
+        "gzKiB": 23.46
       },
       {
         "route": "writing/index.html",
-        "gzKiB": 22.83
+        "gzKiB": 23.38
       },
       {
         "route": "posts/memory-leak-search-and-destroy/index.html",
-        "gzKiB": 22.63
+        "gzKiB": 23.18
       },
       {
         "route": "posts/thanks-for-scrolling-to-the-bottom/index.html",
-        "gzKiB": 22.62
+        "gzKiB": 23.18
       },
       {
         "route": "about/index.html",
-        "gzKiB": 22.45
+        "gzKiB": 23.01
       },
       {
         "route": "behind-the-build/index.html",
-        "gzKiB": 22.36
+        "gzKiB": 22.91
       },
       {
         "route": "index.html",
-        "gzKiB": 22.17
+        "gzKiB": 22.73
       }
     ]
   },
@@ -63,7 +63,7 @@
     "note": "font-display:swap confirmed on all @font-face rules; preloaded fonts fetch before paint to eliminate FOUT on hero overlay text"
   },
   "html": {
-    "maxGzKiB": 39.88,
+    "maxGzKiB": 40.43,
     "targetKiB": 60,
     "hardKiB": 100,
     "passTarget": true,
@@ -71,39 +71,39 @@
     "routes": [
       {
         "route": "behind-the-build/index.html",
-        "gzKiB": 39.88
+        "gzKiB": 40.43
       },
       {
         "route": "posts/memory-leak-search-and-destroy/index.html",
-        "gzKiB": 32.8
+        "gzKiB": 33.36
       },
       {
         "route": "index.html",
-        "gzKiB": 32.63
+        "gzKiB": 33.18
       },
       {
         "route": "projects/index.html",
-        "gzKiB": 31.02
+        "gzKiB": 32.05
       },
       {
         "route": "graveyard/index.html",
-        "gzKiB": 30.42
+        "gzKiB": 30.97
       },
       {
         "route": "posts/thanks-for-scrolling-to-the-bottom/index.html",
-        "gzKiB": 29.4
+        "gzKiB": 29.99
       },
       {
         "route": "writing/index.html",
-        "gzKiB": 28.65
+        "gzKiB": 29.56
       },
       {
         "route": "about/index.html",
-        "gzKiB": 27.75
+        "gzKiB": 28.68
       },
       {
         "route": "404.html",
-        "gzKiB": 27.27
+        "gzKiB": 27.84
       }
     ]
   }
