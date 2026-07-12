@@ -148,7 +148,19 @@ html.js .static-edition {
   transition: opacity 0.3s var(--ease-out-quint) 0s;
 }
 /* The pale speck — the opening pale-blue dot, rendered as a small soft disc with a
-   faint halo. It breathes (scale + glow) so the screen feels alive while we wait. */
+   faint halo. It breathes (scale + glow) so the screen feels alive while we wait.
+
+   SPECK→EVENT-HORIZON BRIDGE (PRD-002): the speck is centred, and the live scene's
+   opening black-hole composition — plus its own centred .bh-focus-dot (hero.css),
+   which rises at exactly this point on body.scene-ready.at-opening — are centred
+   too. So the credible, always-available spatial correspondence is a CENTRED one:
+   on release the speck stops breathing, contracts toward a point, and emits ONE
+   brief gold-tinted photon-ring bloom (a lensing cue at the edge of the forming
+   event horizon) as it hands off to the real frame rising beneath the veil. This
+   is the PRD's supported default (no projected camera coordinate, no new asset,
+   no new readiness source); the box-shadow ring + transform are compositor work
+   that rides the EXISTING body.scene-ready class inside the Stage-1 mark window.
+   The transition here is inert until scene-ready flips the state below. */
 .scene-loader-dot {
   width: 9px;
   height: 9px;
@@ -156,6 +168,12 @@ html.js .static-edition {
   background: var(--fg);
   box-shadow: 0 0 12px 2px color-mix(in oklch, var(--fg) 45%, transparent);
   animation: scene-loader-pulse 2s var(--ease-out-quint) infinite;
+  /* Bridge shape (engaged on body.scene-ready): a lensing contract + a single
+     photon-ring bloom. transform + box-shadow only — no layout, no new frame. */
+  transition:
+    transform 0.34s var(--ease-out-quint),
+    box-shadow 0.34s var(--ease-out-quint);
+  will-change: transform;
 }
 .scene-loader-name {
   font-family: var(--font-mono);
@@ -222,6 +240,20 @@ body.scene-ready .scene-loader {
 body.scene-ready .scene-loader-mark {
   opacity: 0;
 }
+/* SPECK→EVENT-HORIZON BRIDGE — the optical hand-off, riding the SAME scene-ready
+   flip that governs Stage 1 (no new class, timer, or reveal condition). The speck
+   stops breathing, contracts toward the centred event-horizon point, and flares
+   ONE restrained gold photon-ring bloom (the lensing cue) as the mark fades over
+   the real black-hole frame rising beneath the veil. Because the bloom rides the
+   0.3s mark-fade, the ring is only ever seen mid-dissolve — it never lingers as an
+   ornament and is gone with the mark before the glide. Compositor-only. */
+body.scene-ready .scene-loader-dot {
+  animation: none;                        /* release the breathing pulse */
+  transform: scale(0.28);                 /* contract toward a point (lensing pull) */
+  box-shadow:
+    0 0 8px 1px color-mix(in oklch, var(--fg) 35%, transparent),
+    0 0 22px 6px color-mix(in oklch, var(--accent) 42%, transparent);
+}
 /* STAGE 3 — the dark background fades only after the glide completes (the delay on the
    ::before transition above = glide start + glide duration). This reveals the scene. */
 body.scene-ready .scene-loader::before {
@@ -233,7 +265,19 @@ body.scene-ready .scene-loader::before {
    is removed here so it does not sit solid waiting for a glide that never happens). Both
    start on scene-ready with no staging; the dot+name's slightly shorter fade simply
    clears a hair before the background, keeping it calm rather than abrupt. */
-:where(html[data-motion='reduced']) .scene-loader-dot { animation: none; }
+/* Reduced motion: NO decorative travel. Neutralise the speck→event-horizon bridge
+   (no contract, no photon-ring flare, no transition) — the dot simply fades with
+   the mark. The steady speck crossfades calmly into the real frame; PRD-002's
+   optical bridge is motion-additive and must not appear here. */
+:where(html[data-motion='reduced']) .scene-loader-dot {
+  animation: none;
+  transition: none;
+  will-change: auto;
+}
+:where(html[data-motion='reduced']) body.scene-ready .scene-loader-dot {
+  transform: none;                        /* no lensing contract */
+  box-shadow: 0 0 12px 2px color-mix(in oklch, var(--fg) 45%, transparent);
+}
 :where(html[data-motion='reduced']) .scene-loader::before {
   transition: opacity 0.7s var(--ease-out-quint) 0s;
 }
