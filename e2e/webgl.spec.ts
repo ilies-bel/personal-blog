@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './test-base';
 
 // WebGL GOVERNANCE (P4): the site caps itself at TWO simultaneous WebGL
 // contexts, reading routes ship zero three.js, and mount/unmount cycles do not
@@ -111,11 +111,19 @@ test('behind-the-build at rest: figures are captures, ≤2 real contexts ever', 
   expect(census.live, 'live GL contexts at rest').toBeLessThanOrEqual(2);
 });
 
-test('activating three figures sequentially never exceeds 2 live contexts', async ({ page }) => {
+test('activating three figures sequentially never exceeds 2 live contexts', async ({ page, browserName }) => {
   // Three engine boots on a software renderer — give the whole journey a real
   // budget (test.slow() alone caps at 3× the 30s default, less than one boot
   // can take under SwiftShader).
   test.setTimeout(360_000);
+  // Firefox and webkit do not expose a working WebGL implementation on Linux CI
+  // (firefox hangs indefinitely waiting for GPU initialisation; webkit uses our
+  // disabled-WebGL fixture). The figure activation flow requires live WebGL
+  // contexts; limit this test to chromium/SwiftShader where it is reliable.
+  test.skip(
+    browserName !== 'chromium',
+    'figure WebGL activation requires a working GL context — only chromium/SwiftShader is reliable in CI',
+  );
   await installCensus(page);
   await page.goto('/behind-the-build', { waitUntil: 'load' });
   await page.waitForTimeout(1500);

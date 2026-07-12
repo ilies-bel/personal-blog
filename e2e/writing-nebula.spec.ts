@@ -24,7 +24,7 @@
  *   • Graveyard and About remain discoverable in both views
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test-base'
 
 test.describe('writing nebula map — EXP-027', () => {
   // -------------------------------------------------------------------------

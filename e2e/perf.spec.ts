@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 import baseline from './perf-baseline.json' with { type: 'json' };
 
 // FPS REGRESSION BASELINE (P10).

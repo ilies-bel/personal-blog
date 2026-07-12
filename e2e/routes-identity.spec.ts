@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // P9 ROUTE IDENTITY — every route carries its authored world:
 //   • body[data-route] (BaseLayout) — the scoping attribute the per-route

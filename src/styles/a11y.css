@@ -109,6 +109,13 @@
     min-width: 44px;
   }
 
+  /* Writing view toggle buttons (EXP-027 — list / nebula map). The default
+     padding gives ~27 px height; pin the box to ≥44 px on touch so the WCAG
+     2.5.8 44 px target is met without changing the type size. */
+  .writing-view-btn {
+    min-height: 44px;
+  }
+
   /* Shader-source drawers (<details>/<summary>, behind-the-build.css). */
   body.behind-the-build .btb-shader-source > summary {
     display: flex;

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // Degraded-mode sweep (P14): the two matrix cells no other suite covered.
 //

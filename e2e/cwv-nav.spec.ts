@@ -20,7 +20,7 @@
 // verifies that JS does not hide, re-render, or steal focus from them during
 // the compilation window.
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 /** PERF-008 hard limit for nav interactivity. */
 const NAV_BUDGET_MS = 2_500;

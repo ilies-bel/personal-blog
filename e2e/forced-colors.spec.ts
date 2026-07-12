@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator } from './test-base';
 
 // FORCED COLORS (P8) — Windows High Contrast / forced-colors: active.
 //

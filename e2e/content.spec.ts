@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // Derived-count contract (P6): every count shown on the site comes from the
 // content collections through getCounts() (src/lib/contentStats.ts) — never a

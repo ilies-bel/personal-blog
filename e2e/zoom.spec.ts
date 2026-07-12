@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './test-base';
 import { CONTENT_ROUTES } from './routes';
 
 // ZOOM + TEXT-SPACING RESILIENCE (P8).

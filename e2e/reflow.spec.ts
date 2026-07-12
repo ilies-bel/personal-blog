@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 import { CONTENT_ROUTES, MOBILE_WIDTHS } from './routes';
 
 // Reflow regression: at every mobile width in the matrix, no route may

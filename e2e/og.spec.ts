@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 import { ALL_ROUTES } from './routes';
 
 // OG-card contract over HTTP (P12): every route advertises a ROUTE-SPECIFIC

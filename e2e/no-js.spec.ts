@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // The no-JS contract: with JavaScript disabled the homepage must be the
 // static edition — identity, labelled primary navigation in the first

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // Visual regression for DETERMINISTIC states only — the static edition and
 // the 404 page render identically run-to-run (no WebGL, no animation), so

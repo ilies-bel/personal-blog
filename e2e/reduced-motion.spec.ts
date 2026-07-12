@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // The reduced-motion contract: an OS-level prefers-reduced-motion visitor
 // gets the poster edition — and the heavy Three.js engine chunks are never

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './test-base';
 import { ALL_ROUTES } from './routes';
 
 // 44×44px COARSE-POINTER TARGETS (P8, WCAG 2.5.8 at the program's 44px bar).

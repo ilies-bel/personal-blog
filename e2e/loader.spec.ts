@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 // Loader honesty: the intro loader must lift on the scene's real readiness
 // signal (or its backstop), never trap the page, and hand interactivity over
