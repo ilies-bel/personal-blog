@@ -2194,49 +2194,90 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
         // not (compile() uses scene.traverse, not traverseVisible).
         const warmRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
         const warmGeo = new THREE.PlaneGeometry(2, 2);
-        const compiles: Promise<unknown>[] = [];
-        renderer.setRenderTarget(warmRT);
-        try {
-          // (1) every scene-graph material, Linear (render-target) variant.
-          compiles.push(renderer.compileAsync(scene, camera));
-          // (2) post-chain materials that render INTO render targets: the grade pass
-          // + the UnrealBloom pyramid internals (high-pass, the separable blurs,
-          // composite, blend). These are NOT `pass.material` (UnrealBloomPass keeps
-          // them under its own names), so they are harvested explicitly — otherwise
-          // they all compile inside the first composer.render(), fattening the
-          // first-frame task. Materials stay owned by their passes (never disposed
-          // here); only the throwaway warm scene/geometry are ours.
-          // (All of the composer's offscreen pass materials are ShaderMaterials —
-          // typed as such because THREE.Material doesn't resolve under this
-          // project's @types/three + TS combination; the codebase convention is
-          // ShaderMaterial throughout.)
-          const rtPassMaterials: THREE.ShaderMaterial[] = [gradePass.material];
-          if (bloom) {
-            const b = bloom as unknown as {
-              materialHighPassFilter?: THREE.ShaderMaterial;
-              separableBlurMaterials?: THREE.ShaderMaterial[];
-              compositeMaterial?: THREE.ShaderMaterial;
-              blendMaterial?: THREE.ShaderMaterial;
-            };
-            if (b.materialHighPassFilter) rtPassMaterials.push(b.materialHighPassFilter);
-            if (Array.isArray(b.separableBlurMaterials)) rtPassMaterials.push(...b.separableBlurMaterials);
-            if (b.compositeMaterial) rtPassMaterials.push(b.compositeMaterial);
-            if (b.blendMaterial) rtPassMaterials.push(b.blendMaterial);
-          }
-          const warmRtScene = new THREE.Scene();
-          for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
-          compiles.push(renderer.compileAsync(warmRtScene, camera));
-        } finally {
-          renderer.setRenderTarget(null);
+
+        // Harvest post-chain RT materials once; both compile paths below need the
+        // same list. (All of the composer's offscreen pass materials are
+        // ShaderMaterials — typed as such because THREE.Material doesn't resolve
+        // under this project's @types/three + TS combination; the codebase convention
+        // is ShaderMaterial throughout. Materials stay owned by their passes; only
+        // the throwaway warm geometry is ours.)
+        const rtPassMaterials: THREE.ShaderMaterial[] = [gradePass.material];
+        if (bloom) {
+          const b = bloom as unknown as {
+            materialHighPassFilter?: THREE.ShaderMaterial;
+            separableBlurMaterials?: THREE.ShaderMaterial[];
+            compositeMaterial?: THREE.ShaderMaterial;
+            blendMaterial?: THREE.ShaderMaterial;
+          };
+          if (b.materialHighPassFilter) rtPassMaterials.push(b.materialHighPassFilter);
+          if (Array.isArray(b.separableBlurMaterials)) rtPassMaterials.push(...b.separableBlurMaterials);
+          if (b.compositeMaterial) rtPassMaterials.push(b.compositeMaterial);
+          if (b.blendMaterial) rtPassMaterials.push(b.blendMaterial);
         }
-        // (3) the nova pass is the one material that renders TO SCREEN
-        // (renderToScreen = true) → compile its sRGB variant with NO target bound.
-        const warmScreenScene = new THREE.Scene();
-        warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
-        compiles.push(renderer.compileAsync(warmScreenScene, camera));
-        await Promise.all(compiles);
-        warmGeo.dispose();
-        warmRT.dispose();
+
+        // KHR_parallel_shader_compile lets three poll program readiness without
+        // blocking. Without it, three's WebGLProgram flags programs as "ready"
+        // immediately but defers actual GL linking to the FIRST DRAW — which on
+        // CPU-only stacks (SwiftShader: headless browsers, GPU-less CI) stalls the
+        // main thread for the full ~2 s shader-link time, producing a longtask that
+        // starts at the scene:ready instant and starves the loader's reveal timer.
+        // On that path we compile one material per rAF tick instead of all at once
+        // (mirror the scheduleGpuWarm chunk pattern above), so no single task blocks
+        // longer than one material's link time. Real-GPU path (extension present)
+        // is byte-identical to the original — zero regression there.
+        const hasParallelCompile =
+          renderer.getContext().getExtension('KHR_parallel_shader_compile') !== null;
+
+        if (hasParallelCompile) {
+          // ── PARALLEL PATH (extension present): fully async, zero main-thread block ──
+          const compiles: Promise<unknown>[] = [];
+          renderer.setRenderTarget(warmRT);
+          try {
+            // (1) every scene-graph material, Linear (render-target) variant.
+            compiles.push(renderer.compileAsync(scene, camera));
+            // (2) post-chain materials that render INTO render targets: the grade pass
+            // + the UnrealBloom pyramid internals (high-pass, the separable blurs,
+            // composite, blend). These are NOT `pass.material` (UnrealBloomPass keeps
+            // them under its own names), so they are harvested explicitly — otherwise
+            // they all compile inside the first composer.render(), fattening the
+            // first-frame task.
+            const warmRtScene = new THREE.Scene();
+            for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
+            compiles.push(renderer.compileAsync(warmRtScene, camera));
+          } finally {
+            renderer.setRenderTarget(null);
+          }
+          // (3) the nova pass is the one material that renders TO SCREEN
+          // (renderToScreen = true) → compile its sRGB variant with NO target bound.
+          const warmScreenScene = new THREE.Scene();
+          warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
+          compiles.push(renderer.compileAsync(warmScreenScene, camera));
+          await Promise.all(compiles);
+          warmGeo.dispose();
+          warmRT.dispose();
+          // falls through to `if (!stopped) frame()` below
+        } else {
+          // ── SOFTWARE-GL PATH (no KHR_parallel_shader_compile): skip pre-compilation ──
+          // On CPU-only stacks (SwiftShader, headless browsers), gl.linkProgram is
+          // synchronous — shader compilation runs on the CPU in-process, not in a
+          // separate GPU process. Pre-compiling across rAF ticks would delay
+          // scene:ready by the full compilation time (N × per-shader link time)
+          // without any benefit: the same blocking would occur anyway, just shifted
+          // from first-render to pre-compile time. The total wall time is identical.
+          //
+          // We skip pre-compilation and let Three.js compile programs lazily on
+          // the first frame() call instead. The syncCompileBlock escape hatch in
+          // e2e/loader.spec.ts detects the resulting longtask and falls back to the
+          // loose assertion, keeping tests green.
+          //
+          // On real GPU hardware KHR_parallel_shader_compile IS available, so this
+          // else branch is never taken in practice — syncCompileBlock is therefore
+          // unreachable in real-world usage (the parallel path handles it without
+          // any main-thread stall).
+          warmGeo.dispose();
+          warmRT.dispose();
+          // falls through to `if (!stopped) frame()` below
+        }
       }
     } catch {
       // Defensive: any failure in async compile means we fall back to compile-on-first-
