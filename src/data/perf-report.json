@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-07-11",
-  "commit": "3f78679",
+  "generatedAt": "2026-07-12",
+  "commit": "4d01efb",
   "bundle": {
-    "heroGraphGzipKiB": 232.4,
+    "heroGraphGzipKiB": 231.4,
     "heroGraphFiles": [
       {
         "name": "three-core.V_QMjIXb.js",
-        "gzipKiB": 124
+        "gzipKiB": 123.1
       },
       {
-        "name": "createScene.658cBIe0.js",
-        "gzipKiB": 103.5
+        "name": "createScene.D7-KfNQ1.js",
+        "gzipKiB": 103.4
       },
       {
         "name": "three-post.CjpyKcsR.js",
@@ -21,63 +21,63 @@
         "gzipKiB": 0.1
       }
     ],
-    "preHeroGzipKiB": 93.6,
+    "preHeroGzipKiB": 93.4,
     "readingRouteMaxGzipKiB": 15.6,
     "perRoute": {
       "/": {
         "kind": "engine",
-        "jsGzipKiB": 93.6,
-        "htmlGzipKiB": 33
+        "jsGzipKiB": 93.4,
+        "htmlGzipKiB": 33.9
       },
       "/404.html": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 27.5
+        "htmlGzipKiB": 28.5
       },
       "/about/": {
         "kind": "reading",
         "jsGzipKiB": 15.6,
-        "htmlGzipKiB": 28.6
+        "htmlGzipKiB": 30.3
       },
       "/behind-the-build/": {
         "kind": "engine",
-        "jsGzipKiB": 89.4,
-        "htmlGzipKiB": 52
+        "jsGzipKiB": 89.3,
+        "htmlGzipKiB": 52.8
       },
       "/contact/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 28.1
+        "htmlGzipKiB": 29.1
       },
       "/graveyard/": {
         "kind": "engine",
-        "jsGzipKiB": 82.6,
-        "htmlGzipKiB": 31.5
+        "jsGzipKiB": 82.5,
+        "htmlGzipKiB": 32.9
       },
       "/posts/memory-leak-search-and-destroy/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 32.2
+        "htmlGzipKiB": 33.2
       },
       "/posts/thanks-for-scrolling-to-the-bottom/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 30.1
+        "htmlGzipKiB": 31.1
       },
       "/projects/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 31.6
+        "htmlGzipKiB": 33.5
       },
       "/writing/": {
         "kind": "reading",
         "jsGzipKiB": 15.3,
-        "htmlGzipKiB": 28.6
+        "htmlGzipKiB": 30.6
       }
     }
   },
   "html": {
-    "maxPageGzipKiB": 52
+    "maxPageGzipKiB": 52.8
   },
   "rasters": {
     "count": 56,
