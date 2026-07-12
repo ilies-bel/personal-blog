@@ -100,7 +100,21 @@ jobs:
           retention-days: 1
 
   lighthouse:
-    name: Lighthouse CI (lab metrics)
+    # PERF-008 lab CWV gate — blocking release-candidate check.
+    #
+    # Two-step enforcement (both must pass to green this job):
+    #   1. `pnpm lhci` — Lighthouse CI collects 3 runs per route with the
+    #      mid-range mobile throttle profile and exits 1 if any HARD LIMIT
+    #      (LCP 2.5s / INP 200ms / CLS 0.10 / TBT 200ms) is exceeded.
+    #      Thresholds and throttle config live in lighthouserc.cjs.
+    #   2. `node scripts/cwv-gate.mjs` — reads the LHCI report JSONs, checks
+    #      the tighter RECORD TARGETS (LCP 2.0s / INP 150ms / CLS 0.02 /
+    #      TBT 150ms), and archives a summary to evidence/performance/.
+    #      Exits 1 only if the hard limits are also violated (second layer).
+    #
+    # Evidence is archived per SHA as the `cwv-lab-<sha>` artifact (90 days).
+    # Field/RUM monitoring is deferred to the release-phase task.
+    name: Lighthouse CI — PERF-008 lab CWV gate
     runs-on: ubuntu-latest
     needs: checks
     steps:
@@ -125,13 +139,20 @@ jobs:
           name: dist
           path: dist
 
-      - name: Lighthouse CI (lhci autorun)
-        # Assertion severities are set in lighthouserc.cjs: CLS ≤0.02 is a hard
-        # error (deterministic); LCP/TBT/byte-weight are WARN because GitHub
-        # runners render through software GL, where wall-clock lab numbers
-        # measure the runner. They harden to errors when the pipeline gets real
-        # hardware (docs/roadmaps/acceptance-gates.md tracks that promotion).
+      - name: Lighthouse CI — collect + enforce hard limits
+        # lighthouserc.cjs: 9 public routes × 3 runs, mid-range mobile throttle
+        # (4× CPU, Slow 4G).  Hard limits: LCP 2.5s / INP 200ms / CLS 0.10 /
+        # TBT 200ms.  Exit 1 if any ERROR assertion is violated.
         run: pnpm lhci
+
+      - name: CWV gate — record targets + evidence archive
+        # Checks record targets (LCP 2.0s / INP 150ms / CLS 0.02 / TBT 150ms),
+        # prints a per-route table, and writes evidence/performance/cwv-lab.json.
+        # Runs even when lhci fails so evidence is always captured.
+        if: always()
+        run: node scripts/cwv-gate.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
 
       - name: Upload Lighthouse reports
         if: always()
@@ -140,6 +161,14 @@ jobs:
           name: lighthouse-reports
           path: .lighthouseci
           retention-days: 7
+
+      - name: Archive CWV evidence per SHA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cwv-lab-${{ github.sha }}
+          path: evidence/performance/cwv-lab.json
+          retention-days: 90
 
   e2e:
     name: Playwright E2E (${{ matrix.project }})
