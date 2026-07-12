@@ -4,7 +4,7 @@
 
 # Security headers — exact values + how to apply them
 
-Generated 2026-07-10 by `scripts/gen-csp-hashes.mjs` from the built `dist/`.
+Generated 2026-07-12 by `scripts/gen-csp-hashes.mjs` from the built `dist/`.
 
 GitHub Pages cannot set custom response headers, and this site is a static
 build — so the real security headers are applied at the edge by **Cloudflare
@@ -18,7 +18,7 @@ dashboard action for the site owner — tracked as input #9 in
 ### Content-Security-Policy
 
 ```
-default-src 'self'; script-src 'self' 'sha256-/hxIIQWyLcEtUD7MUq/0IQnSNRhkXZUa/EjOOcCaSTc=' 'sha256-3ae2aKZbrIMgCRPIThzuUlp0rcVILo8dJZk9o+M+yiI=' 'sha256-Q2BPg90ZMplYY+FSdApNErhpWafg2hcRRbndmvxuL/Q=' 'sha256-RTS1/UGQIM0gORRloMCDqwUBoXGwj9jRgu8/32H4jL0=' 'sha256-SaCkFfPruIdTXT8/97JArQmGxiJAL2o4bBDvSgJ5y3Q=' 'sha256-eIXWvAmxkr251LJZkjniEK5LcPF3NkapbJepohwYRIc=' 'sha256-xTVqFR1HgrF6yrgUxov2eSyLUPUR8XgKtxNaQIaIi1c=' 'sha256-yxW6gZ01YVyHggX8EbobxkxNSB2HxPAwOxEgWM65aVk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+default-src 'self'; script-src 'self' 'sha256-/hxIIQWyLcEtUD7MUq/0IQnSNRhkXZUa/EjOOcCaSTc=' 'sha256-3ae2aKZbrIMgCRPIThzuUlp0rcVILo8dJZk9o+M+yiI=' 'sha256-Q2BPg90ZMplYY+FSdApNErhpWafg2hcRRbndmvxuL/Q=' 'sha256-RTS1/UGQIM0gORRloMCDqwUBoXGwj9jRgu8/32H4jL0=' 'sha256-SaCkFfPruIdTXT8/97JArQmGxiJAL2o4bBDvSgJ5y3Q=' 'sha256-VP47XM8VZ7ZD7hE9ny6Gy36zHbTIS86OHxy/HVu0yEQ=' 'sha256-eIXWvAmxkr251LJZkjniEK5LcPF3NkapbJepohwYRIc=' 'sha256-xTVqFR1HgrF6yrgUxov2eSyLUPUR8XgKtxNaQIaIi1c=' 'sha256-yxW6gZ01YVyHggX8EbobxkxNSB2HxPAwOxEgWM65aVk='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
 ```
 
 ### Strict-Transport-Security
@@ -59,6 +59,7 @@ apply to them and they need no hash.
 | `sha256-Q2BPg90ZMplYY+FSdApNErhpWafg2hcRRbndmvxuL/Q=` | 2 | `(()=>{var a=(s,i,o)=>{let r=async()=>{await(await s())()},t=typeof i.value=="object"?i.v…` |
 | `sha256-RTS1/UGQIM0gORRloMCDqwUBoXGwj9jRgu8/32H4jL0=` | 10 | `document.addEventListener("astro:before-swap",t=>{if(window.self!==window.top)return;t.n…` |
 | `sha256-SaCkFfPruIdTXT8/97JArQmGxiJAL2o4bBDvSgJ5y3Q=` | 3 | `(()=>{var g=Object.defineProperty;var w=(c,s,d)=>s in c?g(c,s,{enumerable:!0,configurabl…` |
+| `sha256-VP47XM8VZ7ZD7hE9ny6Gy36zHbTIS86OHxy/HVu0yEQ=` | 1 | `function n(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").r…` |
 | `sha256-eIXWvAmxkr251LJZkjniEK5LcPF3NkapbJepohwYRIc=` | 2 | `(()=>{var e=async t=>{await(await t())()};(self.Astro||(self.Astro={})).only=e;window.di…` |
 | `sha256-xTVqFR1HgrF6yrgUxov2eSyLUPUR8XgKtxNaQIaIi1c=` | 10 | `document.documentElement.classList.add('js'); (function () { var motion = null; …` |
 | `sha256-yxW6gZ01YVyHggX8EbobxkxNSB2HxPAwOxEgWM65aVk=` | 2 | `function u(){const a="hud-active",n="hud-booting",c="hud-shutting-down",i="hud-state",o=…` |
