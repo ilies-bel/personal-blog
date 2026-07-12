@@ -25,10 +25,6 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [['html', { open: 'never' }], ['list']] : 'list',
 
-  // Screenshot baselines are committed per-platform from Linux (the CI runner
-  // OS); keep the suffix stable so local Linux runs and CI share baselines.
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}',
-
   use: {
     baseURL: `http://localhost:${PORT}/`,
     trace: 'on-first-retry',
