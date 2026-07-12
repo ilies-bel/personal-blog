@@ -39,6 +39,45 @@ test('finale ledger counts match the rendered collections', async ({ page }) => 
   await expect(ledgerRow('GRAVEYARD')).toHaveText(expectedGraveyardNote);
 });
 
+// Finale proof-card contract: the three featured cards above the ledger must
+// exist in the DOM (server-rendered inside the island's static HTML, just like
+// the ledger rows) with correct destinations and collection-derived kickers.
+// We assert on href and kicker text — the actual title/summary come from the
+// collection and are tested implicitly (build fails if the fields are absent).
+test('finale proof cards exist with collection-derived kickers and correct hrefs', async ({ page }) => {
+  // Re-use the counts from the collections already counted above — ship/dead
+  // are the same values the kickers must show.
+  await page.goto('/projects', { waitUntil: 'domcontentloaded' });
+  const shipped = await page.locator('article.projects-entry').count();
+
+  await page.goto('/graveyard', { waitUntil: 'domcontentloaded' });
+  const dead = await page.locator('article.graveyard-entry').count();
+
+  // The proof cards are server-rendered inside the BlackHole island's static
+  // HTML (ManifestoOverlay renders on the server for client:visible), so
+  // domcontentloaded is enough — no hydration wait, no flake. They are
+  // visibility-gated (data-visible on .bh-finale-section), so we assert on
+  // DOM content rather than toBeVisible().
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const cards = page.locator('.bh-finale-proof-card');
+  await expect(cards).toHaveCount(3);
+
+  // Card 1 — flagship project: kicker includes count and links to /projects.
+  const flagship = cards.nth(0);
+  await expect(flagship.locator('.bh-finale-proof-kicker')).toContainText(String(shipped));
+  await expect(flagship).toHaveAttribute('href', /\/projects/);
+
+  // Card 2 — investigation post: kicker says "Investigation" and links to a post.
+  const investigation = cards.nth(1);
+  await expect(investigation.locator('.bh-finale-proof-kicker')).toHaveText('Investigation');
+  await expect(investigation).toHaveAttribute('href', /\/posts\//);
+
+  // Card 3 — graveyard summary: kicker includes dead count and links to /graveyard.
+  const graveyard = cards.nth(2);
+  await expect(graveyard.locator('.bh-finale-proof-kicker')).toContainText(String(dead));
+  await expect(graveyard).toHaveAttribute('href', /\/graveyard/);
+});
+
 test('projects and graveyard render every collection entry with its record', async ({ page }) => {
   await page.goto('/projects', { waitUntil: 'domcontentloaded' });
   // Both migrated entries, by their stable collection ids.

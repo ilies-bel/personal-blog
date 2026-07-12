@@ -28,6 +28,23 @@ export interface SiteCounts {
   shaders: number;
 }
 
+/** Data for the three featured proof cards in the finale section. Computed
+ *  server-side at build time from the content collections — titles, summaries,
+ *  and slugs always reflect the actual entries, never hand-synced literals. */
+export interface FeaturedCardData {
+  /** The first active project (lowest `order`, status not 'archived'). */
+  flagship: {
+    title: string;
+    summary: string;
+  };
+  /** The first investigation-type post (by pubDate, oldest first). */
+  investigation: {
+    slug: string;
+    title: string;
+    description: string;
+  };
+}
+
 export async function getCounts(): Promise<SiteCounts> {
   // The Inspiration essay lives in the posts collection but reads as site meta —
   // /writing excludes it from the Articles shelf, so the posts count must too.
@@ -47,5 +64,40 @@ export async function getCounts(): Promise<SiteCounts> {
     dead: graveyard.length,
     posts: posts.filter((post) => post.id !== inspirationId).length,
     shaders: SHADERS.length,
+  };
+}
+
+/** Derive the featured proof-card data from the collections. Returns the first
+ *  active project (by `order`) and the first investigation-type post (by
+ *  pubDate, oldest first) — both guaranteed to exist if their collections are
+ *  non-empty; the caller falls back to empty strings if not. */
+export async function getFeaturedCards(): Promise<FeaturedCardData> {
+  const [projects, posts] = await Promise.all([
+    getCollection('projects'),
+    getCollection('posts', ({ data }) => !data.draft && data.type === 'investigation'),
+  ]);
+
+  const active = projects
+    .filter((p) => p.data.status !== 'archived')
+    .sort((a, b) => a.data.order - b.data.order);
+
+  const investigations = posts.sort(
+    (a, b) => a.data.pubDate.getTime() - b.data.pubDate.getTime(),
+  );
+
+  const flagship = active[0];
+  const investigation = investigations[0];
+
+  return {
+    flagship: flagship
+      ? { title: flagship.data.title, summary: flagship.data.summary }
+      : { title: '', summary: '' },
+    investigation: investigation
+      ? {
+          slug: investigation.id,
+          title: investigation.data.title,
+          description: investigation.data.description,
+        }
+      : { slug: '', title: '', description: '' },
   };
 }

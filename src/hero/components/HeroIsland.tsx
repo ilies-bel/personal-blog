@@ -60,7 +60,7 @@ import { glGovernor, PRIORITY_HERO, PRIORITY_AMBIENT } from '../lib/glGovernor';
 import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
-import type { LedgerCounts } from './FinaleLedger';
+import type { LedgerCounts, FeaturedCards } from './FinaleLedger';
 import ExplorationHud from './ExplorationHud';
 import CockpitFrame from './CockpitFrame';
 import StarMarker from './StarMarker';
@@ -103,9 +103,17 @@ interface HeroIslandProps {
    *  a defensive zero so a hypothetical countless full mount reads as obviously
    *  wrong ('0 shipped') rather than plausibly stale. */
   counts?: LedgerCounts;
+  /** Featured proof-card data derived from the collections at build time (P6).
+   *  Passed through to the finale section's three proof cards. Backdrop mode
+   *  renders no overlay, so its callers omit it; the default is empty strings. */
+  cards?: FeaturedCards;
 }
 
 const ZERO_COUNTS: LedgerCounts = { shipped: 0, dead: 0, posts: 0 };
+const EMPTY_CARDS: FeaturedCards = {
+  flagship: { title: '', summary: '' },
+  investigation: { slug: '', title: '', description: '' },
+};
 
 // React only needs a perceptual scroll snapshot for DOM copy/chrome. The scene
 // render loop reads exact progress from progressRef, so this gate cuts context
@@ -163,7 +171,7 @@ const DATA_SCENE_BY_ID: Record<HudTargetId, 'blackhole' | 'red-giant' | 'yellow-
   beginning: 'final',
 };
 
-export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS }: HeroIslandProps = {}) {
+export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS, cards = EMPTY_CARDS }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Frame-cadence marker data from the scene (position of the star object in CSS px).
   // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
@@ -792,7 +800,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             where there is no scene to light it (static frame, CSS crossfade). */}
         {reduced && <CockpitFrame />}
         <HeroIdentity />
-        <ManifestoOverlay counts={counts} />
+        <ManifestoOverlay counts={counts} cards={cards} />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
             black hole. Shown only while body.at-opening (the opening hold); fades out
             once the visitor scrolls past. aria-hidden — pure decoration. (Under reduced

@@ -1100,23 +1100,99 @@ body.scene-ready.at-opening .bh-focus-dot {
   max-width: min(30rem, 86vw);
 }
 
-/* The ledger itself: readable mono navigation, NOT decoration — labels sit at
-   the HUD rung (13px) in full overlay bone, notes one rung down in the chrome
-   dim, both noticeably brighter than the faint chrome tier. Hidden state is
-   visibility (not just the parent's opacity): it removes the links from the
-   tab order and the a11y tree and — with pointer-events — makes them fully
-   inert while another beat owns the screen. */
-.bh-finale-ledger {
+/* ── FINALE SECTION wrapper ──────────────────────────────────────────────── */
+/* Outer container for all three subsections: proof paths, directory nav, and
+   the replay button. All children inherit visibility + pointer-events from here
+   so new finale elements never need their own per-element gate. Pins to the
+   column bottom via margin-top: auto so the block clears the dot + its hover
+   card above. */
+.bh-finale-section {
   margin-top: auto; /* pin to the column's bottom, clear of the dot + its card */
-  width: min(23rem, 88vw);
+  width: min(26rem, 92vw);
   display: flex;
   flex-direction: column;
+  gap: 0;
   visibility: hidden;
   pointer-events: none;
 }
-.bh-finale-ledger[data-visible='true'] {
+.bh-finale-section[data-visible='true'] {
   visibility: visible;
   pointer-events: auto;
+}
+
+/* ── PROOF PATHS ─────────────────────────────────────────────────────────── */
+/* Three concrete evidence links — the second decision point above the directory.
+   Each card: kicker (category + derived count) / label (destination title from
+   the collection) / hook (summary or description from the entry). Same
+   hairline/bone palette as the directory rows so the two sections read as one
+   continuous index. */
+.bh-finale-proof {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
+  margin-bottom: 0.25rem;
+}
+.bh-finale-proof-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: clamp(0.55rem, 1.2vh, 0.8rem) 0.2rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
+  text-decoration: none;
+  transition: border-color 0.18s ease;
+}
+.bh-finale-proof-card:hover,
+.bh-finale-proof-card:focus-visible {
+  border-color: color-mix(in oklch, var(--fg-overlay) 40%, transparent);
+}
+.bh-finale-proof-card:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+.bh-finale-proof-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-chrome-dim);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  transition: color 0.18s ease;
+}
+.bh-finale-proof-card:hover .bh-finale-proof-kicker,
+.bh-finale-proof-card:focus-visible .bh-finale-proof-kicker {
+  color: var(--accent-strong);
+}
+.bh-finale-proof-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-hud);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-overlay);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  transition: color 0.18s ease;
+}
+.bh-finale-proof-hook {
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  line-height: 1.4;
+  transition: color 0.18s ease;
+}
+.bh-finale-proof-card:hover .bh-finale-proof-hook,
+.bh-finale-proof-card:focus-visible .bh-finale-proof-hook {
+  color: var(--fg-chrome-dim);
+}
+
+/* ── DIRECTORY NAV ───────────────────────────────────────────────────────── */
+/* The ledger: readable mono navigation, NOT decoration — labels at the HUD
+   rung in full overlay bone, notes one rung down in chrome-dim. Visibility is
+   inherited from .bh-finale-section — no per-element gate needed. */
+.bh-finale-ledger {
+  width: 100%; /* fill .bh-finale-section */
+  display: flex;
+  flex-direction: column;
 }
 /* The directory screen's header strip — only exists on the powered console
    skin (below); the floating centre-column ledger hides it. */
@@ -1126,13 +1202,16 @@ body.scene-ready.at-opening .bh-focus-dot {
 
 /* DIRECTORY SCREEN — with the ship de-cloaked (body.hud-active) the finale
    site index leaves the floating centre column and mounts INTO the main
-   console: an MFD on the right dash face (the dash masses run from ≈80vh
-   down; the pedestal screen holds the centre, telemetry the left), wearing
-   the shared cockpit screen skin (tokens in hud.css). Rows compress to the
-   instrument register. Scroll still owns WHEN it shows (the finale beat's
-   band drives the parent opacity + data-visible); power owns WHERE it lives.
-   Desktop-only — the compact layouts keep the two-column floating grid. */
+   console: an MFD on the right dash face. The proof paths stay in the centred
+   column (and are hidden on desktop cockpit view for clean UX).
+   Desktop-only — compact layouts keep the two-column floating grid. */
 @media (min-width: 60.0625rem) {
+  /* In cockpit mode the proof paths would overlap the fixed-position nav.
+     Hide them so the cockpit screen is clean: only the directory nav on the
+     instrument panel. */
+  body.hud-active .bh-finale-proof {
+    display: none;
+  }
   body.hud-active .bh-finale-ledger {
     position: fixed;
     right: 2.5vw;
@@ -1160,8 +1239,9 @@ body.scene-ready.at-opening .bh-focus-dot {
     padding-bottom: 0.35rem;
   }
   /* The screen flicker-materialises when its page loads in (the finale beat
-     arriving) — same decloak strobe as the rest of the console chrome. */
-  body.hud-active .bh-finale-ledger[data-visible='true'] {
+     arriving) — same decloak strobe as the rest of the console chrome.
+     data-visible is on .bh-finale-section (the outer wrapper). */
+  body.hud-active .bh-finale-section[data-visible='true'] .bh-finale-ledger {
     animation: hud-decloak 0.7s steps(1, end);
   }
   /* Instrument-register rows: tighter pitch than the floating column, one
@@ -1274,17 +1354,18 @@ body.scene-ready.at-opening .bh-focus-dot {
   }
 }
 /* NARROW viewports (the ≤60rem band where the HUD becomes the bottom strip and
-   the marker card becomes a bottom sheet): the single column + bottom HUD
-   clearance would push the ledger up onto the dot, so it compacts to a
-   two-column grid of label-only links (the notes are enrichment, the labels are
-   the navigation) and lifts above the horizontal HUD strip the same way the
-   bottom-left beats do (safe-area + 8.5rem). */
+   the marker card becomes a bottom sheet): the section lifts above the
+   horizontal HUD strip (safe-area + 9rem). The directory compacts to a
+   two-column grid of label-only links; proof hooks are hidden to keep rows
+   scannable. */
 @media (max-width: 60rem) {
   .bh-beat.bh-beat--finale {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 9rem);
   }
+  .bh-finale-section {
+    width: min(28rem, 92vw);
+  }
   .bh-finale-ledger {
-    width: min(26rem, 92vw);
     display: grid;
     grid-template-columns: 1fr 1fr;
     column-gap: 1.5rem;
@@ -1293,6 +1374,10 @@ body.scene-ready.at-opening .bh-focus-dot {
     border-bottom: 0;
   }
   .bh-finale-ledger-note {
+    display: none;
+  }
+  /* Proof hooks are enrichment on narrow screens — hide to keep rows scannable. */
+  .bh-finale-proof-hook {
     display: none;
   }
 }
