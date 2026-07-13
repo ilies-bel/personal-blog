@@ -439,3 +439,51 @@ export function densityCompensation(
   const pointGain = Math.min(4.2, Math.pow(ratio, 0.32));
   return { brightGain, pointGain };
 }
+
+// --- adaptive runtime downgrade ---------------------------------------------
+// The static device-tier classification in detectDeviceTier() is COARSE: it
+// promotes any desktop with >4 cores + >4 GB + WebGL2 to 'high', even when the
+// GPU is an integrated chip (Intel UHD, etc.) that cannot sustain 30fps under
+// the full 1.2M-particle fragment-bound additive cloud at a 1.85-capped DPR.
+//
+// The adaptive path fixes this class of misclassification WITHOUT modifying the
+// static tier logic (which stays correct for dedicated GPUs): after the first
+// ADAPTIVE_SAMPLE_MS ms of rendering, compute the MEDIAN frame delta and, if
+// that implies FPS below ADAPTIVE_FPS_FLOOR, treat the scene as 'low' tier
+// going forward — lowering the render pixel ratio and enabling the 30fps cap.
+// The 'high' path is byte-identical when median FPS is healthy (no downgrade).
+
+/** Milliseconds to collect frame-time samples before deciding. */
+export const ADAPTIVE_SAMPLE_MS = 1_500;
+
+/** Median FPS floor below which the adaptive downgrade fires. */
+export const ADAPTIVE_FPS_FLOOR = 30;
+
+/**
+ * Given an array of frame-time deltas (ms) returns the median FPS.
+ * Returns 0 for empty arrays.
+ */
+export function medianFpsFromDeltas(frameDeltas: number[]): number {
+  if (frameDeltas.length === 0) return 0;
+  const sorted = [...frameDeltas].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const medianDelta =
+    sorted.length % 2 === 0
+      ? ((sorted[mid - 1]! + sorted[mid]!) / 2)
+      : sorted[mid]!;
+  return 1_000 / medianDelta;
+}
+
+/**
+ * Returns true when the sampled frame deltas indicate that the scene should
+ * be stepped down one tier. Requires at least 5 samples (to filter noise
+ * from the first couple of frames) and a median FPS below `fpsFloor`.
+ * Safe to call on a partial or empty sample set — never throws.
+ */
+export function shouldAdaptiveDowngrade(
+  frameDeltas: number[],
+  fpsFloor: number = ADAPTIVE_FPS_FLOOR,
+): boolean {
+  if (frameDeltas.length < 5) return false;
+  return medianFpsFromDeltas(frameDeltas) < fpsFloor;
+}

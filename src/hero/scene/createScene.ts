@@ -1,6 +1,6 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { CFG, resolveParticleRTScale, resolveRgGranBake, tuneParticlesForDevice, tuneRenderPixelRatio, type DeviceTier } from '../lib/config';
+import { CFG, resolveParticleRTScale, resolveRgGranBake, tuneParticlesForDevice, tuneRenderPixelRatio, shouldAdaptiveDowngrade, ADAPTIVE_SAMPLE_MS, type DeviceTier } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
@@ -368,7 +368,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   function onResize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    renderer.setPixelRatio(tuneRenderPixelRatio(reduced, tier));
+    renderer.setPixelRatio(tuneRenderPixelRatio(reduced, activeTier));
     renderer.setSize(w, h);
     postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
     // Half-res particle target rides the SAME resize path (and the same pixel ratio
@@ -728,6 +728,18 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // margin trims the threshold so a frame landing a hair early still renders (we'd
   // rather hit 30 than drop to 20 by over-waiting). High tier is never capped.
   const LOW_FRAME_MS = 1000 / 30 - 2;
+
+  // --- adaptive downgrade state (high-on-paper / slow-in-practice) ----------------
+  // `activeTier` starts equal to the boot-time `tier` but can be stepped down to 'low'
+  // once (one-shot, irreversible) after the adaptive FPS sampling window completes.
+  // Only the pixel-ratio and frame-cap decisions consult activeTier at runtime; all
+  // other per-boot choices (particle count, post chain, gravity sim) are already made
+  // and stay unchanged — the downgrade is therefore a lightweight one-time reconfigure.
+  let activeTier: DeviceTier = tier;
+  let adaptiveSamples: number[] = [];
+  let adaptiveChecked = false;
+  let adaptiveWindowStart = 0;  // ms; 0 = sampling not started yet
+  let adaptivePrevFrameTime = 0; // ms; used to compute per-frame deltas
 
   // --- cinematic dive: plunge the LIVE camera INTO the clicked marker, soft bloom --
   // A one-shot state machine driven entirely from frame(): once beginDive() arms
@@ -1240,6 +1252,39 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     const now = performance.now();
     const t = (now - t0) / 1000;
 
+    // --- ADAPTIVE DOWNGRADE (high-on-paper / slow-in-practice) ---------------
+    // Sample rAF inter-frame deltas for the first ADAPTIVE_SAMPLE_MS ms. If the
+    // resulting median FPS falls below ADAPTIVE_FPS_FLOOR the machine is a 'high'
+    // on paper but genuinely slow device (integrated GPU, thermally throttled
+    // laptop). Step down activeTier to 'low' and trigger a resize so the lower
+    // pixel ratio propagates to the composer and particle pass. This is the single
+    // biggest render win available without rebuilding geometry. One-shot,
+    // irreversible; the high path stays byte-identical when FPS is healthy.
+    if (tier === 'high' && !adaptiveChecked) {
+      if (adaptiveWindowStart === 0) {
+        // First frame — start the clock.
+        adaptiveWindowStart = now;
+        adaptivePrevFrameTime = now;
+      } else {
+        const dt = now - adaptivePrevFrameTime;
+        adaptivePrevFrameTime = now;
+        // Only collect plausible inter-frame intervals (skip outliers from
+        // background-tab throttling or the very first frame's cold start).
+        if (dt > 0 && dt < 1_000) adaptiveSamples.push(dt);
+        if (now - adaptiveWindowStart >= ADAPTIVE_SAMPLE_MS && adaptiveSamples.length >= 5) {
+          adaptiveChecked = true;
+          if (shouldAdaptiveDowngrade(adaptiveSamples)) {
+            activeTier = 'low';
+            // Propagate the lower pixel ratio to the composer + particle pass via
+            // the existing resize handler (side-effect: also refreshes camera
+            // aspect / lens uniforms, which are harmless no-ops at unchanged size).
+            onResize();
+          }
+          adaptiveSamples = []; // release sample buffer after decision
+        }
+      }
+    }
+
     // --- lifecycle position, sampled from the caller's presentation clock ---
     const exploring = hooks.isExplorationMode?.() === true;
     const focusTarget = exploring ? hooks.getFocusTarget?.() ?? null : null;
@@ -1429,7 +1474,8 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // LOW-tier 30fps cap: on the low tier, render at most ~30fps. We keep arming rAF
     // every native tick but skip the heavy work + render until LOW_FRAME_MS has
     // elapsed since the last actual render. High tier is never capped (native rAF).
-    const capThrottled = tier === 'low' && now - lastRenderTime < LOW_FRAME_MS;
+    // activeTier may have been stepped down to 'low' by the adaptive downgrade.
+    const capThrottled = activeTier === 'low' && now - lastRenderTime < LOW_FRAME_MS;
     // While static we still render on a slow HEARTBEAT so a late async texture load
     // or a restore that lands after we've parked eventually composites — and so the
     // dot's slow uDotTime breath keeps progressing (its ~7.85s period is sampled fine
