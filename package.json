@@ -11,6 +11,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
+    "check:cockpit-plate": "node scripts/generate-cockpit-plate.mjs --check",
     "knip": "knip",
     "test": "node --test \"test/**/*.test.mjs\"",
     "lhci": "lhci autorun",

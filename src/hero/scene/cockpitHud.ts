@@ -12,7 +12,7 @@
 // vertex carries aFollow: 1 = star-anchored (authored origin-relative),
 // 0 = fixed (authored in absolute design px).
 import * as THREE from 'three';
-import { COCKPIT_W } from '../cockpitGeometry';
+import { COCKPIT_W } from '../cockpitPlate';
 
 type Pt = [number, number];
 interface HudLine {
