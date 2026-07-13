@@ -23,9 +23,12 @@ import MarsTopology from './MarsTopology.astro';
 
 interface Props {
   entry: CollectionEntry<'projects'>;
+  // The first case study sits above the fold, so its screenshot is the likely
+  // LCP element — it loads eagerly. Every later entry stays lazy (default).
+  isFirst?: boolean;
 }
 
-const { entry } = Astro.props;
+const { entry, isFirst = false } = Astro.props;
 const { data } = entry;
 
 // Render the slotted MDX body to a string and scope its auto-generated ids
@@ -141,7 +144,8 @@ const hasDecisions =
             formats={['avif', 'webp']}
             fallbackFormat="webp"
             quality={70}
-            loading="lazy"
+            loading={isFirst ? 'eager' : 'lazy'}
+            fetchpriority={isFirst ? 'high' : undefined}
             decoding="async"
           />
         ) : (

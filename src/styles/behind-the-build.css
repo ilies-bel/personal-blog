@@ -5,6 +5,89 @@
    the-build so the regular article pages are untouched. */
 
 /* ---------------------------------------------------------------
+   In-page contents — a quiet mono index under the header on this
+   long read. Instrument grammar: a hairline-ruled ledger of numbered
+   rows, chrome ramp (scaffolding, not signal), the accent reserved for
+   hover/focus. Server-rendered anchors; no JS. Section headings get a
+   scroll-margin so an anchored jump lands below any fixed top chrome
+   rather than tucking the heading under it.
+   --------------------------------------------------------------- */
+body.behind-the-build .btb-toc {
+  margin: 2rem 0 3rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--bg-soft) 55%, transparent);
+}
+
+body.behind-the-build .btb-toc-label {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-chrome-faint);
+}
+
+body.behind-the-build .btb-toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0;
+}
+
+body.behind-the-build .btb-toc-list li + li a {
+  border-top: 1px solid var(--line);
+}
+
+body.behind-the-build .btb-toc-list a {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding: 0.55rem 0;
+  color: var(--fg-chrome-dim);
+  text-decoration: none;
+  transition:
+    color 0.16s ease,
+    padding-left 0.18s var(--ease-out-quint);
+}
+
+body.behind-the-build .btb-toc-list a:hover,
+body.behind-the-build .btb-toc-list a:focus-visible {
+  color: var(--accent-strong);
+  padding-left: 0.4rem;
+}
+
+body.behind-the-build .btb-toc-num {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-chrome-faint);
+}
+
+body.behind-the-build .btb-toc-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+}
+
+/* Anchored jumps land clear of any fixed top chrome. */
+body.behind-the-build .prose section[aria-labelledby] > h2[id] {
+  scroll-margin-top: 5rem;
+}
+
+/* Reduced motion — resolved via html[data-motion] (see src/lib/motion.ts):
+   the hover nudge collapses to a color change only. */
+:where(html[data-motion='reduced']) body.behind-the-build .btb-toc-list a {
+  transition: color 0.16s ease;
+}
+:where(html[data-motion='reduced']) body.behind-the-build .btb-toc-list a:hover,
+:where(html[data-motion='reduced']) body.behind-the-build .btb-toc-list a:focus-visible {
+  padding-left: 0;
+}
+
+/* ---------------------------------------------------------------
    Shader gallery — one panel per .glsl file. Each panel is a self
    contained block: name + filename, then a SceneFigure plate, a
    short blurb, and a <details> revealing the GLSL source. The grid

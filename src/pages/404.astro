@@ -6,6 +6,7 @@
 // site. Copy stays in the site's stellar-lifecycle voice without hiding what
 // happened; every primary destination is one link away.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import AmbientBackdrop from '../components/AmbientBackdrop.astro';
 import { withBase } from '../consts';
 
 const DESTINATIONS = [
@@ -19,6 +20,11 @@ const DESTINATIONS = [
 ---
 
 <BaseLayout title="Page not found" description="This page doesn't exist — but the rest of the site does." noindex>
+  {/* Keep the 'one room' promise even here: the calm nebula poster (zero JS,
+      zero WebGL — just a graded still) means the error page still reads as a
+      surface inside the instrument room, not a step outside it. */}
+  <AmbientBackdrop variant="nebula" />
+
   <section class="notfound measure">
     <p class="notfound-code" aria-hidden="true">404</p>
     <h1>This page collapsed.</h1>
@@ -61,7 +67,7 @@ const DESTINATIONS = [
   .notfound-lead {
     margin: 0 0 2rem;
     max-width: 34rem;
-    color: var(--fg-muted, var(--fg));
+    color: var(--fg-dim);
     line-height: 1.6;
   }
   .notfound-links {

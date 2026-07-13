@@ -185,8 +185,14 @@
 }
 
 /* --- Other frequencies + the proof line -------------------------------------- */
+/* A hairline rule above sets this section apart from the channel readout so the
+   secondary frequencies read as their own instrument row rather than trailing
+   the availability dl. The rule + top padding give it the breathing room the
+   margin alone did not. */
 .contact-elsewhere {
-  margin-top: clamp(2rem, 6vw, 3rem);
+  margin-top: clamp(1.75rem, 5vw, 2.5rem);
+  padding-top: clamp(1.5rem, 4vw, 2rem);
+  border-top: 1px solid var(--line);
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;

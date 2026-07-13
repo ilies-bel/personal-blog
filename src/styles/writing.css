@@ -553,4 +553,13 @@
   .writing-row::after {
     display: none;
   }
+
+  /* List / Map toggle — the compact pill is a fine size for a mouse but tight
+     as a touch target. On narrow (touch-first) widths, grow the hit area to
+     the 44px minimum via min-height + a little extra horizontal padding; the
+     visual pill on desktop is unchanged. */
+  .writing-view-btn {
+    min-height: 44px;
+    padding-inline: 1.05rem;
+  }
 }

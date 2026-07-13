@@ -199,6 +199,25 @@ const FALLBACKS: readonly FallbackRow[] = [
       </p>
     </header>
 
+    {/* IN-PAGE CONTENTS — this is a long read (five sections, a live gallery, a
+        budget table). A quiet mono index orients the reader and gives keyboard
+        users a jump table. Derived from the SAME SECTIONS array the ArticleHud
+        reads, so the contents can never drift from the sections (or the hud).
+        Server-rendered, zero JS: plain in-page anchors to the section ids. */}
+    <nav class="btb-toc" aria-label="On this page">
+      <p class="btb-toc-label" aria-hidden="true">Contents</p>
+      <ol class="btb-toc-list">
+        {SECTIONS.map((section, i) => (
+          <li>
+            <a href={`#${section.id}`}>
+              <span class="btb-toc-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+              <span class="btb-toc-title">{section.title}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+
     {/* ============================================================
         SECTION 1 — Architecture: one engine, one number.
         ============================================================ */}

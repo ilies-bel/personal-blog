@@ -170,11 +170,15 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-top: clamp(2rem, 6vh, 3.5rem);
-  border: 1px solid var(--line);
-  background: color-mix(in oklch, var(--bg-soft) 45%, transparent);
+  /* Still the hairline instrument grid (square corners, plain lines), but the
+     outer frame carries a faint accent tint and the fill a touch more opacity
+     so the trio reads as a deliberate plate against the dim backdrop rather
+     than dissolving into it. The internal rules stay the plain --line. */
+  border: 1px solid color-mix(in oklch, var(--accent) 18%, var(--line));
+  background: color-mix(in oklch, var(--bg-soft) 62%, transparent);
 }
 .about-principles div {
-  padding: 1rem;
+  padding: 1.25rem 1.25rem 1.35rem;
   border-right: 1px solid var(--line);
 }
 .about-principles div:last-child { border-right: 0; }

@@ -312,4 +312,13 @@
   .subnav-socials {
     margin-left: 0;
   }
+
+  /* Footer — at narrow widths the copyright and the links wrap into a stack.
+     Make the stack explicit (column, left-aligned) and give the two rows a
+     real vertical gap so the links don't crowd the copyright line. */
+  .site-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.1rem;
+  }
 }

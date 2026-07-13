@@ -88,7 +88,7 @@ const resolveShot = (filename: string): ImageMetadata => {
 
   {/* role="group" legitimizes the aria-label (a bare div can't carry one). */}
   <div class="graveyard-list" role="group" aria-label="Failed and abandoned projects">
-    {rendered.map(({ s, Content }) => (
+    {rendered.map(({ s, Content }, i) => (
       <article class="graveyard-entry" id={s.id}>
         {/* SPECIMEN DRAWER LABEL — the mono-caps record row above the headline,
             reading like the label slot on a cabinet drawer. Carries the real
@@ -121,7 +121,8 @@ const resolveShot = (filename: string): ImageMetadata => {
               formats={['avif', 'webp']}
               fallbackFormat="webp"
               quality={70}
-              loading="lazy"
+              loading={i === 0 ? 'eager' : 'lazy'}
+              fetchpriority={i === 0 ? 'high' : undefined}
               decoding="async"
             />
             <figcaption>{s.data.image.caption}</figcaption>

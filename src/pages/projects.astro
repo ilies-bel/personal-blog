@@ -47,8 +47,8 @@ const rendered = await Promise.all(
 
   {/* role="group" legitimizes the aria-label (a bare div can't carry one). */}
   <div class="projects-list" role="group" aria-label="Shipped projects">
-    {rendered.map(({ entry, Content }) => (
-      <CaseStudy entry={entry}>
+    {rendered.map(({ entry, Content }, i) => (
+      <CaseStudy entry={entry} isFirst={i === 0}>
         <Content />
       </CaseStudy>
     ))}
