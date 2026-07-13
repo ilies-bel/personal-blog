@@ -25,12 +25,14 @@
 // so a powered-off cockpit costs zero draws (the draw-audit convention).
 import * as THREE from 'three';
 import {
-  COCKPIT_BEAMS_ABOVE_SCREEN,
+  COCKPIT_BEAMS_ABOVE_SCREEN_CORES,
+  COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS,
   COCKPIT_BEAMS_BELOW_SCREEN,
   HULL_OUTER,
   HULL_HOLES,
   HULL_HOLE,
   PANEL_SCREEN,
+  Y_JUNCTION_PATCHES,
   COCKPIT_W,
   COCKPIT_H,
   type CockpitBeam,
@@ -270,7 +272,29 @@ export function buildCockpit(): CockpitRig {
   // Structural beams: the thick milled-metal members with edge hairlines +
   // echo drawn in-shader off the cross-section coordinate.
   const lowerBeamGeo = buildBeamRibbons(COCKPIT_BEAMS_BELOW_SCREEN);
-  const upperBeamGeo = buildBeamRibbons(COCKPIT_BEAMS_ABOVE_SCREEN);
+  const upperShellGeo = buildBeamRibbons(COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS);
+  const upperCoreGeo = buildBeamRibbons(COCKPIT_BEAMS_ABOVE_SCREEN_CORES);
+  const junctionGeo = new THREE.ShapeGeometry(Y_JUNCTION_PATCHES.map((pts) => shapeFromPts(pts)));
+  // Feed the flat union plates through the beam shader at the centre of its
+  // cross-section (aSide=0): their graphite response is byte-for-byte the
+  // surrounding casting fill, with no synthetic edge at the polygon border.
+  const junctionPosition = junctionGeo.getAttribute('position');
+  const junctionPos = new Float32Array(junctionPosition.count * 2);
+  const junctionNorm = new Float32Array(junctionPosition.count * 2);
+  const junctionSide = new Float32Array(junctionPosition.count);
+  const junctionWeight = new Float32Array(junctionPosition.count);
+  const junctionWidth = new Float32Array(junctionPosition.count);
+  for (let i = 0; i < junctionPosition.count; i++) {
+    junctionPos[i * 2] = junctionPosition.getX(i);
+    junctionPos[i * 2 + 1] = junctionPosition.getY(i);
+    junctionNorm[i * 2 + 1] = 1;
+    junctionWidth[i] = 38;
+  }
+  junctionGeo.setAttribute('aPos', new THREE.BufferAttribute(junctionPos, 2));
+  junctionGeo.setAttribute('aNorm', new THREE.BufferAttribute(junctionNorm, 2));
+  junctionGeo.setAttribute('aSide', new THREE.BufferAttribute(junctionSide, 1));
+  junctionGeo.setAttribute('aW', new THREE.BufferAttribute(junctionWeight, 1));
+  junctionGeo.setAttribute('aDW', new THREE.BufferAttribute(junctionWidth, 1));
   const beamUniforms: Uniforms = { ...shared };
   const beamMat = new THREE.ShaderMaterial({
     uniforms: beamUniforms,
@@ -283,11 +307,24 @@ export function buildCockpit(): CockpitRig {
   lowerBeams.renderOrder = 41;
   lowerBeams.visible = false;
   overlay.add(lowerBeams);
-  const upperBeams = new THREE.Mesh(upperBeamGeo, beamMat);
-  upperBeams.frustumCulled = false;
-  upperBeams.renderOrder = 43;
-  upperBeams.visible = false;
-  overlay.add(upperBeams);
+  const upperShells = new THREE.Mesh(upperShellGeo, beamMat);
+  upperShells.frustumCulled = false;
+  upperShells.renderOrder = 43;
+  upperShells.visible = false;
+  overlay.add(upperShells);
+  // Flat centre-fill using the exact beam material: the plate erases the
+  // shell-overlap seam without introducing a differently shaded patch, then
+  // the final lamination batch redraws the reference's two Y branches.
+  const junctions = new THREE.Mesh(junctionGeo, beamMat);
+  junctions.frustumCulled = false;
+  junctions.renderOrder = 44;
+  junctions.visible = false;
+  overlay.add(junctions);
+  const upperCores = new THREE.Mesh(upperCoreGeo, beamMat);
+  upperCores.frustumCulled = false;
+  upperCores.renderOrder = 45;
+  upperCores.visible = false;
+  overlay.add(upperCores);
 
   // HUD pass: the white holographic instruments on the glass (scanner reticle
   // tracking the star via uLight + the fixed compass strip).
@@ -304,11 +341,11 @@ export function buildCockpit(): CockpitRig {
   });
   const hud = new THREE.Mesh(hudGeo, hudMat);
   hud.frustumCulled = false;
-  hud.renderOrder = 45;
+  hud.renderOrder = 46;
   hud.visible = false;
   overlay.add(hud);
 
-  const meshes = [glass, panels, lowerBeams, screen, upperBeams, hud];
+  const meshes = [glass, panels, lowerBeams, screen, upperShells, junctions, upperCores, hud];
 
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
@@ -371,7 +408,9 @@ export function buildCockpit(): CockpitRig {
     for (const m of meshes) overlay.remove(m);
     hudGeo.dispose();
     lowerBeamGeo.dispose();
-    upperBeamGeo.dispose();
+    upperShellGeo.dispose();
+    junctionGeo.dispose();
+    upperCoreGeo.dispose();
     screenGeo.dispose();
     glassGeo.dispose();
     panelGeo.dispose();

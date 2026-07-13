@@ -2409,6 +2409,11 @@ body.scene-ready.hud-active .bh-cockpit {
   vector-effect: none;
   stroke: rgb(13 13 16 / 0.97);
 }
+/* Flat metal over the arm/canopy ribbon overlap: one monolithic Y casting. */
+.bh-cockpit path.bh-cockpit-junction {
+  fill: rgb(13 13 16 / 0.97);
+  stroke: none;
+}
 /* The opaque interior masses (ceiling / dashboard). Heavy but not pure black:
    the scene's brightest beats still ghost through at ~1/5 strength, reading as
    glare on the structure rather than a hole in it. */

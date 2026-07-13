@@ -165,15 +165,13 @@ function canopyDW(_x: number, y: number): number {
   return stops[stops.length - 1][1];
 }
 
-/** At the Y the hull-side companion is physically swallowed by the incoming
- * arm, so only the arm ridge and ring core remain visible. Restore that outer
- * lamination immediately below the merge, where the reference resolves the
- * normal three-line pillar stack again from y≈260 onward. */
+/** The arm's bright lamination becomes the hull-side pillar/sill lamination as
+ * one continuous path (ARM_CORE_PATH below). Suppress this duplicate edge on
+ * the broad canopy ribbon from the Y through the whole lower ring; keep it on
+ * the roof only, before the casting splits. */
 function canopyOuterW(x: number, y: number): number {
   const side = Math.min(x, COCKPIT_W - x);
-  if (side > 320 || y >= 260) return 0.85;
-  const restore = Math.min(1, Math.max(0, (y - 250) / 10));
-  return -0.7 + 1.55 * restore;
+  return y >= 249 || side <= 260 ? -1 : 0.85;
 }
 
 /** The sill's hull-side hairline is the DIM one in the reference (≈0.3× the
@@ -225,27 +223,104 @@ export const CANOPY_CORE: CockpitBeam = {
 const mirrorPts = (pts: ReadonlyArray<Pt>): Pt[] => pts.map(([x, y]) => [COCKPIT_W - x, y]);
 const mirrorBeam = (beam: CockpitBeam): CockpitBeam => ({ ...beam, pts: mirrorPts(beam.pts) });
 
-// The incoming arm is independent from the ring: it keeps the measured
-// x≈187/y≈250 ridge, then continues straight just far enough to bury its cap
-// inside the ring band. Its bright core fades through that buried tail.
+// The incoming shell remains independent from the ring and buries its cap in
+// the casting. Its bright lamination is different: it becomes the outer
+// pillar ridge, follows the measured canopy edge through the lower sill, and
+// exits through the mirrored arm. One offscreen-to-offscreen path means there
+// is no cap or crossfade anywhere on the visible structure — live and reduced
+// motion render the exact same topology.
 const ARM_PATH: ReadonlyArray<Pt> = [[-30, 158], [70, 200], [187, 250], [216, 262]];
 export const ARM_L: CockpitBeam = { pts: ARM_PATH, dw: 32, w: 0.12 };
 export const ARM_R: CockpitBeam = mirrorBeam(ARM_L);
-const armCoreW = (x: number): number => {
-  const px = Math.min(x, COCKPIT_W - x);
-  const t = Math.min(1, Math.max(0, (px - 184) / 28));
-  return 1 - 2 * t;
-};
-const ARM_CORE_L: CockpitBeam = {
-  pts: ARM_PATH,
-  dw: 4,
-  w: 1,
-  wPlusAt: armCoreW,
-  wMinusAt: armCoreW,
-};
-const ARM_CORE_R: CockpitBeam = mirrorBeam(ARM_CORE_L);
 
-const ARM_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_L, ARM_R, ARM_CORE_L, ARM_CORE_R];
+/** Exact centre of one rendered edge of a ribbon, using the extruder's miter
+ * math. Deriving the lower lamination from CANOPY_BEAM prevents the explicit
+ * arm path and the suppressed companion from ever drifting apart. */
+function beamEdgePoint(beam: CockpitBeam, index: number, side: -1 | 1): Pt {
+  const pts = beam.pts;
+  const p = pts[index];
+  const prev = pts[(index - 1 + pts.length) % pts.length];
+  const next = pts[(index + 1) % pts.length];
+  let d1x = p[0] - prev[0];
+  let d1y = p[1] - prev[1];
+  let d2x = next[0] - p[0];
+  let d2y = next[1] - p[1];
+  const l1 = Math.hypot(d1x, d1y) || 1;
+  const l2 = Math.hypot(d2x, d2y) || 1;
+  d1x /= l1;
+  d1y /= l1;
+  d2x /= l2;
+  d2y /= l2;
+  let tx = d1x + d2x;
+  let ty = d1y + d2y;
+  const tl = Math.hypot(tx, ty) || 1;
+  tx /= tl;
+  ty /= tl;
+  const nx = -ty;
+  const ny = tx;
+  const miter = 1 / Math.max(0.35, nx * -d1y + ny * d1x);
+  const width = beam.dwAt?.(p[0], p[1]) ?? beam.dw;
+  return [p[0] + nx * miter * side * width * 0.5, p[1] + ny * miter * side * width * 0.5];
+}
+
+const LOWER_OUTER_EDGE: ReadonlyArray<Pt> = CANOPY_BEAM.pts
+  .map((p, index) => ({ p, index }))
+  // Start below the explicit Y transition. The next resolved canopy sample is
+  // already on the long straight pillar, so the splice has no horizontal
+  // shelf, duplicate point or miter spike.
+  .filter(({ p }) => p[1] >= 330)
+  .reverse()
+  .map(({ index }) => beamEdgePoint(CANOPY_BEAM, index, -1));
+
+const ARM_CORE_PATH: ReadonlyArray<Pt> = [
+  [-30, 158], [70, 200], [187, 250], [190, 260], [194, 270], [197, 280],
+  [201, 290], [205, 300], [210, 310], [215, 320],
+  ...LOWER_OUTER_EDGE,
+  [COCKPIT_W - 215, 320], [COCKPIT_W - 210, 310], [COCKPIT_W - 205, 300],
+  [COCKPIT_W - 201, 290], [COCKPIT_W - 197, 280], [COCKPIT_W - 194, 270],
+  [COCKPIT_W - 190, 260], [COCKPIT_W - 187, 250],
+  [COCKPIT_W - 70, 200], [COCKPIT_W + 30, 158],
+];
+const ARM_CORE: CockpitBeam = { pts: ARM_CORE_PATH, dw: 4, w: 1 };
+
+const ARM_SHELL_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_L, ARM_R];
+export const COCKPIT_ARM_CORE_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_CORE];
+
+/** Flat-metal union masks painted after the arm/canopy shells and before their
+ * laminations. Each is a narrow occlusion plate over the ring edge that used
+ * to cross the incoming arm as a T seam. It stays strictly inside the casting,
+ * preserving every exterior contour; the continuous arm→pillar and
+ * roof→pillar cores are redrawn over the now-unbroken mass in the final pass. */
+const Y_JUNCTION_L: ReadonlyArray<Pt> = [
+  [187, 234], [201, 232], [202, 270], [188, 272],
+];
+export const Y_JUNCTION_PATCHES: ReadonlyArray<ReadonlyArray<Pt>> = [
+  Y_JUNCTION_L,
+  mirrorPts(Y_JUNCTION_L),
+];
+
+/** The one exterior contour shared by arm and roof. The broad ribbons stop on
+ * opposite sides of the fillet, so this short bridge is painted after the
+ * union plate to make their silhouette a single uninterrupted casting. */
+const Y_EXTERIOR_L: CockpitBeam = {
+  // The dark endpoints extend well under the existing arm/roof contours;
+  // only the otherwise-missing middle of the shared silhouette emits.
+  pts: [[145, 217], [176, 230], [190, 233], [198, 231], [208, 221], [222, 213], [250, 197]],
+  dw: 3,
+  w: -0.5,
+  wPlusAt: (x: number): number => {
+    const side = Math.min(x, COCKPIT_W - x);
+    return side <= 145 || side >= 250 ? -1 : -0.5;
+  },
+  wMinusAt: (x: number): number => {
+    const side = Math.min(x, COCKPIT_W - x);
+    return side <= 145 || side >= 250 ? -1 : -0.5;
+  },
+};
+export const COCKPIT_Y_EXTERIOR_BEAMS: ReadonlyArray<CockpitBeam> = [
+  Y_EXTERIOR_L,
+  mirrorBeam(Y_EXTERIOR_L),
+];
 
 // ─── The deck wrap (the sill-corner fan) ─────────────────────────────────────
 // New-reference lower-corner fan. Each ridge is sampled from the 1920×1080
@@ -389,13 +464,23 @@ export const COCKPIT_BEAMS_BELOW_SCREEN: ReadonlyArray<CockpitBeam> = [
   ...WRAP_BEAMS,
 ];
 
-export const COCKPIT_BEAMS_ABOVE_SCREEN: ReadonlyArray<CockpitBeam> = [
+export const COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS: ReadonlyArray<CockpitBeam> = [
   PERIMETER_BEAM,
-  ...ARM_BEAMS,
+  ...ARM_SHELL_BEAMS,
   ...GROOVES,
   HOUSING_BEAM,
   CANOPY_BEAM,
+];
+
+export const COCKPIT_BEAMS_ABOVE_SCREEN_CORES: ReadonlyArray<CockpitBeam> = [
+  ...COCKPIT_Y_EXTERIOR_BEAMS,
+  ...COCKPIT_ARM_CORE_BEAMS,
   CANOPY_CORE,
+];
+
+export const COCKPIT_BEAMS_ABOVE_SCREEN: ReadonlyArray<CockpitBeam> = [
+  ...COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS,
+  ...COCKPIT_BEAMS_ABOVE_SCREEN_CORES,
 ];
 
 export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [

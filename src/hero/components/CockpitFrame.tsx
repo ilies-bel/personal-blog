@@ -16,14 +16,18 @@
 // plain CSS crossfade off the power FSM body classes (see hud.css →
 // "COCKPIT CANOPY", the reduced-motion branch).
 import {
+  CANOPY_CORE,
   COCKPIT_BEAMS,
-  COCKPIT_BEAMS_ABOVE_SCREEN,
+  COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS,
+  COCKPIT_ARM_CORE_BEAMS,
   COCKPIT_BEAMS_BELOW_SCREEN,
+  COCKPIT_Y_EXTERIOR_BEAMS,
   HULL_OUTER,
   HULL_HOLES,
   PANEL_SCREEN,
   COCKPIT_W,
   COCKPIT_H,
+  Y_JUNCTION_PATCHES,
   toPathD,
 } from '../cockpitGeometry';
 
@@ -53,6 +57,18 @@ function BeamMetalPass({ beams }: { beams: typeof COCKPIT_BEAMS }) {
           strokeWidth={Math.max(2, beam.dw - 3)}
         />
       ))}
+    </g>
+  );
+}
+
+function BeamLayers({ beams }: { beams: typeof COCKPIT_BEAMS }) {
+  return (
+    <g>
+      <BeamEdgePass className="bh-cockpit-beam-base" beams={beams} />
+      <g mask="url(#ckpt-lit-mask)">
+        <BeamEdgePass className="bh-cockpit-beam-lit" beams={beams} />
+      </g>
+      <BeamMetalPass beams={beams} />
     </g>
   );
 }
@@ -99,13 +115,21 @@ export default function CockpitFrame() {
       </g>
       <BeamMetalPass beams={COCKPIT_BEAMS_BELOW_SCREEN} />
       <path className="bh-cockpit-panel" d={toPathD(PANEL_SCREEN, true)} />
-      <BeamEdgePass className="bh-cockpit-beam-base" beams={COCKPIT_BEAMS_ABOVE_SCREEN} />
+      <BeamEdgePass className="bh-cockpit-beam-base" beams={COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS} />
       <g mask="url(#ckpt-lit-mask)">
-        <BeamEdgePass className="bh-cockpit-beam-lit" beams={COCKPIT_BEAMS_ABOVE_SCREEN} />
+        <BeamEdgePass className="bh-cockpit-beam-lit" beams={COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS} />
       </g>
 
-      {/* Metal overlay: the dark band that leaves only the edge slivers lit. */}
-      <BeamMetalPass beams={COCKPIT_BEAMS_ABOVE_SCREEN} />
+      {/* Shell metal first, then a flat casting over the arm/canopy overlap.
+          The continuous core laminations paint last, so both branches flow
+          through one uninterrupted Y-shaped mass rather than two ribbons. */}
+      <BeamMetalPass beams={COCKPIT_BEAMS_ABOVE_SCREEN_SHELLS} />
+      {Y_JUNCTION_PATCHES.map((patch, i) => (
+        <path key={i} className="bh-cockpit-junction" d={toPathD(patch, true)} />
+      ))}
+      <BeamLayers beams={COCKPIT_Y_EXTERIOR_BEAMS} />
+      <BeamLayers beams={COCKPIT_ARM_CORE_BEAMS} />
+      <BeamLayers beams={[CANOPY_CORE]} />
     </svg>
   );
 }
