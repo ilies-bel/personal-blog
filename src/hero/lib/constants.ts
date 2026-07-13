@@ -105,7 +105,8 @@ export const LOADER_MIN_MS = 900;
  *  12px is small enough that one deliberate wheel notch / arrow press / swipe
  *  qualifies, but large enough that sub-pixel jitter or a rubber-band bounce does
  *  not. Spelled here once beside the loader timing it modifies; the bundled loader
- *  script imports it, so there is no inline magic number. */
+ *  script imports it, so there is no inline magic number.
+ * @public */
 export const NATIVE_SCROLL_INTENT_PX = 12;
 /** sessionStorage key recording that the minimum-time loader has already played
  *  once THIS browser session. On first load the key is absent → apply the
