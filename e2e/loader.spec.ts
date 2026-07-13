@@ -364,6 +364,27 @@ test.describe('intent-aware loader release (PRD-001)', () => {
     expect(scrollYAfter, 'scroll position preserved').toBeGreaterThan(0);
   });
 
+  test('floor expires with no first frame: loader stays up until scene:ready', async ({ page }) => {
+    // PRD truth-table row 2: "Floor expires, no first frame → Keep loader visible;
+    // reveal only at first frame or existing failure timeout."
+    // Verify that floor expiry alone never reveals the loader — a real scene:ready
+    // is still the gate. We let the floor (LOADER_MIN_MS = 900ms) run to completion
+    // with the engine permanently held, confirm the loader is still covering the
+    // scene, then dispatch scene:ready and confirm an immediate reveal (floor already
+    // spent, so no additional wait).
+    await gotoWithHeldEngine(page);
+    // Wait for the floor to elapse with room to spare (1 400ms > 900ms floor).
+    await page.waitForTimeout(1_400);
+    // Floor elapsed — but no scene:ready → loader must still be visible.
+    await expect(page.locator('.scene-loader'), 'loader persists after floor alone').toBeVisible();
+    await expect(page.locator('body'), 'no scene-ready without the frame').not.toHaveClass(/scene-ready/);
+    // Now dispatch the real first frame — reveal must be immediate (floor already spent).
+    const t0 = Date.now();
+    await dispatchSceneReady(page);
+    await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 1_000 });
+    expect(Date.now() - t0, 'reveal is prompt once painted (floor was spent)').toBeLessThan(600);
+  });
+
   test('no stale scroll listener leaks onto a route after Astro navigation', async ({ page }) => {
     // Boot the home normally (real engine), let it reveal, then navigate away.
     // A leaked scroll observer from the home document must not survive onto the
