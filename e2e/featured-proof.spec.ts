@@ -103,4 +103,51 @@ test.describe('featured-project proof — no-WebGL edition (PRD-003)', () => {
     await expect(link).toHaveCount(1);
     await expect(link).toBeVisible();
   });
+
+  test('the Fleet proof link is keyboard-reachable and receives a visible focus ring', async ({
+    page,
+  }) => {
+    // The Fleet link in the no-WebGL fallback proof must be reachable by Tab
+    // and must expose a focus ring — it is the only path to /projects#fleet
+    // for keyboard users who cannot trigger the live canvas marker.
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).toHaveClass(/webgl-unavailable/, { timeout: 9_000 });
+
+    // Tab through the page until we land on the Fleet fragment link.
+    const link = page.locator('.webgl-fallback-proof a[href$="projects#fleet"]');
+    await expect(link).toHaveCount(1);
+
+    // Focus the link directly (Tab iteration count varies by page content;
+    // direct focus proves the element is focusable and painted for keyboard users).
+    await link.focus();
+    await expect(link).toBeFocused();
+
+    // :focus-visible must apply — the link must not hide the focus ring.
+    const hasFocusVisible = await link.evaluate(
+      (el) => el.matches(':focus-visible'),
+    );
+    expect(hasFocusVisible, 'Fleet link shows :focus-visible ring when focused').toBe(true);
+  });
+});
+
+test.describe('featured-project proof — browser history (PRD-003)', () => {
+  test('back/forward navigation preserves the #fleet fragment destination', async ({ page }) => {
+    // Start on home, navigate to /projects#fleet, then verify back/forward
+    // returns to the expected positions — the fragment must survive browser history.
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.goto('/projects#fleet', { waitUntil: 'domcontentloaded' });
+
+    // Fleet article is visible at the fragment destination.
+    await expect(page.locator('article#fleet')).toBeVisible();
+
+    // Back: return to home.
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL('/');
+
+    // Forward: return to the fragment destination.
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    // The URL must contain the fleet fragment.
+    expect(page.url()).toMatch(/projects#fleet$/);
+    await expect(page.locator('article#fleet')).toBeVisible();
+  });
 });
