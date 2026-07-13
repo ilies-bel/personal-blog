@@ -108,12 +108,12 @@ html.js .static-edition {
      (and later than) the dot+name. The element itself stays opacity:1 the whole time. */
   opacity: 1;
 }
-/* STAGE 1-2 — the solid dark cover. A full-bleed --bg layer that HOLDS solid through the
-   scene's heavy first paint AND the entire glide, so the scene is never visible behind the
-   readout mid-travel. STAGE 3 — it fades only AFTER the glide lands: its transition-delay
-   is computed as (glide start + glide duration), both single-sourced in tokens.css, so the
-   fade can never begin before the readout has arrived at the bottom. z-index:-1 keeps it
-   behind the dot+name (which fade earlier, during the glide). */
+/* The solid dark cover — a full-bleed --bg layer that hides the canvas until the scene
+   is genuinely alive. On scene:ready (first composited WebGL frame) it fades out
+   immediately (0s delay, 0.7s ease), so the scene becomes visible at scene:ready + 0.7s
+   rather than the old scene:ready + 1.72s. The readout glide still runs concurrently
+   (it is not gated on this overlay) and completes while the scene cross-fades in.
+   z-index:-1 keeps the cover behind the dot+name, which finish fading first. */
 .scene-loader::before {
   content: '';
   position: absolute;
@@ -121,8 +121,7 @@ html.js .static-edition {
   z-index: -1;
   background: var(--bg);                 /* the graphite room, matching the scene edges */
   opacity: 1;
-  transition: opacity 0.7s var(--ease-out-quint)
-    calc(var(--boot-glide-start) + var(--boot-glide-dur));
+  transition: opacity 0.7s var(--ease-out-quint) 0s;
 }
 .scene-loader-mark {
   display: flex;

@@ -172,10 +172,11 @@ const featured = await getFeaturedProof();
       //      dark layer reaches opacity 0. transitionend on a ::before bubbles to
       //      the host, with event.pseudoElement === '::before'.
       //   2. a timeout backstop in case that transitionend is interrupted / never
-      //      fires (element removed, browser quirks). Sized to the worst-case
-      //      fade end: glide-start(0.32s) + glide-dur(0.7s) + fade-dur(0.7s) ≈ 1.72s
-      //      plus a margin ≈ 2.1s after reveal. (The dot+name fade out earlier, in
-      //      their own 0→0.3s window before the glide, so they never affect this end.)
+      //      fires (element removed, browser quirks). Sized conservatively:
+      //      fade-dur(0.7s) + generous main-thread margin = 2.1s after reveal.
+      //      The ::before transition now has 0s delay (down from 1.02s), so the
+      //      transitionend fires at ~700ms and wins the race; the 2.1s backstop
+      //      is only a safety net for degenerate environments.
       let goneArmed = false;
       const armGone = (): void => {
         if (goneArmed) return;

@@ -389,6 +389,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const NEAR_FACTOR = 0.42; // how close the travelling begins (× resting distance)
   const INTRO_DUR = 6.0; // seconds for the dezoom
   const ROTATE_SPEED = 0.018; // rad/s of resting drift
+  // How long (in scene-time seconds after the first composited frame) the opening
+  // exposure boost decays over. The boost peaks at +45% on frame 1 and reaches
+  // zero at BOOT_GLOW_DUR. Anchored to the first frame, not scene mount, so
+  // shader-compile time does not consume the budget before it starts.
+  const BOOT_GLOW_DUR = 1.5;
   // Red-giant axial spin: ~one rotation per 180 s on its tilted pole (2π/180). Slow
   // and cinematic — 3× slower than before — the surface barely rolls, the camera no
   // longer orbits it (see the red-giant orbit freeze below).
@@ -685,6 +690,9 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // (the loader's inline listener fades itself out). Backdrop mode (reading pages)
   // has no loader, so the event is harmless there. See frame().
   let firstFramePainted = false;
+  // Scene time (seconds) at which the first real frame was composited, -1 until
+  // then. Used to anchor the boot-glow timer independently of shader-compile lag.
+  let bootGlowT0 = -1;
 
   // easeOut (cubic) is a single-source-of-truth easing owned by lifecycle.ts
   // (imported above). The intro dezoom ramp below still uses it. The supernova
@@ -1751,6 +1759,18 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // simBlend, streak gas-dim, nebula-flash bloom) were written into applyCtx above.
     applyLook(look, applyCtx);
 
+    // BOOT GLOW — a brief exposure lift so the opening canvas reads as 'alive'
+    // when the loader overlay dissolves over it. The overlay now starts fading the
+    // instant scene:ready fires (0s CSS delay, 0.7s ease), so the first state the
+    // visitor sees is the scene at t≈bootGlowT0+0.7s. At that moment the lift is
+    // still ~+24%, making the accretion disk and star-field distinctly luminous.
+    // The boost decays linearly to zero by BOOT_GLOW_DUR seconds after the first
+    // frame, with no effect on the settled scene. Reduced-motion skips WebGL; the
+    // backdrop path has no loader — both are correctly excluded by the guards.
+    if (!reduced && bootGlowT0 >= 0 && t < bootGlowT0 + BOOT_GLOW_DUR) {
+      gradePass.uniforms.uExposure.value *= 1 + 0.45 * (1 - (t - bootGlowT0) / BOOT_GLOW_DUR);
+    }
+
     // --- master forward camera rig ------------------------------------------
     // Progress, not object identity, owns the camera: calm drift while the nebula
     // gathers, stable holds while text is readable, one accelerating collapse pull,
@@ -2190,6 +2210,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // pages) has no loader, so the event is simply unobserved there.
     if (!firstFramePainted) {
       firstFramePainted = true;
+      bootGlowT0 = t; // anchor the boot-glow decay timer to this first composited frame
       window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
       // Warm the GPGPU collapse (programs + snapshot FBOs) so no scroll position
       // ever pays a first-bake stall — but only once the loader's reveal has

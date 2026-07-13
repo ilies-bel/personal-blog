@@ -199,6 +199,67 @@ test('SPA nav home (clicking the wordmark) keeps html.js — the live hero, not 
   await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });
 });
 
+// ── Perceived-load: tightened dissolve + boot glow ───────────────────────────
+//
+// Verifies that the dark overlay begins fading the instant scene:ready fires
+// (0s CSS delay) rather than after the old 1.02s glide hold, and that the
+// canvas frame revealed is non-trivially lit by the boot-glow exposure lift.
+// Chromium-only: Safari's getContext is shadowed in test-base (→ no-WebGL path,
+// no canvas timing), and this assertion requires real WebGL rAF scheduling.
+test('tightened dissolve: loader-gone fires ≤1500ms after scene:ready over a non-black canvas', async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== 'chromium', 'chromium only — real WebGL timing + canvas screenshot');
+
+  // Instrument scene:ready and loader-gone inside the page before navigation.
+  await page.addInitScript(() => {
+    const s: { ready?: number; gone?: number } = {};
+    (window as unknown as { __bhBootT: typeof s }).__bhBootT = s;
+    window.addEventListener('scene:ready', () => { s.ready = performance.now(); }, { once: true });
+    new MutationObserver(() => {
+      if (s.gone === undefined && document.body?.classList.contains('loader-gone'))
+        s.gone = performance.now();
+    }).observe(document, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  });
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('body')).toHaveClass(/loader-gone/, { timeout: 15_000 });
+
+  // Skip if no usable WebGL — the no-WebGL path calls revealWithoutWebgl()
+  // synchronously and never fires scene:ready, so there is no CSS transition
+  // timing to validate here.
+  const noWebgl = await page.evaluate(() => document.body.classList.contains('webgl-unavailable'));
+  test.skip(noWebgl, 'no usable WebGL in this run — CSS dissolve timing not exercised');
+
+  const times = await page.evaluate(
+    () => (window as unknown as { __bhBootT: { ready?: number; gone?: number } }).__bhBootT,
+  );
+  test.skip(times.ready === undefined, 'scene:ready never fired — cannot measure delta');
+  expect(times.gone, 'loader-gone instant must be recorded').toBeDefined();
+
+  // Core assertion: the dark overlay dissolves within 1500ms of scene:ready.
+  // Old code: delay = 1.02s + 0.7s fade ≈ 1720ms → would have failed this bound.
+  // New code: delay = 0s   + 0.7s fade ≈  700ms → passes with margin to spare.
+  const delta = times.gone! - times.ready!;
+  expect(
+    delta,
+    `loader-gone came ${delta.toFixed(0)}ms after scene:ready (target: <1500ms)`,
+  ).toBeLessThan(1500);
+
+  // Canvas luminance sanity: the boot-glow exposure lift (peak +45%, decaying
+  // over 1.5s after the first frame) makes the opening frame distinctly non-black.
+  // A pure-black 1280×720 PNG compresses to ≤~10 KB; a lit WebGL frame is larger.
+  const canvasCount = await page.locator('canvas').count();
+  if (canvasCount > 0) {
+    const shot = await page.locator('canvas').first().screenshot();
+    expect(
+      shot.length,
+      'canvas screenshot should be non-trivially sized (not pure black)',
+    ).toBeGreaterThan(10_000);
+  }
+});
+
 // ── PRD-001 Intent-aware loader release ──────────────────────────────────────
 //
 // These tests exercise the first-session floor waiver DETERMINISTICALLY, with
