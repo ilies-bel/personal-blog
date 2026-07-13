@@ -715,7 +715,9 @@ body.graveyard-page .bh-backdrop::before {
 }
 .bh-identity-role {
   font-family: var(--font-mono);
-  font-size: var(--text-label);
+  /* Raised from var(--text-label) (0.6875rem / 11px) — 11px sits below the 12px
+     a11y floor. 0.8125rem (13px) satisfies ≥12px while staying compact. */
+  font-size: 0.8125rem;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--fg-faint);
@@ -1031,11 +1033,20 @@ body.scene-ready.at-opening .bh-focus-dot {
   max-width: min(34rem, 80vw);
   font-family: var(--font-mono);
   font-weight: var(--weight-regular);
-  font-size: var(--text-body-sm);
+  /* Fluid clamp: raised from var(--text-body-sm) (0.875rem / 14px) for readability.
+     Floor is 1rem (16px) — satisfies the ≥16px a11y floor regardless of viewport.
+     Ceiling is 1.125rem (18px) for generous desktop reading. The ≤60rem mobile
+     manifesto treatment (.bh-beat-line override) is untouched — no whisper
+     font-size is declared in that block, so this clamp governs all widths. */
+  font-size: clamp(1rem, 2vw, 1.125rem);
   line-height: var(--leading-snug);
   color: var(--fg-overlay);
   text-wrap: pretty;
-  text-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
+  /* Two-layer shadow for contrast across the full scene brightness range:
+     · the tight opaque layer anchors the glyphs even on the supernova / yellow-star
+       bright-hold frames where a single blurred halo is insufficient for AA;
+     · the wide blurred halo suppresses the ambient glow from the scene underneath. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 1), 0 0 24px rgba(0, 0, 0, 0.95);
 }
 @media (max-width: 34rem) {
   /* Only the placement tightens on narrow widths now — the type tokens (--text-hero
