@@ -62,8 +62,9 @@ const beams = G.COCKPIT_BEAMS.map((b, i) => ({ beam: b, name: names.get(b) ?? `b
 // ---- image ------------------------------------------------------------------
 const { data, info } = await sharp(shot).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 const SCALE = info.width / 1920;
-// Amber energy: hairlines are orange (r high, g mid, b low); the -b term
-// mutes stars and the blue window haze so they can't fake a HOT.
+// Amber energy: hairlines are orange (r high, g mid, b low). Weight by actual
+// red-vs-blue chroma so neutral-white DOM copy crossing a beam cannot fake a
+// HOT (the old linear -b term still scored white text at ~65% intensity).
 function amber(dx, dy) {
   const x = Math.min(info.width - 1.001, Math.max(0, dx * SCALE));
   const y = Math.min(info.height - 1.001, Math.max(0, dy * SCALE));
@@ -71,7 +72,9 @@ function amber(dx, dy) {
   let v = 0;
   for (const [ox, oy, w] of [[0, 0, (1 - fx) * (1 - fy)], [1, 0, fx * (1 - fy)], [0, 1, (1 - fx) * fy], [1, 1, fx * fy]]) {
     const i = ((y0 + oy) * info.width + (x0 + ox)) * 4;
-    v += w * Math.max(0, 0.6 * data[i] + 0.4 * data[i + 1] - 0.35 * data[i + 2]);
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const chroma = Math.max(0, r - b) / 255;
+    v += w * Math.max(0, 0.7 * r + 0.3 * g - b) * chroma;
   }
   return v;
 }

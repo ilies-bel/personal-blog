@@ -306,12 +306,12 @@ void main() {
   float faceKey = mix(abs(L.y), abs(L.x), sideFace);
   float broad = min(lit, 1.7) * (0.35 + 0.65 * faceKey);
   float brushed = 0.5 + 0.5 * sin(vPos.y * 0.34 + ckHash(floor(vPos / 22.0)) * 6.2831);
-  vec3 shell = vec3(0.029, 0.030, 0.033) * (0.92 + 0.52 * edgeGlow)
-             + vec3(0.022, 0.016, 0.012) * edgeGlow
-             + vec3(0.006) * brushed * (0.25 + 0.75 * deckFace);
+  vec3 shell = vec3(0.020, 0.021, 0.023) * (0.94 + 0.34 * edgeGlow)
+             + vec3(0.010, 0.007, 0.005) * edgeGlow
+             + vec3(0.004) * brushed * (0.25 + 0.75 * deckFace);
   vec3 col = shell
-           + uAmber * (0.004 + 0.014 * edgeGlow)
-           + uStarColor * (0.120 * broad + 0.060 * broad * broad);
+           + uAmber * (0.002 + 0.006 * edgeGlow)
+           + uStarColor * (0.050 * broad + 0.020 * broad * broad);
   col *= vigMul(vPos);
   col += (ckHash(vPos * 0.41) - 0.5) * 0.004; // 8-bit dither against banding
   col = novaWash(col);
@@ -335,17 +335,17 @@ void main() {
   float lit = min(litAt(vPos, 1.0), 1.5);
   float horizon = exp(-abs(vPos.y - uLight.y) / 150.0) * exp(-abs(vPos.x - uLight.x) / 850.0);
   float dust = step(0.995, ckHash(floor(vPos / 5.0))) * (0.15 + 0.35 * edge);
-  vec3 col = vec3(0.025, 0.045, 0.070)
-           + uStarColor * (0.08 * lit + 0.10 * horizon)
+  vec3 col = vec3(0.018, 0.028, 0.042)
+           + uStarColor * (0.045 * lit + 0.055 * horizon)
            + vec3(dust);
-  float alpha = (0.022 + 0.038 * edge + 0.016 * lit) * cloakMask(vPos);
+  float alpha = (0.014 + 0.020 * edge + 0.009 * lit) * cloakMask(vPos);
   gl_FragColor = vec4(novaWash(col), uAlpha * alpha);
 }
 `;
 
-/** The recessed console SCREEN — powered display glass inside the housing:
- *  near-black with a warm glow that gathers toward the top lip (the CTA
- *  readout's backlight), clearly a different material from the hull. */
+/** The recessed console SCREEN — matte near-black display glass inside the
+ *  housing. A restrained warm lift under the top lip separates it from the
+ *  hull without turning the recess into a glowing card. */
 export const cockpitScreenFragmentShader = /* glsl */ `
 precision highp float;
 ${starLight}
@@ -356,11 +356,11 @@ varying vec2 vPos;
 void main() {
   // Vertical backlight: strongest just under the top lip, falling to the sill.
   float g = smoothstep(1100.0, 955.0, vPos.y);
-  // Soft side falloff so the glow pools centre-screen where the CTA sits.
+  // Soft side falloff keeps the top-lip lift behind the CTA, not the corners.
   float cx = 1.0 - smoothstep(60.0, 300.0, abs(vPos.x - 960.0));
-  vec3 col = vec3(0.014, 0.010, 0.007)
-           + uAmber * (0.020 + 0.068 * g * g * (0.45 + 0.55 * cx));
-  col += (ckHash(vPos * 0.53) - 0.5) * 0.006;
+  vec3 col = vec3(0.010, 0.009, 0.008)
+           + uAmber * (0.004 + 0.010 * g * g * (0.45 + 0.55 * cx));
+  col += (ckHash(vPos * 0.53) - 0.5) * 0.003;
   col = novaWash(col);
   gl_FragColor = vec4(col, uAlpha * cloakMask(vPos));
 }

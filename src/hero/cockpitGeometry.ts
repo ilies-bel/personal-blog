@@ -165,8 +165,15 @@ function canopyDW(_x: number, y: number): number {
  *  fillet curves themselves at full strength; the ring winds clockwise, so
  *  the −normal side is the hull side everywhere. */
 function canopyOuterW(x: number, y: number): number {
-  if (y < 795) return 1;
   const c01 = (v: number) => Math.min(1, Math.max(0, v));
+  // At the Y-crotch the arm and ring are one casting. The arm's lower edge is
+  // the exposed hull contour; the ring's outer edge is internal to that union
+  // and must disappear until it emerges again as the pillar edge. Leaving it
+  // lit draws the tell-tale third diagonal through the junction.
+  const side = c01((350 - Math.min(x, COCKPIT_W - x)) / 90);
+  const yMerge = c01((y - 252) / 28) * (1 - c01((y - 342) / 34));
+  if (side * yMerge > 0) return 1 - 1.9 * side * yMerge;
+  if (y < 795) return 1;
   const t = c01((x - 500) / 45) * c01((1420 - x) / 45) * c01((y - 795) / 20);
   return 1 - 1.28 * t;
 }
@@ -329,19 +336,18 @@ function buildWrap(mirrored: boolean): CockpitBeam {
 }
 
 function buildCrease(mirrored: boolean): CockpitBeam {
-  // Single lit line passing UNDER the sill corner; both ends die dark — the
-  // left tail fades in past the dash plates, the right tip fades before it
-  // buries inside the housing band.
+  // Single lit line passing UNDER the sill corner; it enters from off-screen
+  // and the inner tip fades before it buries inside the housing band.
   const RIDGE: Pt[] = [
-    [140, 984], [170, 975], [250, 954], [340, 939], [440, 929],
+    [-10, 1024], [80, 997], [170, 975], [250, 954], [340, 939], [440, 929],
     [520, 921], [620, 916], [660, 914], [690, 914],
   ];
   const pts = bandOnRidge(RIDGE, 6, 1);
   const litW = (x: number, _y: number): number => {
     const px = mirrored ? 1920 - x : x;
-    const on = Math.min(1, Math.max(0, (px - 125) / 60));
+    const on = Math.min(1, Math.max(0, (px + 12) / 85));
     const off = Math.min(1, Math.max(0, (px - 648) / 38));
-    return -1 + 1.55 * on * (1 - off);
+    return -1 + 1.9 * on * (1 - off);
   };
   const dark = (_x: number, _y: number): number => -1;
   return {
@@ -363,8 +369,8 @@ function buildFlare(mirrored: boolean): CockpitBeam {
     [340, 802], [380, 795], [400, 792], [434, 792],
   ];
   const pts = bandOnRidge(RIDGE, 11, -1); // band sits ABOVE the strong ridge
-  const strongW = rampW(400, 430, 0.15, -0.8, mirrored);
-  const dimW = rampW(400, 430, -0.33, -0.9, mirrored);
+  const strongW = rampW(400, 430, 0.62, -0.8, mirrored);
+  const dimW = rampW(400, 430, -0.2, -0.9, mirrored);
   return {
     pts: mirrored ? mirrorPts(pts) : pts,
     dw: 11,
@@ -383,16 +389,40 @@ export const WRAP_BEAMS: ReadonlyArray<CockpitBeam> = [
   buildFlare(true),
 ];
 
+// A short upper fork completes the reference's lower-corner fan. It leaves
+// the shallow inset facet, converges with the rising wrap around x≈300, then
+// disappears inside that later-painted band. Both tips fade before their caps
+// so the branch reads as an etched handoff, never a floating stroke.
+function buildDeckFork(mirrored: boolean): CockpitBeam {
+  const pts: Pt[] = [[105, 908], [155, 900], [220, 891], [280, 883], [325, 873]];
+  const litW = (x: number, _y: number): number => {
+    const px = mirrored ? COCKPIT_W - x : x;
+    const on = Math.min(1, Math.max(0, (px - 105) / 45));
+    const off = Math.min(1, Math.max(0, (px - 285) / 36));
+    return -1 + 1.72 * on * (1 - off);
+  };
+  return {
+    pts: mirrored ? mirrorPts(pts) : pts,
+    dw: 5,
+    w: 0.35,
+    wPlusAt: litW,
+    wMinusAt: litW,
+  };
+}
+
+const DECK_FORK_BEAMS: ReadonlyArray<CockpitBeam> = [buildDeckFork(false), buildDeckFork(true)];
+
 // ─── The console ─────────────────────────────────────────────────────────────
-// Measured: deck band face y 826→887, screen housing shoulders at (700,887)/
-// (1220,887) with ~45° slopes to the frame bottom, the recess a closed
-// trapezoid with its bottom lip at y≈1030, CTA row at y≈940.
+// Measured: deck band face y 826→878, screen housing shoulders around
+// (730,872)/(1190,872) with faceted slopes below the frame, and an OPEN
+// recess whose y≈911 top lip carries the CTA row (its sides continue below
+// the viewport rather than closing into a card).
 
 const HOUSING_RAW: RawPt[] = [
-  [553, 1090],
-  [700, 887, 60],
-  [1220, 887, 60],
-  [1367, 1090],
+  [500, 1090],
+  [730, 872, 74],
+  [1190, 872, 74],
+  [1420, 1090],
 ];
 /** The housing's inner (+normal) hairline approaches the screen-recess groove
  *  within a pixel at both shoulder fillets. Let the recess carry that short
@@ -400,14 +430,14 @@ const HOUSING_RAW: RawPt[] = [
 function housingInnerW(x: number, y: number): number {
   const c01 = (value: number): number => Math.min(1, Math.max(0, value));
   const top = 1 - c01((y - 930) / 70);
-  const shoulderDistance = Math.min(Math.abs(x - 700), Math.abs(x - 1220));
+  const shoulderDistance = Math.min(Math.abs(x - 730), Math.abs(x - 1190));
   const shoulder = 1 - c01((shoulderDistance - 20) / 90);
   return 0.85 - 1.2 * top * shoulder;
 }
 
 export const HOUSING_BEAM: CockpitBeam = {
   pts: resolveCorners(HOUSING_RAW),
-  dw: 22,
+  dw: 12,
   w: 0.85,
   wPlusAt: housingInnerW,
 };
@@ -418,13 +448,15 @@ export const HOUSING_BEAM: CockpitBeam = {
 // another member's band — no floating ends.
 
 const GROOVES: ReadonlyArray<CockpitBeam> = [
-  // Dash plates — the reference's bottom-left plate CARRIES the telemetry
-  // readout (the DOM prints bare text inside this etch), the right one seats
-  // the finale ledger. Tilted with the wrap perspective.
-  { pts: resolveCorners([[115, 975], [445, 955, 22], [460, 1025, 22], [130, 1048, 22]], true), dw: 6, w: 0.35, closed: true },
-  { pts: resolveCorners([[1475, 955], [1805, 975, 22], [1790, 1048, 22], [1460, 1025, 22]], true), dw: 6, w: 0.35, closed: true },
-  // Screen recess — the closed trapezoid the CTA readout floats in.
-  { pts: resolveCorners([[640, 1030, 24], [706, 898, 36], [1214, 898, 36], [1280, 1030, 24]], true), dw: 7, w: 0.45, closed: true },
+  // Shallow inset facets on the deck. They sit ABOVE the telemetry/directory
+  // readouts rather than boxing the text into card-like bezels.
+  { pts: resolveCorners([[320, 923, 12], [512, 891, 16], [560, 913, 15], [372, 949, 15]], true), dw: 5, w: -0.2, closed: true },
+  { pts: resolveCorners([[1600, 923, 12], [1408, 891, 16], [1360, 913, 15], [1548, 949, 15]], true), dw: 5, w: -0.2, closed: true },
+  { pts: resolveCorners([[342, 922, 10], [507, 899, 13], [535, 912, 12], [374, 940, 12]], true), dw: 3, w: -0.24, closed: true },
+  { pts: resolveCorners([[1578, 922, 10], [1413, 899, 13], [1385, 912, 12], [1546, 940, 12]], true), dw: 3, w: -0.24, closed: true },
+  // The screen recess is OPEN at the bottom of the viewport: the reference's
+  // side grooves continue below the glass instead of closing into a card.
+  { pts: resolveCorners([[670, 1100], [770, 911, 38], [1150, 911, 38], [1250, 1100]]), dw: 6, w: 0.45 },
 ];
 
 // PAINT ORDER = JOIN ORDER: every chisel tip tucks under a band drawn LATER
@@ -432,6 +464,7 @@ const GROOVES: ReadonlyArray<CockpitBeam> = [
 // dark fill ever crosses a receiving member's hairline.
 export const COCKPIT_BEAMS: ReadonlyArray<CockpitBeam> = [
   ...ARM_BEAMS,
+  ...DECK_FORK_BEAMS,
   ...WRAP_BEAMS,
   ...GROOVES,
   HOUSING_BEAM,
@@ -463,10 +496,10 @@ export const HULL_HOLES: ReadonlyArray<ReadonlyArray<Pt>> = [HULL_HOLE];
  *  so it reads as a powered display). */
 export const PANEL_SCREEN: ReadonlyArray<Pt> = resolveCorners(
   [
-    [646, 1024, 20],
-    [710, 904, 32],
-    [1210, 904, 32],
-    [1274, 1024, 20],
+    [670, 1100],
+    [776, 917, 32],
+    [1144, 917, 32],
+    [1250, 1100],
   ],
   true,
 );
