@@ -792,12 +792,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             ))}
           </>
         )}
-        {/* The cockpit canopy the HUD power-on DE-CLOAKS. On the LIVE path it
-            is a WebGL rig inside the scene itself (buildCockpit — per-pixel star
-            lighting, bloom-lit, the Predator materialisation), so no DOM layer
-            mounts here.
-            The SVG fallback below serves ONLY the reduced-motion poster path,
-            where there is no scene to light it (static frame, CSS crossfade). */}
+        {/* The cockpit canopy the HUD power-on DE-CLOAKS. Live renders the shared
+            structural plate once after the post chain, with a restrained solid
+            lifecycle-light response and no bloom. Reduced motion mounts that
+            exact plate as a static image over the poster crossfade. */}
         {reduced && <CockpitFrame />}
         <HeroIdentity />
         <ManifestoOverlay counts={counts} cards={cards} />

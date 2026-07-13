@@ -2,7 +2,7 @@
 // amber trim lines cross a set of scan rows/columns. "Amberness" = (r−b)
 // weighted by luminance, which ignores the white disk/reticle and the black
 // hull; peaks are local maxima merged within 5px. Output feeds the authored
-// geometry in cockpitGeometry.ts — measured, not eyeballed.
+// paths in cockpit-plate.source.svg — measured, not eyeballed.
 //   node scripts/blueprint-scan.mjs [ref=reference-v2.png] [--rows a,b,c] [--cols d,e,f]
 //   --rows/--cols replace the preset scan lines — densify around a joint to
 //   measure it before authoring.

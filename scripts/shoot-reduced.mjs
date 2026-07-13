@@ -1,5 +1,5 @@
-// Reduced-motion fallback capture: the static SVG cockpit must keep rendering
-// the exact shared COCKPIT_BEAMS geometry without loading the live engine.
+// Reduced-motion fallback capture: the shared static cockpit plate must render
+// the exact shared RGBA plate without loading the live engine.
 // Usage: node scripts/shoot-reduced.mjs [port=4325] [out=reduced-motion.png]
 import { chromium } from '@playwright/test';
 const port = process.argv[2] ?? '4325';

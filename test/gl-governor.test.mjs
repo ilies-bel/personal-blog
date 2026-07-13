@@ -3,8 +3,8 @@
 // Unlike the scene-curve/transitions tests (which hand-translate shader math),
 // this suite imports the REAL module: glGovernor.ts is pure erasable TypeScript
 // (no GL, no DOM), and node >= 22.18 strips types on import — the same
-// mechanism scripts/inspect-joins.mjs uses for cockpitGeometry.ts. So the
-// policy asserted here is the policy production runs, not a copy that drifts.
+// mechanism other source-level policy tests use. So the policy asserted here
+// is the policy production runs, not a copy that drifts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

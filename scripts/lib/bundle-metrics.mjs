@@ -14,7 +14,7 @@
 //     (`import("./warmThree…")` / `import("./createScene…")`) out of the eager
 //     chunks, with a chunk-name-pattern fallback, so a hash change can never
 //     silently drop a file from the measurement. Shared support chunks the
-//     engine ALSO uses (config, glGovernor, cockpitGeometry…) are counted once,
+//     engine ALSO uses (config, glGovernor, cockpitPlate…) are counted once,
 //     in the route budgets, not double-counted here.
 //
 //   • PER-ROUTE EAGER JS — for every dist HTML page: the JS actually requested

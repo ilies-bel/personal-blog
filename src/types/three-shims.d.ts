@@ -35,6 +35,7 @@ declare module 'three' {
   export class ShaderMaterial { constructor(...args: any[]); [key: string]: any; }
   export class Sphere { constructor(...args: any[]); [key: string]: any; }
   export class Texture { constructor(...args: any[]); [key: string]: any; }
+  export class TextureLoader { constructor(...args: any[]); [key: string]: any; }
   export class Vector2 { constructor(...args: any[]); [key: string]: any; }
   export class Vector3 { constructor(...args: any[]); [key: string]: any; }
   export class Vector4 { constructor(...args: any[]); [key: string]: any; }

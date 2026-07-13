@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <!--
+    Cockpit structural plate — authoring source.
+
+    Runtime never renders these vectors. scripts/generate-cockpit-plate.mjs
+    flattens this file to the adjacent PNG so the hull and every trim junction
+    are one precomposed RGBA surface. No filters: all lighting is a separate,
+    solid-energy treatment in the post-composer plate shader.
+  -->
+  <defs>
+    <linearGradient id="hull-metal" x1="0" y1="0" x2="0" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#070709" stop-opacity="0.97"/>
+      <stop offset="0.63" stop-color="#040406" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#09090b" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="console-metal" x1="960" y1="810" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#101012" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#050506" stop-opacity="0.99"/>
+    </linearGradient>
+  </defs>
+
+  <!-- One hull mass with one transparent windshield opening. -->
+  <path
+    id="cockpit-shell"
+    fill="url(#hull-metal)"
+    fill-rule="evenodd"
+    d="M0 0H1920V1080H0Z
+       M526 79H1394
+       L1677 243
+       C1697 255 1704 268 1698 288
+       L1537 744
+       C1530 765 1518 781 1498 796
+       L1438 832
+       C1426 840 1411 843 1391 843
+       H529
+       C509 843 494 840 482 832
+       L422 796
+       C402 781 390 765 383 744
+       L222 288
+       C216 268 223 255 243 243Z"
+  />
+
+  <!-- Quiet, large facets keep the plate physical without decorative seams. -->
+  <path fill="#111115" fill-opacity="0.34" d="M0 0H520L184 218L0 137Z"/>
+  <path fill="#111115" fill-opacity="0.34" d="M1920 0H1400L1736 218L1920 137Z"/>
+  <path fill="#0d0d10" fill-opacity="0.34" d="M0 878L386 801L510 852L0 1020Z"/>
+  <path fill="#0d0d10" fill-opacity="0.34" d="M1920 878L1534 801L1410 852L1920 1020Z"/>
+
+  <!-- The outer casting silhouette is one uninterrupted, subdued contour. -->
+  <path
+    id="casting-outer-contour"
+    fill="none"
+    stroke="#746b5d"
+    stroke-opacity="0.62"
+    stroke-width="1.35"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M-24 132L164 217
+       C176 223 185 222 197 214
+       L497 42
+       C507 36 518 34 532 34H1388
+       C1402 34 1413 36 1423 42
+       L1723 214
+       C1735 222 1744 223 1756 217L1944 132"
+  />
+
+  <!--
+    PRIMARY RIDGE 1: incoming arm → outer pillar → lower sill → mirrored arm.
+    This is one off-canvas-to-off-canvas path. The compact cubic at each Y is
+    the entire turn: no overlap, patch, butt cap, shelf or S-curve exists.
+  -->
+  <path
+    id="arm-outer-pillar-ridge"
+    fill="none"
+    stroke="#f0a126"
+    stroke-width="3.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M-34 158L178 250
+       C185 253 190 260 193 272
+       L354 744
+       C361 765 373 781 392 796
+       L451 839
+       C465 849 481 852 503 852H1417
+       C1439 852 1455 849 1469 839
+       L1528 796
+       C1547 781 1559 765 1566 744
+       L1727 272
+       C1730 260 1735 253 1742 250L1954 158"
+  />
+
+  <!--
+    PRIMARY RIDGE 2: roof → inner pillar → windshield sill. Its Y tangent
+    leaves the same casting cleanly but never intersects the arm ridge.
+  -->
+  <path
+    id="roof-inner-pillar-ridge"
+    fill="none"
+    stroke="#f0a126"
+    stroke-width="3.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M520 60H1400
+       C1409 60 1417 62 1425 67L1690 220
+       C1708 231 1716 247 1710 268
+       L1544 742
+       C1537 764 1524 781 1504 796
+       L1443 834
+       C1430 842 1415 845 1394 845H526
+       C505 845 490 842 477 834
+       L416 796
+       C396 781 383 764 376 742
+       L210 268
+       C204 247 212 231 230 220L495 67
+       C503 62 511 60 520 60Z"
+  />
+
+  <!-- Quiet companions, kept deliberately below the primary ridge energy. -->
+  <path
+    id="windshield-inner-companion"
+    fill="none"
+    stroke="#60636a"
+    stroke-opacity="0.7"
+    stroke-width="1.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M535 80H1385L1674 247
+       C1689 256 1694 269 1689 285L1528 739
+       C1522 757 1512 770 1495 783L1433 822
+       C1422 829 1409 832 1390 832H530
+       C511 832 498 829 487 822L425 783
+       C408 770 398 757 392 739L231 285
+       C226 269 231 256 246 247Z"
+  />
+  <path
+    id="windshield-depth-companion"
+    fill="none"
+    stroke="#383e47"
+    stroke-opacity="0.5"
+    stroke-width="0.9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M550 92H1370L1658 258
+       C1670 265 1674 276 1670 290L1518 731
+       C1512 748 1503 760 1487 772L1426 811
+       C1416 817 1404 820 1386 820H534
+       C516 820 504 817 494 811L433 772
+       C417 760 408 748 402 731L250 290
+       C246 276 250 265 262 258Z"
+  />
+  <path
+    id="casting-shadow-contour"
+    fill="none"
+    stroke="#41454c"
+    stroke-opacity="0.78"
+    stroke-width="1.15"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M-28 185L158 266
+       C173 273 181 285 187 302L346 757
+       C353 778 367 798 387 813L441 853
+       M1479 853L1533 813
+       C1553 798 1567 778 1574 757L1733 302
+       C1739 285 1747 273 1762 266L1948 185"
+  />
+
+  <!-- Simplified deck: two long structural sweeps per side, no line fan. -->
+  <path
+    id="deck-upper-ridge"
+    fill="none"
+    stroke="#b8781f"
+    stroke-opacity="0.9"
+    stroke-width="1.7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M-20 902L245 850L476 850L653 880H1267L1444 850H1675L1940 902"
+  />
+  <path
+    id="deck-lower-ridge"
+    fill="none"
+    stroke="#5b5751"
+    stroke-opacity="0.72"
+    stroke-width="1.35"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M-20 982L164 932L458 892L618 931
+       M1302 931L1462 892L1756 932L1940 982"
+  />
+  <path
+    fill="none"
+    stroke="#35322e"
+    stroke-opacity="0.75"
+    stroke-width="1"
+    d="M0 878L258 829L454 829M1920 878L1662 829L1466 829"
+  />
+
+  <!-- One console housing and one recessed face, both precomposed in the plate. -->
+  <path
+    id="console-housing"
+    fill="url(#console-metal)"
+    stroke="#655e55"
+    stroke-opacity="0.9"
+    stroke-width="1.3"
+    stroke-linejoin="round"
+    d="M620 1080L563 989L635 866L704 826H1216L1285 866L1357 989L1300 1080Z"
+  />
+  <path
+    id="console-screen"
+    fill="#070708"
+    fill-opacity="0.98"
+    stroke="#e89a25"
+    stroke-width="2.4"
+    stroke-linejoin="round"
+    d="M628 1018L708 895Q713 887 724 887H1196Q1207 887 1212 895L1292 1018Z"
+  />
+  <path
+    fill="none"
+    stroke="#5d5952"
+    stroke-width="1.2"
+    stroke-linejoin="round"
+    d="M606 1036L694 879Q701 866 718 866H1202Q1219 866 1226 879L1314 1036"
+  />
+
+  <!-- Fixed outer hull datum; no glow/filter. -->
+  <rect x="11" y="11" width="1898" height="1058" fill="none" stroke="#69635c" stroke-opacity="0.72" stroke-width="1"/>
+</svg>
