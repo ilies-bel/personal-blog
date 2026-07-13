@@ -672,7 +672,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // chunk hasn't resolved yet, it degrades to a plain SPA navigation — the marker is
   // never a dead link. Stable identity (useCallback, no deps) so the context value
   // doesn't churn the marker tree.
-  const beginDive = useCallback((opts: { href: string; targetNdc?: { x: number; y: number }; state?: HudTargetId }) => {
+  const beginDive = useCallback((opts: { href: string; targetNdc?: { x: number; y: number }; state?: HudTargetId; label?: string }) => {
     const handle = sceneHandleRef.current;
     // PURE SPA navigation — no hard-reload fallback. The former 700ms
     // `window.location.assign` band-aid papered over a real stall: the heavy ~1.2M-point
@@ -721,6 +721,24 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         const py = (1 - (opts.targetNdc.y * 0.5 + 0.5)) * 100;
         overlay.style.setProperty('--bloom-x', `${px}%`);
         overlay.style.setProperty('--bloom-y', `${py}%`);
+      }
+      // DECORATIVE DESTINATION READOUT (PRD-004): carry the audited transit label
+      // through the bloom on the persisted, aria-hidden [data-dive-label] carrier.
+      // It rides the overlay from here to the destination's resurface handler
+      // (BaseLayout), which clears it — the route <h1> + real SiteNav state own the
+      // arrival. Under reduced motion, CSS omits the carrier entirely (no travel);
+      // we still set the text so the reduced-motion resurface clears the same node.
+      // Absent label (a dive marker without one) → clear any stale text and do not
+      // flag the carrier active.
+      const carrier = overlay.querySelector<HTMLElement>('[data-dive-label]');
+      if (carrier) {
+        if (opts.label) {
+          carrier.textContent = opts.label;
+          overlay.dataset.diveLabel = 'active';
+        } else {
+          carrier.textContent = '';
+          delete overlay.dataset.diveLabel;
+        }
       }
     }
     handle.beginDive({

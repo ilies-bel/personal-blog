@@ -610,6 +610,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
               href: resolveHref(base, placement.href),
               targetNdc: { x: ndcX, y: ndcY },
               state: placement.state,
+              label: placement.transitLabel,
             });
           }
           return;
@@ -632,6 +633,7 @@ export default function StarMarker({ placement, markerFrameRef }: StarMarkerProp
           href: resolveHref(base, placement.href),
           targetNdc: { x: ndcX, y: ndcY },
           state: placement.state,
+          label: placement.transitLabel,
         });
         // (3) Otherwise: no preventDefault — the <a href> navigates natively.
       }}

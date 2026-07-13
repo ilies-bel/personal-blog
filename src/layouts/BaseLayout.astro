@@ -102,7 +102,18 @@ const routeId = (() => {
         eases it back out for the "resurface" (and clears the tint so the next nav starts
         clean). Starts hidden via CSS (opacity 0), so a normal page load / navigation
         never sees it. */}
-    <div class="dive-overlay" data-dive-overlay transition:persist aria-hidden="true"></div>
+    <div class="dive-overlay" data-dive-overlay transition:persist aria-hidden="true">
+      {/* DECORATIVE DESTINATION READOUT (PRD-004) — a travelling instrument label
+          that carries the audited dive-destination name (WRITING/PROJECTS/…)
+          through the bloom, then RECEDES before the destination's real <h1> rises.
+          It lives INSIDE the aria-hidden overlay, so it is permanently out of the
+          accessibility tree (never announced, never a heading/live region) and
+          pointer-inert (the overlay is pointer-events:none). HeroIsland.beginDive
+          writes its text + flips data-dive-label='active' on the overlay to reveal
+          it; the resurface handler + every reset path below clear it. Empty and
+          hidden on a normal load. Nonfocusable (no tabindex, not interactive). */}
+      <span class="dive-label" data-dive-label></span>
+    </div>
     {/* Hyperspace warp overlay — a full-viewport canvas that renders the Star-Wars
         "jump to lightspeed" streaks when navigating INTO the About page. Persisted
         across the ClientRouter swap (transition:persist) exactly like the dive
@@ -472,6 +483,28 @@ const routeId = (() => {
         delete overlay.dataset.bloomState;
         overlay.style.removeProperty('--bloom-x');
         overlay.style.removeProperty('--bloom-y');
+        // DESTINATION READOUT (PRD-004): the decorative transit label recedes with
+        // the bloom (dived branch: it fades out alongside the overlay opacity, then
+        // its text is cleared so it can never leak onto a later route) or is cleared
+        // instantly (normal nav / fresh load). The route <h1> + real SiteNav state
+        // own arrival — the carrier yields before it could read as a heading. This
+        // covers EVERY exit path this handler serves: resurface, normal nav, reload,
+        // browser history, and an interrupted/abandoned dive whose flag was consumed.
+        const label = overlay.querySelector<HTMLElement>('[data-dive-label]');
+        delete overlay.dataset.diveLabel;
+        if (label) {
+          // Under a dived resurface the carrier's own CSS transition fades it with
+          // the overlay; clear the text after that tail so it recedes visibly. On a
+          // normal nav the flag is already gone (carrier hidden by CSS), so clearing
+          // the text immediately is invisible and prevents any stale replay.
+          if (dived) {
+            window.setTimeout(() => {
+              label.textContent = '';
+            }, 720);
+          } else {
+            label.textContent = '';
+          }
+        }
       });
     </script>
 

@@ -50,11 +50,14 @@ export interface SceneActions {
   /** Begin the cinematic dive for a marker, then navigate at the bloom apex.
    *  Falls back to a plain navigate if the scene engine hasn't mounted yet.
    *  `targetNdc` is the marker's on-screen point (so the plunge aims at it, not
-   *  dead-centre); `state` selects the bloom's per-lifecycle-state tint. */
+   *  dead-centre); `state` selects the bloom's per-lifecycle-state tint; `label`
+   *  is the audited decorative destination readout (PRD-004) carried through the
+   *  bloom by the persisted overlay, then cleared on resurface (aria-hidden). */
   beginDive?: (opts: {
     href: string;
     targetNdc?: { x: number; y: number };
     state?: HudTargetId;
+    label?: string;
   }) => void;
   /** Request a change to the RESOLVED reduced-motion preference (state.reduced).
    *  Drives the corner toggle button; the SAME resolved value feeds the hero's mount

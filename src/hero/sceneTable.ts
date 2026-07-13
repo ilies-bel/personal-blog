@@ -598,6 +598,18 @@ export interface MarkerPlacement {
    *  frame, then SPA-navigates at the apex. Set on ALL markers now (each scene's
    *  state colours its own bloom). Absent/false markers would navigate normally. */
   dive?: boolean;
+  /** DECORATIVE destination readout carried through the dive bloom (PRD-004) — the
+   *  audited short, mono-uppercase name of where this dive lands (e.g. 'WRITING').
+   *  Set ONLY on dive-capable markers; it rides the persisted [data-dive-overlay]
+   *  carrier from dive-commit to resurface, then yields to the destination's real
+   *  <h1> + SiteNav current state, which OWN the arrival meaning. The carrier is
+   *  permanently aria-hidden / pointer-inert / nonfocusable and is NOT a heading,
+   *  live region, or replacement title — it never claims an aria-current the route
+   *  does not itself provide (e.g. Graveyard lights no nav item, so its label just
+   *  recedes into a route with no current section). Vocabulary deltas are
+   *  intentional and audited: PROJECTS→Work, INSPIRATION→Writing. Absent (or on the
+   *  warp-only About marker) → no carrier. */
+  transitLabel?: string;
 }
 
 export interface ManifestoBeat {
@@ -769,6 +781,9 @@ export const SCENES: readonly LifecycleScene[] = [
         tags: ['Essays', 'Craft'],
         cta: 'Read the writing',
         dive: true,
+        // PRD-004 audited transit label. Destination /writing, h1 "Everything, in
+        // plain words.", nav current = Writing.
+        transitLabel: 'WRITING',
       },
     ],
     // NEBULA — a gentle dwell so the bloom/collapse around the held frame slow down
@@ -832,6 +847,11 @@ export const SCENES: readonly LifecycleScene[] = [
         tags: ['Shipped', 'Tools'],
         cta: 'See the projects',
         dive: true,
+        // PRD-004 audited transit label. Destination /projects (fragment #fleet
+        // after PRD-003; the fragment does not change the pathname, so nav current
+        // = Work). Marker label PROJECTS → nav item Work is an intentional,
+        // audited vocabulary delta. h1 "The work that held."
+        transitLabel: 'PROJECTS',
       },
     ],
     beat: {
@@ -890,6 +910,11 @@ export const SCENES: readonly LifecycleScene[] = [
         tags: ['Dead repos', 'Lessons'],
         cta: 'Walk the graveyard',
         dive: true,
+        // PRD-004 audited transit label. Destination /graveyard, h1 "Not
+        // everything survives." Graveyard has NO SiteNav item and claims NO
+        // nav-current by design — the carrier recedes into a route with no current
+        // section (never a false aria-current).
+        transitLabel: 'GRAVEYARD',
       },
     ],
     // RED GIANT — the contemplative beat. A modest dwell so the morph lingers a
@@ -955,6 +980,11 @@ export const SCENES: readonly LifecycleScene[] = [
         // soft capped veil (the black-hole/warm-bone tint), then SPA-navigates at
         // the apex. The dive is now on EVERY marker (each in its own state tint).
         dive: true,
+        // PRD-004 audited transit label. Destination /posts/thanks-for-scrolling-
+        // to-the-bottom, h1 "Why this begins at the end". Marker label INSPIRATION
+        // → nav current Writing (the posts subtree lights Writing) is an
+        // intentional, audited vocabulary delta.
+        transitLabel: 'INSPIRATION',
       },
     ],
     // BLACK HOLE — the terminal hero. A light dwell so the final settle reads as
