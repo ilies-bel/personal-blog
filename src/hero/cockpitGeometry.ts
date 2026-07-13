@@ -136,15 +136,17 @@ const RING_RAW: RawPt[] = [
   // shoulders straight almost to y=60, then facets hard into the diagonal.
   [519, 60, 6],
   [1397, 60, 6],
-  [1729, 250, 10],
-  [1705, 270, 10],
+  // One compact turning vertex per Y-joint. The former two-point dogleg
+  // kicked outward at y≈250 and snapped back by y≈280, producing an S-bulb.
+  // This measured 30-unit fillet matches the reference ridge at every scan
+  // row from y190 through y320 while preserving the straight roof/pillar runs.
+  [1712, 242, 30],
   [1531, 760, 22],
   [1434, 835, 28],
   [960, 833, 72],
   [483, 835, 28],
   [384, 760, 22],
-  [211, 270, 10],
-  [187, 250, 10],
+  [203, 242, 30],
 ];
 
 /** Per-point canopy width — the measured band profile: thin top (14), ~17 on
@@ -163,6 +165,17 @@ function canopyDW(_x: number, y: number): number {
   return stops[stops.length - 1][1];
 }
 
+/** At the Y the hull-side companion is physically swallowed by the incoming
+ * arm, so only the arm ridge and ring core remain visible. Restore that outer
+ * lamination immediately below the merge, where the reference resolves the
+ * normal three-line pillar stack again from y≈260 onward. */
+function canopyOuterW(x: number, y: number): number {
+  const side = Math.min(x, COCKPIT_W - x);
+  if (side > 320 || y >= 260) return 0.85;
+  const restore = Math.min(1, Math.max(0, (y - 250) / 10));
+  return -0.7 + 1.55 * restore;
+}
+
 /** The sill's hull-side hairline is the DIM one in the reference (≈0.3× the
  *  window side) between the corners — the strong line at each corner belongs
  *  to the wrap crease handing off through the fillet. The ramps keep the
@@ -177,7 +190,7 @@ export const CANOPY_BEAM: CockpitBeam = {
   // The inner companion is deliberately quieter than the hull-side line,
   // matching the measured 73/131/19 ridge energy around y=500.
   wPlusAt: () => -0.1,
-  wMinusAt: () => 0.85,
+  wMinusAt: canopyOuterW,
 };
 
 /** Bright centre lamination. At 4 design px its two shader edges resolve as a
@@ -212,10 +225,24 @@ export const CANOPY_CORE: CockpitBeam = {
 const mirrorPts = (pts: ReadonlyArray<Pt>): Pt[] => pts.map(([x, y]) => [COCKPIT_W - x, y]);
 const mirrorBeam = (beam: CockpitBeam): CockpitBeam => ({ ...beam, pts: mirrorPts(beam.pts) });
 
-const ARM_PATH: ReadonlyArray<Pt> = [[-30, 158], [70, 200], [187, 250], [211, 270], [220, 292]];
+// The incoming arm is independent from the ring: it keeps the measured
+// x≈187/y≈250 ridge, then continues straight just far enough to bury its cap
+// inside the ring band. Its bright core fades through that buried tail.
+const ARM_PATH: ReadonlyArray<Pt> = [[-30, 158], [70, 200], [187, 250], [216, 262]];
 export const ARM_L: CockpitBeam = { pts: ARM_PATH, dw: 32, w: 0.12 };
 export const ARM_R: CockpitBeam = mirrorBeam(ARM_L);
-const ARM_CORE_L: CockpitBeam = { pts: ARM_PATH, dw: 4, w: 1 };
+const armCoreW = (x: number): number => {
+  const px = Math.min(x, COCKPIT_W - x);
+  const t = Math.min(1, Math.max(0, (px - 184) / 28));
+  return 1 - 2 * t;
+};
+const ARM_CORE_L: CockpitBeam = {
+  pts: ARM_PATH,
+  dw: 4,
+  w: 1,
+  wPlusAt: armCoreW,
+  wMinusAt: armCoreW,
+};
 const ARM_CORE_R: CockpitBeam = mirrorBeam(ARM_CORE_L);
 
 const ARM_BEAMS: ReadonlyArray<CockpitBeam> = [ARM_L, ARM_R, ARM_CORE_L, ARM_CORE_R];
