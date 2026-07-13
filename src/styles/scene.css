@@ -123,6 +123,25 @@ html.js .static-edition {
   opacity: 1;
   transition: opacity 0.7s var(--ease-out-quint) 0s;
 }
+/* LCP poster — a real <img> element (see index.astro) that browsers can track as
+   the Largest Contentful Paint candidate, replacing the ::before pseudo-element
+   which is invisible to LCP reporting. Sits above the dark ::before cover (z-1 →
+   z-0) but below the dot+name stacking context, filling the loader identically.
+   fetchpriority=high + decoding=sync on the markup side put the 22 KB webp on the
+   critical path; here we just position it and sequence its fade with scene-ready. */
+.scene-loader-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 1;
+  transition: opacity 0.7s var(--ease-out-quint) 0s;
+}
+body.scene-ready .scene-loader-poster {
+  opacity: 0;
+}
 .scene-loader-mark {
   display: flex;
   flex-direction: column;

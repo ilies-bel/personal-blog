@@ -78,6 +78,20 @@ const featured = await getFeaturedProof();
       loader-gone in one stroke). Styling lives in scene.css under "Instant
       intro loader". */}
   <div class="scene-loader">
+    {/* LCP poster — a real <img> the browser can report as the Largest Contentful
+        Paint candidate, replacing the ::before pseudo-element which browsers cannot
+        track for LCP. fetchpriority=high + decoding=sync pushes the 22 KB webp onto
+        the critical path so it arrives before the ~200 KB-gzip three.js chunk, giving
+        a ~200 ms LCP instead of the 9.8 s figure tied to the engine warm-up.
+        aria-hidden: pure decoration — the loader copy already describes the state. */}
+    <img
+      class="scene-loader-poster"
+      src={href('assets/posters/poster-1-blackhole.webp')}
+      alt=""
+      aria-hidden="true"
+      fetchpriority="high"
+      decoding="sync"
+    />
     <div class="scene-loader-mark" aria-hidden="true">
       <span class="scene-loader-dot"></span>
       <span class="scene-loader-name">{BRAND_NAME}</span>
