@@ -3,7 +3,7 @@
 // design-space source is cockpitGeometry.ts, corners pre-rounded there).
 //
 // The live path does NOT mount this: the canopy is part of the scene itself
-// (per-pixel star lighting, bloom, the beam shader's milled metal). Under
+// (per-pixel star lighting and the beam shader's crisp milled metal). Under
 // reduced motion there is no scene and no light to track, so this renders the
 // frame with a fixed light resting at the star's home position.
 //
@@ -17,6 +17,8 @@
 // "COCKPIT CANOPY", the reduced-motion branch).
 import {
   COCKPIT_BEAMS,
+  COCKPIT_BEAMS_ABOVE_SCREEN,
+  COCKPIT_BEAMS_BELOW_SCREEN,
   HULL_OUTER,
   HULL_HOLES,
   PANEL_SCREEN,
@@ -30,11 +32,26 @@ const LIGHT_HOME_X = 960;
 const LIGHT_HOME_Y = 460;
 
 /** One pass of beam underlays; `className` picks the stroke colour. */
-function BeamEdgePass({ className }: { className: string }) {
+function BeamEdgePass({ className, beams = COCKPIT_BEAMS }: { className: string; beams?: typeof COCKPIT_BEAMS }) {
   return (
     <g className={className}>
-      {COCKPIT_BEAMS.map((beam, i) => (
+      {beams.map((beam, i) => (
         <path key={i} d={toPathD(beam.pts, beam.closed)} strokeWidth={beam.dw} strokeOpacity={0.4 + 0.6 * beam.w} />
+      ))}
+    </g>
+  );
+}
+
+function BeamMetalPass({ beams }: { beams: typeof COCKPIT_BEAMS }) {
+  return (
+    <g>
+      {beams.map((beam, i) => (
+        <path
+          key={i}
+          className="bh-cockpit-beam-metal"
+          d={toPathD(beam.pts, beam.closed)}
+          strokeWidth={Math.max(2, beam.dw - 3)}
+        />
       ))}
     </g>
   );
@@ -74,26 +91,21 @@ export default function CockpitFrame() {
         d={`${toPathD(HULL_OUTER, true)} ${HULL_HOLES.map((hole) => toPathD(hole, true)).join(' ')}`}
         fillRule="evenodd"
       />
-      {/* The recessed console screen glass. */}
-      <path className="bh-cockpit-panel" d={toPathD(PANEL_SCREEN, true)} />
-
-      {/* Beam underlays: dim base, then the lit pass under the resting light. */}
-      <BeamEdgePass className="bh-cockpit-beam-base" />
+      {/* Deck plates first: the physical screen glass occludes any ridge that
+          passes behind the console, matching the live renderer's layer split. */}
+      <BeamEdgePass className="bh-cockpit-beam-base" beams={COCKPIT_BEAMS_BELOW_SCREEN} />
       <g mask="url(#ckpt-lit-mask)">
-        <BeamEdgePass className="bh-cockpit-beam-lit" />
+        <BeamEdgePass className="bh-cockpit-beam-lit" beams={COCKPIT_BEAMS_BELOW_SCREEN} />
+      </g>
+      <BeamMetalPass beams={COCKPIT_BEAMS_BELOW_SCREEN} />
+      <path className="bh-cockpit-panel" d={toPathD(PANEL_SCREEN, true)} />
+      <BeamEdgePass className="bh-cockpit-beam-base" beams={COCKPIT_BEAMS_ABOVE_SCREEN} />
+      <g mask="url(#ckpt-lit-mask)">
+        <BeamEdgePass className="bh-cockpit-beam-lit" beams={COCKPIT_BEAMS_ABOVE_SCREEN} />
       </g>
 
       {/* Metal overlay: the dark band that leaves only the edge slivers lit. */}
-      <g>
-        {COCKPIT_BEAMS.map((beam, i) => (
-          <path
-            key={i}
-            className="bh-cockpit-beam-metal"
-            d={toPathD(beam.pts, beam.closed)}
-            strokeWidth={Math.max(2, beam.dw - 3)}
-          />
-        ))}
-      </g>
+      <BeamMetalPass beams={COCKPIT_BEAMS_ABOVE_SCREEN} />
     </svg>
   );
 }

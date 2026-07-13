@@ -2026,7 +2026,7 @@ body.bh-diving .hud-frame-readout {
   .hud-compass--boot[data-boot='cue'][data-glide='true'] {
     /* Reserve the pedestal seat in both power states. Power changes paint,
        never the readout's measured position or box metrics. */
-    bottom: 7.4vh;
+    bottom: 9vh;
     width: clamp(17rem, 19vw, 24rem);
     min-height: 4.4rem;
     padding: 1.1vh 1rem 1.3vh;

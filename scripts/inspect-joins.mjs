@@ -106,9 +106,25 @@ function bandDist(beam, x, y) {
   return { dist: best, half };
 }
 const offscreen = (x, y) => x < -2 || x > 1922 || y < -2 || y > 1082;
+const belowScreen = new Set(G.COCKPIT_BEAMS_BELOW_SCREEN ?? []);
+function inOrOnPolygon(poly, x, y) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = poly[j], [bx, by] = poly[i];
+    const vx = bx - ax, vy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1)));
+    if (Math.hypot(x - (ax + vx * t), y - (ay + vy * t)) <= 3) return true;
+    if ((ay > y) !== (by > y) && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;
+  }
+  return inside;
+}
 // Covered = erased by a LATER-painted beam's opaque fill.
 function covered(order, x, y) {
   if (offscreen(x, y)) return true;
+  // The live/reduced renderers intentionally split the deck batch around the
+  // physical screen glass: lower plate ridges are painted, then PANEL_SCREEN
+  // occludes them, then the screen bezel and upper frame are painted.
+  if (belowScreen.has(beams[order].beam) && inOrOnPolygon(G.PANEL_SCREEN, x, y)) return true;
   for (let j = order + 1; j < beams.length; j++) {
     const { dist, half } = bandDist(beams[j].beam, x, y);
     if (dist <= half - 1.0) return true;

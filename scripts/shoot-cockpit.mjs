@@ -16,10 +16,12 @@ const morph = Number(process.argv[2] ?? '0');
 const out = process.argv[3] ?? `shot-${morph}.png`;
 const port = process.argv[4] ?? '4325';
 const base = (process.env.BASE ?? `http://localhost:${port}`).replace(/\/$/, '');
+const width = Number(process.env.WIDTH ?? '1920');
+const height = Number(process.env.HEIGHT ?? '1080');
 
 const browser = await chromium.launch();
 const page = await browser.newPage({
-  viewport: { width: 1920, height: 1080 },
+  viewport: { width, height },
   deviceScaleFactor: Number(process.env.DSF ?? '2'),
 });
 

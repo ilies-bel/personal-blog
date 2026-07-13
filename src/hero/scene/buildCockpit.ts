@@ -25,7 +25,8 @@
 // so a powered-off cockpit costs zero draws (the draw-audit convention).
 import * as THREE from 'three';
 import {
-  COCKPIT_BEAMS,
+  COCKPIT_BEAMS_ABOVE_SCREEN,
+  COCKPIT_BEAMS_BELOW_SCREEN,
   HULL_OUTER,
   HULL_HOLES,
   HULL_HOLE,
@@ -70,7 +71,7 @@ const HUD_WHITE = new THREE.Color(0.88, 0.92, 0.99);
 // shows: bone glare off the accretion disk, the supernova flash, ember red
 // giant, gold star, blue-white nebula core, then the pale dot. Only the KISS
 // rides these (where a member's face squares to the star it flares toward the
-// star's own colour); the trim's resting glow is chapter-independent now that
+// star's own colour); the trim's resting light is chapter-independent now that
 // the overlay renders post-grade.
 const STAR_KEYS: ReadonlyArray<{ s: number; c: [number, number, number]; i: number }> = [
   { s: 0.0, c: [0.88, 0.86, 0.8], i: 0.85 }, // black hole: cold bone disk glare
@@ -262,13 +263,14 @@ export function buildCockpit(): CockpitRig {
   });
   const screen = new THREE.Mesh(screenGeo, screenMat);
   screen.frustumCulled = false;
-  screen.renderOrder = 41;
+  screen.renderOrder = 42;
   screen.visible = false;
   overlay.add(screen);
 
   // Structural beams: the thick milled-metal members with edge hairlines +
   // echo drawn in-shader off the cross-section coordinate.
-  const beamGeo = buildBeamRibbons(COCKPIT_BEAMS);
+  const lowerBeamGeo = buildBeamRibbons(COCKPIT_BEAMS_BELOW_SCREEN);
+  const upperBeamGeo = buildBeamRibbons(COCKPIT_BEAMS_ABOVE_SCREEN);
   const beamUniforms: Uniforms = { ...shared };
   const beamMat = new THREE.ShaderMaterial({
     uniforms: beamUniforms,
@@ -276,11 +278,16 @@ export function buildCockpit(): CockpitRig {
     fragmentShader: cockpitBeamFragmentShader,
     ...overlayMatOpts,
   });
-  const beams = new THREE.Mesh(beamGeo, beamMat);
-  beams.frustumCulled = false;
-  beams.renderOrder = 42;
-  beams.visible = false;
-  overlay.add(beams);
+  const lowerBeams = new THREE.Mesh(lowerBeamGeo, beamMat);
+  lowerBeams.frustumCulled = false;
+  lowerBeams.renderOrder = 41;
+  lowerBeams.visible = false;
+  overlay.add(lowerBeams);
+  const upperBeams = new THREE.Mesh(upperBeamGeo, beamMat);
+  upperBeams.frustumCulled = false;
+  upperBeams.renderOrder = 43;
+  upperBeams.visible = false;
+  overlay.add(upperBeams);
 
   // HUD pass: the white holographic instruments on the glass (scanner reticle
   // tracking the star via uLight + the fixed compass strip).
@@ -301,7 +308,7 @@ export function buildCockpit(): CockpitRig {
   hud.visible = false;
   overlay.add(hud);
 
-  const meshes = [glass, panels, screen, beams, hud];
+  const meshes = [glass, panels, lowerBeams, screen, upperBeams, hud];
 
   // ── Decloak tween state (the power envelope) ────────────────────────────────
   let decloak = 0;
@@ -363,7 +370,8 @@ export function buildCockpit(): CockpitRig {
   const dispose = (): void => {
     for (const m of meshes) overlay.remove(m);
     hudGeo.dispose();
-    beamGeo.dispose();
+    lowerBeamGeo.dispose();
+    upperBeamGeo.dispose();
     screenGeo.dispose();
     glassGeo.dispose();
     panelGeo.dispose();

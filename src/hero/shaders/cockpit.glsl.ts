@@ -202,7 +202,9 @@ void main() {
   // max(): w below -0.818 means "faded out entirely" — emission must floor
   // at zero, never go subtractive (a negative energy draws a DARK stroke).
   float energy = max(0.45 + 0.55 * vW, 0.0) * (0.5 + 0.5 * min(lit, 1.0));
-  vec3 col = fill + uAmber * edgeLine * energy;
+  // Solid-energy lift only: brighter/saturated amber without a blur kernel,
+  // bloom pass, echo line or halo. The edge remains the same crisp coverage.
+  vec3 col = fill + uAmber * edgeLine * energy * 1.25;
 
   col = novaWash(col);
   col = cloakTint(col, vPos);
