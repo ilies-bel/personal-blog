@@ -120,20 +120,36 @@ export function useMotion(): Motion {
   return useSyncExternalStore(onMotionChange, getMotion, () => 'full');
 }
 
+/** Re-stamp `html.js` — the "JavaScript is running" class the BaseHead pre-paint
+ *  script adds. Like `data-motion`, this lives on <html>, and a ClientRouter swap
+ *  replaces <html>'s attributes with the incoming STATIC document's (which has no
+ *  `js` class, since only client JS adds it). Without re-stamping, every SPA
+ *  navigation back to a scene page loses the class → the `html:not(.js)` CSS gate
+ *  fires, hiding the live hero and REVEALING the no-JS static edition over it
+ *  (the "static edition overlaps the hero after clicking the wordmark home" bug).
+ *  Piggybacks the same after-swap lifecycle the motion re-stamp already owns.
+ *  Idempotent (classList.add no-ops when present). */
+function stampJsClass(): void {
+  document.documentElement.classList.add('js');
+}
+
 // --- module init (client only, once per session) -----------------------------
 if (typeof window !== 'undefined') {
   // Seed/refresh the attribute at module eval: normally a no-op (the pre-paint
   // script already stamped the same value), but it self-heals any page that
   // reached this module without the stamp.
   applyMotion(computeMotion());
+  stampJsClass();
   // THE one shared OS listener. With a manual override set, an OS flip leaves
   // the computed value unchanged and applyMotion no-ops — override wins.
   window.matchMedia?.(OS_QUERY).addEventListener('change', () => {
     applyMotion(computeMotion());
   });
   // ClientRouter swaps replace <html>'s attributes with the incoming (static)
-  // document's, which carries no data-motion — re-stamp before the page paints.
+  // document's, which carries no data-motion / js class — re-stamp BOTH before
+  // the page paints so the live experience (not the no-JS static edition) shows.
   document.addEventListener('astro:after-swap', () => {
     applyMotion(computeMotion());
+    stampJsClass();
   });
 }

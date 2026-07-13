@@ -171,6 +171,34 @@ test('warm return (same session) reveals without the first-visit floor', async (
   expect(Date.now() - t0).toBeLessThan(8_000);
 });
 
+test('SPA nav home (clicking the wordmark) keeps html.js — the live hero, not the static edition', async ({
+  page,
+}) => {
+  // Regression: a ClientRouter swap replaces <html>'s attributes with the
+  // incoming static document's, which has no `js` class (only client JS adds it).
+  // Without re-stamping `html.js` after the swap, navigating back to '/' — e.g.
+  // clicking the brand wordmark — dropped the class, so `html:not(.js)` fired and
+  // the no-JS static edition overlapped the hero. motion.ts now re-stamps `js`
+  // (and data-motion) on astro:after-swap; this pins that.
+  await page.goto('/projects', { waitUntil: 'load' });
+  await expect(page.locator('a.subnav-brand')).toBeVisible();
+  await page.locator('a.subnav-brand').first().click();
+  await page.waitForURL(/\/$/, { timeout: 8_000 });
+
+  // The js class survives the swap → the static edition stays hidden and the
+  // live hero shell is present (not display:none behind the no-JS gate).
+  await expect(page.locator('html')).toHaveClass(/(^|\s)js(\s|$)/);
+  await expect(page.locator('.static-edition')).toBeHidden();
+  // .bh-root is a fixed full-viewport shell; assert it is NOT display:none (the
+  // html:not(.js) gate would set it) rather than Playwright "visibility".
+  const bhRootDisplay = await page
+    .locator('.bh-root')
+    .evaluate((el) => getComputedStyle(el).display);
+  expect(bhRootDisplay, 'hero shell is not gated off').not.toBe('none');
+  // And the scene actually comes up (not trapped behind a no-JS gate).
+  await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });
+});
+
 // ── PRD-001 Intent-aware loader release ──────────────────────────────────────
 //
 // These tests exercise the first-session floor waiver DETERMINISTICALLY, with
