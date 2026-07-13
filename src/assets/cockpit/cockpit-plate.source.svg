@@ -164,61 +164,188 @@
        C1739 285 1747 273 1762 266L1948 185"
   />
 
-  <!-- Simplified deck: two long structural sweeps per side, no line fan. -->
+  <!-- LOWER COCKPIT STRUCTURE
+    Filled plates are painted first, followed by their shared-node ridges. The
+    raised centre cowl then receives/occludes every side-deck endpoint. This is
+    one flattened topology: no runtime beams, overlap patches or loose caps.
+  -->
+  <defs>
+    <linearGradient id="deck-shelf-metal" x1="0" y1="760" x2="0" y2="1010" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17171b" stop-opacity="0.96"/>
+      <stop offset="0.48" stop-color="#0c0c0f" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#060608" stop-opacity="0.99"/>
+    </linearGradient>
+    <linearGradient id="instrument-metal" x1="0" y1="900" x2="0" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111115" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#050507" stop-opacity="0.99"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Author one measured half; the right deck is its exact mirror. -->
+  <g id="lower-deck-left">
+    <path
+      id="left-deck-shelf-plate"
+      fill="url(#deck-shelf-metal)"
+      d="M-20 824L384 760L483 824H720L705 880H445L248 850L-20 930Z"
+    />
+    <path
+      id="left-instrument-panel-plate"
+      fill="url(#instrument-metal)"
+      d="M-20 928L128 940L231 910L570 940L611 1020L520 1090H-20Z"
+    />
+
+    <!-- Cool casting companions establish plate depth before the amber loads. -->
+    <path
+      id="left-upper-flare-companion"
+      fill="none"
+      stroke="#555a63"
+      stroke-opacity="0.76"
+      stroke-width="1.25"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M384 750L333 781L240 837L98 868L-20 888"
+    />
+    <path
+      id="left-shelf-companion"
+      fill="none"
+      stroke="#444952"
+      stroke-opacity="0.72"
+      stroke-width="1.15"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M-20 862L242 838H452L665 838L714 868"
+    />
+    <path
+      id="left-panel-companion"
+      fill="none"
+      stroke="#353941"
+      stroke-opacity="0.66"
+      stroke-width="1"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M-20 1004L136 955L236 927L552 956L594 1020L526 1084"
+    />
+
+    <!-- One primary per brace/plate. Shared nodes are literal shared points. -->
+    <path
+      id="left-upper-flare-primary"
+      fill="none"
+      stroke="#bd7c20"
+      stroke-opacity="0.92"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M384 760L341 790L248 850L104 880L-20 904"
+    />
+    <path
+      id="left-shelf-primary"
+      fill="none"
+      stroke="#d89023"
+      stroke-width="2.05"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M-20 900L248 850H445L658 850L705 880"
+    />
+    <path
+      id="left-lower-flare"
+      fill="none"
+      stroke="#666971"
+      stroke-opacity="0.8"
+      stroke-width="1.25"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M483 835L445 850L324 880L231 910"
+    />
+    <path
+      id="left-panel-primary-exterior"
+      fill="none"
+      stroke="#e09a28"
+      stroke-width="2.35"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M-20 980L128 940L231 910L570 940L579 958"
+    />
+  </g>
+  <use href="#lower-deck-left" transform="translate(1920 0) scale(-1 1)"/>
+
+  <!-- The later shelf face erases the former doubled canopy sills. One new
+       primary sill remains, and the centre cowl occludes its middle span. -->
   <path
-    id="deck-upper-ridge"
+    id="canopy-primary-sill"
     fill="none"
-    stroke="#b8781f"
-    stroke-opacity="0.9"
-    stroke-width="1.7"
+    stroke="#e19a28"
+    stroke-width="2.6"
     stroke-linecap="round"
-    stroke-linejoin="round"
-    d="M-20 902L245 850L476 850L653 880H1267L1444 850H1675L1940 902"
-  />
-  <path
-    id="deck-lower-ridge"
-    fill="none"
-    stroke="#5b5751"
-    stroke-opacity="0.72"
-    stroke-width="1.35"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    d="M-20 982L164 932L458 892L618 931
-       M1302 931L1462 892L1756 932L1940 982"
-  />
-  <path
-    fill="none"
-    stroke="#35322e"
-    stroke-opacity="0.75"
-    stroke-width="1"
-    d="M0 878L258 829L454 829M1920 878L1662 829L1466 829"
+    d="M483 833H1437"
   />
 
-  <!-- One console housing and one recessed face, both precomposed in the plate. -->
+  <!-- Raised cowl: its fill closes below the canvas to receive the side deck;
+       the visible neutral shoulders stay open and yield into the amber braces. -->
   <path
-    id="console-housing"
+    id="console-cowl-plate"
     fill="url(#console-metal)"
-    stroke="#655e55"
-    stroke-opacity="0.9"
-    stroke-width="1.3"
-    stroke-linejoin="round"
-    d="M620 1080L563 989L635 866L704 826H1216L1285 866L1357 989L1300 1080Z"
+    d="M520 1090L611 1020L579 958
+       C574.5 949 602 906 610 888Q612 881 618 875L666 834Q670 830 678 830
+       H1242Q1250 830 1254 834L1302 875Q1308 881 1310 888
+       C1318 906 1345.5 949 1341 958L1304 1020L1400 1090Z"
   />
+
+  <path
+    id="console-cowl-outer-contour"
+    fill="none"
+    stroke="#62666e"
+    stroke-opacity="0.88"
+    stroke-width="1.45"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+    d="M585 970L579 958
+       C574.5 949 602 906 610 888Q612 881 618 875L666 834Q670 830 678 830
+       H1242Q1250 830 1254 834L1302 875Q1308 881 1310 888
+       C1318 906 1345.5 949 1341 958L1335 970"
+  />
+
+  <!-- The exterior brace is buried by the cowl. Its interior continuation is
+       painted over the neutral contour's short coincident handoff, then runs
+       uninterrupted into the bezel node: no crossing, cap, gap or patch. -->
+  <g id="lower-brace-interior-left">
+    <path
+      id="left-panel-primary-interior"
+      fill="none"
+      stroke="#e09a28"
+      stroke-width="2.35"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M579 958L611 1020"
+    />
+  </g>
+  <use href="#lower-brace-interior-left" transform="translate(1920 0) scale(-1 1)"/>
+
+  <!-- The recess owns the four visible corners; raw mirrored side paths end
+       4–5px underneath this face by design, never at a second visible joint. -->
   <path
     id="console-screen"
-    fill="#070708"
-    fill-opacity="0.98"
-    stroke="#e89a25"
-    stroke-width="2.4"
-    stroke-linejoin="round"
-    d="M628 1018L708 895Q713 887 724 887H1196Q1207 887 1212 895L1292 1018Z"
+    fill="#060607"
+    fill-opacity="0.99"
+    d="M611 1020L699 889Q704 880 713 880H1203Q1210 880 1215 889L1304 1020Z"
   />
   <path
+    id="console-screen-inset-seam"
     fill="none"
-    stroke="#5d5952"
-    stroke-width="1.2"
+    stroke="#353941"
+    stroke-opacity="0.68"
+    stroke-width="1"
     stroke-linejoin="round"
-    d="M606 1036L694 879Q701 866 718 866H1202Q1219 866 1226 879L1314 1036"
+    d="M638 1002L716 906Q721 900 729 900H1187Q1194 900 1199 906L1277 1002Z"
+  />
+  <path
+    id="console-bezel-load-path"
+    fill="none"
+    stroke="#eda02a"
+    stroke-width="2.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M520 1090L611 1020L699 889Q704 880 713 880H1203Q1210 880 1215 889L1304 1020L1400 1090
+       M611 1020H1304"
   />
 
   <!-- Fixed outer hull datum; no glow/filter. -->
