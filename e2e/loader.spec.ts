@@ -158,8 +158,14 @@ test('labelled nav is interactive from first paint, before the engine arrives', 
 });
 
 test('warm return (same session) reveals without the first-visit floor', async ({ page }) => {
+  // Setup only — the contract under test is the WARM return below. Under a
+  // fully parallel run several heavy software-GL pages compile shaders at
+  // once and even the loader's 8s safety timer can be starved on the first
+  // load, so give the cold boot a generous budget (the warm-return assertion
+  // keeps its own tight bound).
+  test.slow();
   await page.goto('/', { waitUntil: 'load' });
-  await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });
+  await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 30_000 });
 
   // Navigate away and back within the session: the reveal must be fast.
   await page.goto('/writing', { waitUntil: 'load' });

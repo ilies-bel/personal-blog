@@ -89,6 +89,8 @@ const featured = await getFeaturedProof();
       src={href('assets/posters/poster-1-blackhole.webp')}
       alt=""
       aria-hidden="true"
+      width="1920"
+      height="1080"
       fetchpriority="high"
       decoding="sync"
     />
@@ -195,6 +197,20 @@ const featured = await getFeaturedProof();
       const armGone = (): void => {
         if (goneArmed) return;
         goneArmed = true;
+        // SOFT-GL HARD CUT — when the software-rasteriser flattening is active
+        // (html[data-soft-gl], stamped by createScene before scene:ready) the
+        // loader's transitions are `none`, the overlay flips visibility:hidden
+        // the instant scene-ready lands, and NO transitionend will ever fire.
+        // Waiting out the 2.1s backstop would keep the in-scene markers inert
+        // for 2.1s over an already-revealed scene, so release immediately.
+        // Detected via the COMPUTED ::before transition-duration (0s covers
+        // both data-soft-gl and any future no-transition regime) rather than
+        // the attribute alone.
+        const beforeStyle = window.getComputedStyle(loader, '::before');
+        if (parseFloat(beforeStyle.transitionDuration) === 0) {
+          markGone();
+          return;
+        }
         loader.addEventListener(
           'transitionend',
           (e) => {

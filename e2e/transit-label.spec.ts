@@ -47,9 +47,16 @@ test.describe('destination-name transition continuity (PRD-004)', () => {
     // Fire the dive via a real click event on the anchor (dispatch bypasses the
     // scroll-track pointer occlusion; the marker's own handler runs beginDive).
     // We intercept the navigation so we can inspect the armed carrier before swap.
+    // COARSE POINTER (mobile-chrome): the marker's designed touch contract is a
+    // two-step — the first tap only reveals the info card (tap-to-lock, no
+    // navigation), the SECOND tap fires the dive. Mirror that here: tap twice
+    // on coarse pointers, once on fine pointers (desktop dives on first click).
     await marker.evaluate((el) => {
-      el.addEventListener('click', (e) => e.preventDefault(), { capture: true, once: true });
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+      el.addEventListener('click', (e) => e.preventDefault(), { capture: true });
+      const tap = () =>
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+      tap();
+      if (window.matchMedia('(pointer: coarse)').matches) tap();
     });
     // beginDive armed the persisted carrier with the audited PROJECTS label.
     await expect(page.locator('[data-dive-overlay]')).toHaveAttribute('data-dive-label', 'active', {
