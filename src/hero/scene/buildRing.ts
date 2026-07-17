@@ -11,8 +11,15 @@ export interface RingRig extends UniformRig {
   uniforms: Uniforms;
   dispose: () => void;
 }
-export function buildRing(scene: THREE.Scene, pixelRatio: number): RingRig {
-  const ringN = 64000;
+export function buildRing(scene: THREE.Scene, pixelRatio: number, lowTier = false): RingRig {
+  // LOW tier: the shipped 64k sprites oversample the thin rim enormously (the
+  // band covers far fewer pixels than that even at full DPR, let alone the low
+  // tier's 0.5 cap). Half the sprites at twice the per-sprite emission keeps the
+  // ACCUMULATED additive brightness identical while halving the submitted fill —
+  // the ring's light is a pure sum, so count × bright is the invariant. High/mid
+  // take the default (64k, ×1) — byte-identical.
+  const ringN = lowTier ? 16000 : 64000;
+  const brightComp = lowTier ? 4.0 : 1.0;
   const ringAng = new Float32Array(ringN);
   const ringSeed = new Float32Array(ringN);
   for (let i = 0; i < ringN; i++) {
@@ -33,7 +40,7 @@ export function buildRing(scene: THREE.Scene, pixelRatio: number): RingRig {
     uHole: { value: 0.12 },
     uVertAsym: { value: CFG.vertAsym },
     uHorizAsym: { value: CFG.horizAsym },
-    uRingBright: { value: CFG.ringBright },
+    uRingBright: { value: CFG.ringBright * brightComp },
     uRingScale: { value: 1.0 }, // dev: ring radius × (relative to dark-core rim)
     uMorph: { value: 0 },
   };

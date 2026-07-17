@@ -1,6 +1,6 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
-import { CFG, resolveParticleRTScale, resolveRgGranBake, tuneParticlesForDevice, tuneRenderPixelRatio, shouldAdaptiveDowngrade, ADAPTIVE_SAMPLE_MS, type DeviceTier } from '../lib/config';
+import { CFG, FILM_GRAIN_AMT, FILM_GRAIN_AMT_MID, MID_TIER_DENSITY, detectDeviceTierSource, isSoftwareRenderer, resolveDensityScale, resolveParticleRTScale, resolveBlastBake, resolvePerfHud, resolvePhotons, resolveRgGranBake, resolveSunBake, resolveAdaptive, isTierForced, stepDownTier, tuneParticlesForDevice, tuneRenderPixelRatio, shouldAdaptiveDowngrade, ADAPTIVE_SAMPLE_MS, type DeviceTier } from '../lib/config';
 import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
@@ -15,9 +15,13 @@ import { buildWarp } from './buildWarp';
 import { buildStreak } from './buildStreak';
 import { buildRing } from './buildRing';
 import { buildCockpit } from './buildCockpit';
+import { buildPhotons } from './buildPhotons';
+import { buildBlastBake } from './buildBlastBake';
 import { buildGranBake } from './buildGranBake';
+import { buildSunBake } from './buildSunBake';
 import { buildParticlePass, PARTICLE_RT_LAYER } from './buildParticlePass';
 import { buildPostChain } from './buildPostChain';
+import { buildPerfHud } from './perfHud';
 import { WebGLUnavailableError, type SceneHandle, type SceneHooks, type DiveOptions, type Rig } from './types';
 
 /**
@@ -104,7 +108,17 @@ interface ApplyLookCtx {
 // still throws synchronously-on-first-tick (before any await), so the typed
 // WebGLUnavailableError keeps surfacing through the same promise rejection path.
 export async function createScene(container: HTMLElement, reduced: boolean, hooks: SceneHooks, tier: DeviceTier = 'high'): Promise<SceneHandle> {
-  const diskParticles = tuneParticlesForDevice(tier);
+  // Particle-density scale (resolveDensityScale: 0.05–1). On high/low the default
+  // is 1 → this whole block is a no-op multiply and the shipped counts are
+  // byte-identical. On MID the tier's own default is MID_TIER_DENSITY (0.5) —
+  // the mid look IS "the high bucket at half density" riding the exact plumbing
+  // the ?density= A/B experiments validated; an explicit ?density= still
+  // overrides. When < 1 the scaled count flows into buildDisk with
+  // forceDensityComp so the ratio-based per-grain fatten/brighten (the low
+  // tier's path) engages automatically, and the perf HUD's `grains` line
+  // reports the scaled count.
+  const densityScale = resolveDensityScale(tier === 'mid' ? MID_TIER_DENSITY : 1);
+  const diskParticles = Math.max(10_000, Math.round(tuneParticlesForDevice(tier) * densityScale));
   const bCritShadow = 2.598; // (3√3/2) rs — shadow radius (informational)
   void bCritShadow;
 
@@ -124,7 +138,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   }
   let renderer: THREE.WebGLRenderer;
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // LOW tier: no MSAA on the default framebuffer. The whole frame is additive
+    // gaussian sprites + full-screen post quads (no geometry edges to smooth), and
+    // the composer's own render targets never had MSAA anyway — the only thing
+    // antialias:true buys on low is a 4× multisampled default framebuffer that the
+    // final full-screen pass must shade + resolve every frame. On software
+    // rasterisers (SwiftShader — the GPUs the low tier classifies) that resolve is
+    // a measured double-digit-ms cost. High/mid keep antialias:true, byte-identical.
+    renderer = new THREE.WebGLRenderer({ antialias: tier !== 'low', powerPreference: 'high-performance' });
   } catch (error: unknown) {
     // Nothing else is built yet, so there is nothing to dispose; surface the typed
     // error (preserving the original cause for diagnostics) for the caller to handle.
@@ -158,7 +179,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // listener registration, so no handler can ever observe a half-built scene.)
   await yieldToMain();
 
-  const diskRig = buildDisk(scene, diskParticles, pixelRatio, tier === 'low');
+  const diskRig = buildDisk(scene, diskParticles, pixelRatio, tier === 'low', densityScale < 1);
   const diskMatPrimary = diskRig.primary;
   const diskMatSecondary = diskRig.secondary;
   const diskPrimary = diskRig.primaryPts;
@@ -179,7 +200,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
 
   await yieldToMain(); // boot slice seam (lensed starfield ~450k grains built above)
 
-  const warpRig = buildWarp(scene, diskParticles);
+  const warpRig = buildWarp(scene, diskParticles, tier === 'low');
   const warpUniforms = warpRig.uniforms; // updateLensUniforms() writes through this
   const warpMat = warpRig.mat;
   const warpMatSec = warpRig.matSec;
@@ -193,7 +214,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const streakMat = streakRig.mat;
   const streakSeg = streakRig.seg;
 
-  const ringRig = buildRing(scene, pixelRatio);
+  const ringRig = buildRing(scene, pixelRatio, tier === 'low');
   const ringUniforms = ringRig.uniforms; // updateLensUniforms() writes through this
   const ringMat = ringRig.mat;
   const ringPts = ringRig.pts;
@@ -205,15 +226,33 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // cockpitRig.render call below) so its authored sRGB is WYSIWYG.
   const cockpitRig = buildCockpit();
 
+  // Cursor-photon interaction rig: the cursor EMITS light at the black hole and
+  // the hole absorbs it with real (Paczyński–Wiita) gravity — see buildPhotons.ts.
+  // HIGH + MID tiers, motion only (it is a pointer interaction; reduced motion has
+  // no pointer parallax either), kill-switchable via ?photons=0. The rig's own
+  // cost is a few thousand points — negligible next to the disk cloud, so a mid
+  // GPU affords it. Null in normal low/reduced play — the frame loop then pays
+  // exactly one null check.
+  const photonsRig = !reduced && tier !== 'low' && resolvePhotons() ? buildPhotons(scene) : null;
+
   await yieldToMain(); // boot slice seam (warp/streak/ring line rigs built above)
 
-  // High builds the full RenderPass→Bloom→Grade→Nova. The low tier gets a CHEAP
+  // High AND MID build the full RenderPass→Bloom→Grade→Nova (on mid the full
+  // bloom is load-bearing: it smooths the half-density cloud into gas, and the
+  // mid tier also gets the bumped FILM_GRAIN_AMT_MID default so the grain
+  // textures the wider dark gaps — the validated middle look). The low tier gets a CHEAP
   // bloom — the SAME pass, but its mip pyramid renders at quarter resolution
   // (bloomScale 0.5), which is far cheaper AND softer: the low-res blur spreads, so
   // it smooths the sparse low-tier grains into a glow (the chunky/speckly red giant
   // was caused by REMOVING bloom, the very effect that smooths grains). postRig.bloom
   // is now NON-null on low too, so the guarded `if (bloom)` writes in applyLook run.
-  const postRig = buildPostChain(renderer, scene, camera, tier === 'low' ? 'cheap' : 'full');
+  const postRig = buildPostChain(
+    renderer,
+    scene,
+    camera,
+    tier === 'low' ? 'cheap' : 'full',
+    tier === 'mid' ? FILM_GRAIN_AMT_MID : FILM_GRAIN_AMT,
+  );
   const bloom = postRig.bloom;
   const gradePass = postRig.gradePass;
   const novaPass = postRig.novaPass;
@@ -224,12 +263,17 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // layer and rendered into a `particleScale`-sized HalfFloat target each frame,
   // then additively upsample-composited into the full-res scene render BEFORE
   // bloom (see buildParticlePass.ts for the full pipeline/depth/ordering story).
-  // HIGH tier only: the low tier already renders the whole frame at a 0.6-capped
-  // DPR with its own re-tuned grain sizes/boosts — stacking another halving under
-  // that would change its carefully measured look for little gain. At scale === 1
-  // (?prtres=1, the A/B kill-switch) NOTHING is built or moved: the rigs stay on
-  // layer 0 and the frame path below is the original single pass, byte-identical.
-  const particleScale = tier === 'high' ? resolveParticleRTScale() : 1;
+  // HIGH + MID tiers (mid is "the high look, thinner" — the same fill-rate lever
+  // applies and the density compensation already accounts for it): the low tier
+  // was MEASURED with the split during the SwiftShader 30fps rework — both with
+  // the default HalfFloat target and with an UnsignedByte one — and LOST fps in
+  // both configurations: at 24k grains its disk is per-sprite-setup-bound on
+  // software rasterisers, not fill-bound, so the extra target + upsample-composite
+  // pass buys nothing back. Low keeps the original direct single pass. At scale
+  // === 1 (?prtres=1, the A/B kill-switch) NOTHING is built or moved: the rigs
+  // stay on layer 0 and the frame path below is the original single pass,
+  // byte-identical.
+  const particleScale = tier !== 'low' ? resolveParticleRTScale() : 1;
   const particlePass = particleScale < 1 ? buildParticlePass(scene, particleScale) : null;
   if (particlePass) {
     diskPrimary.layers.set(PARTICLE_RT_LAYER);
@@ -252,9 +296,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // following the GPGPU-bake precedent) and the shader swaps the noise block for
   // one textureCube fetch — gated by uGranBakeReady, which flips ONLY on bake
   // success, so a slow/failed bake or the ?rgbake=0 kill-switch keeps the exact
-  // analytic rendering. HIGH tier only: the low tier draws 28-40k grains (the
-  // vertex noise is negligible there) and may lack WebGL2/float-renderability.
-  const granBake = tier === 'high' && renderer.capabilities.isWebGL2 && resolveRgGranBake()
+  // analytic rendering. ALL tiers with WebGL2 (the bake is a LOAD-TIME cost — six
+  // tiny draws under the loader). The low tier was previously excluded ("24k
+  // grains → vertex noise negligible"), but on the software rasterisers low
+  // classifies the per-vertex cellular/warpFbm/fbm block is CPU work — the bench's
+  // scroll sweep dipped exactly across the red-giant band. Low devices without
+  // WebGL2 simply keep the analytic path (the WebGL2 gate below), and a failed
+  // bake falls back identically — the pattern itself is byte-identical either way.
+  const granBake = renderer.capabilities.isWebGL2 && resolveRgGranBake()
     ? buildGranBake(renderer, diskMatPrimary.uniforms.uGranScale.value as number)
     : null;
   let granBakeTried = false; // one attempt settles it (bake() is idempotent, success or fail)
@@ -269,6 +318,52 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       m.uniforms.uGranBakeReady.value = 1;
     }
     granBakeApplied = true;
+  };
+
+  // --- supernova blast-field cubemap bake (the vertex-bound collapse-flash fix) --
+  // The collapse-flash beat was VERTEX-bound (26.8fps on the host high tier): the
+  // disk vertex shader evaluated four pure-direction fbm fields (lane/fil/
+  // crushBias/spdLobe) per vertex per frame during the blast. buildBlastBake
+  // renders them ONCE into a 256² RGBA16F cubemap and the shader swaps four fbm
+  // evaluations for one fetch — gated by uBlastBakeReady, which flips ONLY on
+  // bake success (the granulation-bake contract: a failed/kill-switched bake
+  // keeps the exact analytic rendering). ALL tiers with WebGL2. Baked at IDLE
+  // TIME after the first composited frame (the scheduleGpuWarm chain below) —
+  // the flash is mid-scroll, unreachable in the first seconds.
+  const blastBake = renderer.capabilities.isWebGL2 && resolveBlastBake()
+    ? buildBlastBake(renderer)
+    : null;
+  let blastBakeTried = false;
+  let blastBakeApplied = false;
+  const applyBlastBake = (): void => {
+    if (blastBakeApplied || !blastBake || !blastBake.isBaked()) return;
+    for (const m of [diskMatPrimary, diskMatSecondary]) {
+      m.uniforms.uBlastTex.value = blastBake.texture;
+      m.uniforms.uBlastBakeReady.value = 1;
+    }
+    blastBakeApplied = true;
+  };
+
+  // --- LOW-tier yellow-star photosphere cubemap bake (the sun fragment fix) ----
+  // The photosphere's 48-snoise-per-pixel stack measured 51.8ms/frame on the
+  // software-GL low tier (19.3fps — the only hard 30fps failure). LOW TIER ONLY:
+  // bake the three surface fields (m/ch/granMul) into a cubemap and collapse the
+  // stack to one fetch (the time scroll rides a rotated lookup direction — see
+  // sunSurfaceField). High/mid never build the rig and keep the analytic path
+  // byte-identical. Same success-gated contract as the other bakes; ?sunbake=0
+  // is the kill-switch. NOTE: built (like granBake) from the BOOT tier — the
+  // adaptive high→low downgrade never picks it up mid-session, which only means
+  // a downgraded session keeps the analytic sun (today's rendering).
+  const sunBake = tier === 'low' && renderer.capabilities.isWebGL2 && resolveSunBake()
+    ? buildSunBake(renderer)
+    : null;
+  let sunBakeTried = false;
+  let sunBakeApplied = false;
+  const applySunBake = (): void => {
+    if (sunBakeApplied || !sunBake || !sunBake.isBaked()) return;
+    sunRig.surfaceMat.uniforms.uSunTex.value = sunBake.texture;
+    sunRig.surfaceMat.uniforms.uSunBakeReady.value = 1;
+    sunBakeApplied = true;
   };
 
   // --- yellow-star sun rig (revealed only during the yellow stage) ---
@@ -368,7 +463,12 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   function onResize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    renderer.setPixelRatio(tuneRenderPixelRatio(reduced, activeTier));
+    // lowDprAdapted: the LOW tier's own one-shot adaptive rung (see the sampler in
+    // frame()) — a device that cannot hold ~30fps of RENDERED frames even at the
+    // low tier's 0.5 DPR cap steps down once more to LOW_ADAPTED_DPR. false for
+    // every other tier and for capable low devices — byte-identical there.
+    const basePr = tuneRenderPixelRatio(reduced, activeTier);
+    renderer.setPixelRatio(lowDprAdapted ? Math.min(basePr, LOW_ADAPTED_DPR) : basePr);
     renderer.setSize(w, h);
     postRig.setSize(w, h); // composer.setSize + bloom.setSize, co-located in the rig
     // Half-res particle target rides the SAME resize path (and the same pixel ratio
@@ -664,7 +764,16 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     holdStartGiant = 0;
   };
 
+  // Photon click burst: any pointerdown fires a 48-photon fan from under the
+  // cursor (the "flash" companion to the move stream). The rig's own update
+  // gates the spend on the black-hole emission band and clears stale bursts, so
+  // this handler stays a dumb one-liner — no beat logic duplicated here.
+  const onPointerDownPhotons = (): void => {
+    photonsRig?.burst(48);
+  };
+
   if (!reduced) {
+    if (photonsRig) window.addEventListener('pointerdown', onPointerDownPhotons);
     // Listen on `window`, NOT renderer.domElement — same as the parallax pointermove
     // above. The canvas (.bh-stage) is position:fixed; z-index:0 and sits UNDER the
     // scroll track: the page's .scene-track / .scene-stage divs (no pointer-events:none)
@@ -715,6 +824,9 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // previous-frame time (seconds) for the eruption pool's age advance — clamped to a
   // sane dt so a backgrounded-tab time jump never teleports a ripple across the disc.
   let prevEruptT = 0;
+  // previous-frame time (seconds) for the photon rig's OWN dt clock — same clamp
+  // discipline as prevEruptT so a backgrounded-tab jump never teleports photons.
+  let prevPhotonT = 0;
 
   // --- render-on-change gating (idle CPU win) -------------------------------
   // A visitor reading a manifesto line is NOT scrolling, yet every idle rAF tick
@@ -732,18 +844,87 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // is the wall-clock of the last frame that actually rendered.
   let lastRenderTime = 0;
   const STATIC_HEARTBEAT_MS = 500;
-  // LOW-tier frame cap: target ~30fps rather than chasing 60 and stuttering. The
-  // margin trims the threshold so a frame landing a hair early still renders (we'd
-  // rather hit 30 than drop to 20 by over-waiting). High tier is never capped.
-  const LOW_FRAME_MS = 1000 / 30 - 2;
+  // LOW-tier frame cap: render at a steady reduced rate rather than chasing 60 and
+  // stuttering. The threshold is 25ms (a 40fps CEILING, not a 30fps target): the
+  // cap quantizes against the native rAF tick — with a ~33ms threshold a frame
+  // whose cost sits right AT the 30fps budget kept slipping to every-3rd-tick
+  // (~22fps) on the SwiftShader bench. 25ms leaves a whole tick of slack, so a
+  // 30fps-capable device actually SUSTAINS 30 while fast devices still idle at a
+  // calm ≤40 instead of a thrashy 60. High tier is never capped.
+  const LOW_FRAME_MS = 25;
 
-  // --- adaptive downgrade state (high-on-paper / slow-in-practice) ----------------
-  // `activeTier` starts equal to the boot-time `tier` but can be stepped down to 'low'
-  // once (one-shot, irreversible) after the adaptive FPS sampling window completes.
+  // --- LOW tier's own adaptive rung: a one-shot DPR step-down ------------------
+  // The high/mid adaptive sampler below steps the TIER down; the low tier has no
+  // lower tier, so its escape hatch is pixels. If the median RENDERED-frame rate
+  // over the first LOW_DPR_SAMPLE_MS stays under LOW_DPR_FPS_FLOOR (i.e. the
+  // device cannot hold ~30fps even at low's 0.5 DPR cap — in practice: software
+  // rasterisers), the pixel ratio steps once to LOW_ADAPTED_DPR and stays there.
+  // Rendered deltas — not rAF tick deltas — are sampled, because on low the frame
+  // cap makes tick deltas read ~60fps regardless of render cost. Skipped when the
+  // tier was FORCED (?tier=low) so look checks stay pinned at the 0.5 cap, and
+  // when ?adapt=0 disables adaptation. One-shot, irreversible, like the tier rung.
+  const LOW_ADAPTED_DPR = 0.4;
+  const LOW_DPR_SAMPLE_MS = 3_000;
+  // 32, not 30: a device rendering right AT the 30fps floor is one thermal
+  // wobble from dipping under it — the rung fires with a small safety margin so
+  // "sustained ≥30" survives noise. (Devices already ≥32 keep the 0.5 look.)
+  const LOW_DPR_FPS_FLOOR = 32;
+  // PROACTIVE branch: a renderer string the classification table already KNOWS is
+  // a software rasteriser needs no sampling window — it measured 9-16fps cold on
+  // the bench, and the 3s wait just shows the visitor the slow version first.
+  // Boot straight into the adapted state (reduced DPR + the 20% disk drawRange
+  // trim below); unknown-but-slow devices still take the sampled path. Real GPUs
+  // (including an explicit ?tier=low look-check on hardware) never match — their
+  // boot path is byte-identical.
+  const softwareGl = ((): boolean => {
+    if (tier !== 'low') return false;
+    try {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      return isSoftwareRenderer(name);
+    } catch {
+      return false;
+    }
+  })();
+  let lowDprAdapted = softwareGl;
+  let lowDprChecked = softwareGl; // proactive decision → no sampling window needed
+  // softwareGl reveal pacing (see the scene-ready gate at the bottom of frame()).
+  let swReadyStreak = 0;
+  let swPrevRenderAt = 0;
+  if (softwareGl) {
+    // Stamp the root so CSS can flatten the reveal choreography (scene.css
+    // [data-soft-gl]): the staged loader fades are full-screen layers animating
+    // over the canvas, and on a software rasteriser their ~3s of compositor
+    // blending froze the scene right after the reveal. A hard cut costs nothing.
+    document.documentElement.setAttribute('data-soft-gl', '');
+  }
+  if (softwareGl) {
+    diskPrimary.geometry.setDrawRange(0, Math.floor(diskParticles * 0.8));
+    diskSecondary.geometry.setDrawRange(0, Math.floor(diskParticles * 0.8));
+  }
+  let lowDprWindowStart = 0;
+  let lowDprPrevRender = 0;
+  let lowDprSamples: number[] = [];
+
+  // --- adaptive downgrade state (SAFETY NET — see lib/config.ts) ------------------
+  // Tiering is now decided PROACTIVELY at detectDeviceTier (GPU classification +
+  // fill-rate microprobe), so this sampler should ~never fire. It remains for the
+  // residue upfront classification can't see (masked renderer strings that probed
+  // optimistically, thermal throttling, battery-saver GPU clocks). `activeTier`
+  // starts equal to the boot-time `tier` but can be stepped down ONE rung
+  // (stepDownTier: high→mid, mid→low — never the old high→low cliff) once
+  // (one-shot, irreversible) after the adaptive FPS sampling window completes.
   // Only the pixel-ratio and frame-cap decisions consult activeTier at runtime; all
   // other per-boot choices (particle count, post chain, gravity sim) are already made
   // and stay unchanged — the downgrade is therefore a lightweight one-time reconfigure.
   let activeTier: DeviceTier = tier;
+  // PIN gate: the adaptive downgrade is skipped entirely when either (a) the
+  // ?adapt=0 flag disables it (machines hovering right at the 30fps floor keep
+  // flip-flopping into the low-res render), or (b) the tier was FORCED via
+  // ?tier=/sessionStorage/__bhTier — an explicit human choice the runtime must
+  // not override. Default (adaptive on, non-forced tier) is byte-identical.
+  const adaptiveEnabled = resolveAdaptive() && !isTierForced();
   let adaptiveSamples: number[] = [];
   let adaptiveChecked = false;
   let adaptiveWindowStart = 0;  // ms; 0 = sampling not started yet
@@ -1096,16 +1277,27 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     diskPrimary.visible = look.cloudShown;
     starPts.visible = look.starPtsVisible;
     // plain starfield brightness behind the scene.
-    starMat.uniforms.uStarBright.value = look.starBright;
+    // ×2 on low only: buildStarfield halves the low-tier star count, and the
+    // field's additive light is count × bright (see the countScale note there).
+    // High/mid multiply by 1 — byte-identical.
+    starMat.uniforms.uStarBright.value = look.starBright * (tier === 'low' ? 2 : 1);
     // remove ALL gravity once the star forms (warp arcs, lensed ghost, photon ring).
     warpSeg.visible = !look.gravityGone;
-    warpSeg2.visible = !look.gravityGone;
+    // LOW tier: the secondary lensed warp arcs are a dimmer duplicate of the
+    // primary set (same geometry, opposite image sign). Like the disk ghost they
+    // cost a full second line submission for a subtle read — dropped on low.
+    warpSeg2.visible = tier !== 'low' && !look.gravityGone;
     // Ghost + ring carry their own zero-contribution gates (lifecycle's
     // diskGhostVisible / ringVisible): each goes false a beat BEFORE gravityGone,
     // exactly where its shader already zeroes every pixel — so the ~1.2M-vertex
     // secondary draw and the 64k ring sprites stop being submitted at zero cost
     // to the rendered frame (see the flag docs in lifecycle.ts).
-    diskSecondary.visible = look.diskGhostVisible; // no lensed disk ghost behind the star
+    // LOW tier: the lensed disk ghost is a full second submission of the whole
+    // grain cloud (a dim additive duplicate). At 28-40k grains its visual
+    // contribution is minor, but under a software rasteriser it costs ~the same
+    // fill as the primary cloud — measured ~10ms/frame on the SwiftShader bench.
+    // Dropped on low only; high/mid keep the shipped look byte-identical.
+    diskSecondary.visible = tier !== 'low' && look.diskGhostVisible; // no lensed disk ghost behind the star
     ringPts.visible = look.ringVisible; // no photon ring around the star
     starSecPts.visible = false; // secondary lensed star image stays off
 
@@ -1121,6 +1313,10 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     gradePass.uniforms.uSat.value = look.gradeSat;
     gradePass.uniforms.uToneComp.value = look.toneComp; // tone-map compression (low for red giant)
     gradePass.uniforms.uGrain.value = look.grain; // per-state film grain (0 in the nebula)
+    // Re-seed the luminance-adaptive film grain (uGrainAmt) every frame so it
+    // animates like film stock. Held constant under reduced motion (a frozen frame
+    // must stay frozen); when uGrainAmt is 0 the shader term is exactly 0 anyway.
+    gradePass.uniforms.uGrainSeed.value = reduced ? 0 : Math.random();
     // Per-scene room tint: the frame clears to the scene's own near-black hue
     // (lifecycle's roomTint ramp) instead of one shared pure black, so each
     // chapter's void carries a quiet colour identity. Rides through the grade +
@@ -1157,6 +1353,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // face draws completed and the disk flipped to the baked path. Stays false on
     // the low tier / ?rgbake=0 / a failed bake — the analytic fallback.
     granBakeDone: false,
+    // Supernova blast-field cubemap bake state (buildBlastBake): true once the
+    // six face draws completed and the disk flipped to the baked blast path.
+    // Stays false under ?blastbake=0 / no WebGL2 / a failed bake.
+    blastBakeDone: false,
+    // LOW-tier yellow-star photosphere cubemap bake state (buildSunBake): true
+    // once the bake landed and the sun mesh flipped to the baked path. Always
+    // false on high/mid (the rig is never built there) / ?sunbake=0 / a failure.
+    sunBakeDone: false,
     // Live count, so a perf/capture script can assert AFTER scrubbing the full
     // scroll range that no state transition compiled anything new
     // (programsNow() === programsAfterWarm ⇒ zero mid-scroll compile stalls).
@@ -1186,6 +1390,38 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     },
   };
 
+  // --- debug-flag PERF HUD (?perf=1 / __bhPerf — see perfHud.ts) ---------------
+  // Built ONLY when the flag resolves on; in normal play `perfHud` is null and the
+  // frame loop pays exactly one null check (`perfHud?.tick(now)` at the top of
+  // frame()). The tick sits BEFORE the idle-gate early return + the low-tier cap,
+  // so parked/skipped frames still count toward FPS — the HUD reports the TRUE
+  // composite rate the visitor experiences and keeps refreshing while the idle
+  // gate parks rendering. Getters (not copies) are threaded for the two values
+  // that mutate after boot: `activeTier` (the one-shot adaptive downgrade must be
+  // visible when it fires) and `granBakeApplied` (the cubemap bake lands
+  // asynchronously under the loader). The HUD also ARMS the draw-audit
+  // accumulator above — the composer issues one renderer.render() per pass and
+  // renderer.info auto-resets after each, so without whole-frame accumulation the
+  // HUD would show only the LAST pass's draw calls, not what the frame submitted.
+  const perfHud = resolvePerfHud()
+    ? buildPerfHud({
+        renderer,
+        bootTier: tier,
+        // Classification provenance ("gpu-class" / "probe Nms" / "forced" / …)
+        // straight from the detector's memo — shows WHY this session got its
+        // rung, e.g. "tier mid (gpu-class)". Note it describes detectDeviceTier's
+        // decision; callers thread that same detection into `tier` here.
+        tierSource: detectDeviceTierSource(),
+        getActiveTier: () => activeTier,
+        diskParticles,
+        halfResParticles: particlePass !== null,
+        gravitySimActive: gravitySim.available,
+        getGranBakeApplied: () => granBakeApplied,
+        getFrameStats: () => drawAuditFrame,
+      })
+    : null;
+  if (perfHud) drawAuditArmed = true;
+
   let gpuWarmStarted = false;
   const scheduleGpuWarm = (): void => {
     if (gpuWarmStarted) return;
@@ -1203,6 +1439,29 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
         granBake.bake();
         applyGranBake();
         gpuWarmInfo.granBakeDone = granBakeApplied;
+        requestAnimationFrame(tick);
+        return;
+      }
+      // Supernova blast-field cubemap next (same bounded six-draw shape as the
+      // granulation bake; its shader also compiles here, off the hot path). The
+      // collapse-flash beat is mid-scroll — it cannot be reached before this
+      // idle-time tick lands. Failure → analytic path, byte-identical.
+      if (blastBake && !blastBakeTried) {
+        blastBakeTried = true;
+        blastBake.bake();
+        applyBlastBake();
+        gpuWarmInfo.blastBakeDone = blastBakeApplied;
+        requestAnimationFrame(tick);
+        return;
+      }
+      // LOW-tier yellow-star photosphere cubemap (null on high/mid). The bake
+      // fragment runs the full noise stack once per texel — a bounded, one-shot
+      // cost that lands here under the loader/idle window instead of per-frame.
+      if (sunBake && !sunBakeTried) {
+        sunBakeTried = true;
+        sunBake.bake();
+        applySunBake();
+        gpuWarmInfo.sunBakeDone = sunBakeApplied;
         requestAnimationFrame(tick);
         return;
       }
@@ -1232,6 +1491,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // loader still beats first-scroll bake stalls. scheduleGpuWarm is idempotent.
   const scheduleGpuWarmAfterReveal = (): void => {
     if (
+      // KNOWN software rasteriser (the proactive low-DPR branch): its bakes and
+      // shader compiles cost SECONDS, not the hundreds of ms the fast-GPU
+      // reveal-starvation fix above was written for. Waiting for the reveal
+      // would land those seconds inside the visitor's first interactive moments
+      // (and, on the bench, inside the measured hold) — so warm immediately,
+      // under the loader, where the wait is already covered. Real GPUs keep the
+      // after-reveal path unchanged.
+      softwareGl ||
       document.body.classList.contains(SCENE_READY_BODY_CLASS) ||
       !document.querySelector('.scene-loader') // class literal mirrors index.astro's loader markup
     ) {
@@ -1258,17 +1525,24 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     }
     raf = requestAnimationFrame(frame);
     const now = performance.now();
+    // PERF HUD tick — MUST stay at the very top of frame(), before the idle-gate
+    // early return and the low-tier frame cap below, so every rAF tick (rendered
+    // OR skipped) feeds the FPS window and the ~2Hz DOM flush keeps running while
+    // the idle gate parks rendering. One null check when the flag is off; zero
+    // allocations when on (preallocated ring buffer, strings only at the flush).
+    perfHud?.tick(now);
     const t = (now - t0) / 1000;
 
-    // --- ADAPTIVE DOWNGRADE (high-on-paper / slow-in-practice) ---------------
+    // --- ADAPTIVE DOWNGRADE (safety net — proactive tiering happens at boot) --
     // Sample rAF inter-frame deltas for the first ADAPTIVE_SAMPLE_MS ms. If the
-    // resulting median FPS falls below ADAPTIVE_FPS_FLOOR the machine is a 'high'
-    // on paper but genuinely slow device (integrated GPU, thermally throttled
-    // laptop). Step down activeTier to 'low' and trigger a resize so the lower
-    // pixel ratio propagates to the composer and particle pass. This is the single
-    // biggest render win available without rebuilding geometry. One-shot,
-    // irreversible; the high path stays byte-identical when FPS is healthy.
-    if (tier === 'high' && !adaptiveChecked) {
+    // resulting median FPS falls below ADAPTIVE_FPS_FLOOR the upfront GPU
+    // classification was too optimistic for THIS session (thermal throttle,
+    // battery saver, masked renderer string). Step activeTier down exactly ONE
+    // rung (high→mid, mid→low) and trigger a resize so the lower pixel ratio
+    // propagates to the composer and particle pass. One-shot, irreversible; the
+    // boot path stays byte-identical when FPS is healthy — and with correct
+    // classification this should ~never fire at all.
+    if (tier !== 'low' && adaptiveEnabled && !adaptiveChecked) {
       if (adaptiveWindowStart === 0) {
         // First frame — start the clock.
         adaptiveWindowStart = now;
@@ -1282,7 +1556,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
         if (now - adaptiveWindowStart >= ADAPTIVE_SAMPLE_MS && adaptiveSamples.length >= 5) {
           adaptiveChecked = true;
           if (shouldAdaptiveDowngrade(adaptiveSamples)) {
-            activeTier = 'low';
+            activeTier = stepDownTier(tier);
             // Propagate the lower pixel ratio to the composer + particle pass via
             // the existing resize handler (side-effect: also refreshes camera
             // aspect / lens uniforms, which are harmless no-ops at unchanged size).
@@ -1370,6 +1644,19 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     const screenNova = Math.max(novaScreen, nebulaScreen);
     const nebulaFlashOwnsScreen = nebulaScreen > novaScreen;
     novaPass.uniforms.uNova.value = screenNova;
+    // LOW tier: when the nova envelope is at rest (uNova ≈ 0 — the shader's own
+    // early-out already makes the pass a pixel-identical texture copy) skip the
+    // pass entirely and let the grade pass present to screen. Saves one full-
+    // screen blit per frame — a measured win on software rasterisers. The two
+    // flags flip TOGETHER so the chain always has exactly one screen writer.
+    // High/mid never enter this branch (their chain stays byte-identical).
+    if (tier === 'low') {
+      const novaLive = screenNova >= 0.001;
+      if (novaPass.enabled !== novaLive) {
+        novaPass.enabled = novaLive;
+        gradePass.renderToScreen = !novaLive;
+      }
+    }
     novaPass.uniforms.uPeak.value = 0.88; // filmic cap — peak stays under pure white
     // DEBUG: window.__bhFlashDir pins the blast direction (+1 explode / -1 implode)
     // so a capture script can inspect either variant without scrolling to trigger it.
@@ -1381,7 +1668,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // dezoom progress (0 close → 1 rest). Reduced motion lands at the rest frame.
     // This is the second piece of the stateful clock (time-based intro ramp); like
     // `nova` it is resolved HERE and fed into lifecycle() as an input.
-    const intro = reduced ? 1 : easeOut(Math.min(t / INTRO_DUR, 1));
+    // softwareGl ALSO lands at rest: during the dezoom the camera sits close and
+    // the additive sprites balloon to many times their resting footprint — on a
+    // software rasteriser that fill spike froze the first ~6 s after the reveal
+    // (measured 1-7fps across exactly the INTRO_DUR window on the SwiftShader
+    // bench). The travel is a flourish, not content; a proven-software device
+    // opens on the exact resting frame instead — the same contract reduced
+    // motion already uses. Real GPUs keep the full dezoom, byte-identical.
+    const intro = reduced || softwareGl ? 1 : easeOut(Math.min(t / INTRO_DUR, 1));
 
     // === lifecycle() — the pure choreography ================================
     // All the per-frame look DECISIONS (the ~48 scalars that used to live inline:
@@ -1483,7 +1777,13 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // every native tick but skip the heavy work + render until LOW_FRAME_MS has
     // elapsed since the last actual render. High tier is never capped (native rAF).
     // activeTier may have been stepped down to 'low' by the adaptive downgrade.
-    const capThrottled = activeTier === 'low' && now - lastRenderTime < LOW_FRAME_MS;
+    // !lowDprAdapted: once the low tier's adaptive DPR rung has fired, the device
+    // has PROVEN it cannot exceed ~32fps — the cap (which exists so fast devices
+    // don't thrash chasing 60) can only steal frames there. Rendering every tick
+    // lets a ~30fps-capable device actually sustain 30+ instead of slipping to
+    // the every-2nd-tick 30.0 ceiling minus quantization losses.
+    const capThrottled =
+      activeTier === 'low' && !lowDprAdapted && now - lastRenderTime < LOW_FRAME_MS;
     // While static we still render on a slow HEARTBEAT so a late async texture load
     // or a restore that lands after we've parked eventually composites — and so the
     // dot's slow uDotTime breath keeps progressing (its ~7.85s period is sampled fine
@@ -1496,6 +1796,49 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       return; // skip applyLook + camera + gravity + postRig.render() this tick
     }
     lastRenderTime = now;
+    // window.__bhRendered — monotonically increasing count of frames that actually
+    // RENDERED (this line sits below the idle-gate + frame-cap early returns). The
+    // honest user-perceived rate: bench scripts diff it over time, because both the
+    // rAF-counted fps (counts capped/skipped ticks) and the perf HUD's tick-delta
+    // median overstate what the visitor sees on the capped low tier. One property
+    // write per rendered frame — negligible.
+    const w = window as unknown as Record<string, unknown>;
+    w.__bhRendered = ((w.__bhRendered as number) | 0) + 1;
+
+    // --- LOW tier adaptive DPR rung (state + rationale by LOW_ADAPTED_DPR above).
+    // Samples RENDERED-frame deltas only (this line is below the cap/idle gates),
+    // so the median reflects what the visitor actually watches.
+    if (tier === 'low' && adaptiveEnabled && !lowDprChecked) {
+      if (lowDprWindowStart === 0) {
+        lowDprWindowStart = now;
+        lowDprPrevRender = now;
+      } else {
+        const renderDt = now - lowDprPrevRender;
+        lowDprPrevRender = now;
+        // Same plausibility gate as the tier sampler: drop background-tab gaps
+        // (and idle-park heartbeats, which arrive ~500ms apart) so a parked
+        // stretch can't masquerade as slowness.
+        if (renderDt > 0 && renderDt < 400) lowDprSamples.push(renderDt);
+        if (now - lowDprWindowStart >= LOW_DPR_SAMPLE_MS && lowDprSamples.length >= 5) {
+          lowDprChecked = true;
+          const sorted = [...lowDprSamples].sort((a, b) => a - b);
+          const median = sorted[Math.floor(sorted.length / 2)];
+          if (1000 / median < LOW_DPR_FPS_FLOOR) {
+            lowDprAdapted = true;
+            onResize(); // propagate LOW_ADAPTED_DPR to renderer + composer + grade
+            // The proven-slow device also sheds 20% of the disk grains via
+            // drawRange (the low-tier disk is per-sprite-bound on software
+            // rasterisers — see the particle-pass note above). A ~20% dimmer
+            // additive cloud is under the perceptual floor next to the DPR step;
+            // the geometry itself is untouched, and capable low devices (median
+            // ≥ the floor) never reach this line.
+            diskPrimary.geometry.setDrawRange(0, Math.floor(diskParticles * 0.8));
+            diskSecondary.geometry.setDrawRange(0, Math.floor(diskParticles * 0.8));
+          }
+          lowDprSamples = [];
+        }
+      }
+    }
 
     // --- transition 2: red-giant SIZE override (giantSize debug hook) ----------
     // Red-giant SIZE is a RED-GIANT-ONLY scale (uGiantScale) so resizing the orb never
@@ -1578,6 +1921,20 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       applyGranBake();
       gpuWarmInfo.granBakeDone = granBakeApplied;
     }
+    // Same lazy fallback for the blast-field + low-tier sun bakes (each a single
+    // bounded six-draw call; the apply* fns flip their uniforms only on success).
+    if (blastBake && !blastBakeTried) {
+      blastBakeTried = true;
+      blastBake.bake();
+      applyBlastBake();
+      gpuWarmInfo.blastBakeDone = blastBakeApplied;
+    }
+    if (sunBake && !sunBakeTried) {
+      sunBakeTried = true;
+      sunBake.bake();
+      applySunBake();
+      gpuWarmInfo.sunBakeDone = sunBakeApplied;
+    }
     // GATE THE COLLAPSE ON A COMPLETE FLIPBOOK. The baked sim is the ONE beat that is not
     // a pure function of scroll: its snapshots take ~0.6s to bake the first time the
     // nebula is reached. If we sampled it before the bake finished, sampleAt() clamps to
@@ -1652,6 +2009,20 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     const rgBakeOverride = readDebugNumber(DEBUG_WINDOW_KEYS.rgbake);
     if (typeof rgBakeOverride === 'number') {
       setDisk('uGranBakeReady', rgBakeOverride > 0 && granBakeApplied ? 1 : 0);
+    }
+    // DEBUG: window.__bhBlastBake / window.__bhSunBake LIVE-toggle the baked
+    // blast-field and photosphere paths, mirroring __bhRgBake above (0 = the
+    // analytic per-frame noise, 1 = the baked cubemap — only when the boot bake
+    // actually landed). Same-session toggling keeps the per-load grain + phase
+    // fixed so an A/B screenshot pair isolates the bake itself.
+    const blastBakeOverride = readDebugNumber(DEBUG_WINDOW_KEYS.blastbake);
+    if (typeof blastBakeOverride === 'number') {
+      setDisk('uBlastBakeReady', blastBakeOverride > 0 && blastBakeApplied ? 1 : 0);
+    }
+    const sunBakeOverride = readDebugNumber(DEBUG_WINDOW_KEYS.sunbake);
+    if (typeof sunBakeOverride === 'number') {
+      sunRig.surfaceMat.uniforms.uSunBakeReady.value =
+        sunBakeOverride > 0 && sunBakeApplied ? 1 : 0;
     }
 
     // --- yellow star → red giant: FLASH-SWAP transition ----------------------
@@ -2002,6 +2373,19 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       camera.updateProjectionMatrix();
     }
 
+    // --- cursor-photon rig (the cursor emits light, the hole absorbs it) -------
+    // Runs AFTER the camera's final pose is fully resolved (lookAt, dive override,
+    // dolly, shake/roll, FOV restore): spawning unprojects the pointer through the
+    // camera and the heads/trails must agree with what THIS frame renders. The rig
+    // gets its OWN clamped dt clock (a photon integrates real physics; a tab-switch
+    // time jump must never slingshot it), and the pointer arrives as the parallax
+    // handler's 0-centred viewport fractions rescaled to NDC (×2, y flipped).
+    if (photonsRig) {
+      const photonDt = Math.min(Math.max(t - prevPhotonT, 0), 0.1);
+      prevPhotonT = t;
+      photonsRig.update(photonDt, camera, stage, mouseX * 2, -mouseY * 2);
+    }
+
     const ut = reduced ? 0 : t;
     // SCROLL-LOCK THE NEBULA: across the nebula + gravitational-collapse window the
     // disk clock is frozen to 0 so the cloud is purely a function of scroll position
@@ -2208,6 +2592,26 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     // uncovered. Note we only reach this line AFTER the early document.hidden return
     // above, so the event always trails a genuine paint. Backdrop mode (reading
     // pages) has no loader, so the event is simply unobserved there.
+    // KNOWN software rasteriser: after the first frame the browser spends ~3-4s
+    // JIT-ing draw pipelines and software-rasterising the page's tiles on the
+    // same CPU cores the scene renders with — frame pacing craters to ~1-5fps
+    // for that window no matter what the scene does (measured invariant to the
+    // intro, the bakes and a gl.finish fence). Revealing during the storm shows
+    // the visitor a frozen hero, so on softwareGl `scene-ready` additionally
+    // waits for STEADY pacing: SW_READY_STREAK consecutive rendered frames under
+    // SW_READY_FRAME_MS, or the SW_READY_TIMEOUT_S backstop (comfortably inside
+    // the loader's own 8s no-WebGL backstop). Real GPUs dispatch on the first
+    // frame exactly as before.
+    const SW_READY_FRAME_MS = 36;
+    const SW_READY_STREAK = 15;
+    const SW_READY_TIMEOUT_S = 8;
+    const SW_READY_MIN_S = 4; // the storm starts ~1s in; don't trust earlier streaks
+    if (!firstFramePainted && softwareGl && t < SW_READY_TIMEOUT_S) {
+      if (t < SW_READY_MIN_S) return; // too early to trust pacing — keep the loader up
+      swReadyStreak = now - swPrevRenderAt <= SW_READY_FRAME_MS ? swReadyStreak + 1 : 0;
+      swPrevRenderAt = now;
+      if (swReadyStreak < SW_READY_STREAK) return; // keep the loader up; try next frame
+    }
     if (!firstFramePainted) {
       firstFramePainted = true;
       bootGlowT0 = t; // anchor the boot-glow decay timer to this first composited frame
@@ -2318,6 +2722,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
           // (renderToScreen = true) → compile its sRGB variant with NO target bound.
           const warmScreenScene = new THREE.Scene();
           warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
+          // LOW tier: the nova-idle skip flips gradePass.renderToScreen, so grade
+          // ALSO renders to screen there — warm its sRGB variant too, or it
+          // compiles lazily on the very first skipped-nova frame. High/mid never
+          // flip the flag, so their warm set is unchanged.
+          if (tier === 'low') warmScreenScene.add(new THREE.Mesh(warmGeo, gradePass.material));
           compiles.push(renderer.compileAsync(warmScreenScene, camera));
           await Promise.all(compiles);
           warmGeo.dispose();
@@ -2341,6 +2750,30 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
           // else branch is never taken in practice — syncCompileBlock is therefore
           // unreachable in real-world usage (the parallel path handles it without
           // any main-thread stall).
+          //
+          // EXCEPT on a KNOWN software rasteriser (the proactive softwareGl
+          // branch): "the total wall time is identical" is true, but WHERE it
+          // lands is not — lazy compiles land AFTER scene:ready, as a multi-second
+          // freeze inside the visitor's first interactive moments (and inside the
+          // bench's measured hold). There we DO compile everything up front,
+          // synchronously, under the loader: bootMs grows by the same seconds the
+          // first-play stall shrinks. Mirrors the parallel path's variant set,
+          // including grade's to-screen (sRGB) variant for the nova-idle skip.
+          if (softwareGl) {
+            renderer.setRenderTarget(warmRT);
+            try {
+              renderer.compile(scene, camera);
+              const warmRtScene = new THREE.Scene();
+              for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
+              renderer.compile(warmRtScene, camera);
+            } finally {
+              renderer.setRenderTarget(null);
+            }
+            const warmScreenScene = new THREE.Scene();
+            warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
+            warmScreenScene.add(new THREE.Mesh(warmGeo, gradePass.material));
+            renderer.compile(warmScreenScene, camera);
+          }
           warmGeo.dispose();
           warmRT.dispose();
           // falls through to `if (!stopped) frame()` below
@@ -2445,6 +2878,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       // `window`, not the canvas, because the scroll-track overlay swallows canvas-targeted
       // pointer events; detach them from the same target we added them to.
       window.removeEventListener('pointerdown', onPointerDownSun);
+      window.removeEventListener('pointerdown', onPointerDownPhotons); // photon click burst (window, like the eruptions)
       window.removeEventListener('pointerup', onPointerUpSun);
       window.removeEventListener('pointercancel', cancelHold);
       window.removeEventListener('pointerleave', cancelHold);
@@ -2461,7 +2895,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       // and renderer are NOT rigs (their own teardown contracts) so stay explicit.
       const rigs: Rig[] = [postRig, diskRig, starRig, distantStarRig, warpRig, streakRig, ringRig, sunRig, cockpitRig];
       if (particlePass) rigs.push(particlePass); // present only when the half-res split is active
-      if (granBake) rigs.push(granBake); // present only when the granulation bake is active (high tier, ?rgbake≠0)
+      if (blastBake) rigs.push(blastBake); // present only on WebGL2 without ?blastbake=0
+      if (sunBake) rigs.push(sunBake); // present only on the low tier without ?sunbake=0
+      if (granBake) rigs.push(granBake); // present only when the granulation bake is active (?rgbake≠0)
+      if (perfHud) rigs.push(perfHud); // present only under ?perf=1 — dispose removes the DOM overlay
+      if (photonsRig) rigs.push(photonsRig); // present only on the high tier with motion + ?photons≠0
       for (const rig of rigs) rig.dispose();
       gravitySim.dispose();
       renderer.dispose();

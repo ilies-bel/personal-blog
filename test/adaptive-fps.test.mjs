@@ -36,6 +36,8 @@ globalThis.window = globalThis;
 const {
   shouldAdaptiveDowngrade,
   medianFpsFromDeltas,
+  classifyGpuRenderer,
+  stepDownTier,
   ADAPTIVE_FPS_FLOOR,
   ADAPTIVE_SAMPLE_MS,
 } = await import(
@@ -127,6 +129,62 @@ test('shouldAdaptiveDowngrade: custom floor respected', () => {
   // And 60 fps should not.
   assert.equal(shouldAdaptiveDowngrade(deltasAt(60, 20), 50), false);
 });
+
+// stepDownTier (the one-rung safety-net ladder) ---------------------------
+
+test('stepDownTier: high → mid (one rung, not the old high→low cliff)', () => {
+  assert.equal(stepDownTier('high'), 'mid');
+});
+
+test('stepDownTier: mid → low', () => {
+  assert.equal(stepDownTier('mid'), 'low');
+});
+
+test('stepDownTier: low stays low (floor)', () => {
+  assert.equal(stepDownTier('low'), 'low');
+});
+
+// classifyGpuRenderer (the proactive classification table) ----------------
+// Pure string → class; real-world unmasked renderer strings per family.
+
+const GPU_CASES = [
+  // software rasterisers → low (the SwiftShader bench: 9-11fps on desktop-high)
+  ['ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)', 'low'],
+  ['Google SwiftShader', 'low'],
+  ['llvmpipe (LLVM 15.0.7, 256 bits)', 'low'],
+  ['Microsoft Basic Render Driver', 'low'],
+  // discrete NVIDIA → high
+  ['ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)', 'high'],
+  ['ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)', 'high'],
+  // older / laptop NVIDIA → mid
+  ['ANGLE (NVIDIA, NVIDIA GeForce GTX 1050 Direct3D11 vs_5_0 ps_5_0, D3D11)', 'mid'],
+  ['ANGLE (NVIDIA, NVIDIA GeForce MX250 Direct3D11 vs_5_0 ps_5_0, D3D11)', 'mid'],
+  // AMD: RX → high, APU/other Radeon → mid
+  ['ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)', 'high'],
+  ['ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', 'mid'],
+  // Apple Silicon → high (mobile clamp in detectDeviceTier caps iPhones at mid)
+  ['ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)', 'high'],
+  ['Apple GPU', 'high'],
+  // Intel iGPU → mid (the canonical "high on paper, 10fps in practice" class)
+  ['ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)', 'mid'],
+  ['ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', 'mid'],
+  ['Intel(R) HD Graphics 4000', 'mid'],
+  // recent mobile GPUs → mid; older → low
+  ['ANGLE (Qualcomm, Adreno (TM) 740, OpenGL ES 3.2)', 'mid'],
+  ['ANGLE (Qualcomm, Adreno (TM) 630, OpenGL ES 3.2)', 'low'],
+  ['ANGLE (ARM, Mali-G78, OpenGL ES 3.2)', 'mid'],
+  ['Mali-T880', 'low'],
+  ['PowerVR Rogue GE8320', 'low'],
+  // masked / unknown strings → unknown (→ the fill-rate microprobe tie-breaker)
+  ['', 'unknown'],
+  ['WebKit WebGL', 'unknown'],
+];
+
+for (const [renderer, expected] of GPU_CASES) {
+  test(`classifyGpuRenderer: ${renderer || '(empty)'} → ${expected}`, () => {
+    assert.equal(classifyGpuRenderer(renderer), expected);
+  });
+}
 
 // Constants sanity checks -----------------------------------------------
 

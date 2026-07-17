@@ -13,8 +13,13 @@ export interface WarpRig extends UniformRig {
   uniforms: Uniforms; // primary's shared block (matSec clones it)
   dispose: () => void;
 }
-export function buildWarp(scene: THREE.Scene, particleCount: number): WarpRig {
-  const WARP_STARS = Math.max(2000, Math.floor(particleCount * 0.02));
+export function buildWarp(scene: THREE.Scene, particleCount: number, lowTier = false): WarpRig {
+  // LOW tier: 1200 arcs instead of the 2000 floor — line rasterisation is a
+  // per-segment cost on the software rasterisers the low tier classifies, and the
+  // arc web reads at ~60% density (the arcs are a subtle background cue; the
+  // secondary arc set is already dropped on low in createScene). High/mid keep
+  // the shipped floor — byte-identical.
+  const WARP_STARS = lowTier ? 1200 : Math.max(2000, Math.floor(particleCount * 0.02));
   const K = 7;
   const V = WARP_STARS * K * 2;
   const warpPos = new Float32Array(V * 3);

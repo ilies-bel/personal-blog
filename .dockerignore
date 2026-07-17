@@ -1,0 +1,7 @@
+node_modules
+.git
+.mars
+.astro
+dist
+evidence
+.bench-docker-out

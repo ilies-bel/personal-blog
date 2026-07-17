@@ -82,6 +82,12 @@ export function buildSunRig(scene: THREE.Scene, R: number, pixelRatio: number): 
       // streaming with the wavefront). 0 = surface texture frozen; 1 = tuned default. Lives
       // purely in object space so there is no atlas/seam. Live-tunable via window.__wave.flow.
       uWaveFlow: { value: 1 },
+      // --- baked photosphere fields (LOW tier only — scene/buildSunBake.ts) ---
+      // uSunBakeReady stays 0 (the analytic per-pixel noise stack — today's
+      // exact shader) unless createScene's low-tier cubemap bake completes and
+      // flips it; never on high/mid, under ?sunbake=0, or if the bake fails.
+      uSunTex: { value: null },
+      uSunBakeReady: { value: 0 },
     },
     vertexShader: sunSurfaceVert,
     fragmentShader: sunSurfaceFrag,

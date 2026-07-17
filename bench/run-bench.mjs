@@ -1,0 +1,275 @@
+#!/usr/bin/env node
+// Device-matrix performance benchmark for the WebGL hero engine.
+//
+// Serves the PRODUCTION build (dist/) over a local static server, then drives
+// Playwright Chromium through the device matrix in bench/devices.json.
+// Per device x scenario it measures:
+//   - boot ms   : navigation start -> body.scene-ready (45s timeout => FAILED-TO-START)
+//   - hold FPS  : rAF-counted FPS over an 8s stationary hold
+//   - scroll FPS: rAF-counted FPS during a 10s scripted scroll sweep top->bottom
+//   - longtask  : total long-task ms during boot (PerformanceObserver 'longtask')
+//   - heap MB   : performance.memory.usedJSHeapSize, if exposed
+//
+// Output: evidence/performance/bench-<device>-<scenario>.json (one per run)
+// plus evidence/performance/bench-summary.json and a printed table.
+//
+// Usage: node bench/run-bench.mjs
+// Env:   BENCH_PORT (default: auto), BENCH_SKIP_BUILD=1 to trust dist/ as-is.
+
+import { chromium } from 'playwright';
+import { createServer } from 'node:http';
+import { execSync, spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from 'node:fs';
+import { join, extname, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = join(ROOT, 'dist');
+const OUT_DIR = join(ROOT, 'evidence', 'performance');
+const BOOT_TIMEOUT_MS = 45_000;
+const HOLD_S = 8;
+const SCROLL_S = 10;
+
+// --- build freshness ---------------------------------------------------------
+
+function newestMtime(dir) {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const p = join(dir, entry.name);
+    newest = Math.max(newest, entry.isDirectory() ? newestMtime(p) : statSync(p).mtimeMs);
+  }
+  return newest;
+}
+
+function ensureBuild() {
+  if (process.env.BENCH_SKIP_BUILD === '1' && existsSync(join(DIST, 'index.html'))) return;
+  const distStamp = existsSync(join(DIST, 'index.html')) ? statSync(join(DIST, 'index.html')).mtimeMs : 0;
+  const srcStamp = Math.max(newestMtime(join(ROOT, 'src')), statSync(join(ROOT, 'astro.config.mjs')).mtimeMs);
+  if (distStamp > srcStamp) {
+    console.log('[bench] dist/ is fresh, skipping build');
+    return;
+  }
+  console.log('[bench] dist/ stale or missing -> running pnpm build (this may take a minute)');
+  execSync('pnpm build', { cwd: ROOT, stdio: 'inherit' });
+}
+
+// --- static server -----------------------------------------------------------
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
+  '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+  '.avif': 'image/avif', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff',
+  '.xml': 'application/xml', '.txt': 'text/plain', '.wasm': 'application/wasm',
+  '.glb': 'model/gltf-binary', '.ktx2': 'image/ktx2', '.mp4': 'video/mp4',
+};
+
+function startServer() {
+  const server = createServer((req, res) => {
+    try {
+      let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+      let file = join(DIST, path);
+      if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
+      if (!existsSync(file)) file = join(DIST, path.replace(/\/$/, '') + '/index.html');
+      if (!existsSync(file)) { res.writeHead(404).end('not found'); return; }
+      res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+      res.end(readFileSync(file));
+    } catch (e) {
+      res.writeHead(500).end(String(e));
+    }
+  });
+  return new Promise((resolve) => {
+    const wanted = Number(process.env.BENCH_PORT ?? 0);
+    server.listen(wanted, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+  });
+}
+
+// --- scenario discovery --------------------------------------------------------
+
+function discoverPostRoute() {
+  const postsDir = join(DIST, 'posts');
+  const slug = readdirSync(postsDir, { withFileTypes: true })
+    .find((d) => d.isDirectory() && existsSync(join(postsDir, d.name, 'index.html')));
+  if (!slug) throw new Error('no post route found under dist/posts/');
+  return `/posts/${slug.name}/`;
+}
+
+// --- in-page instrumentation ---------------------------------------------------
+
+const INIT_SCRIPT = () => {
+  const S = (window.__bench = { longTaskMs: 0, longTasks: 0, bootMs: null });
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) { S.longTaskMs += e.duration; S.longTasks += 1; }
+    }).observe({ type: 'longtask', buffered: true });
+  } catch { /* longtask unsupported */ }
+  const mark = () => {
+    if (S.bootMs === null && document.body?.classList.contains('scene-ready')) S.bootMs = performance.now();
+  };
+  // NOTE: observe `document`, not documentElement — init scripts run before the
+  // document has an <html> element, so documentElement is null at this point.
+  new MutationObserver(mark).observe(document, {
+    subtree: true, attributes: true, attributeFilter: ['class'], childList: true,
+  });
+  document.addEventListener('DOMContentLoaded', mark);
+};
+
+const MEASURE_FPS = ({ seconds, scroll }) => new Promise((resolve) => {
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  const t0 = performance.now();
+  let frames = 0;
+  let worst = Infinity;
+  let last = t0;
+  const frame = (now) => {
+    frames += 1;
+    const dt = now - last;
+    last = now;
+    if (frames > 1 && dt > 0) worst = Math.min(worst, 1000 / dt);
+    const elapsed = now - t0;
+    if (scroll) window.scrollTo(0, Math.min(1, elapsed / (seconds * 1000)) * total);
+    if (elapsed >= seconds * 1000) {
+      resolve({ fps: (frames * 1000) / elapsed, frames, worstInstantFps: worst === Infinity ? null : worst });
+    } else {
+      requestAnimationFrame(frame);
+    }
+  };
+  requestAnimationFrame(frame);
+});
+
+// --- one run ---------------------------------------------------------------------
+
+async function runOne(browser, device, scenario, baseUrl) {
+  const url = baseUrl + scenario.path + device.query;
+  const context = await browser.newContext({
+    viewport: device.viewport,
+    deviceScaleFactor: device.deviceScaleFactor,
+    isMobile: device.isMobile,
+    hasTouch: device.hasTouch,
+    ...(device.userAgent ? { userAgent: device.userAgent } : {}),
+  });
+  const page = await context.newPage();
+  await page.addInitScript(INIT_SCRIPT);
+  const cdp = await context.newCDPSession(page);
+  if (device.cpuThrottle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: device.cpuThrottle });
+
+  const result = {
+    device: device.name, scenario: scenario.name, url,
+    config: {
+      viewport: device.viewport, deviceScaleFactor: device.deviceScaleFactor,
+      cpuThrottle: device.cpuThrottle, isMobile: device.isMobile,
+      userAgent: device.userAgent ?? '(chromium default)', query: device.query,
+    },
+    started: false, bootMs: null, longTaskBootMs: null, longTaskBootCount: null,
+    holdFps: null, holdWorstInstantFps: null, scrollFps: null, scrollWorstInstantFps: null,
+    heapMB: null, error: null,
+    timestamp: new Date().toISOString(),
+  };
+
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: BOOT_TIMEOUT_MS });
+    try {
+      await page.waitForFunction(() => window.__bench && window.__bench.bootMs !== null, null, { timeout: BOOT_TIMEOUT_MS });
+      result.started = true;
+      result.bootMs = round(await page.evaluate(() => window.__bench.bootMs));
+    } catch {
+      // body.scene-ready is HOME-only (added by index.astro's loader). Other
+      // routes still run WebGL canvases but never add the marker — treat a
+      // fully-loaded page without the marker as started (bootMs n/a), and only
+      // a page that never finished loading as FAILED-TO-START.
+      const loaded = await page.evaluate(() => document.readyState === 'complete');
+      if (loaded && scenario.name !== 'home') {
+        result.started = true;
+        result.note = 'no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load';
+      } else {
+        result.started = false;
+        result.error = `FAILED-TO-START: body.scene-ready not observed within ${BOOT_TIMEOUT_MS / 1000}s`;
+      }
+    }
+    result.canvasCount = await page.evaluate(() => document.querySelectorAll('canvas').length);
+    const boot = await page.evaluate(() => ({ ms: window.__bench.longTaskMs, n: window.__bench.longTasks }));
+    result.longTaskBootMs = round(boot.ms);
+    result.longTaskBootCount = boot.n;
+
+    if (result.started) {
+      const hold = await page.evaluate(MEASURE_FPS, { seconds: HOLD_S, scroll: false });
+      result.holdFps = round(hold.fps);
+      result.holdWorstInstantFps = round(hold.worstInstantFps);
+      const sweep = await page.evaluate(MEASURE_FPS, { seconds: SCROLL_S, scroll: true });
+      result.scrollFps = round(sweep.fps);
+      result.scrollWorstInstantFps = round(sweep.worstInstantFps);
+      result.heapMB = round(await page.evaluate(
+        () => performance.memory ? performance.memory.usedJSHeapSize / (1024 * 1024) : null,
+      ));
+    }
+  } catch (e) {
+    result.error = result.error ?? `CRASH: ${e.message}`;
+  } finally {
+    await context.close();
+  }
+  return result;
+}
+
+const round = (v) => (v === null || v === undefined ? null : Math.round(v * 10) / 10);
+
+// --- main -----------------------------------------------------------------------
+
+async function main() {
+  ensureBuild();
+  mkdirSync(OUT_DIR, { recursive: true });
+  const { devices } = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'devices.json'), 'utf8'));
+  const { server, port } = await startServer();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  console.log(`[bench] serving dist/ at ${baseUrl}`);
+
+  const scenarios = [
+    { name: 'home', path: '/' },
+    { name: 'post', path: discoverPostRoute() },
+  ];
+  console.log(`[bench] scenarios: ${scenarios.map((s) => s.path).join(', ')}`);
+
+  const extraArgs = (process.env.BENCH_CHROMIUM_FLAGS ?? '').split(' ').filter(Boolean);
+  // Headed by default on the host: headless Chromium falls back to a software /
+  // stalled GL path on macOS (measured ~3x slower than headed on the same scene).
+  // Docker (no display) sets BENCH_HEADLESS=1 and uses SwiftShader explicitly.
+  const headless = process.env.BENCH_HEADLESS === '1';
+  const browser = await chromium.launch({ args: extraArgs, headless });
+  const gpu = spawnSync('sysctl', ['-n', 'machdep.cpu.brand_string'], { encoding: 'utf8' }).stdout?.trim() || null;
+
+  const results = [];
+  for (const device of devices) {
+    for (const scenario of scenarios) {
+      process.stdout.write(`[bench] ${device.name} x ${scenario.name} ... `);
+      const r = await runOne(browser, device, scenario, baseUrl);
+      results.push(r);
+      const file = join(OUT_DIR, `bench-${device.name}-${scenario.name}.json`);
+      writeFileSync(file, JSON.stringify(r, null, 2) + '\n');
+      console.log(r.started ? `boot ${r.bootMs}ms, hold ${r.holdFps}fps, scroll ${r.scrollFps}fps` : (r.error ?? 'failed'));
+    }
+  }
+
+  await browser.close();
+  server.close();
+
+  const summary = {
+    host: { platform: process.platform, cpu: gpu, node: process.version, chromiumFlags: extraArgs },
+    holdSeconds: HOLD_S, scrollSeconds: SCROLL_S, bootTimeoutMs: BOOT_TIMEOUT_MS,
+    timestamp: new Date().toISOString(),
+    results,
+  };
+  writeFileSync(join(OUT_DIR, 'bench-summary.json'), JSON.stringify(summary, null, 2) + '\n');
+
+  const header = ['device', 'scenario', 'started', 'boot ms', 'hold fps', 'scroll fps', 'longtask ms', 'heap MB'];
+  const rows = results.map((r) => [
+    r.device, r.scenario, r.started ? 'yes' : 'NO', r.bootMs ?? '-', r.holdFps ?? '-',
+    r.scrollFps ?? '-', r.longTaskBootMs ?? '-', r.heapMB ?? '-',
+  ]);
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((row) => String(row[i]).length)));
+  const line = (cells) => cells.map((c, i) => String(c).padEnd(widths[i])).join('  ');
+  console.log('\n' + line(header));
+  console.log(widths.map((w) => '-'.repeat(w)).join('  '));
+  for (const row of rows) console.log(line(row));
+  console.log(`\n[bench] wrote ${results.length} run files + bench-summary.json to evidence/performance/`);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });

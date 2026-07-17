@@ -192,9 +192,10 @@ export const DEBUG_WINDOW_KEYS = {
   /** DEV framing panel: nudge the red-giant off-centre composition live on the Y axis
    *  (baked into RED_COMPOSITION; rides the red-giant beat weight so no snap). */
   giantPosY: '__bhGiantPosY',
-  /** Force the device tier ('high' | 'low') so the low-end fallback can be tested on
-   *  any machine without spoofing hardware. Read as a STRING via readDebugString and
-   *  honoured FIRST by detectDeviceTier (overrides the cheap auto-detect signals). */
+  /** Force the device tier ('high' | 'mid' | 'low') so any rung of the ladder can be
+   *  tested on any machine without spoofing hardware. Read as a STRING via
+   *  readDebugString and honoured FIRST by detectDeviceTier (overrides the proactive
+   *  GPU classification + microprobe). */
   tier: '__bhTier',
   /** Force the particle render-target scale (the half-res split for the heavy soft
    *  additive rigs — see buildParticlePass). Follows the ?tier= pattern: the ?prtres=
@@ -213,6 +214,63 @@ export const DEBUG_WINDOW_KEYS = {
    *  bake that didn't land), so an A/B screenshot pair keeps the per-load random
    *  grain + spin phase fixed and diffs cleanly. */
   rgbake: '__bhRgBake',
+  /** Kill-switch for the supernova BLAST-FIELD cubemap bake (buildBlastBake —
+   *  the vertex-bound collapse-flash fix). Follows the ?rgbake= pattern: the
+   *  ?blastbake= URL query is honoured first and persisted to sessionStorage,
+   *  then this window global. `0` forces the ANALYTIC per-frame blastField()
+   *  path (today's exact shader — the bake is never built, uBlastBakeReady
+   *  stays 0) for A/B; `1` (or unset) keeps the shipped baked path on every
+   *  WebGL2 tier. ALSO a live per-frame toggle (the __bhRgBake precedent):
+   *  setting the window global mid-session flips uBlastBakeReady on the fly
+   *  (never enabling a bake that didn't land), so an A/B screenshot pair keeps
+   *  the per-load grain + morph phase fixed and diffs cleanly. */
+  blastbake: '__bhBlastBake',
+  /** Kill-switch for the LOW-tier yellow-star PHOTOSPHERE cubemap bake
+   *  (buildSunBake — the fragment-bound sun fix). Follows the ?rgbake= pattern:
+   *  the ?sunbake= URL query is honoured first and persisted to sessionStorage,
+   *  then this window global. `0` forces the ANALYTIC per-pixel noise stack
+   *  (today's exact shader — the bake is never built, uSunBakeReady stays 0)
+   *  for A/B; `1` (or unset) keeps the shipped baked path on the low tier
+   *  (high/mid never build the bake regardless). ALSO a live per-frame toggle,
+   *  mirroring __bhRgBake/__bhBlastBake. */
+  sunbake: '__bhSunBake',
+  /** Debug-flag PERF HUD (scene/perfHud.ts — the live "what does the scene cost"
+   *  overlay: FPS/1%-low/frame-ms, renderer.info draw stats, tier/DPR/particle
+   *  config, GPU string, JS heap). Follows the ?rgbake= pattern: the ?perf= URL
+   *  query is honoured first and persisted to sessionStorage, then this window
+   *  global. DEFAULT OFF — when unset the HUD is never built and the frame loop
+   *  pays exactly one null check. `?perf=1` builds it; `?perf=0` clears the
+   *  sessionStorage mirror for subsequent same-tab loads. */
+  perf: '__bhPerf',
+  /** Kill-switch for the cursor-photon interaction rig (buildPhotons — the
+   *  "cursor emits light, the black hole absorbs it" gravity rig). Follows the
+   *  ?perf= pattern: the ?photons= URL query is honoured first and persisted to
+   *  sessionStorage, then this window global. `0` skips building the rig entirely
+   *  (the frame loop pays one null check); `1` (or unset) keeps the shipped
+   *  default ON for the high tier. */
+  photons: '__bhPhotons',
+  /** PIN flag for the adaptive runtime downgrade (the first-1.5s median-FPS check
+   *  that steps a 'high' session down to 'low' — see resolveAdaptive). Follows the
+   *  ?photons= pattern: the ?adapt= URL query is honoured first and persisted to
+   *  sessionStorage, then this window global. `0` PINS the boot tier (the downgrade
+   *  never fires — for machines hovering right at the 30fps floor); `1` (or unset)
+   *  keeps the shipped adaptive behavior ON. An explicit ?tier= override also pins
+   *  independently of this flag (isTierForced). */
+  adapt: '__bhAdapt',
+  /** A/B override for the grade pass's LUMINANCE-ADAPTIVE film grain strength
+   *  (uGrainAmt — the dark-lifting grain that textures the dim gaps between sparse
+   *  cloud grains; distinct from the per-state uGrain flicker). Follows the
+   *  ?prtres= pattern: the ?grain= URL query (a float) is honoured first and
+   *  persisted to sessionStorage, then this window global. `0` disables the grain
+   *  outright (byte-identical pre-grain look); unset → the shipped FILM_GRAIN_AMT
+   *  default. */
+  grain: '__bhGrain',
+  /** DEBUG A/B lever: scale the device-tuned particle count (0.05–1; default 1 =
+   *  no production change). Follows the ?prtres= pattern: the ?density= URL query
+   *  is honoured first and persisted to sessionStorage, then this window global.
+   *  When < 1 the scaled count also flows through densityCompensation (forced),
+   *  so per-grain emission/size auto-fatten exactly as the low tier's do. */
+  density: '__bhDensity',
   /** A/B override for the disk shader's invisible-tail discard epsilon (uTailEps).
    *  Set 0 to disable the discard outright (byte-identical original fill), or any
    *  epsilon to test; unset → the shipped TAIL_EPS default. Same-session toggling

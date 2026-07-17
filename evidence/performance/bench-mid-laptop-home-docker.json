@@ -1,0 +1,28 @@
+{
+  "device": "mid-laptop",
+  "scenario": "home",
+  "url": "http://127.0.0.1:39067/",
+  "config": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "deviceScaleFactor": 2,
+    "cpuThrottle": 4,
+    "isMobile": false,
+    "userAgent": "(chromium default)",
+    "query": ""
+  },
+  "started": true,
+  "bootMs": 2192.2,
+  "longTaskBootMs": 1407,
+  "longTaskBootCount": 4,
+  "holdFps": 7.3,
+  "holdWorstInstantFps": 0.7,
+  "scrollFps": 7.1,
+  "scrollWorstInstantFps": 1.8,
+  "heapMB": 33.5,
+  "error": null,
+  "timestamp": "2026-07-15T07:38:08.438Z",
+  "canvasCount": 3
+}

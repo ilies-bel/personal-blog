@@ -253,6 +253,15 @@ body.scene-ready .scene-loader-skip { display: none; }
    pointer-events. */
 body.scene-ready .scene-loader {
   pointer-events: none;
+  /* COMPOSITOR-LAYER RELEASE: once every reveal transition has finished (the
+     longest chain — glide + the delayed ::before fade — is comfortably inside
+     3s), flip the whole loader to visibility:hidden so its full-screen layers
+     (the dark ::before cover + the LCP poster) stop being blended over the
+     animating canvas every frame — a measurable per-frame cost on software
+     rasterisers. The 3s-delayed visibility transition never cuts a fade short,
+     and visibility (unlike display) keeps the subtree's transitions runnable. */
+  visibility: hidden;
+  transition: visibility 0s linear 3s;
 }
 /* STAGE 1 — dot+name fade out FIRST (0→0.3s), gone before the glide starts (0.32s). */
 body.scene-ready .scene-loader-mark {
@@ -996,4 +1005,48 @@ body.webgl-unavailable .webgl-fallback {
 .webgl-fallback a:hover,
 .webgl-fallback a:focus-visible {
   color: var(--accent-strong);
+}
+
+/* --- Software-GL reveal flattening ------------------------------------------
+   [data-soft-gl] is stamped on <html> by createScene when the low tier's GPU
+   classification identifies a SOFTWARE rasteriser (SwiftShader / llvmpipe /
+   Basic Render — see isSoftwareRenderer in src/hero/lib/config.ts). There the
+   loader's staged reveal — three overlapping full-screen opacity fades — is
+   ~3s of software compositor blending at device resolution, which froze the
+   freshly revealed scene at 1-5fps (measured on the SwiftShader bench). A hard
+   cut is imperceptible next to that: every loader layer drops its transition
+   and the whole overlay releases its compositor layers the moment scene-ready
+   lands. Real GPUs never carry the attribute — their choreography is untouched. */
+html[data-soft-gl] .scene-loader,
+html[data-soft-gl] .scene-loader::before,
+html[data-soft-gl] .scene-loader-poster,
+html[data-soft-gl] .scene-loader-mark,
+html[data-soft-gl] .scene-loader-dot {
+  transition: none;
+  animation: none;
+}
+html[data-soft-gl] body.scene-ready .scene-loader {
+  visibility: hidden; /* immediate — overrides the 3s-delayed release below */
+}
+/* Same rationale, wider net: EVERY entrance transition/animation that fires on
+   scene-ready (chrome fade-ins, HUD boot glide, nav power-on, manifesto
+   entrances) is compositor blending the software rasteriser cannot afford in
+   the seconds after the reveal. Flatten them all to end states — the soft-gl
+   session opens on the settled frame, exactly like reduced motion's contract.
+   Scroll-driven state (classes, visibility flips) is untouched: only the
+   tweened travel between states is removed. */
+html[data-soft-gl] *,
+html[data-soft-gl] *::before,
+html[data-soft-gl] *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+}
+/* The loader's dark cover is fully opaque, so Chromium never rasterises the
+   content underneath it — the reveal then pays a one-shot software raster of
+   the whole occluded page (~2s at 15-20fps right at scene-ready on the bench).
+   At 0.998 the cover is visually identical (black over black) but no longer
+   counts as occluding, so those tiles rasterise DURING the load, under the
+   loader, and the reveal opens straight at the settled frame rate. */
+html[data-soft-gl] .scene-loader::before {
+  opacity: 0.998;
 }

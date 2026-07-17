@@ -217,6 +217,38 @@ export const GRAN_FIELD_GLSL = /* glsl */ `
   }
 `;
 
+// --- shared supernova blast-field recipe (vertex shader + the CUBEMAP bake) ----
+// The collapse-flash blast branch shapes the ejecta from four CONTINUOUS fbm
+// fields over the (stable, per-particle) unit blast direction — lane (finger
+// jets), fil (fine filaments), the crush-bias lobe and the speed lobe. All four
+// are PURE functions of blastDir (no uTime, no aSeed term), so — exactly like the
+// red-giant granulation (buildGranBake) — they can be baked ONCE into a cubemap
+// and replaced by a single fetch. This ONE function is interpolated into BOTH the
+// disk vertex shader (the analytic / fallback path) and the bake fragment
+// (scene/buildBlastBake.ts), so the two can never drift. Channels:
+//   .r = fbm(d*2.2 + 11.0)  — lane field (RAW, pre-smoothstep/pow shaping)
+//   .g = fbm(d*6.0 +  4.0)  — fil, the fine filament octave (the 6.0-frequency
+//        detail is why the bake uses 256² faces — see BLAST_BAKE_FACE_SIZE)
+//   .b = fbm(d*1.6 + 23.0)  — crushBias field (RAW, pre *2-1 remap)
+//   .a = fbm(d*1.3 + 31.0)  — spdLobe field (RAW, pre 0.78+0.55* shaping)
+// The cheap shaping math (smoothstep/pow/clamp/mix) stays in the vertex shader so
+// the baked and analytic paths share it verbatim. fbm outputs live in ~[0,1]
+// (4-octave value noise, weights sum to 0.9375), and the bake target is RGBA16F —
+// no scale/bias needed. The time-dependent fields (pulsePhase drift is pure too
+// but rides in the remaining analytic fbm; the swirl billowing samples a uTime-
+// DRIFTING domain) cannot be baked and stay analytic.
+export const BLAST_FIELD_GLSL = /* glsl */ `
+  // -- supernova blast shaping fields: four pure-direction fbm channels --------
+  vec4 blastField(vec3 d){
+    return vec4(
+      fbm(d*2.2 + 11.0),   // lane  (finger-jet selector, raw)
+      fbm(d*6.0 +  4.0),   // fil   (fine filament octave)
+      fbm(d*1.6 + 23.0),   // crushBias (lopsided-implosion lobe, raw)
+      fbm(d*1.3 + 31.0)    // spdLobe (smooth spatial speed field, raw)
+    );
+  }
+`;
+
 // Default epsilon for the fragment shader's invisible-tail discard (uTailEps).
 // Each soft gaussian sprite pays full raster+blend cost for its whole quad, but the
 // tail of the falloff contributes almost nothing: a fragment whose final additive
@@ -299,6 +331,7 @@ export const diskVertexShader = /* glsl */ `
   ${GRAN_NOISE_GLSL}
   ${SUN_NOISE_GLSL}
   ${GRAN_FIELD_GLSL}
+  ${BLAST_FIELD_GLSL}
 
   // nebula placement — SHARED VERBATIM with the GPGPU collapse sim's seed pass
   // (gravitySim.ts) so the sim starts looking exactly like the analytic nebula.
@@ -326,6 +359,15 @@ export const diskVertexShader = /* glsl */ `
   //   time-evolution) NEVER take the baked path: the gate requires rgActive.
   uniform samplerCube uGranTex;
   uniform float uGranBakeReady;
+  // --- baked supernova blast fields (see scene/buildBlastBake.ts) ------------
+  // The collapse-flash blast branch's four pure-direction fbm fields (lane / fil
+  // / crushBias / spdLobe — see BLAST_FIELD_GLSL above), baked once into a
+  // cubemap off the critical path (idle-time after first composited frame, in
+  // scheduleGpuWarm) and fetched with ONE texture read per vertex. uBlastBakeReady
+  // stays 0 until the bake succeeds (or forever under ?blastbake=0 / no WebGL2 /
+  // a failed bake) → the analytic blastField() below runs: today's exact shader.
+  uniform samplerCube uBlastTex;
+  uniform float uBlastBakeReady;
 
   // --- CLICK ERUPTIONS (geyser jet + travelling surface ripple) --------------
   // Up to N_ERUPT concurrent click eruptions on the PARTICLE red giant, mirroring
@@ -487,9 +529,23 @@ export const diskVertexShader = /* glsl */ `
     // window widened 0.28-0.90 -> 0.40-0.95, exponent 2.2 -> 1.5 = less peaky) and the
     // jet reach contrast pulled down (2.6 -> 1.4, void floor lifted 0.40 -> 0.55) so the
     // ejecta reads as a brief compressed flash that gathers inward, not a spray of rays.
-    float lane = fbm(blastDir*2.2 + 11.0);
+    // BAKED-vs-ANALYTIC gate (the buildGranBake precedent): the four shaping
+    // fields below are pure functions of blastDir, baked once into uBlastTex
+    // (scene/buildBlastBake.ts). One fetch replaces four fbm evaluations (16
+    // value-noise calls) per vertex per frame during the blast. The analytic
+    // blastField() call is the byte-identical fallback until the bake lands.
+    vec4 blastF;
+    if(uBlastBakeReady > 0.5){
+      // texture(), not textureCube(): three's GLSL-300-es VERTEX prefix only
+      // aliases texture2D (same note as the uGranTex fetch below). Vertex-stage
+      // sampling has no derivatives → implicit lod 0, exactly the baked level.
+      blastF = texture(uBlastTex, blastDir);
+    } else {
+      blastF = blastField(blastDir);
+    }
+    float lane = blastF.r;
     lane = pow(smoothstep(0.40, 0.95, lane), 1.5);  // softer, less-spiky fingers
-    float fil  = fbm(blastDir*6.0 + 4.0);
+    float fil  = blastF.g;
     float jet  = 0.55 + 1.4*lane + 0.30*fil;        // ~0.55 (void) .. ~2.25 (mild spike)
     // filament brightness from the STABLE lane field (no uTime / post-pos), so
     // bright wisps hold still as the remnant expands. High contrast: the rays
@@ -511,7 +567,7 @@ export const diskVertexShader = /* glsl */ `
     // (low-freq lobe over the stable blast direction → no flicker), so the implosion
     // is lopsided, not a perfect uniform shrink. Endpoints stay pinned (1 early, 0.03
     // by the blast) so the hero and the blast structure are unchanged.
-    float crushBias = clamp(fbm(blastDir*1.6 + 23.0)*2.0 - 1.0, -1.0, 1.0);
+    float crushBias = clamp(blastF.b*2.0 - 1.0, -1.0, 1.0);
     float crushLo = clamp(0.14 - 0.10*crushBias, 0.0, 0.30);
     float crushHi = clamp(0.46 - 0.10*crushBias, 0.34, 0.60);
     float seedShrink = mix(1.0, 0.03, smoothstep(crushLo, crushHi, uMorph));
@@ -527,7 +583,7 @@ export const diskVertexShader = /* glsl */ `
     // so neighbouring particles share a velocity and the cloud expands as coherent
     // membranes & filaments. Bulk lands ~0.4–0.7 rOut; the fastest jets spike past
     // rOut into long spikes.
-    float spdLobe = 0.78 + 0.55*fbm(blastDir*1.3 + 31.0);  // smooth spatial speed field
+    float spdLobe = 0.78 + 0.55*blastF.a;  // smooth spatial speed field (baked channel)
     float speed   = uRout * 0.42 * spdLobe * jet;          // neighbour-coherent reach
     float reach   = pow(flare, 0.55);                      // fast launch, easing
     // LIVING blast: the ejecta isn't frozen at a held scroll position — it slowly
@@ -1171,11 +1227,21 @@ export const diskVertexShader = /* glsl */ `
         //      bluer (atmospheric/volumetric depth), so near gas reads in front of far.
         // Result: gentle dimensionality, no hard shadows — the even sprawling glow is
         // preserved, just given depth. uNebLight (0..1) lets the look be dialled.
-        vec3 toCam = normalize(cameraPosition - wp);
         float occ = 0.0;
+        // NEB_LOW_TRIM (LOW tier only — buildDisk sets the define): the two
+        // toward-camera SELF-OCCLUSION resamples of the density field are the
+        // costliest part of the nebula light model (2 extra fbm evaluations per
+        // vertex per frame, ~22% of the nebula branch's noise stack) for its
+        // subtlest cue. On low the occlusion term is compiled OUT (occ stays 0 →
+        // occLight = 1); the ambient + depth-fade terms below — the cheap parts
+        // that carry most of the perceived volume — are kept. Mid/high keep the
+        // full model, byte-identical.
+        #ifndef NEB_LOW_TRIM
+        vec3 toCam = normalize(cameraPosition - wp);
         occ += smoothstep(0.28, 0.66, fbm((wp + toCam*(NR*0.16))*0.58 + nDrift*0.6));
         occ += smoothstep(0.28, 0.66, fbm((wp + toCam*(NR*0.34))*0.58 + nDrift*0.6));
         occ *= 0.5;                                          // 0 (clear in front) .. 1 (buried)
+        #endif
         float occLight = mix(1.0, 0.34, occ);               // dim gas hidden behind dense gas
         // depth: view-space distance from camera, normalised across the cloud span.
         // The cloud sits at the origin, so the camera-to-centre distance is just

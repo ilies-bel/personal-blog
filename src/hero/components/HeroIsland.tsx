@@ -297,9 +297,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // effect and re-reads the (now updated) value, re-mounting or tearing down the
     // scene as appropriate. The two agree once reconciled.
     const isReduced = resolveReducedMotionNow();
-    // Coarse 'high' | 'low' device tier, detected once at mount (memoized inside).
-    // Threaded into createScene so the low-end fallback (fewer particles, capped DPR,
-    // no bloom, no gravity bake) is chosen up front; 'high' is byte-identical to today.
+    // Proactive 'high' | 'mid' | 'low' device tier, detected once at mount (memoized
+    // inside; GPU classification + fill-rate microprobe). Threaded into createScene so
+    // the right rung (mid: half density + 1.5 DPR cap; low: the reduced fallback) is
+    // chosen UP FRONT — the device never has to fail first; 'high' is byte-identical.
     const tier = detectDeviceTier();
 
     // The three.js engine is loaded lazily (dynamic import) so it never blocks first
@@ -744,7 +745,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     handle.beginDive({
       targetNdc: opts.targetNdc,
       state: opts.state,
-      onDiveProgress: (s) => { if (overlay) overlay.style.opacity = String(s); },
+      onDiveProgress: (s) => {
+        if (!overlay) return;
+        overlay.style.opacity = String(s);
+        // Mirror visibility so the parked (opacity 0) overlay releases its
+        // compositor layer — see .dive-overlay in hero.css.
+        overlay.style.visibility = s > 0.001 ? 'visible' : 'hidden';
+      },
       onApex: () => { goTo(opts.href); },
     });
   }, []);

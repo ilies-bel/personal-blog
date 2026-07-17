@@ -57,3 +57,8 @@ pnpm-debug.log*
 
 # codegraph local index (regenerable via `codegraph init`)
 /.codegraph/
+
+# local benchmark scratch (throwaway probe scripts + raw captures)
+/bench-scratch/
+/.bench-scratch/
+/screenshots/

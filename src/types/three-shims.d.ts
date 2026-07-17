@@ -4,6 +4,10 @@ declare module 'three' {
   export class DoubleSide {}
   export class FloatType {}
   export class HalfFloatType {}
+  export class UnsignedByteType {}
+  /** Union of the texture-precision constants this codebase passes around
+   *  (mirrors @types/three's TextureDataType narrowly enough for our call sites). */
+  export type TextureDataType = HalfFloatType | UnsignedByteType | FloatType;
   export class LinearFilter {}
   export class NoToneMapping {}
   export class RGBAFormat {}

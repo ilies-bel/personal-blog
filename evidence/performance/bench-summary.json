@@ -1,0 +1,242 @@
+{
+  "host": {
+    "platform": "darwin",
+    "cpu": "Apple M1 Max",
+    "node": "v26.0.0",
+    "chromiumFlags": []
+  },
+  "holdSeconds": 8,
+  "scrollSeconds": 10,
+  "bootTimeoutMs": 45000,
+  "timestamp": "2026-07-14T20:29:21.347Z",
+  "results": [
+    {
+      "device": "desktop",
+      "scenario": "home",
+      "url": "http://127.0.0.1:54996/",
+      "config": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "cpuThrottle": 1,
+        "isMobile": false,
+        "userAgent": "(chromium default)",
+        "query": ""
+      },
+      "started": true,
+      "bootMs": 1072.4,
+      "longTaskBootMs": 0,
+      "longTaskBootCount": 0,
+      "holdFps": 40.5,
+      "holdWorstInstantFps": 1.4,
+      "scrollFps": 39.6,
+      "scrollWorstInstantFps": 15,
+      "heapMB": 142.1,
+      "error": null,
+      "timestamp": "2026-07-14T20:23:46.316Z",
+      "canvasCount": 3
+    },
+    {
+      "device": "desktop",
+      "scenario": "post",
+      "url": "http://127.0.0.1:54996/posts/memory-leak-search-and-destroy/",
+      "config": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "cpuThrottle": 1,
+        "isMobile": false,
+        "userAgent": "(chromium default)",
+        "query": ""
+      },
+      "started": true,
+      "bootMs": null,
+      "longTaskBootMs": 57,
+      "longTaskBootCount": 1,
+      "holdFps": 117.2,
+      "holdWorstInstantFps": 87,
+      "scrollFps": 114.2,
+      "scrollWorstInstantFps": 84,
+      "heapMB": 1.7,
+      "error": null,
+      "timestamp": "2026-07-14T20:24:05.652Z",
+      "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
+      "canvasCount": 2
+    },
+    {
+      "device": "mid-laptop",
+      "scenario": "home",
+      "url": "http://127.0.0.1:54996/",
+      "config": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "cpuThrottle": 4,
+        "isMobile": false,
+        "userAgent": "(chromium default)",
+        "query": ""
+      },
+      "started": true,
+      "bootMs": 1510.5,
+      "longTaskBootMs": 301,
+      "longTaskBootCount": 4,
+      "holdFps": 96.8,
+      "holdWorstInstantFps": 7.3,
+      "scrollFps": 116.2,
+      "scrollWorstInstantFps": 85.5,
+      "heapMB": 149.9,
+      "error": null,
+      "timestamp": "2026-07-14T20:25:09.129Z",
+      "canvasCount": 3
+    },
+    {
+      "device": "mid-laptop",
+      "scenario": "post",
+      "url": "http://127.0.0.1:54996/posts/memory-leak-search-and-destroy/",
+      "config": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 2,
+        "cpuThrottle": 4,
+        "isMobile": false,
+        "userAgent": "(chromium default)",
+        "query": ""
+      },
+      "started": true,
+      "bootMs": null,
+      "longTaskBootMs": 186,
+      "longTaskBootCount": 2,
+      "holdFps": 120.9,
+      "holdWorstInstantFps": 106.4,
+      "scrollFps": 122.1,
+      "scrollWorstInstantFps": 100,
+      "heapMB": 1.7,
+      "error": null,
+      "timestamp": "2026-07-14T20:25:28.967Z",
+      "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
+      "canvasCount": 2
+    },
+    {
+      "device": "low-mobile",
+      "scenario": "home",
+      "url": "http://127.0.0.1:54996/",
+      "config": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "cpuThrottle": 6,
+        "isMobile": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "query": ""
+      },
+      "started": true,
+      "bootMs": 1998.8,
+      "longTaskBootMs": 850,
+      "longTaskBootCount": 9,
+      "holdFps": 116.6,
+      "holdWorstInstantFps": 4.3,
+      "scrollFps": 120.5,
+      "scrollWorstInstantFps": 102,
+      "heapMB": 28.7,
+      "error": null,
+      "timestamp": "2026-07-14T20:26:32.654Z",
+      "canvasCount": 3
+    },
+    {
+      "device": "low-mobile",
+      "scenario": "post",
+      "url": "http://127.0.0.1:54996/posts/memory-leak-search-and-destroy/",
+      "config": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "cpuThrottle": 6,
+        "isMobile": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "query": ""
+      },
+      "started": true,
+      "bootMs": null,
+      "longTaskBootMs": 204,
+      "longTaskBootCount": 2,
+      "holdFps": 123.1,
+      "holdWorstInstantFps": 99,
+      "scrollFps": 122.8,
+      "scrollWorstInstantFps": 91.7,
+      "heapMB": 1.7,
+      "error": null,
+      "timestamp": "2026-07-14T20:26:53.044Z",
+      "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
+      "canvasCount": 2
+    },
+    {
+      "device": "mid-mobile-forced-high",
+      "scenario": "home",
+      "url": "http://127.0.0.1:54996/?tier=high&adapt=0",
+      "config": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "cpuThrottle": 6,
+        "isMobile": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "query": "?tier=high&adapt=0"
+      },
+      "started": true,
+      "bootMs": 2120.9,
+      "longTaskBootMs": 1040,
+      "longTaskBootCount": 6,
+      "holdFps": 114.4,
+      "holdWorstInstantFps": 31.5,
+      "scrollFps": 114,
+      "scrollWorstInstantFps": 84.7,
+      "heapMB": 41.4,
+      "error": null,
+      "timestamp": "2026-07-14T20:27:56.771Z",
+      "canvasCount": 3
+    },
+    {
+      "device": "mid-mobile-forced-high",
+      "scenario": "post",
+      "url": "http://127.0.0.1:54996/posts/memory-leak-search-and-destroy/?tier=high&adapt=0",
+      "config": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 3,
+        "cpuThrottle": 6,
+        "isMobile": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "query": "?tier=high&adapt=0"
+      },
+      "started": true,
+      "bootMs": null,
+      "longTaskBootMs": 162,
+      "longTaskBootCount": 1,
+      "holdFps": 117.4,
+      "holdWorstInstantFps": 86.2,
+      "scrollFps": 118.4,
+      "scrollWorstInstantFps": 37.7,
+      "heapMB": 1.7,
+      "error": null,
+      "timestamp": "2026-07-14T20:28:17.779Z",
+      "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
+      "canvasCount": 2
+    }
+  ]
+}

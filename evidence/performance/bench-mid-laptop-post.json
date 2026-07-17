@@ -1,0 +1,29 @@
+{
+  "device": "mid-laptop",
+  "scenario": "post",
+  "url": "http://127.0.0.1:54996/posts/memory-leak-search-and-destroy/",
+  "config": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "deviceScaleFactor": 2,
+    "cpuThrottle": 4,
+    "isMobile": false,
+    "userAgent": "(chromium default)",
+    "query": ""
+  },
+  "started": true,
+  "bootMs": null,
+  "longTaskBootMs": 186,
+  "longTaskBootCount": 2,
+  "holdFps": 120.9,
+  "holdWorstInstantFps": 106.4,
+  "scrollFps": 122.1,
+  "scrollWorstInstantFps": 100,
+  "heapMB": 1.7,
+  "error": null,
+  "timestamp": "2026-07-14T20:25:28.967Z",
+  "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
+  "canvasCount": 2
+}

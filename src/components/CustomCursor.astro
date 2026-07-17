@@ -114,6 +114,11 @@
 
     color: var(--cursor-fg);
     opacity: 0;                /* revealed by the script on first fine-pointer move */
+    /* visibility gates the COMPOSITOR layer: an opacity:0 fixed layer is still
+       blended over the animating hero canvas every frame (a measurable per-frame
+       cost on software rasterisers). hidden = the layer is skipped entirely; the
+       reveal script flips it with the opacity. */
+    visibility: hidden;
   }
 
   /* The comet-tail canvas: a full-viewport fixed layer, one z-index step BELOW
@@ -129,6 +134,7 @@
     z-index: 2147483646;       /* one below the ball → tail behind the dot */
     pointer-events: none;
     opacity: 0;                /* revealed with the ball on first move */
+    visibility: hidden;        /* same compositor-layer gate as .cursor above */
   }
 
   /* The default cursor: a single 5px filled dot at ~38% opacity. Centred in the
@@ -783,7 +789,11 @@
         head = 0;
         count = 0;
         cursor.style.opacity = '1';
-        if (canvas) canvas.style.opacity = '1';
+        cursor.style.visibility = 'visible';
+        if (canvas) {
+          canvas.style.opacity = '1';
+          canvas.style.visibility = 'visible';
+        }
       }
 
       // DOCKED (or capturing) a locked star-marker: the loop owns the glide +
@@ -846,7 +856,11 @@
     // ring and kick one frame so the canvas clears then parks.
     const onLeave = (): void => {
       cursor.style.opacity = '0';
-      if (canvas) canvas.style.opacity = '0';
+      cursor.style.visibility = 'hidden';
+      if (canvas) {
+        canvas.style.opacity = '0';
+        canvas.style.visibility = 'hidden';
+      }
       head = 0;
       count = 0;
       // The pointer left the window: block docking and let syncDock undock so the
@@ -859,7 +873,11 @@
       pointerInside = true;
       if (revealed) {
         cursor.style.opacity = '1';
-        if (canvas) canvas.style.opacity = '1';
+        cursor.style.visibility = 'visible';
+        if (canvas) {
+          canvas.style.opacity = '1';
+          canvas.style.visibility = 'visible';
+        }
       }
     };
 

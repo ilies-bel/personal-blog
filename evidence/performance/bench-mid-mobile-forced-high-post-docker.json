@@ -1,0 +1,29 @@
+{
+  "device": "mid-mobile-forced-high",
+  "scenario": "post",
+  "url": "http://127.0.0.1:39067/posts/memory-leak-search-and-destroy/?tier=high&adapt=0",
+  "config": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "deviceScaleFactor": 3,
+    "cpuThrottle": 6,
+    "isMobile": true,
+    "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    "query": "?tier=high&adapt=0"
+  },
+  "started": true,
+  "bootMs": null,
+  "longTaskBootMs": 195,
+  "longTaskBootCount": 2,
+  "holdFps": 60.1,
+  "holdWorstInstantFps": 59.5,
+  "scrollFps": 60,
+  "scrollWorstInstantFps": 59.5,
+  "heapMB": 9.5,
+  "error": null,
+  "timestamp": "2026-07-15T07:41:23.754Z",
+  "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
+  "canvasCount": 2
+}

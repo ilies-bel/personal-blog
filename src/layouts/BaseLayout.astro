@@ -462,18 +462,22 @@ const routeId = (() => {
             if (e.animationName !== 'dive-resurface') return;
             document.body.removeAttribute('data-resurface');
             document.body.removeEventListener('animationend', onEnd);
+            // Faded out — release the overlay's compositor layer (see hero.css).
+            overlay.style.visibility = 'hidden';
             window.clearTimeout(fallback);
           };
           document.body.addEventListener('animationend', onEnd);
           fallback = window.setTimeout(() => {
             document.body.removeAttribute('data-resurface');
             document.body.removeEventListener('animationend', onEnd);
+            overlay.style.visibility = 'hidden';
           }, 1200);
         } else {
           // Normal nav / fresh load: ensure the overlay is hidden with no fade so a
           // page that wasn't reached via a dive never shows the white layer.
           overlay.style.transition = 'none';
           overlay.style.opacity = '0';
+          overlay.style.visibility = 'hidden'; // release the compositor layer too
         }
         // Clear the per-state bloom tint + origin in BOTH branches. The overlay is
         // transition:persist'ed across swaps, so a stale data-bloom-state / --bloom-x/y
@@ -604,6 +608,7 @@ const routeId = (() => {
           if (overlay) {
             overlay.style.transition = 'none';
             overlay.style.opacity = '0';
+            overlay.style.visibility = 'hidden'; // release the compositor layer too
             delete overlay.dataset.bloomState;
             overlay.style.removeProperty('--bloom-x');
             overlay.style.removeProperty('--bloom-y');

@@ -1461,6 +1461,11 @@ body.scene-ready.at-opening .bh-focus-dot {
   inset: 0;
   pointer-events: none;
   opacity: 0;
+  /* visibility gates the COMPOSITOR layer: an opacity:0 full-screen fixed layer
+     is still blended over the animating hero canvas every frame (a measurable
+     per-frame cost on software rasterisers). Every JS writer that ramps the
+     overlay's opacity flips visibility alongside it. */
+  visibility: hidden;
   /* Above the HUD boot layers (max z-index 25 in hud.css) + the corner chrome
      (1000 in chrome.css); below the custom cursor (which is pointer-events:none
      and only a thin dot, so the bloom reads cleanly beneath it). */

@@ -55,6 +55,39 @@ float fbm(vec3 p){
 }
 `;
 
+// --- shared photosphere surface fields (fragment shader + the CUBEMAP bake) ----
+// The per-pixel noise stack of the photosphere — 8 fbm evaluations of 6 simplex
+// octaves each (48 snoise calls per pixel per frame) — measured 51.8 ms/frame on
+// the software-GL low tier (the only hard 30fps failure). The three scalars the
+// rest of the shader consumes (m — the big mottle field; ch — the chromospheric
+// network; granMul — the combined 3-octave granulation brightness multiplier)
+// are, at a FROZEN time and with no click-ripple warp, pure functions of the
+// surface direction — so on the LOW tier they are baked once into a cubemap
+// (scene/buildSunBake.ts) and replaced by ONE fetch. This function is the SINGLE
+// recipe both the analytic path (sunSurfaceFrag below) and the bake fragment
+// interpolate, so they can never drift. The slow time scroll (t = uTime*0.05, a
+// domain translation) is approximated on the baked path by ROTATING the lookup
+// direction (not re-baking); high/mid always run this analytic call with the
+// live t + waveDisp — byte-identical to the pre-bake shader.
+export const SUN_SURFACE_FIELD_GLSL = /* glsl */ `
+  // returns vec3(m, ch, granMul) — mottle field, network field, granulation gain
+  vec3 sunSurfaceField(vec3 sdir, float t, vec3 waveDisp){
+    vec3 p = sdir * 2.4;
+    vec3 q;
+    q.x = fbm(p + vec3(0.0,0.0,t));
+    q.y = fbm(p + vec3(5.2,1.3,2.7) + t);
+    q.z = fbm(p + vec3(1.7,9.2,3.4) - t);
+    float n = fbm(p + 3.2*q + waveDisp + t*0.5);
+    float m = clamp(n*0.5+0.5, 0.0, 1.0);
+    float ch = fbm(p*1.4 + 2.0*q.yzx + waveDisp*1.4 + t*0.3);
+    float gran = fbm(p*7.0 + waveDisp*7.0 + t*1.0);
+    float gran2 = fbm(p*15.0 + waveDisp*15.0 - t*0.6);
+    float gran3 = fbm(p*28.0 + waveDisp*28.0 + t*0.4);
+    float granMul = 0.90 + 0.50*(gran*0.5+0.5) + 0.10*(gran2*0.5+0.5) + 0.07*(gran3*0.5+0.5);
+    return vec3(m, ch, granMul);
+  }
+`;
+
 // --- photosphere mesh (high-contrast mottled gold surface) ---
 
 export const sunSurfaceVert = /* glsl */ `
@@ -73,7 +106,7 @@ export const sunSurfaceVert = /* glsl */ `
 // play at once (a single restart-on-click would clobber an in-flight blast).
 export const SUN_ERUPT_SLOTS = 4;
 
-export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
+export const sunSurfaceFrag = SUN_NOISE_GLSL + SUN_SURFACE_FIELD_GLSL + /* glsl */ `
   #define N_ERUPT 4
   // ERUPT_LIFE: total lifetime of one eruption in seconds. The plume + ripple both
   // fade out by here; the render loop frees the slot (intensity→0) at the same age.
@@ -122,9 +155,16 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
   // 0 = the surface texture is frozen (no-op); 1 = the tuned default. Lives entirely in
   // object space (vObj), the SAME space as the noise, so there is no atlas / face / seam.
   uniform float uWaveFlow;
+  // --- baked photosphere surface fields (LOW tier only — scene/buildSunBake.ts) --
+  // uSunBakeReady stays 0 (the analytic per-pixel path — today's exact shader)
+  // unless the LOW tier's boot-time cubemap bake succeeded (never on high/mid,
+  // under ?sunbake=0, without WebGL2, or after a failed bake). When 1, the whole
+  // 48-snoise-per-pixel stack collapses to ONE cubemap fetch; the slow time
+  // scroll is carried by rotating the lookup direction (see sunSurfaceField).
+  uniform samplerCube uSunTex;
+  uniform float uSunBakeReady;
   varying vec3 vObj; varying vec3 vViewN; varying vec3 vViewPos;
   void main(){
-    vec3 p = vObj * 2.4;
     float t = uTime * 0.05;
 
     // === CLICK RIPPLE — 3D OBJECT-SPACE DOMAIN WARP ==========================
@@ -187,12 +227,28 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
       waveDisp *= 0.5 * uWaveFlow;   // master gain — small: a little domain push moves cells a lot
     }
 
-    vec3 q;
-    q.x = fbm(p + vec3(0.0,0.0,t));
-    q.y = fbm(p + vec3(5.2,1.3,2.7) + t);
-    q.z = fbm(p + vec3(1.7,9.2,3.4) - t);
-    float n = fbm(p + 3.2*q + waveDisp + t*0.5);
-    float m = clamp(n*0.5+0.5, 0.0, 1.0);
+    // === SURFACE FIELDS: baked cubemap fetch (low tier) vs analytic stack ===
+    // sf = (m, ch, granMul) — see SUN_SURFACE_FIELD_GLSL. The analytic branch is
+    // the exact original math (one shared function, verbatim); the baked branch
+    // replaces the whole 8-fbm stack with a single fetch, rotating the lookup
+    // direction slowly to stand in for the original domain scroll (t). The
+    // click-ripple domain warp (waveDisp) cannot warp a baked texture — on the
+    // low tier the wave keeps its crest light (added below) but not the
+    // cell-streaming, an accepted low-only trade against 51.8ms/frame of noise.
+    vec3 sf;
+    if(uSunBakeReady > 0.5){
+      // slow rigid rotation ≈ the analytic domain scroll's drift rate (the scroll
+      // translates the p = dir*2.4 domain at ~1.7·(dt) per second of t, which at
+      // unit-sphere scale is ~0.7·t radians). Axis is arbitrary but fixed.
+      vec3 axis = normalize(vec3(0.30, 1.0, 0.22));
+      float ca = cos(t*0.7), sa = sin(t*0.7);
+      vec3 d0 = normalize(vObj);
+      vec3 bd = d0*ca + cross(axis, d0)*sa + axis*dot(axis, d0)*(1.0-ca);
+      sf = textureCube(uSunTex, bd).rgb;
+    } else {
+      sf = sunSurfaceField(vObj, t, waveDisp);
+    }
+    float m = sf.x;
 
     // gold (yellow-star) photosphere ramp — a blazing 5772K sun: hot amber troughs,
     // bright YELLOW-WHITE crests (the reference reads gold-yellow, not orange). The
@@ -246,7 +302,7 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // high-contrast molten texture, not a smooth gold wash. The wave domain-warp (waveDisp,
     // scaled to this octave's frequency) rides along so the dark lanes stream with the
     // wavefront too — the network moving is the most legible "the surface ripples" cue.
-    float ch = fbm(p*1.4 + 2.0*q.yzx + waveDisp*1.4 + t*0.3);
+    float ch = sf.y; // chromospheric network field (shared sunSurfaceField / bake)
     float chMask = smoothstep(0.16, -0.05, ch);
     // The YELLOW-star lane weight is pulled way down (0.88 -> 0.42): at full weight the
     // low-frequency lanes painted broad grey-brown continents across the disc that read
@@ -268,15 +324,10 @@ export const sunSurfaceFrag = SUN_NOISE_GLSL + /* glsl */ `
     // cell contrast, but the average is now well above 1.0 so the whole disc reads bright.
     // the granulation octaves ride the SAME wave domain-warp (scaled to each frequency) so
     // the bright cells bunch/stretch with the front in lock-step with the network above.
-    float gran = fbm(p*7.0 + waveDisp*7.0 + t*1.0);
-    float gran2 = fbm(p*15.0 + waveDisp*15.0 - t*0.6);
-    // gran3: a FINER third octave (p*28, ~2x gran2) for the dense fine-scale stippling
-    // the reference photosphere shows between the big cells — it busies up the surface
-    // so it reads richly mottled rather than smoothly speckled. Small weight (0.07) and
-    // the floor is dropped 0.95 → 0.90 to fund the extra ~+0.035 mean it adds, so the
-    // average brightness is unchanged (the gold look / network / spots / rim are untouched).
-    float gran3 = fbm(p*28.0 + waveDisp*28.0 + t*0.4);
-    col *= 0.90 + 0.50*(gran*0.5+0.5) + 0.10*(gran2*0.5+0.5) + 0.07*(gran3*0.5+0.5);
+    // gran/gran2/gran3 (incl. the fine p*28 stippling octave) now live in
+    // sunSurfaceField — sf.z is the combined brightness multiplier
+    // 0.90 + 0.50·(g·0.5+0.5) + 0.10·(g2·0.5+0.5) + 0.07·(g3·0.5+0.5), verbatim.
+    col *= sf.z;
 
     // bright active-region speckle fades out toward the (quiet) red giant. On the
     // yellow star these are the white-hot flare patches of the reference, so they

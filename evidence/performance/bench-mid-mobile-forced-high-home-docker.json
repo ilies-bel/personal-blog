@@ -1,0 +1,28 @@
+{
+  "device": "mid-mobile-forced-high",
+  "scenario": "home",
+  "url": "http://127.0.0.1:39067/?tier=high&adapt=0",
+  "config": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "deviceScaleFactor": 3,
+    "cpuThrottle": 6,
+    "isMobile": true,
+    "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    "query": "?tier=high&adapt=0"
+  },
+  "started": true,
+  "bootMs": 2458.3,
+  "longTaskBootMs": 1625,
+  "longTaskBootCount": 8,
+  "holdFps": 3,
+  "holdWorstInstantFps": 0.6,
+  "scrollFps": 3.9,
+  "scrollWorstInstantFps": 1.7,
+  "heapMB": 45.2,
+  "error": null,
+  "timestamp": "2026-07-15T07:40:58.952Z",
+  "canvasCount": 3
+}

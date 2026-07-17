@@ -67,12 +67,21 @@ export interface ParticlePassRig extends Rig {
   dispose: () => void;
 }
 
-export function buildParticlePass(scene: THREE.Scene, scale: number): ParticlePassRig {
+export function buildParticlePass(
+  scene: THREE.Scene,
+  scale: number,
+  // Target precision. HalfFloat (default — high/mid, byte-identical) matches the
+  // composer's HDR scene target. The LOW tier passes UnsignedByteType to match its
+  // byte post chain: FP16 additive blending is the most expensive raster mode on
+  // the software rasterisers low classifies, and the byte chain already clamps at
+  // the composer anyway, so clamping here too changes nothing further.
+  rtType: THREE.TextureDataType = THREE.HalfFloatType,
+): ParticlePassRig {
   // No depth/stencil: every rig routed here is depthTest:false + depthWrite:false
   // (see the header). LinearFilter (the render-target default) gives the bilinear
   // upsample when the full-res composite samples it.
   const target = new THREE.WebGLRenderTarget(2, 2, {
-    type: THREE.HalfFloatType,
+    type: rtType,
     depthBuffer: false,
     stencilBuffer: false,
   });

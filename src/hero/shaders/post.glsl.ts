@@ -10,6 +10,15 @@ export const GradeShader = {
     uResolution: { value: new THREE.Vector2(1, 1) },
     uExposure: { value: 1.0 },
     uGrain: { value: 0.05 },
+    // Luminance-adaptive film grain (distinct from uGrain's per-state flicker):
+    // strength peaks in the dark-to-mid range and fades to ~0 in highlights, so it
+    // textures the dim gaps BETWEEN sparse cloud grains (where a thinned particle
+    // cloud resolves into "confetti") without dirtying the bright disk/bloom core.
+    // 0 = off (byte-identical). Default set from resolveGrainAmt() at chain build.
+    uGrainAmt: { value: 0 },
+    // Per-frame re-seed for uGrainAmt's hash noise (written in the render loop) so
+    // the grain animates like film stock instead of a frozen dither pattern.
+    uGrainSeed: { value: 0 },
     uWarmth: { value: 0.05 },
     uSat: { value: 0.1 },
     uOlive: { value: 0.6 },
@@ -27,6 +36,7 @@ export const GradeShader = {
     precision highp float;
     uniform sampler2D tDiffuse;
     uniform float uTime, uExposure, uGrain, uWarmth, uSat, uOlive, uToneComp;
+    uniform float uGrainAmt, uGrainSeed;
     uniform vec2 uResolution;
     varying vec2 vUv;
     float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
@@ -56,6 +66,29 @@ export const GradeShader = {
       // fine grain
       float g = hash(vUv*uResolution + fract(uTime)*97.0);
       col += (g-0.5)*uGrain;
+      // LUMINANCE-ADAPTIVE film grain (uGrainAmt; 0 = off, term is exactly 0).
+      // Purpose: let the particle-cloud density be lowered without the cloud
+      // resolving into discrete dots ("confetti"). Signed hash noise (±0.5),
+      // re-seeded per frame via uGrainSeed, weighted by a luminance curve that
+      // PEAKS in the dark-to-mid range and fades to ~0 in highlights — it fills
+      // the dim gaps BETWEEN sparse grains while leaving the bright disk/bloom
+      // core clean. A small positive lift rides along in the near-black so gaps
+      // read as textured gas rather than pure black holes between dots.
+      // TEXTURE: vertically-correlated ("old-TV") noise — the hash is sampled at a
+      // y-compressed coordinate (px.y / GRAIN_STRETCH, ~8px of vertical correlation)
+      // so it forms subtle vertical streaks like analog CRT noise, blended 70/30
+      // with plain per-pixel hash so it never reads as pure banding. Both layers
+      // ride uGrainSeed so the streaks re-seed (shimmer) every frame.
+      const float GRAIN_STRETCH = 8.0;                              // px of vertical correlation
+      float fl = dot(col, vec3(0.299,0.587,0.114));                 // post-grade luma
+      vec2 fpx = vUv*uResolution;
+      vec2 fseed = vec2(fract(uGrainSeed)*113.0, fract(uGrainSeed*0.61)*57.0);
+      float fgStreak = hash(vec2(fpx.x, floor(fpx.y / GRAIN_STRETCH)) + fseed) - 0.5; // vertical streaks
+      float fgPixel  = hash(fpx + fseed) - 0.5;                     // per-pixel salt
+      float fg = fgStreak*0.7 + fgPixel*0.3;                        // signed ±
+      float fw = smoothstep(0.85, 0.30, fl);                        // full in dark/mid, ~0 in highlights
+      float flift = (1.0 - smoothstep(0.0, 0.14, fl)) * 0.30;       // near-black lift
+      col += (fg + flift) * uGrainAmt * fw;
       // vignette
       vec2 q = vUv-0.5;
       float vig = smoothstep(1.10, 0.28, length(q)*1.25);

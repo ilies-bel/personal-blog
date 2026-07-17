@@ -2,8 +2,6 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
-
 /* Hide the scrollbar chrome site-wide while keeping the page (and any inner
    scroll containers, e.g. prose.css's overflow-x code blocks) fully scrollable.
    Firefox + legacy IE/Edge use standard properties; WebKit/Blink (Chrome,
@@ -146,7 +144,6 @@ h3 { line-height: 1.15; font-weight: var(--weight-bold); letter-spacing: -0.01em
    manual toggle governs CSS too. :where() keeps the original specificity; the
    bare html[...] selector also covers html itself (the old `*` did). Concern-
    specific reduced-motion (hero, hud) lives with those stylesheets. */
-html:where([data-motion='reduced']) { scroll-behavior: auto; }
 html:where([data-motion='reduced']),
 :where(html[data-motion='reduced']) *,
 :where(html[data-motion='reduced']) *::before,

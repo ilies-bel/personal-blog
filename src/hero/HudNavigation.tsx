@@ -36,7 +36,7 @@ export const HUD_NAV_BY_ID = HUD_NAV_ITEMS.reduce<Record<HudTargetId, HudNavItem
 
 interface HudNavigationProps {
   visible: boolean;
-  /** resolved reduced-motion preference: travel jumps instead of smooth-scrolling. */
+  /** resolved reduced-motion preference: gates the boot-glide choreography. */
   reduced: boolean;
   /** The target the current scroll position maps to (scroll-spy "you are here").
    *  Drives a quiet ambient marker so the rail reflects scroll position. */
@@ -69,15 +69,16 @@ interface HudNavigationProps {
  * with the caret exactly on the clicked station, the row current, and the
  * scene's marker inside its settledWindow. (The old stage-inverse mapping parked
  * travel on hold EDGES or mid-transition — the rail and the gauge disagreed.)
- * Honours reduced-motion (jumps instead of smooth-scrolling). RETURNS the target
- * raw scroll-Y (px) so the caller can poll window.scrollY against it to detect
- * when the smooth-scroll has settled (and clear the click-lock highlight).
+ * The jump is INSTANT for everyone (behavior: 'auto') — no smooth-scroll
+ * takeover. RETURNS the target raw scroll-Y (px) so the caller can poll
+ * window.scrollY against it to detect settling (and clear the click-lock
+ * highlight).
  */
-function scrollToScene(id: HudTargetId, reduced: boolean): number {
+function scrollToScene(id: HudTargetId): number {
   const raw = anchorRawForScene(id);
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
   const top = raw * max;
-  window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
+  window.scrollTo({ top, behavior: 'auto' });
   return top;
 }
 
@@ -153,10 +154,11 @@ interface AimState {
 // --- Click-travel highlight lock tuning ------------------------------------
 // How close (px) window.scrollY must be to the target top — and how little it may
 // move between frames — to count as "settled" on the destination. A few px of
-// slack absorbs sub-pixel rounding and the smooth-scroll's easing tail.
+// slack absorbs sub-pixel rounding. The jump is instant, so this settles within
+// a couple of frames.
 const TRAVEL_SETTLE_EPSILON_PX = 3;
 // Hard fallback (ms): the click-lock ALWAYS releases by now even if the scroll never
-// lands exactly on target. Comfortably longer than the browser's smooth-scroll.
+// lands exactly on target (e.g. the page can't reach the exact top).
 const TRAVEL_LOCK_TIMEOUT_MS = 1500;
 
 // --- Target-lock signal (the same global the cursor reads) ------------------
@@ -269,22 +271,19 @@ export default function HudNavigation({
     });
   }, [currentId]);
 
-  // CLICK-TRAVEL HIGHLIGHT LOCK. Clicking a rail row fires a multi-second SMOOTH
-  // scroll; during that travel the scroll-spy currentId sweeps through every
-  // intervening scene, which would strobe the gold data-current glow across all the
-  // rows between start and target. So on click we PIN the displayed-current row to
-  // the clicked one (travelId) and ignore the scroll-spy sweep until the smooth
-  // scroll lands on the target, then clear travelId so normal scroll-spy resumes.
-  // null = not travelling (scroll-spy drives the highlight as usual).
+  // CLICK-TRAVEL HIGHLIGHT LOCK. Clicking a rail row fires an INSTANT jump; we
+  // still PIN the displayed-current row to the clicked one (travelId) until the
+  // scroll-spy catches up with the landed position (a frame or two), then clear
+  // travelId so normal scroll-spy resumes. null = not travelling (scroll-spy
+  // drives the highlight as usual).
   const [travelId, setTravelId] = useState<HudTargetId | null>(null);
 
-  // Teardown handles for the in-flight settle-watcher (rAF + hard-timeout fallback)
-  // and the manual-scroll listeners that yield the lock to real user input. Held in
-  // a ref so a fresh click (or unmount) can cancel the previous watcher cleanly —
-  // no overlapping watchers, no leaked rAF/timeout/listeners.
+  // Teardown handle for the in-flight settle-watcher (rAF + hard-timeout
+  // fallback). Held in a ref so a fresh click (or unmount) can cancel the
+  // previous watcher cleanly — no overlapping watchers, no leaked rAF/timeouts.
   const travelWatchRef = useRef<(() => void) | null>(null);
 
-  // Cancel any in-flight settle-watcher on unmount so no rAF/timeout/listener leaks
+  // Cancel any in-flight settle-watcher on unmount so no rAF/timeout leaks
   // past the component's life.
   useEffect(() => {
     return () => {
@@ -293,14 +292,13 @@ export default function HudNavigation({
     };
   }, []);
 
-  // Begin a click-travel: pin the highlight to `id`, scroll there, and watch for the
-  // smooth-scroll to SETTLE (then release the lock). Robust settle detection: poll
-  // window.scrollY each frame and clear once it is within a few px of the target top
-  // AND has stopped changing for ~2 consecutive frames. A hard-timeout fallback
-  // (TRAVEL_LOCK_TIMEOUT_MS) always clears the lock even if the scroll math is a hair
-  // off or the page can't reach the exact top. Manual user scroll (wheel/touch/
-  // keydown) during travel clears the lock immediately so grabbing the scrollbar mid
-  // travel isn't left with a stale pin. Any prior watcher is torn down first.
+  // Begin a click-travel: pin the highlight to `id`, jump there instantly, and
+  // watch for the scroll to SETTLE (then release the lock). Settle detection:
+  // poll window.scrollY each frame and clear once it is within a few px of the
+  // target top AND has stopped changing for ~2 consecutive frames. A hard-timeout
+  // fallback (TRAVEL_LOCK_TIMEOUT_MS) always clears the lock even if the scroll
+  // math is a hair off or the page can't reach the exact top. Any prior watcher
+  // is torn down first.
   function beginTravel(id: HudTargetId): void {
     // Tear down a previous in-flight watcher before starting a new one.
     travelWatchRef.current?.();
@@ -316,7 +314,7 @@ export default function HudNavigation({
       return next;
     });
 
-    const targetTop = scrollToScene(id, reduced);
+    const targetTop = scrollToScene(id);
 
     let rafId = 0;
     let timeoutId = 0;
@@ -329,20 +327,9 @@ export default function HudNavigation({
       done = true;
       if (rafId) cancelAnimationFrame(rafId);
       if (timeoutId) window.clearTimeout(timeoutId);
-      window.removeEventListener('wheel', onUserScroll);
-      window.removeEventListener('touchmove', onUserScroll);
-      window.removeEventListener('keydown', onUserScroll);
       travelWatchRef.current = null;
       setTravelId(null);
     };
-
-    // Real user input mid-travel yields the lock at once (don't fight the user).
-    function onUserScroll(): void {
-      release();
-    }
-    window.addEventListener('wheel', onUserScroll, { passive: true });
-    window.addEventListener('touchmove', onUserScroll, { passive: true });
-    window.addEventListener('keydown', onUserScroll);
 
     function poll(): void {
       const y = window.scrollY;
@@ -359,9 +346,8 @@ export default function HudNavigation({
     }
     rafId = requestAnimationFrame(poll);
 
-    // Hard fallback so the lock ALWAYS clears even if the target/scroll math is a hair
-    // off (or under reduced motion where the jump is instant but the poll's 2-frame
-    // settle still needs a tick). Generous enough for the longest smooth-scroll.
+    // Hard fallback so the lock ALWAYS clears even if the target/scroll math is a
+    // hair off (the jump is instant but the poll's 2-frame settle needs a tick).
     timeoutId = window.setTimeout(release, TRAVEL_LOCK_TIMEOUT_MS);
 
     travelWatchRef.current = release;

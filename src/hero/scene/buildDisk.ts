@@ -20,7 +20,7 @@ export interface DiskRig extends UniformRig {
   count: number;
   dispose: () => void;
 }
-export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false): DiskRig {
+export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false, forceDensityComp = false): DiskRig {
   const N = Math.floor(particleCount);
   // Low-tier density compensation (no-op unless lowTier → high path + every high-tier
   // width bucket stay byte-identical; only the low fallback buckets are boosted). The
@@ -28,8 +28,11 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
   // quarter-res bloom, so we still lift per-grain emission (brightGain) and grain size
   // (pointGain) to keep the cloud legible — but only MODESTLY now that bloom + the 2×
   // particle bump carry most of the load. See densityCompensation() in config.ts for
-  // the (lighter) sublinear formula and the tier gate.
-  const comp = densityCompensation(N, CFG.diskParticles, lowTier);
+  // the (lighter) sublinear formula and the tier gate. `forceDensityComp` is the
+  // debug ?density= A/B path (resolveDensityScale < 1): the scaled count flows
+  // through the SAME ratio-based compensation the low tier uses (tier gate + sanity
+  // bound bypassed), so sprites auto-fatten as the cloud thins.
+  const comp = densityCompensation(N, CFG.diskParticles, lowTier, forceDensityComp);
   const aU = new Float32Array(N);
   const aPhase = new Float32Array(N);
   const aThickN = new Float32Array(N);
@@ -136,6 +139,14 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
     // sampled behind that gate (three binds a default cube texture while null).
     uGranTex: { value: null },
     uGranBakeReady: { value: 0 },
+    // --- baked supernova blast-field cubemap (scene/buildBlastBake.ts) --------
+    // uBlastBakeReady stays 0 (the analytic per-frame blastField() — today's
+    // exact shader) until createScene's idle-time bake completes and flips it; it
+    // never flips under ?blastbake=0, without WebGL2, or if the bake fails.
+    // uBlastTex is only ever sampled behind that gate (three binds a default
+    // cube texture while null).
+    uBlastTex: { value: null },
+    uBlastBakeReady: { value: 0 },
     // --- Later lifecycle transitions (scroll-driven 0..1 each). The scroll
     //     timeline drives these per frame; the shader body consumes them to morph
     //     the star onward. They sit on the timeline AFTER the red giant:
@@ -177,6 +188,14 @@ export function buildDisk(scene: THREE.Scene, particleCount: number, pixelRatio:
 
   const primary = new THREE.ShaderMaterial({
     uniforms,
+    // NEB_LOW_TRIM (LOW tier only): compiles OUT the nebula light model's two
+    // toward-camera self-occlusion fbm resamples — the costliest slice of the
+    // nebula vertex branch for its subtlest cue (nebula-collapse measured
+    // 27.3fps on the software-GL low tier, a marginal 30fps fail). The ambient +
+    // depth-fade terms are kept. Mid/high compile without the define →
+    // byte-identical GLSL to before. (secondary = primary.clone() carries the
+    // same defines.)
+    defines: lowTier ? { NEB_LOW_TRIM: 1 } : {},
     vertexShader: diskVertexShader,
     fragmentShader: diskFragmentShader,
     transparent: true,

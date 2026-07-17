@@ -143,6 +143,23 @@ const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [personLd, websiteLd, breadcrumbLd, articleLd, ...structuredData].filter(Boolean),
 };
+
+// Meta-CSP directive list (see the comment on the <meta> tag below).
+// `upgrade-insecure-requests` is omitted in DEV only: WebKit enforces it even
+// for http://localhost (Chromium/Firefox exempt potentially-trustworthy
+// origins), so on the dev server every module script would be upgraded to
+// https://localhost:4321, fail TLS, and leave the site stuck on the loader.
+const metaCsp = [
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "media-src 'self'",
+  "connect-src 'self'",
+  ...(import.meta.env.DEV ? [] : ['upgrade-insecure-requests']),
+].join('; ');
 ---
 
 <!-- Charset & viewport -->
@@ -171,10 +188,7 @@ const jsonLd = {
        • img-src allows data: for the inline SVG grain/placeholder data-URIs.
      Directives omitted here (script-src, worker-src, …) simply fall through to
      "allow" in this meta layer — the edge header closes them. -->
-<meta
-  http-equiv="Content-Security-Policy"
-  content="object-src 'none'; base-uri 'self'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self'; upgrade-insecure-requests"
-/>
+<meta http-equiv="Content-Security-Policy" content={metaCsp} />
 
 <!-- Pre-paint environment flags, set before first paint so CSS can branch on
      them with zero flash:

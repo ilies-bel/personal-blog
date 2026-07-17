@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { CFG } from '../lib/config';
+import { CFG, FILM_GRAIN_AMT, resolveGrainAmt } from '../lib/config';
 import { GradeShader, NovaShader } from '../shaders/post.glsl';
 import type { Rig } from './types';
 
@@ -20,7 +20,10 @@ export type BloomQuality = 'full' | 'cheap' | 'none';
 // Fraction of the composer resolution each bloom mode renders its blur pyramid at.
 // 'full' = 1.0 (high path, unchanged). 'cheap' = 0.5 → a quarter of the pixels
 // (CONSERVATIVE; halving each axis), which both cuts the cost and softens the glow.
-const BLOOM_SCALE: Record<BloomQuality, number> = { full: 1.0, cheap: 0.5, none: 1.0 };
+// 'cheap' was 0.5; 0.3 (~1/11 the pixels of full) buys back most of the remaining
+// pyramid cost on software rasterisers while spreading the glow slightly wider —
+// which is the low tier's grain-smoothing job anyway. 'full' stays byte-identical.
+const BLOOM_SCALE: Record<BloomQuality, number> = { full: 1.0, cheap: 0.3, none: 1.0 };
 // The cheap (low-res) bloom is the low tier's main grain-smoother (it spreads each
 // sparse grain's light into a glow), so we keep its strength at full and give it a
 // slightly WIDER radius than the high pass — the extra spread melts the convection
@@ -50,8 +53,22 @@ export function buildPostChain(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   bloomQuality: BloomQuality = 'full',
+  // Tier-default luminance-adaptive grain strength (uGrainAmt). createScene
+  // passes FILM_GRAIN_AMT_MID on the mid tier (the stronger grain that textures
+  // the half-density cloud's wider dark gaps); everyone else gets the shipped
+  // FILM_GRAIN_AMT. An explicit ?grain= still overrides (resolveGrainAmt).
+  grainAmtDefault: number = FILM_GRAIN_AMT,
 ): PostRig {
-  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+  // RT precision: the 'full'/'none' chains keep the shipped HalfFloat targets
+  // (HDR headroom for the bloom threshold — byte-identical high/mid path). The
+  // 'cheap' (low-tier) chain runs UnsignedByte targets instead: on the software
+  // rasterisers the low tier classifies (SwiftShader et al), FP16 blending of the
+  // additive sprite cloud is the single most expensive raster mode — byte targets
+  // measured ~4-6ms/frame cheaper on the bench. The cost is clamping >1.0
+  // accumulation before bloom, which slightly flattens the very brightest core —
+  // masked on low by the wider cheap-bloom spread + adaptive grain.
+  const rtType = bloomQuality === 'cheap' ? THREE.UnsignedByteType : THREE.HalfFloatType;
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: rtType }));
   composer.addPass(new RenderPass(scene, camera));
   // Bloom is the most expensive pass (a mip pyramid of blurs). 'full' builds it at
   // the composer resolution EXACTLY as before (high path, byte-identical). 'cheap'
@@ -68,10 +85,26 @@ export function buildPostChain(
       0.55,
     );
     composer.addPass(bloom);
+    // UnrealBloomPass hardcodes HalfFloatType for its internal mip targets; on the
+    // 'cheap' (low-tier) chain retype them to UnsignedByte to match the composer
+    // (same FP16-blending cost story as above). dispose() drops the yet-unused GPU
+    // allocation; three lazily re-allocates each target with the new type on first
+    // use. 'full' never enters this branch — high/mid bloom is byte-identical.
+    if (bloomQuality === 'cheap') {
+      for (const rt of [...bloom.renderTargetsHorizontal, ...bloom.renderTargetsVertical, bloom.renderTargetBright]) {
+        rt.texture.type = THREE.UnsignedByteType;
+        rt.dispose();
+      }
+    }
   }
   const gradePass = new ShaderPass(GradeShader);
   gradePass.uniforms.uExposure.value = CFG.exposure;
   gradePass.uniforms.uGrain.value = CFG.grain;
+  // Luminance-adaptive film grain strength (?grain= A/B lever; the tier default
+  // threaded in by the caller — FILM_GRAIN_AMT, or FILM_GRAIN_AMT_MID on mid —
+  // 0 = off → the grain term contributes exactly 0). Resolved ONCE at chain
+  // build; the per-frame uGrainSeed re-seed lives in createScene's loop.
+  gradePass.uniforms.uGrainAmt.value = resolveGrainAmt(grainAmtDefault);
   gradePass.uniforms.uWarmth.value = CFG.warmth;
   gradePass.uniforms.uSat.value = CFG.saturation;
   gradePass.uniforms.uOlive.value = CFG.olive;

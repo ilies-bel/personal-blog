@@ -14,7 +14,12 @@ export interface StarRig extends UniformRig {
   dispose: () => void;
 }
 export function buildStarfield(scene: THREE.Scene, particleCount: number, pixelRatio: number, lowTier = false): StarRig {
-  const starN = Math.max(2500, Math.floor(particleCount * 0.11 * CFG.starDensity));
+  // LOW tier: half the star sprites at twice the per-star emission — the field's
+  // additive light is a pure sum, so count × bright is the invariant (same trick
+  // as the low-tier photon ring). Halves the per-sprite raster setup cost that
+  // dominates point clouds on software rasterisers. High/mid: ×1, byte-identical.
+  const countScale = lowTier ? 0.5 : 1;
+  const starN = Math.max(2500, Math.floor(particleCount * 0.11 * CFG.starDensity * countScale));
   // Low-tier density compensation, gated on the explicit lowTier flag (the tier
   // signal) so the starfield brightens in lockstep with the disk on the low fallback
   // and stays a no-op (1.0) on the high path + every high-tier width bucket → high

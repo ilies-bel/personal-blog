@@ -246,13 +246,17 @@ export default function ArticleScene({ journey }: ArticleSceneProps) {
         // navigator. createScene tolerates the minimal hook set (backdrop mode already
         // passes only getStage).
         // In the 'canvas' branch renderMode has already filtered out reduced-motion
-        // (→ 'reduced') and the low tier (→ 'poster'), so we pass the canvas-branch
-        // invariants directly. The createScene signature still takes them so the same
-        // entry point works for HeroIsland's backdrop / live branches.
+        // (→ 'reduced') and the low tier (→ 'poster'), so the remaining tiers here
+        // are 'high' | 'mid' — pass the DETECTED tier (memoised; the re-read is
+        // free), not a hardcoded 'high': a mid-classified GPU must get the
+        // half-density / 1.5-DPR-capped backdrop on article pages too, or this
+        // would be the one route still running the full 1.2M-grain cloud on a
+        // weak GPU. The createScene signature still takes the same params so the
+        // one entry point works for HeroIsland's backdrop / live branches.
         if (host) {
           // createScene is async now (sliced boot). A teardown racing the build
           // disposes the fresh handle the moment it resolves.
-          const handle = await createScene(host, false, { getStage }, 'high');
+          const handle = await createScene(host, false, { getStage }, detectDeviceTier());
           if (cancelled) {
             handle();
             return;

@@ -1,0 +1,28 @@
+{
+  "device": "desktop",
+  "scenario": "home",
+  "url": "http://127.0.0.1:39067/",
+  "config": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "deviceScaleFactor": 2,
+    "cpuThrottle": 1,
+    "isMobile": false,
+    "userAgent": "(chromium default)",
+    "query": ""
+  },
+  "started": true,
+  "bootMs": 2887.3,
+  "longTaskBootMs": 2542,
+  "longTaskBootCount": 2,
+  "holdFps": 9.2,
+  "holdWorstInstantFps": 0.8,
+  "scrollFps": 10.9,
+  "scrollWorstInstantFps": 2.3,
+  "heapMB": 33.5,
+  "error": null,
+  "timestamp": "2026-07-15T07:36:42.140Z",
+  "canvasCount": 3
+}
