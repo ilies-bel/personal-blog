@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, FILM_GRAIN_AMT, FILM_GRAIN_AMT_MID, MID_TIER_DENSITY, detectDeviceTierSource, isSoftwareRenderer, resolveDensityScale, resolveParticleRTScale, resolveBlastBake, resolvePerfHud, resolvePhotons, resolveRgGranBake, resolveSunBake, resolveAdaptive, isTierForced, stepDownTier, tuneParticlesForDevice, tuneRenderPixelRatio, shouldAdaptiveDowngrade, ADAPTIVE_SAMPLE_MS, type DeviceTier } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, readDebugNumber } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, WARM_SESSION_STORAGE_KEY, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
@@ -892,6 +892,22 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   // softwareGl reveal pacing (see the scene-ready gate at the bottom of frame()).
   let swReadyStreak = 0;
   let swPrevRenderAt = 0;
+  // WARM-SESSION FAST PATH — the software-GL steady-pacing hold below exists to
+  // cover the browser's FIRST-visit JIT/tile-raster storm (a per-session,
+  // per-process cost: draw pipelines JIT once, page tiles rasterise once). On a
+  // warm return within the same tab session (flag stamped at the first
+  // scene:ready, see the dispatch site in frame()) that storm has already been
+  // paid, so holding the reveal to the 4s floor / 15-frame streak — which on a
+  // loaded CI host degrades to the full 8s backstop — only re-imposes a
+  // decorative floor the warm return must NOT have (e2e/loader.spec.ts "warm
+  // return"). Cold boots (no flag) keep the hold byte-identical.
+  const warmSession = ((): boolean => {
+    try {
+      return window.sessionStorage?.getItem(WARM_SESSION_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })();
   if (softwareGl) {
     // Stamp the root so CSS can flatten the reveal choreography (scene.css
     // [data-soft-gl]): the staged loader fades are full-screen layers animating
@@ -2606,7 +2622,9 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     const SW_READY_STREAK = 15;
     const SW_READY_TIMEOUT_S = 8;
     const SW_READY_MIN_S = 4; // the storm starts ~1s in; don't trust earlier streaks
-    if (!firstFramePainted && softwareGl && t < SW_READY_TIMEOUT_S) {
+    // Warm returns skip the hold entirely (see warmSession above): the storm the
+    // streak waits out is a once-per-session cost already paid on the cold boot.
+    if (!firstFramePainted && softwareGl && !warmSession && t < SW_READY_TIMEOUT_S) {
       if (t < SW_READY_MIN_S) return; // too early to trust pacing — keep the loader up
       swReadyStreak = now - swPrevRenderAt <= SW_READY_FRAME_MS ? swReadyStreak + 1 : 0;
       swPrevRenderAt = now;
@@ -2616,6 +2634,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       firstFramePainted = true;
       bootGlowT0 = t; // anchor the boot-glow decay timer to this first composited frame
       window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
+      // Stamp the warm-session flag: any LATER same-session boot (a back-nav to
+      // the hero, an SPA return) may skip the software-GL steady-pacing hold
+      // above — the first-visit JIT/raster storm it covers has now been paid.
+      try {
+        window.sessionStorage?.setItem(WARM_SESSION_STORAGE_KEY, '1');
+      } catch {
+        // private mode / disabled storage — cold-path behaviour simply repeats.
+      }
       // Warm the GPGPU collapse (programs + snapshot FBOs) so no scroll position
       // ever pays a first-bake stall — but only once the loader's reveal has
       // landed, so the warm's heavy chunks can't starve the reveal timer (see

@@ -133,6 +133,15 @@ export const LOADER_SEEN_STORAGE_KEY = 'loader-seen';
  *  / disabled storage must never throw). */
 export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained';
 
+/** sessionStorage flag ('1') stamped by createScene the first time SCENE_READY_EVENT
+ *  is dispatched in this tab session. A WARM return (same-session back-nav to the
+ *  home hero) reads it to skip the software-GL "steady pacing" reveal hold in
+ *  frame(): that hold exists to cover the browser's FIRST-visit JIT/tile-raster
+ *  storm on software rasterisers, which does not recur within the session — so a
+ *  warm return reveals on the first composited frame like real GPUs do. Access is
+ *  wrapped in try/catch (private mode / disabled storage must never throw). */
+export const WARM_SESSION_STORAGE_KEY = 'bh:warm';
+
 // --- cross-layer events ----------------------------------------------------
 /** The window CustomEvent the scene dispatches ONCE, after its first frame has
  *  rendered + composited (see createScene's frame()). The instant intro loader
