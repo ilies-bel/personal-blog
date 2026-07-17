@@ -2786,22 +2786,79 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
           // first-play stall shrinks. Mirrors the parallel path's variant set,
           // including grade's to-screen (sRGB) variant for the nova-idle skip.
           if (softwareGl) {
-            renderer.setRenderTarget(warmRT);
-            try {
-              renderer.compile(scene, camera);
-              const warmRtScene = new THREE.Scene();
-              for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
-              renderer.compile(warmRtScene, camera);
-            } finally {
-              renderer.setRenderTarget(null);
+            // The full compile split into three bounded chunks. Cold boots run
+            // them back-to-back (byte-identical work to the previous single
+            // block); warm returns run them one-per-rAF AFTER the reveal (see
+            // below). The last chunk owns the warm resources' disposal.
+            const compileChunks: Array<() => void> = [
+              () => {
+                renderer.setRenderTarget(warmRT);
+                try {
+                  renderer.compile(scene, camera);
+                } finally {
+                  renderer.setRenderTarget(null);
+                }
+              },
+              () => {
+                renderer.setRenderTarget(warmRT);
+                try {
+                  const warmRtScene = new THREE.Scene();
+                  for (const mat of rtPassMaterials) warmRtScene.add(new THREE.Mesh(warmGeo, mat));
+                  renderer.compile(warmRtScene, camera);
+                } finally {
+                  renderer.setRenderTarget(null);
+                }
+              },
+              () => {
+                const warmScreenScene = new THREE.Scene();
+                warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
+                warmScreenScene.add(new THREE.Mesh(warmGeo, gradePass.material));
+                renderer.compile(warmScreenScene, camera);
+                warmGeo.dispose();
+                warmRT.dispose();
+              },
+            ];
+            if (!warmSession) {
+              // COLD BOOT — compile everything up front, under the loader, exactly
+              // as before: bootMs grows by the same seconds the first-play stall
+              // shrinks, and the loader is already covering the wait.
+              for (const chunk of compileChunks) chunk();
+            } else {
+              // WARM RETURN (same-session back-nav, e2e/loader.spec.ts "warm
+              // return") — the up-front compile-everything is ~the ENTIRE boot
+              // cost on a software rasteriser (CI traces: >10s under SwiftShader
+              // with 5-worker contention, dominating the warm return exactly as
+              // it dominates the cold boot; GL program objects don't survive
+              // navigation, so the flag can't skip the work — only move it).
+              // Skip it: frame() lazily compiles just the FIRST FRAME's visible
+              // subset, the reveal lands (warmSession already skips the pacing
+              // hold), and the remaining variants (per-state rigs, bloom
+              // pyramid, to-screen passes) compile one chunk per rAF after
+              // scene:ready — deferred, not dropped, so mid-scroll rigs still
+              // never pay a first-draw link stall long after the return.
+              let deferredCompileStarted = false;
+              const runDeferredCompile = (): void => {
+                if (deferredCompileStarted) return;
+                deferredCompileStarted = true;
+                let i = 0;
+                const tick = (): void => {
+                  if (stopped) return; // disposed → lazy compile-on-draw remains the fallback
+                  compileChunks[i]();
+                  i += 1;
+                  if (i < compileChunks.length) requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+              };
+              window.addEventListener(SCENE_READY_EVENT, runDeferredCompile, { once: true });
+              // Backstop (mirrors scheduleGpuWarmAfterReveal's): if the reveal
+              // never lands (hidden tab, loader's own no-WebGL backstop), still
+              // warm eventually — late under the loader beats first-scroll stalls.
+              window.setTimeout(runDeferredCompile, 6000);
             }
-            const warmScreenScene = new THREE.Scene();
-            warmScreenScene.add(new THREE.Mesh(warmGeo, novaPass.material));
-            warmScreenScene.add(new THREE.Mesh(warmGeo, gradePass.material));
-            renderer.compile(warmScreenScene, camera);
+          } else {
+            warmGeo.dispose();
+            warmRT.dispose();
           }
-          warmGeo.dispose();
-          warmRT.dispose();
           // falls through to `if (!stopped) frame()` below
         }
       }
