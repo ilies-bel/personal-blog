@@ -131,10 +131,13 @@ test('?tier= is an explicit override: honoured and persisted for the session', a
     testInfo.project.name !== 'chromium',
     'hero adaptive spec is chromium-only (one GPU environment)',
   );
-  // ?tier=high on a software rasteriser boots the maximum particle load —
-  // under a fully parallel local run the shader compile can take well past the
-  // default 30s test budget. The assertion is not timing-sensitive; give setup
-  // room.
+  // The contract here is "an explicit ?tier= is honoured and persisted" —
+  // provable with ANY tier, so force the CHEAPEST rung. ?tier=high on CI's
+  // software rasteriser boots the maximum particle load, and under a fully
+  // parallel headless run its shader compile can exceed even a tripled test
+  // budget (observed: body stuck pre-reveal for 30s+ on GitHub Actions).
+  // ?tier=low exercises the identical override/persistence path (readTierOverride
+  // → isTierForced → __bhTier mirror) with the lightest possible boot.
   test.slow();
 
   // The pin half of the contract: a forced tier is mirrored into
@@ -143,7 +146,7 @@ test('?tier= is an explicit override: honoured and persisted for the session', a
   // the scene still boots on it. isTierForced() then disables the adaptive
   // sampler entirely; this asserts the observable surface of that decision —
   // the persisted override every subsequent detection consults.
-  await page.goto('/?tier=high', { waitUntil: 'load' });
+  await page.goto('/?tier=low', { waitUntil: 'load' });
 
   const unavailable = await page.evaluate(
     () => document.body.classList.contains('webgl-unavailable'),
@@ -159,5 +162,5 @@ test('?tier= is an explicit override: honoured and persisted for the session', a
       return null;
     }
   });
-  expect(stored, 'forced tier is persisted for the session').toBe('high');
+  expect(stored, 'forced tier is persisted for the session').toBe('low');
 });

@@ -161,20 +161,60 @@ test('warm return (same session) reveals without the first-visit floor', async (
   // Setup only — the contract under test is the WARM return below. Under a
   // fully parallel run several heavy software-GL pages compile shaders at
   // once and even the loader's 8s safety timer can be starved on the first
-  // load, so give the cold boot a generous budget (the warm-return assertion
-  // keeps its own tight bound).
+  // load, so give the cold boot a generous budget (the warm-return assertions
+  // below judge the floor, not the machine).
   test.slow();
+
+  // Instrument scene:ready and the scene-ready class instant inside every
+  // document this page loads (init scripts re-run per navigation), so the warm
+  // return can be judged from IN-PAGE timestamps rather than cross-navigation
+  // wall clock — the latter measures CI scheduler contention, not the floor.
+  await page.addInitScript(() => {
+    const t: { ready?: number; reveal?: number } = {};
+    (window as unknown as { __loaderTimes: typeof t }).__loaderTimes = t;
+    window.addEventListener(
+      'scene:ready',
+      () => {
+        t.ready = performance.now();
+      },
+      { once: true },
+    );
+    new MutationObserver(() => {
+      if (!t.reveal && document.body?.classList.contains('scene-ready')) {
+        t.reveal = performance.now();
+      }
+      // Observe the Document node, not documentElement — see the first-visit
+      // floor test above for why (pre-parse <html> is replaced).
+    }).observe(document, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  });
+
   await page.goto('/', { waitUntil: 'load' });
   await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 30_000 });
 
-  // Navigate away and back within the session: the reveal must be fast.
+  // Navigate away and back within the session.
   await page.goto('/writing', { waitUntil: 'load' });
-  const t0 = Date.now();
   await page.goto('/', { waitUntil: 'load' });
-  await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 10_000 });
-  // Generous ceiling: the point is "no re-imposed decorative floor", measured
-  // from navigation start.
-  expect(Date.now() - t0).toBeLessThan(8_000);
+  await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 15_000 });
+
+  const warm = await page.evaluate(
+    () => (window as unknown as { __loaderTimes: { ready?: number; reveal?: number } }).__loaderTimes,
+  );
+  expect(warm.reveal, 'warm reveal instant recorded').toBeDefined();
+
+  // Contract 1 — no engine-side cold path re-run: on a warm return the engine
+  // must dispatch scene:ready (the software-GL steady-pacing hold and the
+  // loader's 8s safety are cold/no-WebGL machinery). If scene:ready never
+  // fired here, the warm return repeated the full cold boot — the exact
+  // regression this test exists to catch (bh:warm not stamped).
+  expect(warm.ready, 'warm return reveals from a real scene:ready, not the safety timer').toBeDefined();
+
+  // Contract 2 — no re-imposed first-visit floor: with no floor armed, the
+  // reveal is the synchronous scene:ready listener, so ready→reveal is a few
+  // ms even on contended CI. A re-introduced LOADER_MIN_MS (900ms) floor —
+  // or the old 2.5s theater hold — fails this decisively; the 700ms ceiling
+  // absorbs main-thread jitter without covering the floor.
+  const delta = warm.reveal! - warm.ready!;
+  expect(delta, `warm ready=${warm.ready} reveal=${warm.reveal}`).toBeLessThan(700);
 });
 
 test('SPA nav home (clicking the wordmark) keeps html.js — the live hero, not the static edition', async ({

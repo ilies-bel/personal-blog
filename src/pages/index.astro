@@ -162,6 +162,7 @@ const featured = await getFeaturedProof();
       LOADER_MIN_MS,
       LOADER_SEEN_STORAGE_KEY,
       NATIVE_SCROLL_INTENT_PX,
+      WARM_SESSION_STORAGE_KEY,
     } from '../hero/lib/constants';
 
     function initLoader(): void {
@@ -238,6 +239,21 @@ const featured = await getFeaturedProof();
         if (!loader.isConnected) return;
         teardownFirstLoad();
         document.body.classList.add(SCENE_READY_BODY_CLASS);
+        // Stamp the engine's warm-session flag at the moment the reveal actually
+        // lands — whatever path delivered it (scene:ready, intent, skip, or the
+        // 8s safety). The engine normally stamps this itself at its first
+        // scene:ready dispatch (createScene frame()), but on a contended
+        // software-GL host the cold boot can reveal via the safety timer with
+        // scene:ready starved — leaving the flag unset, so a warm return would
+        // re-run the full cold steady-pacing hold it is meant to skip. By the
+        // time ANY reveal lands, the first-visit JIT/raster storm the warm flag
+        // waives has been paid (or there is no engine at all, in which case the
+        // flag is simply unread). Idempotent with the engine's own stamp.
+        try {
+          window.sessionStorage?.setItem(WARM_SESSION_STORAGE_KEY, '1');
+        } catch (_e) {
+          // private mode / disabled storage — cold-path behaviour simply repeats.
+        }
         armGone();
       };
 
