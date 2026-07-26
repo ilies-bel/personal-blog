@@ -18,6 +18,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "screenshot": "node scripts/screenshot.mjs",
+    "capture:mobile-hero": "node scripts/capture-mobile-hero.mjs",
     "bench": "node bench/run-bench.mjs",
     "bench:docker": "docker build -f bench/Dockerfile -t blog-bench . && docker run --rm -v \"$PWD/evidence:/app/evidence\" blog-bench",
     "astro": "astro"

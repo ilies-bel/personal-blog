@@ -74,6 +74,7 @@ import {
   useReducedMotionPreference,
   resolveReducedMotionNow,
 } from './reduced-motion';
+import MobileHeroVideo from './MobileHeroVideo';
 
 declare global {
   interface Window {
@@ -257,6 +258,11 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // is true when the reduced state comes purely from the OS (no manual override
   // yet) — it gates the one-time explanatory modal below.
   const { reduced, fromOsOnly, setReduced } = useReducedMotionPreference();
+  // Phone detection: start false (matches SSR output and initial hydration render)
+  // and flip to true inside the mount effect once window is available. NOT in the
+  // main effect's deps — the detection is a one-way door (phones don't become
+  // desktops mid-session) and is re-evaluated via isPhoneNow inside the effect.
+  const [isPhone, setIsPhone] = useState(false);
   // The reduced-motion modal: which copy to show, or null when closed.
   //   'confirm' — opened by a corner-toggle click that turns reduced motion ON.
   //   'explain' — opened once when reduced motion is active purely from the OS.
@@ -504,6 +510,33 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       return () => {
         cancelled = true;
         disposeReduced();
+        unsubClock();
+        clock.stop();
+        unsub();
+        tracker.stop();
+      };
+    }
+
+    // PHONE CONTRACT: on phones (innerWidth < 768, portrait phone-sized viewport) we
+    // replace the live WebGL scene with a pre-rendered scroll-scrubbed portrait video
+    // (MobileHeroVideo, rendered below). The video is zero-GPU cost and plays well on
+    // constrained mobile hardware. Tablets (≥ 768 px) and all desktops — including
+    // low-tier ones — keep the live scene and the tier ladder byte-identical. The check
+    // is synchronous so createScene is NEVER imported on a phone, closing the "engine
+    // starts then tears down" gap. setIsPhone(true) queues a render that mounts
+    // MobileHeroVideo, which dispatches 'scene:ready' when its first frame is ready
+    // (just like createScene fires that event after its first GPU frame). The inline
+    // script in index.astro handles the CSS transition / loader-gone — same flow as
+    // the live scene, so the skip-intro button stays keyboard-accessible during the
+    // brief load window, and the 8 s safety backstop still guards a missing video.
+    const isPhoneNow = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isPhoneNow) {
+      setIsPhone(true);
+      // No loader manipulation here — MobileHeroVideo fires 'scene:ready' and the
+      // index.astro inline script handles the reveal. Cleanup only tears down the
+      // scroll infrastructure that was set up above.
+      return () => {
+        cancelled = true;
         unsubClock();
         clock.stop();
         unsub();
@@ -865,7 +898,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
           // Reduced-motion stand-in for the live hero: four lifecycle posters
           // cross-faded by scroll progress (opacity only). Sits at the canvas's
           // z-layer, behind the manifesto overlay copy — same room, no motion.
+          // Reduced motion takes precedence over the phone video path so that a
+          // phone user who has enabled reduced motion still gets the still posters.
           <PosterSlideshow progress={progress} base={base} />
+        ) : isPhone ? (
+          // Phone stand-in for the live hero: pre-rendered scroll-scrubbed portrait
+          // video. currentTime is driven by `progress` inside MobileHeroVideo, so the
+          // visual matches the live WebGL lifecycle without any GPU cost.
+          // Tablets (≥ 768 px) and all desktops stay on the live scene below.
+          <MobileHeroVideo progress={progress} base={base} />
         ) : (
           <>
             {/* One marker per placement, all mounted at once. Each instance gates its

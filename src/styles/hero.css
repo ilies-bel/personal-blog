@@ -190,6 +190,28 @@
    on the posters, this neutralises it — the slideshow is opacity-only by construction. */
 :where(html[data-motion='reduced']) .bh-poster { transform: none !important; }
 
+/* --- Mobile scroll-scrubbed hero video ------------------------------------- */
+/* Phones only (innerWidth < 768): HeroIsland mounts this instead of the live WebGL
+   scene. currentTime is driven by scroll progress — the same 0..1 lifecycle axis —
+   so the manifesto copy reads over a matching backdrop without any GPU rAF loop.
+   Sits at the canvas's z-plane (z 0) behind all chrome; pointer-events:none so it
+   never intercepts taps meant for nav/markers above it. */
+.bh-mobile-video {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  pointer-events: none;
+}
+/* Honour the backdrop-off toggle (corner scene button on reading pages). */
+body.backdrop-off .bh-mobile-video {
+  display: none;
+}
+
 /* Reduced-motion modal — the confirm/explain dialog raised when entering reduced
    motion (or once when the OS requests it). Sits above all hero chrome + the dive
    overlay so it owns the foreground while open. Dark scrim + a single panel built
