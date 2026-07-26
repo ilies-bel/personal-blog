@@ -61,7 +61,15 @@ import { glGovernor, PRIORITY_HERO, PRIORITY_AMBIENT } from '../lib/glGovernor';
 import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
-import type { LedgerCounts } from './FinaleLedger';
+import FinaleLedger, { type LedgerCounts } from './FinaleLedger';
+
+/** Typed handle to the HUD power FSM exposed on window.__bhHudFsm by BaseLayout.
+ *  Only the fields HeroIsland needs are declared here; the full interface lives in
+ *  BaseLayout's bundled script and cannot be imported from this client bundle. */
+interface BhHudFsm {
+  state: 'idle' | 'ready';
+  forceState?: (next: 'idle' | 'ready') => void;
+}
 import ExplorationHud from './ExplorationHud';
 import CockpitFrame from './CockpitFrame';
 import StarMarker from './StarMarker';
@@ -281,10 +289,15 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // progress >= 0.9 corresponds to lifecycleProgress <= 0.1 (the finale band).
   // Ref-tracked so the body class only flips on an actual transition.
   const atFinaleRef = useRef(false);
-  // NOTE: scroll no longer drives HUD power. The HUD is OFF BY DEFAULT (the power FSM
-  // in BaseLayout lands a first-time visitor in `idle` — the bare spectacle) and only
-  // the corner power button toggles it on/off — so this island dispatches no
-  // HUD_POWER_EVENT and keeps no at-end / pending-power-on refs.
+  // React-state mirror of atFinaleRef — published on threshold crossings so the
+  // FinaleLedger component's `visible` prop (which controls tabIndex + data-visible)
+  // stays in sync with the body class and the left-panel CSS gate.
+  const [atFinaleState, setAtFinaleState] = useState(false);
+  // Auto-power tracker: null = finale not active / no auto-power in effect;
+  // true  = finale active, HUD was already on before auto-power (no-op);
+  // false = finale active, HUD was off → we auto-powered it to 'ready'.
+  // On leaving the finale, only the `false` case restores the idle state.
+  const hudAutoRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -396,17 +409,51 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       }
 
       // Finale beat: progress >= 0.9 ≡ lifecycleProgress <= 0.1 (the pale-blue-dot
-      // band). The body class drives CSS light-cockpit dimming (hud.css).
+      // band). The body class drives CSS light-cockpit dimming (hud.css) and
+      // gates the left-panel MFD directory (body.hud-active.bh-at-finale).
       const atFinale = progressRef.current >= 0.9;
       if (atFinale !== atFinaleRef.current) {
         atFinaleRef.current = atFinale;
         document.body.classList.toggle(AT_FINALE_BODY_CLASS, atFinale);
+        setAtFinaleState(atFinale);
+
+        // Auto-power the HUD at the finale so the left-panel directory appears
+        // without requiring a manual button press. On leaving the finale restore
+        // the previous state so mid-scroll stays bare spectacle.
+        // forceState() (added to the FSM in BaseLayout) flips the body class and
+        // button ARIA WITHOUT writing to localStorage — the user's stored choice
+        // is preserved and re-applied by the FSM on the next page load / swap.
+        const fsmWin = window as unknown as { __bhHudFsm?: BhHudFsm };
+        const hudFsm = fsmWin.__bhHudFsm;
+        if (hudFsm) {
+          if (atFinale) {
+            hudAutoRef.current = hudFsm.state === 'ready';
+            if (hudFsm.state !== 'ready') {
+              hudFsm.forceState?.('ready');
+            }
+          } else {
+            if (hudAutoRef.current === false) {
+              hudFsm.forceState?.('idle');
+            }
+            hudAutoRef.current = null;
+          }
+        }
       }
 
       const visible = progressRef.current < CHROME_HIDE_AT || explorationModeRef.current;
       if (visible === chromeVisibleRef.current) return;
       chromeVisibleRef.current = visible;
       document.body.classList.toggle(SCROLLED_BODY_CLASS, !visible);
+    };
+    // Restore the HUD to idle if we auto-powered it at the finale without persisting.
+    // Safe to call from any cleanup path that set up the scroll tracker (all non-backdrop
+    // paths). No-ops if the HUD was already on before the finale (hudAutoRef = true)
+    // or if the finale was never reached (hudAutoRef = null).
+    const restoreHudAuto = (): void => {
+      if (hudAutoRef.current === false) {
+        (window as unknown as { __bhHudFsm?: BhHudFsm }).__bhHudFsm?.forceState?.('idle');
+      }
+      hudAutoRef.current = null;
     };
     // Publish a presentation-clock snapshot to React (gated so DOM overlays get a
     // perceptual cadence, not every frame of the ease). Both values in a snapshot
@@ -489,6 +536,24 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     atOpeningRef.current = initialAtOpening;
     document.body.classList.toggle(AT_OPENING_BODY_CLASS, initialAtOpening);
 
+    // Seed the finale class and auto-power the HUD if the page loads at finale.
+    // Mirrors syncChrome's threshold logic — ensures the body class and HUD state
+    // are correct even before the first scroll event fires.
+    const initialAtFinale = initial.progress >= 0.9;
+    atFinaleRef.current = initialAtFinale;
+    document.body.classList.toggle(AT_FINALE_BODY_CLASS, initialAtFinale);
+    if (initialAtFinale) {
+      setAtFinaleState(true);
+      const fsmWin = window as unknown as { __bhHudFsm?: BhHudFsm };
+      const hudFsm = fsmWin.__bhHudFsm;
+      if (hudFsm) {
+        hudAutoRef.current = hudFsm.state === 'ready';
+        if (hudFsm.state !== 'ready') {
+          hudFsm.forceState?.('ready');
+        }
+      }
+    }
+
     // The engine samples the presentation clock — pre-smoothed, shared with every
     // DOM consumer. One clock, one truth about what is on screen.
     const getStage = (): number => clock.current.stage;
@@ -509,6 +574,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       const disposeReduced = mountReducedMotionHero();
       return () => {
         cancelled = true;
+        restoreHudAuto();
         disposeReduced();
         unsubClock();
         clock.stop();
@@ -537,6 +603,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // scroll infrastructure that was set up above.
       return () => {
         cancelled = true;
+        restoreHudAuto();
         unsubClock();
         clock.stop();
         unsub();
@@ -567,6 +634,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       revealWithoutWebgl();
       return () => {
         cancelled = true;
+        restoreHudAuto();
         unsubClock();
         clock.stop();
         unsub();
@@ -688,11 +756,14 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // token was already released by the governor).
       glGovernor.release(glToken);
       // Leave the body in a clean state if the island unmounts mid-scroll. We clear
-      // ONLY the island-owned chrome class (is-scrolled). We deliberately do NOT
-      // touch hud-active / hud-booting / hud-shutting-down: those are owned by the
-      // boot FSM and its state is mirrored to localStorage, so the persisted power
-      // state is the source of truth across an SPA unmount/reload — and the FSM
-      // re-applies the correct resting classes on the next astro:page-load.
+      // ONLY the island-owned chrome classes. We deliberately do NOT touch hud-active /
+      // hud-booting / hud-shutting-down for MANUAL state — those are owned by the boot
+      // FSM, mirrored to localStorage, and re-applied on the next astro:page-load.
+      // EXCEPTION: if we auto-powered the HUD at the finale (forceState — no
+      // localStorage update), we restore the idle state now so the body is consistent
+      // for an in-session re-mount (e.g. motion-preference toggle). SPA nav: the FSM
+      // re-inits from localStorage on the new page, so this restore is a no-op there.
+      restoreHudAuto();
       // Reset the opening-hold edge tracker so a re-mount re-seeds from the live
       // scroll position rather than inheriting a stale "in the opening hold" flag.
       atOpeningRef.current = false;
@@ -929,7 +1000,14 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             exact plate as a static image over the poster crossfade. */}
         {reduced && <CockpitFrame />}
         <HeroIdentity />
-        <ManifestoOverlay counts={counts} />
+        <ManifestoOverlay />
+        {/* Finale site-index directory — positioned on the cockpit LEFT panel via CSS
+            (body.hud-active.bh-at-finale, desktop-only). Hidden in centre column.
+            Rendered here (not inside the beat div) so the beat-column flex context
+            and its layout do not influence the panel's fixed positioning. The HUD is
+            auto-powered at the finale by syncChrome, so the panel appears without any
+            manual button press. */}
+        <FinaleLedger visible={atFinaleState} counts={counts} />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
             black hole. Shown only while body.at-opening (the opening hold); fades out
             once the visitor scrolls past. aria-hidden — pure decoration. (Under reduced

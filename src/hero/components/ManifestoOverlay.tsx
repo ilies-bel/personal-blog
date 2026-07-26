@@ -4,16 +4,9 @@
 import { BEATS } from '../sceneTable';
 import { band } from '../scroll';
 import { lifecycleProgress } from '../timeline';
-import FinaleLedger, { type LedgerCounts } from './FinaleLedger';
 import { useSceneState } from './SceneStateContext';
 
-interface ManifestoOverlayProps {
-  /** Collection-derived counts for the finale ledger notes — serialized from
-   *  index.astro's getCounts() through the island props (see FinaleLedger). */
-  counts: LedgerCounts;
-}
-
-export default function ManifestoOverlay({ counts }: ManifestoOverlayProps) {
+export default function ManifestoOverlay() {
   const { progress, reduced, explorationMode } = useSceneState();
 
   return (
@@ -52,8 +45,9 @@ export default function ManifestoOverlay({ counts }: ManifestoOverlayProps) {
         const visible = opacity > 0.05;
         // Declared per-beat layout variant (sceneTable), NOT an index test: the
         // finale beat renders as a centred full-viewport column (copy upper-
-        // middle, ledger pinned at the bottom) composed around the anchored dot
-        // marker; every other beat keeps the shared bottom-left position.
+        // middle) composed around the anchored dot marker; every other beat
+        // keeps the shared bottom-left position. The directory ledger is rendered
+        // separately in HeroIsland (not here) and positioned on the left panel.
         const isFinale = beat.layout === 'finale';
         return (
           <div
@@ -83,12 +77,9 @@ export default function ManifestoOverlay({ counts }: ManifestoOverlayProps) {
               {beat.whisper}
             </p>
 
-            {/* The finale's payoff: the site index, pinned to the bottom of the
-                finale column. Shares this beat's exact visibility band (live
-                hard-cut AND the reduced-motion gapless regime) via `visible`;
-                the ledger gates its own visibility/pointer-events on it so the
-                links are inert whenever the copy is off screen. */}
-            {isFinale ? <FinaleLedger visible={visible} counts={counts} /> : null}
+            {/* FinaleLedger (the site directory) is no longer rendered inside the
+                beat column. It lives directly in HeroIsland and is positioned on
+                the cockpit left panel via CSS (body.hud-active.bh-at-finale). */}
           </div>
         );
       })}

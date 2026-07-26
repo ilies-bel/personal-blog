@@ -1113,12 +1113,12 @@ body.scene-ready.at-opening .bh-focus-dot {
    becomes a CENTERED full-viewport column composed around the projection-
    anchored ABOUT dot at ~0.5/0.5:
      · the copy (big line + whisper) sits in the UPPER-middle — it ends well
-       above the dot, so the speck floats alone in the clear middle band;
-     · the ledger (FinaleLedger's <nav>) pins to the BOTTOM of the column via
-       margin-top:auto, starting BELOW the marker's hover-card region (the card
-       is 20rem wide, tethered to the dot's right, vertically centred on it —
-       roughly 50vh ± ~100px), so card and ledger can never collide on sane
-       viewport heights; a max-height fallback tightens the rows on short ones.
+       above the dot, so the speck floats alone in the clear middle band.
+   The site-index directory (FinaleLedger) is NO LONGER inside this beat column;
+   it is rendered directly in .bh-root and appears as the cockpit LEFT-panel MFD
+   (body.hud-active desktop CSS below). The HUD is auto-powered at progress >= 0.9
+   by HeroIsland so the directory is always visible at the finale without a manual
+   button press.
    Selector is .bh-beat.bh-beat--finale (0,2,0) so it outranks BOTH the base
    .bh-beat placement and the ≤60rem bottom-lift override above, regardless of
    source order. The local ::before text pool is dropped — the finale frame is
@@ -1148,12 +1148,12 @@ body.scene-ready.at-opening .bh-focus-dot {
 }
 
 /* ── FINALE SECTION wrapper ──────────────────────────────────────────────── */
-/* Outer container for the directory nav and REPLAY control. All children
-   inherit visibility + pointer-events from here so new finale elements never
-   need their own per-element gate. Pins to the column bottom via margin-top:
-   auto so the block clears the dot + its hover card above. */
+/* Outer container for the directory nav and REPLAY control. Rendered directly
+   in .bh-root (NOT inside the beat column) so the beat-column flex context
+   and its margin-top:auto trick never apply. Default: hidden everywhere.
+   Visibility is granted ONLY via the cockpit left-panel block below so the
+   centre column presentation is gone entirely. */
 .bh-finale-section {
-  margin-top: auto; /* pin to the column's bottom, clear of the dot + its card */
   width: min(26rem, 92vw);
   display: flex;
   flex-direction: column;
@@ -1161,9 +1161,12 @@ body.scene-ready.at-opening .bh-focus-dot {
   visibility: hidden;
   pointer-events: none;
 }
+/* Centre-column presentation is removed — [data-visible='true'] no longer
+   makes the section visible in the flow; it is still read by the cockpit
+   CSS below to gate the decloak animation. */
 .bh-finale-section[data-visible='true'] {
-  visibility: visible;
-  pointer-events: auto;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ── DIRECTORY NAV ───────────────────────────────────────────────────────── */
@@ -1181,16 +1184,25 @@ body.scene-ready.at-opening .bh-focus-dot {
   display: none;
 }
 
-/* DIRECTORY SCREEN — with the ship de-cloaked (body.hud-active) the finale
-   site index leaves the floating centre column and mounts INTO the main
-   console: an MFD on the right dash face.
-   Desktop-only — compact layouts keep the two-column floating grid. */
+/* LEFT-PANEL DIRECTORY SCREEN — with the ship de-cloaked (body.hud-active)
+   and the finale beat active (body.bh-at-finale) the site index appears as
+   the LEFT-panel MFD: the left counterpart of the old right-panel directory.
+   The HUD is auto-powered at the finale by HeroIsland (syncChrome + forceState)
+   so the panel is always visible here without a manual button press.
+   Desktop-only — compact layouts have no cockpit left panel. */
 @media (min-width: 60.0625rem) {
+  body.hud-active .bh-finale-section[data-visible='true'] {
+    visibility: visible;
+    pointer-events: auto;
+  }
   body.hud-active .bh-finale-ledger {
     position: fixed;
-    right: 2.5vw;
+    /* Align with the HUD system rail's left edge + clear the icon column
+       (--rail-col = 3.4rem) with a small gap. var(--edge-x) is the rail's
+       own left origin (tokens.css: clamp(1.25rem, 5vw, 5rem)). */
+    left: calc(var(--edge-x) + var(--rail-col) + 0.8rem);
     bottom: 2.4vh;
-    width: clamp(20rem, 23vw, 26rem);
+    width: clamp(16rem, 20vw, 24rem);
     margin: 0;
     padding: 0;
   }
@@ -1212,15 +1224,14 @@ body.scene-ready.at-opening .bh-focus-dot {
       1;
     padding-bottom: 0.35rem;
   }
-  /* The screen flicker-materialises when its page loads in (the finale beat
-     arriving) — same decloak strobe as the rest of the console chrome.
+  /* The screen flicker-materialises when the finale beat arrives — same
+     decloak strobe as the rest of the console chrome.
      data-visible is on .bh-finale-section (the outer wrapper). */
   body.hud-active .bh-finale-section[data-visible='true'] .bh-finale-ledger {
     animation: hud-decloak 0.7s steps(1, end);
   }
-  /* Instrument-register rows: tighter pitch than the floating column, labels at
-     the --text-hud rung (the minimum readable tier), notes at --text-label.
-     Both nowrap — a directory screen, not prose. */
+  /* Instrument-register rows: tighter pitch, labels at the --text-hud rung,
+     notes at --text-label. Both nowrap — a directory screen, not prose. */
   body.hud-active .bh-finale-ledger-row {
     padding: 0.28rem 0.1rem;
     gap: 0.9rem;
@@ -1241,11 +1252,11 @@ body.scene-ready.at-opening .bh-focus-dot {
   body.hud-active .bh-finale-ledger-row:last-child {
     border-bottom: 0;
   }
-  /* REPLAY control: in cockpit mode the standalone button sits below the MFD
-     panel, fixed just below the ledger's bottom edge. */
+  /* REPLAY control: in cockpit mode the standalone button sits just below the
+     left-panel MFD, fixed to match the ledger's left origin. */
   body.hud-active .bh-finale-replay {
     position: fixed;
-    right: 2.5vw;
+    left: calc(var(--edge-x) + var(--rail-col) + 0.8rem);
     bottom: calc(2.4vh - 1.8rem);
   }
 }

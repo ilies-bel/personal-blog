@@ -1,23 +1,21 @@
 // The finale section — the quiet site index the cinematic resolves to.
-// Rendered INSIDE the finale beat (ManifestoOverlay mounts it when
-// beat.layout === 'finale'), so it appears/disappears on the exact same scroll
-// frame as the finale copy, in BOTH visibility regimes:
-//   • live hero: the beat's authored band [inStart, outEnd] (a hard cut);
-//   • reduced motion: the beat's gapless still-poster band (inStart → the next
-//     beat's inStart). The still version parks the page bottom on the dot
-//     poster, which sits inside that band — so the section is present on the
-//     settled finale frame, and hidden whenever another beat's band is active.
+// Rendered directly in HeroIsland (NOT inside the beat column) so the
+// beat-column flex context never influences the panel layout.
 //
 // The center column shows ONLY the punchline headline + whisper (composed in
-// ManifestoOverlay with the pale-blue-dot). Below the punchline the directory
-// nav lists every primary destination. On desktop cockpit (body.hud-active)
-// the nav moves to the right-panel MFD; on compact/no-hud it stays in the
-// center column.
+// ManifestoOverlay). The directory nav appears on the cockpit LEFT PANEL:
+// HeroIsland auto-powers the HUD at progress >= 0.9 (syncChrome / forceState),
+// and the CSS block `body.hud-active .bh-finale-ledger { position: fixed; left:
+// calc(var(--edge-x) + var(--rail-col) + 0.8rem); ... }` positions the panel.
+// There is NO centre-column fallback — the directory only shows in the cockpit.
 //
-// Visibility model: .bh-finale-section[data-visible] gates visibility +
-// pointer-events for ALL child elements at once. Hrefs resolve through the
-// same base-path seam the star markers use (resolveHref + SceneStateContext's
-// base) — never a hardcoded site prefix.
+// Visibility model: .bh-finale-section[data-visible] is the outer gate; the
+// desktop cockpit CSS (`body.hud-active .bh-finale-section[data-visible='true']`)
+// is the ONLY rule that makes the section visible. The `visible` prop tracks
+// atFinaleState (progress >= 0.9 React state) so tabIndex and pointer-events
+// stay in sync with the body class and the CSS gate.
+// Hrefs resolve through the same base-path seam the star markers use
+// (resolveHref + SceneStateContext's base) — never a hardcoded site prefix.
 import { resolveHref } from '../lib/url';
 import { graveyardNote, projectsNote, writingNote } from '../../lib/contentFormat';
 import { getMotion } from '../../lib/motion';

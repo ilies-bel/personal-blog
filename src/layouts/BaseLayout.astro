@@ -212,6 +212,12 @@ const routeId = (() => {
             interface HudFsm {
               state: HudState;
               togglePower?: () => void;
+              /** Force a state WITHOUT persisting to localStorage. Called by HeroIsland
+               *  to auto-power the HUD at the finale threshold, and to restore the bare-
+               *  spectacle state when the visitor scrolls back from the finale. Because
+               *  this skips writePowered(), the user's manual choice (if any) is
+               *  preserved in localStorage and restored on the next FSM init. */
+              forceState?: (next: HudState) => void;
             }
             function initHudFsm(): void {
               // --- Centralized literals (mirror src/hero/lib/constants.ts) ---------
@@ -297,6 +303,19 @@ const routeId = (() => {
                 transition(state === 'ready' ? 'idle' : 'ready');
               };
               fsm.togglePower = togglePower;
+
+              // Auto-power support (called by HeroIsland at the finale threshold).
+              // Identical to transition() but intentionally skips writePowered() so
+              // the user's manually-stored preference is never overwritten.
+              const forceState = (next: HudState): void => {
+                if (next === state) return;
+                state = next;
+                fsm.state = next;
+                applyPressed();
+                body.classList.remove(BOOTING_CLASS, SHUTDOWN_CLASS);
+                body.classList.toggle(ACTIVE_CLASS, next === 'ready');
+              };
+              fsm.forceState = forceState;
 
               // Power button — toggles the power state. The button node is REPLACED on
               // every swap (fresh node = no prior listener), but initHudFsm() can also
