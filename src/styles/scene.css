@@ -123,24 +123,25 @@ html.js .static-edition {
   opacity: 1;
   transition: opacity 0.7s var(--ease-out-quint) 0s;
 }
-/* LCP poster — a real <img> element (see index.astro) that browsers can track as
-   the Largest Contentful Paint candidate, replacing the ::before pseudo-element
-   which is invisible to LCP reporting. Sits above the dark ::before cover (z-1 →
-   z-0) but below the dot+name stacking context, filling the loader identically.
-   fetchpriority=high + decoding=sync on the markup side put the 22 KB webp on the
-   critical path; here we just position it and sequence its fade with scene-ready. */
-.scene-loader-poster {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-  opacity: 1;
-  transition: opacity 0.7s var(--ease-out-quint) 0s;
+/* Welcome greeting — a minimal single-line brand salutation that fades in with a
+   letter-spacing expansion (text reveals by contracting from wide tracking to its
+   settled width — the same optical trick used by rishabh-upadhyay.com style loaders).
+   Lives inside .scene-loader-mark so it shares the dot+name Stage-1 fade-out timing
+   (see body.scene-ready .scene-loader-mark above) and participates in the same
+   centred flex column. aria-hidden on the parent; margin: 0 resets the <p>. */
+.scene-loader-welcome {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;                    /* balance trailing tracking so it reads centred */
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  animation: scene-loader-welcome-in 1.2s var(--ease-out-quint) 0.18s both;
 }
-body.scene-ready .scene-loader-poster {
-  opacity: 0;
+@keyframes scene-loader-welcome-in {
+  from { opacity: 0; letter-spacing: 0.55em; text-indent: 0.55em; }
+  to   { opacity: 1; letter-spacing: 0.32em; text-indent: 0.32em; }
 }
 .scene-loader-mark {
   display: flex;
@@ -300,6 +301,9 @@ body.scene-ready .scene-loader::before {
   animation: none;
   transition: none;
   will-change: auto;
+}
+:where(html[data-motion='reduced']) .scene-loader-welcome {
+  animation: none;
 }
 :where(html[data-motion='reduced']) body.scene-ready .scene-loader-dot {
   transform: none;                        /* no lensing contract */
@@ -1019,8 +1023,8 @@ body.webgl-unavailable .webgl-fallback {
    lands. Real GPUs never carry the attribute — their choreography is untouched. */
 html[data-soft-gl] .scene-loader,
 html[data-soft-gl] .scene-loader::before,
-html[data-soft-gl] .scene-loader-poster,
 html[data-soft-gl] .scene-loader-mark,
+html[data-soft-gl] .scene-loader-welcome,
 html[data-soft-gl] .scene-loader-dot {
   transition: none;
   animation: none;
