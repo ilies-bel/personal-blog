@@ -8,29 +8,32 @@ import { CFG, FILM_GRAIN_AMT, resolveGrainAmt } from '../lib/config';
 import { GradeShader, NovaShader } from '../shaders/post.glsl';
 import type { Rig } from './types';
 
-// Bloom build mode. 'full' is the desktop/high pass — the UnrealBloom mip pyramid
-// runs at the FULL composer resolution (byte-identical default). 'cheap' is the
-// low tier: the SAME pass, but its internal render targets are sized to a fraction
-// of the composer (bloomScale below) so the mip-blur pyramid costs ~¼ the pixels —
-// and, as a free bonus, rendering the blur at low res naturally softens/spreads it,
-// which is exactly the grain-smoothing the sparse low-tier cloud needs. 'none' skips
-// the pass entirely (chain becomes RenderPass → Grade → Nova, `bloom` left null).
-export type BloomQuality = 'full' | 'cheap' | 'none';
+// Bloom build mode.
+//   'full'  — desktop/high path: the UnrealBloom mip pyramid runs at the FULL
+//             composer resolution (byte-identical default).
+//   'mid'   — mid-tier path: pyramid runs at ~55% of composer resolution (~0.3×
+//             the pixel count of 'full'), keeping HalfFloat precision (no HDR
+//             cost on the mid-tier GPU) while materially cutting bloom fill cost.
+//   'cheap' — low-tier path: pyramid at 30% (~1/11 the pixels of full), plus
+//             UnsignedByte RT precision (measured ~4-6ms/frame cheaper on
+//             software rasterisers where FP16 blending is the bottleneck).
+//             Slightly wider radius for low-tier grain-smoothing.
+//   'none'  — chain becomes RenderPass → Grade → Nova; bloom left null.
+export type BloomQuality = 'full' | 'mid' | 'cheap' | 'none';
 
 // Fraction of the composer resolution each bloom mode renders its blur pyramid at.
-// 'full' = 1.0 (high path, unchanged). 'cheap' = 0.5 → a quarter of the pixels
-// (CONSERVATIVE; halving each axis), which both cuts the cost and softens the glow.
-// 'cheap' was 0.5; 0.3 (~1/11 the pixels of full) buys back most of the remaining
-// pyramid cost on software rasterisers while spreading the glow slightly wider —
-// which is the low tier's grain-smoothing job anyway. 'full' stays byte-identical.
-const BLOOM_SCALE: Record<BloomQuality, number> = { full: 1.0, cheap: 0.3, none: 1.0 };
+// 'full' = 1.0 (high path, byte-identical). 'mid' = 0.55 (about a third of the
+// pixels of full — good mid-point between visual quality and fill cost). 'cheap'
+// = 0.3 (~1/11 the pixels of full; low-tier software-GL floor-keeper). 'none' =
+// 1.0 (ignored — no bloom pass is built).
+const BLOOM_SCALE: Record<BloomQuality, number> = { full: 1.0, mid: 0.55, cheap: 0.3, none: 1.0 };
 // The cheap (low-res) bloom is the low tier's main grain-smoother (it spreads each
 // sparse grain's light into a glow), so we keep its strength at full and give it a
 // slightly WIDER radius than the high pass — the extra spread melts the convection
 // granules of the red giant together into a smooth molten surface. 1.0 = identical to
-// CFG, so the 'full' path is byte-identical (these only apply to the 'cheap' variant).
-const BLOOM_STRENGTH_MUL: Record<BloomQuality, number> = { full: 1.0, cheap: 1.0, none: 1.0 };
-const BLOOM_RADIUS_MUL: Record<BloomQuality, number> = { full: 1.0, cheap: 1.15, none: 1.0 };
+// CFG, so the 'full'/'mid' paths are byte-identical for these multipliers.
+const BLOOM_STRENGTH_MUL: Record<BloomQuality, number> = { full: 1.0, mid: 1.0, cheap: 1.0, none: 1.0 };
+const BLOOM_RADIUS_MUL: Record<BloomQuality, number> = { full: 1.0, mid: 1.0, cheap: 1.15, none: 1.0 };
 
 // PostRig is a plain Rig (no shared `uniforms` block): its tunable values live on
 // the bloom pass + the grade/nova ShaderPasses, not one shared uniform object.

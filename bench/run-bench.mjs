@@ -30,6 +30,11 @@ const BOOT_TIMEOUT_MS = 45_000;
 const HOLD_S = 8;
 const SCROLL_S = 10;
 
+// BENCH_TAG: when set (e.g. 'docker'), run files are suffixed with the tag
+// (bench-desktop-home-docker.json) and the summary file is bench-summary-docker.json.
+// This prevents containerised runs from clobbering host-run files.
+const BENCH_TAG = process.env.BENCH_TAG ?? '';
+
 // --- build freshness ---------------------------------------------------------
 
 function newestMtime(dir) {
@@ -98,14 +103,19 @@ function discoverPostRoute() {
 // --- in-page instrumentation ---------------------------------------------------
 
 const INIT_SCRIPT = () => {
-  const S = (window.__bench = { longTaskMs: 0, longTasks: 0, bootMs: null });
+  const S = (window.__bench = { longTaskMs: 0, longTasks: 0, bootMs: null, heroMode: null });
   try {
     new PerformanceObserver((list) => {
       for (const e of list.getEntries()) { S.longTaskMs += e.duration; S.longTasks += 1; }
     }).observe({ type: 'longtask', buffered: true });
   } catch { /* longtask unsupported */ }
   const mark = () => {
-    if (S.bootMs === null && document.body?.classList.contains('scene-ready')) S.bootMs = performance.now();
+    if (S.bootMs === null && document.body?.classList.contains('scene-ready')) {
+      S.bootMs = performance.now();
+      // 'bh-poster-mode' is added by mountReducedMotionHero (reduced-motion AND
+      // software-GL fallback paths). Its absence means the live WebGL scene booted.
+      S.heroMode = document.body.classList.contains('bh-poster-mode') ? 'poster' : 'live';
+    }
   };
   // NOTE: observe `document`, not documentElement — init scripts run before the
   // document has an <html> element, so documentElement is null at this point.
@@ -119,17 +129,31 @@ const MEASURE_FPS = ({ seconds, scroll }) => new Promise((resolve) => {
   const total = document.documentElement.scrollHeight - window.innerHeight;
   const t0 = performance.now();
   let frames = 0;
-  let worst = Infinity;
+  const deltas = []; // per-frame deltas (ms), excluding the first frame
   let last = t0;
   const frame = (now) => {
     frames += 1;
     const dt = now - last;
     last = now;
-    if (frames > 1 && dt > 0) worst = Math.min(worst, 1000 / dt);
+    if (frames > 1 && dt > 0) deltas.push(dt);
     const elapsed = now - t0;
     if (scroll) window.scrollTo(0, Math.min(1, elapsed / (seconds * 1000)) * total);
     if (elapsed >= seconds * 1000) {
-      resolve({ fps: (frames * 1000) / elapsed, frames, worstInstantFps: worst === Infinity ? null : worst });
+      const sorted = deltas.slice().sort((a, b) => a - b);
+      const n = sorted.length;
+      // p95 frame time: 95% of frames are faster than this (ms).
+      const p95FrameMs = n > 0 ? sorted[Math.floor(n * 0.95)] ?? null : null;
+      // Worst hitch: the single longest frame (ms).
+      const worstHitchMs = n > 0 ? sorted[n - 1] ?? null : null;
+      // Worst instant FPS: the slowest single frame's FPS equivalent.
+      const worstInstantFps = worstHitchMs !== null && worstHitchMs > 0 ? 1000 / worstHitchMs : null;
+      resolve({
+        fps: (frames * 1000) / elapsed,
+        frames,
+        worstInstantFps,
+        p95FrameMs,
+        worstHitchMs,
+      });
     } else {
       requestAnimationFrame(frame);
     }
@@ -160,8 +184,13 @@ async function runOne(browser, device, scenario, baseUrl) {
       cpuThrottle: device.cpuThrottle, isMobile: device.isMobile,
       userAgent: device.userAgent ?? '(chromium default)', query: device.query,
     },
-    started: false, bootMs: null, longTaskBootMs: null, longTaskBootCount: null,
-    holdFps: null, holdWorstInstantFps: null, scrollFps: null, scrollWorstInstantFps: null,
+    started: false,
+    // 'live' = WebGL scene booted; 'poster' = reduced-motion or software-GL fallback.
+    // null = page did not reach scene-ready (non-home routes or FAILED-TO-START).
+    heroMode: null,
+    bootMs: null, longTaskBootMs: null, longTaskBootCount: null,
+    holdFps: null, holdWorstInstantFps: null, holdP95FrameMs: null, holdWorstHitchMs: null,
+    scrollFps: null, scrollWorstInstantFps: null, scrollP95FrameMs: null, scrollWorstHitchMs: null,
     heapMB: null, error: null,
     timestamp: new Date().toISOString(),
   };
@@ -172,6 +201,7 @@ async function runOne(browser, device, scenario, baseUrl) {
       await page.waitForFunction(() => window.__bench && window.__bench.bootMs !== null, null, { timeout: BOOT_TIMEOUT_MS });
       result.started = true;
       result.bootMs = round(await page.evaluate(() => window.__bench.bootMs));
+      result.heroMode = await page.evaluate(() => window.__bench.heroMode);
     } catch {
       // body.scene-ready is HOME-only (added by index.astro's loader). Other
       // routes still run WebGL canvases but never add the marker — treat a
@@ -195,9 +225,13 @@ async function runOne(browser, device, scenario, baseUrl) {
       const hold = await page.evaluate(MEASURE_FPS, { seconds: HOLD_S, scroll: false });
       result.holdFps = round(hold.fps);
       result.holdWorstInstantFps = round(hold.worstInstantFps);
+      result.holdP95FrameMs = round(hold.p95FrameMs);
+      result.holdWorstHitchMs = round(hold.worstHitchMs);
       const sweep = await page.evaluate(MEASURE_FPS, { seconds: SCROLL_S, scroll: true });
       result.scrollFps = round(sweep.fps);
       result.scrollWorstInstantFps = round(sweep.worstInstantFps);
+      result.scrollP95FrameMs = round(sweep.p95FrameMs);
+      result.scrollWorstHitchMs = round(sweep.worstHitchMs);
       result.heapMB = round(await page.evaluate(
         () => performance.memory ? performance.memory.usedJSHeapSize / (1024 * 1024) : null,
       ));
@@ -242,7 +276,8 @@ async function main() {
       process.stdout.write(`[bench] ${device.name} x ${scenario.name} ... `);
       const r = await runOne(browser, device, scenario, baseUrl);
       results.push(r);
-      const file = join(OUT_DIR, `bench-${device.name}-${scenario.name}.json`);
+      const suffix = BENCH_TAG ? `-${BENCH_TAG}` : '';
+      const file = join(OUT_DIR, `bench-${device.name}-${scenario.name}${suffix}.json`);
       writeFileSync(file, JSON.stringify(r, null, 2) + '\n');
       console.log(r.started ? `boot ${r.bootMs}ms, hold ${r.holdFps}fps, scroll ${r.scrollFps}fps` : (r.error ?? 'failed'));
     }
@@ -253,11 +288,13 @@ async function main() {
 
   const summary = {
     host: { platform: process.platform, cpu: gpu, node: process.version, chromiumFlags: extraArgs },
+    tag: BENCH_TAG || null,
     holdSeconds: HOLD_S, scrollSeconds: SCROLL_S, bootTimeoutMs: BOOT_TIMEOUT_MS,
     timestamp: new Date().toISOString(),
     results,
   };
-  writeFileSync(join(OUT_DIR, 'bench-summary.json'), JSON.stringify(summary, null, 2) + '\n');
+  const summarySuffix = BENCH_TAG ? `-${BENCH_TAG}` : '';
+  writeFileSync(join(OUT_DIR, `bench-summary${summarySuffix}.json`), JSON.stringify(summary, null, 2) + '\n');
 
   const header = ['device', 'scenario', 'started', 'boot ms', 'hold fps', 'scroll fps', 'longtask ms', 'heap MB'];
   const rows = results.map((r) => [
@@ -269,7 +306,8 @@ async function main() {
   console.log('\n' + line(header));
   console.log(widths.map((w) => '-'.repeat(w)).join('  '));
   for (const row of rows) console.log(line(row));
-  console.log(`\n[bench] wrote ${results.length} run files + bench-summary.json to evidence/performance/`);
+  const summaryName = `bench-summary${summarySuffix}.json`;
+  console.log(`\n[bench] wrote ${results.length} run files + ${summaryName} to evidence/performance/`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

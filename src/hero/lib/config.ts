@@ -114,6 +114,14 @@ export const CFG: Config = {
   //   rigidly rotated). ?rgbake=0 forces the analytic per-frame path for A/B.
 };
 
+// --- viewport constants -----------------------------------------------------
+/**
+ * The viewport width boundary (in CSS px) below which a device is treated as a
+ * phone for tier clamping, mobile-video gating, and particle tuning. Shared
+ * across config.ts and HeroIsland.tsx so all three use the same boundary.
+ */
+export const PHONE_VIEWPORT_WIDTH = 768;
+
 // --- device tier ------------------------------------------------------------
 // A three-step ladder, detected ONCE at mount — PROACTIVELY, from what the GPU
 // actually IS (renderer-string classification + a fill-rate microprobe for
@@ -169,6 +177,12 @@ export function detectDeviceTierSource(): string {
 // downgrade never overrides an explicit human choice.
 let cachedTierForced = false;
 
+// Whether the probe detected a software rasteriser (SwiftShader / llvmpipe /
+// Microsoft Basic Render / ANGLE "Software"). Set alongside cachedTier in
+// detectDeviceTier when probeWebGL() is called; consumed by isSoftwareGl()
+// so HeroIsland can switch to the poster fallback without re-probing.
+let cachedIsSoftwareGl: boolean | undefined;
+
 /**
  * True when the session's device tier was FORCED via readTierOverride (?tier= /
  * sessionStorage / __bhTier) rather than auto-detected. Calls detectDeviceTier()
@@ -178,6 +192,17 @@ let cachedTierForced = false;
 export function isTierForced(): boolean {
   detectDeviceTier();
   return cachedTierForced;
+}
+
+/**
+ * True when the WebGL probe detected a software rasteriser (SwiftShader /
+ * llvmpipe / ANGLE "Software" / Microsoft Basic Render). Calls detectDeviceTier()
+ * first so the memoized probe result is always populated. Used by HeroIsland to
+ * switch to the poster fallback without re-probing the GPU.
+ */
+export function isSoftwareGl(): boolean {
+  detectDeviceTier();
+  return cachedIsSoftwareGl ?? false;
 }
 
 /**
@@ -488,6 +513,9 @@ export function detectDeviceTier(): DeviceTier {
   }
 
   const probe = probeWebGL();
+  // Cache the software-renderer flag alongside the tier so isSoftwareGl()
+  // can answer without creating another throwaway WebGL context.
+  cachedIsSoftwareGl = isSoftwareRenderer(probe.renderer);
 
   // 2) No WebGL2 → low outright.
   if (!probe.webgl2) {
@@ -518,7 +546,7 @@ export function detectDeviceTier(): DeviceTier {
   // 5) Demote-only clamps (cheap signals, defensively typed).
   const cores = navigator.hardwareConcurrency ?? 8;
   const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory; // GB | undefined
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 760;
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < PHONE_VIEWPORT_WIDTH;
   let tier = gpuTier;
   // ALL mobile caps at 'mid' — never 'high' (safety: thermals, shared memory,
   // touch scrolling all punish the full 1.2M cloud even on strong mobile GPUs).
@@ -969,7 +997,7 @@ export function tuneRenderPixelRatio(reduced = false, tier: DeviceTier = 'high')
   if (typeof window === 'undefined') return 1;
   const dpr = window.devicePixelRatio || 1;
   const width = window.innerWidth;
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < PHONE_VIEWPORT_WIDTH;
   if (reduced) return Math.min(dpr, 1.25);
   // Low tier (ALL mobile): cap at 0.6 — render WELL BELOW native resolution and let
   // the browser upscale. The additive gaussian-sprite cloud is fragment-bound, so
@@ -1022,7 +1050,7 @@ export function tuneParticlesForDevice(tier: DeviceTier = 'high'): number {
   // halving happens downstream, in createScene, via resolveDensityScale's
   // MID_TIER_DENSITY default — the same ?density= plumbing — so the count AND
   // the density-compensation fatten stay one mechanism, not two.
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < 760;
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < PHONE_VIEWPORT_WIDTH;
   if (width < 480) return 95_000;
   if (isMobile) return 150_000;
   if (width < 1280) return 240_000;

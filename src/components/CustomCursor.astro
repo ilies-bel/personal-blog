@@ -313,12 +313,9 @@
     // easeOutCubic: fast pull then soft settle — used to taper the tail head→tail.
     const easeOut = (x: number): number => 1 - Math.pow(1 - x, 3);
     // Cap the device pixel ratio so the offscreen buffer never gets huge on hiDPI.
-    const cappedDpr = (): number => {
-      const dpr = window.devicePixelRatio || 1;
-      const w = window.innerWidth;
-      if (w < 1280) return Math.min(dpr, 1.6);
-      return Math.min(dpr, 1.85);
-    };
+    // Hard cap at 2: the comet-trail canvas is a small soft overlay — rendering
+    // above 2× buys no visible quality and wastes memory/fill on 3× displays.
+    const cappedDpr = (): number => Math.min(window.devicePixelRatio || 1, 2);
 
     // ---- tuning (a visible luminous comet on a dark cobalt bg — bright head,
     //      long soft fading tail, matching the reference image) ----

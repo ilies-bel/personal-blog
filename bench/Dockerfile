@@ -27,5 +27,6 @@ RUN pnpm build
 ENV BENCH_SKIP_BUILD=1
 ENV BENCH_HEADLESS=1
 ENV BENCH_CHROMIUM_FLAGS="--use-gl=angle --use-angle=swiftshader --no-sandbox"
+ENV BENCH_TAG=docker
 
 CMD ["node", "bench/run-bench.mjs"]

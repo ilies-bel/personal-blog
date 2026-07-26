@@ -15,7 +15,7 @@
 // The HUD needs no explicit power-on here: it is ON BY DEFAULT (the boot FSM in
 // BaseLayout lands a first-time visitor straight in `ready`), so the still-slideshow
 // path gets the lit HUD for free — no HUD_POWER_EVENT dispatch, no boot animation.
-import { SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS } from '../../lib/constants';
+import { SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS, POSTER_MODE_BODY_CLASS } from '../../lib/constants';
 
 /**
  * Apply the reduced-motion mount side-effects and return a cleanup. Call this from
@@ -25,7 +25,9 @@ import { SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS } from '../../lib/consta
  */
 export function mountReducedMotionHero(): () => void {
   if (typeof document !== 'undefined') {
-    document.body.classList.add(SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS);
+    // POSTER_MODE_BODY_CLASS lets the performance bench (run-bench.mjs) detect
+    // whether the home hero booted as the poster fallback or the live WebGL scene.
+    document.body.classList.add(SCENE_READY_BODY_CLASS, LOADER_GONE_BODY_CLASS, POSTER_MODE_BODY_CLASS);
   }
   // The loader-lift classes are persistent by design (the page has revealed), so
   // there is nothing to undo on cleanup — the HUD's power state is the FSM's alone.

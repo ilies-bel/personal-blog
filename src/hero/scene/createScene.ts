@@ -250,7 +250,7 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     renderer,
     scene,
     camera,
-    tier === 'low' ? 'cheap' : 'full',
+    tier === 'low' ? 'cheap' : tier === 'mid' ? 'mid' : 'full',
     tier === 'mid' ? FILM_GRAIN_AMT_MID : FILM_GRAIN_AMT,
   );
   const bloom = postRig.bloom;

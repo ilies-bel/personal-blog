@@ -81,6 +81,11 @@ export const WEBGL_UNAVAILABLE_BODY_CLASS = 'webgl-unavailable';
  *  also reads this class to drive tabIndex/aria so the <a> leaves the tab order
  *  until the loader is gone. */
 export const LOADER_GONE_BODY_CLASS = 'loader-gone';
+/** Added to <body> when the home hero mounts the poster-slideshow fallback instead
+ *  of the live WebGL scene (reduced-motion OR software-GL paths). The performance
+ *  bench (run-bench.mjs) reads this class to record whether the poster or the live
+ *  scene booted — distinct from `webgl-unavailable`, which is a hard GL failure. */
+export const POSTER_MODE_BODY_CLASS = 'bh-poster-mode';
 /** Minimum time (ms) the instant intro loader is held on the FIRST load of a
  *  browser session, so the boot readout gets ONE legible beat even when the
  *  scene paints fast. It is a FLOOR, never a cap: on first load the loader

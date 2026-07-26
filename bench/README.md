@@ -1,5 +1,10 @@
 # WebGL hero engine — device-matrix bench
 
+> **Full performance-testing guide:** [docs/PERF-TESTING.md](../docs/PERF-TESTING.md)
+> — covers host bench, docker bench, LHCI, bundle budgets, smoothness floors,
+> the software-GL fallback, and how to add devices / metrics.
+
+
 Measures the production build (`dist/`) across a matrix of simulated devices
 with Playwright Chromium + CDP CPU throttling.
 

@@ -21,7 +21,7 @@ import { SCROLL_SECTION_COUNT, BUILT_STAGES, legacyStageForProgress, brightZoneF
 import { MARKER_PLACEMENTS, type HudTargetId } from '../HudNavigation';
 import { dwellForScene, sceneForProgress } from '../sceneTable';
 import { PresentationClock, type PresentationState } from '../presentationClock';
-import { detectDeviceTier } from '../lib/config';
+import { detectDeviceTier, isTierForced, isSoftwareGl, PHONE_VIEWPORT_WIDTH } from '../lib/config';
 import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
@@ -271,6 +271,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // main effect's deps — the detection is a one-way door (phones don't become
   // desktops mid-session) and is re-evaluated via isPhoneNow inside the effect.
   const [isPhone, setIsPhone] = useState(false);
+  // Software-GL fallback: true when the WebGL probe detected a software rasteriser
+  // (SwiftShader / llvmpipe) and no ?tier= override is forcing the live scene.
+  // Set by the mount effect; controls the JSX poster path alongside `reduced`.
+  const [isSoftwareFallback, setIsSoftwareFallback] = useState(false);
   // The reduced-motion modal: which copy to show, or null when closed.
   //   'confirm' — opened by a corner-toggle click that turns reduced motion ON.
   //   'explain' — opened once when reduced motion is active purely from the OS.
@@ -595,7 +599,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     // script in index.astro handles the CSS transition / loader-gone — same flow as
     // the live scene, so the skip-intro button stays keyboard-accessible during the
     // brief load window, and the 8 s safety backstop still guards a missing video.
-    const isPhoneNow = typeof window !== 'undefined' && window.innerWidth < 768;
+    const isPhoneNow = typeof window !== 'undefined' && window.innerWidth < PHONE_VIEWPORT_WIDTH;
     if (isPhoneNow) {
       setIsPhone(true);
       // No loader manipulation here — MobileHeroVideo fires 'scene:ready' and the
@@ -604,6 +608,29 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       return () => {
         cancelled = true;
         restoreHudAuto();
+        unsubClock();
+        clock.stop();
+        unsub();
+        tracker.stop();
+      };
+    }
+
+    // SOFTWARE-GL FALLBACK: when the WebGL probe detected a software rasteriser
+    // (SwiftShader / llvmpipe / Microsoft Basic Render) and no ?tier= override is
+    // forcing the live scene for diagnostics, mount the poster-slideshow hero instead
+    // of importing the three.js engine. Software rasterisers hold ~6-18fps on the
+    // desktop scene even after all other mitigations — the poster is the right
+    // product experience for that context. Forced ?tier= keeps the live scene so
+    // the bench operator can still measure the live-scene path with SwiftShader.
+    // mountReducedMotionHero lifts the loader (SCENE_READY_BODY_CLASS) and sets
+    // POSTER_MODE_BODY_CLASS for the bench's booted-path detector.
+    if (isSoftwareGl() && !isTierForced()) {
+      setIsSoftwareFallback(true);
+      const disposeReduced = mountReducedMotionHero();
+      return () => {
+        cancelled = true;
+        restoreHudAuto();
+        disposeReduced();
         unsubClock();
         clock.stop();
         unsub();
@@ -965,10 +992,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             slideshow below paints the backdrop instead — opacity-only cross-fade, no
             WebGL, no rAF loop. */}
         <div className="bh-stage" ref={hostRef} aria-hidden="true" />
-        {reduced ? (
-          // Reduced-motion stand-in for the live hero: four lifecycle posters
-          // cross-faded by scroll progress (opacity only). Sits at the canvas's
-          // z-layer, behind the manifesto overlay copy — same room, no motion.
+        {(reduced || isSoftwareFallback) ? (
+          // Poster stand-in for the live hero. Two cases reach this path:
+          //   1. Reduced-motion preference (manual or OS): four lifecycle posters
+          //      cross-faded by scroll progress (opacity only), no animation.
+          //   2. Software-GL fallback: SwiftShader / llvmpipe detected at probe
+          //      time — the poster gives a correct, smooth experience on CPU
+          //      rasterisers instead of an 6-18fps slideshow.
           // Reduced motion takes precedence over the phone video path so that a
           // phone user who has enabled reduced motion still gets the still posters.
           <PosterSlideshow progress={progress} base={base} />
@@ -996,9 +1026,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         )}
         {/* The cockpit canopy the HUD power-on DE-CLOAKS. Live renders the shared
             structural plate once after the post chain, with a restrained solid
-            lifecycle-light response and no bloom. Reduced motion mounts that
-            exact plate as a static image over the poster crossfade. */}
-        {reduced && <CockpitFrame />}
+            lifecycle-light response and no bloom. Reduced motion and the
+            software-GL poster fallback mount that exact plate as a static image
+            over the poster crossfade. */}
+        {(reduced || isSoftwareFallback) && <CockpitFrame />}
         <HeroIdentity />
         <ManifestoOverlay />
         {/* Finale site-index directory — positioned on the cockpit LEFT panel via CSS
