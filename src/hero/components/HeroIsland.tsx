@@ -26,6 +26,7 @@ import {
   SCROLLED_BODY_CLASS,
   AT_OPENING_BODY_CLASS,
   DIVING_BODY_CLASS,
+  AT_FINALE_BODY_CLASS,
   SCROLL_DOWN,
   SCROLL_UP,
   type ScrollDirection,
@@ -60,7 +61,7 @@ import { glGovernor, PRIORITY_HERO, PRIORITY_AMBIENT } from '../lib/glGovernor';
 import { SceneStateProvider } from './SceneStateContext';
 import HeroIdentity from './HeroIdentity';
 import ManifestoOverlay from './ManifestoOverlay';
-import type { LedgerCounts, FeaturedCards } from './FinaleLedger';
+import type { LedgerCounts } from './FinaleLedger';
 import ExplorationHud from './ExplorationHud';
 import CockpitFrame from './CockpitFrame';
 import StarMarker from './StarMarker';
@@ -103,10 +104,6 @@ interface HeroIslandProps {
    *  a defensive zero so a hypothetical countless full mount reads as obviously
    *  wrong ('0 shipped') rather than plausibly stale. */
   counts?: LedgerCounts;
-  /** Featured proof-card data derived from the collections at build time (P6).
-   *  Passed through to the finale section's three proof cards. Backdrop mode
-   *  renders no overlay, so its callers omit it; the default is empty strings. */
-  cards?: FeaturedCards;
   /** Home-feature proof (PRD-003) — the ONE shipped project the yellow-star
    *  Projects marker features by name. Validated + derived server-side by
    *  getFeaturedProof() (index.astro) so the marker's facts and its
@@ -165,10 +162,6 @@ function withFeaturedProof(
 }
 
 const ZERO_COUNTS: LedgerCounts = { shipped: 0, dead: 0, posts: 0 };
-const EMPTY_CARDS: FeaturedCards = {
-  flagship: { title: '', summary: '' },
-  investigation: { slug: '', title: '', description: '' },
-};
 
 // React only needs a perceptual scroll snapshot for DOM copy/chrome. The scene
 // render loop reads exact progress from progressRef, so this gate cuts context
@@ -226,7 +219,7 @@ const DATA_SCENE_BY_ID: Record<HudTargetId, 'blackhole' | 'red-giant' | 'yellow-
   beginning: 'final',
 };
 
-export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS, cards = EMPTY_CARDS, featured = null }: HeroIslandProps = {}) {
+export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STAGES, counts = ZERO_COUNTS, featured = null }: HeroIslandProps = {}) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Frame-cadence marker data from the scene (position of the star object in CSS px).
   // Written every rAF by the scene's onMarkerFrame callback; read by StarMarker on
@@ -278,6 +271,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
   // Whether scroll is still in the opening hold (progress <= SCROLL_HINT_DISMISS_AT).
   // Ref-tracked so the body class only flips on an actual transition, not every sample.
   const atOpeningRef = useRef(true);
+  // Whether the finale beat (pale-blue-dot / site index) is the active beat.
+  // progress >= 0.9 corresponds to lifecycleProgress <= 0.1 (the finale band).
+  // Ref-tracked so the body class only flips on an actual transition.
+  const atFinaleRef = useRef(false);
   // NOTE: scroll no longer drives HUD power. The HUD is OFF BY DEFAULT (the power FSM
   // in BaseLayout lands a first-time visitor in `idle` — the bare spectacle) and only
   // the corner power button toggles it on/off — so this island dispatches no
@@ -390,6 +387,14 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       if (atOpening !== atOpeningRef.current) {
         atOpeningRef.current = atOpening;
         document.body.classList.toggle(AT_OPENING_BODY_CLASS, atOpening);
+      }
+
+      // Finale beat: progress >= 0.9 ≡ lifecycleProgress <= 0.1 (the pale-blue-dot
+      // band). The body class drives CSS light-cockpit dimming (hud.css).
+      const atFinale = progressRef.current >= 0.9;
+      if (atFinale !== atFinaleRef.current) {
+        atFinaleRef.current = atFinale;
+        document.body.classList.toggle(AT_FINALE_BODY_CLASS, atFinale);
       }
 
       const visible = progressRef.current < CHROME_HIDE_AT || explorationModeRef.current;
@@ -533,7 +538,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
         clock.stop();
         unsub();
         tracker.stop();
-        document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
+        document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS, AT_FINALE_BODY_CLASS);
       };
     }
 
@@ -658,12 +663,13 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // Reset the opening-hold edge tracker so a re-mount re-seeds from the live
       // scroll position rather than inheriting a stale "in the opening hold" flag.
       atOpeningRef.current = false;
+      atFinaleRef.current = false;
       // Also clear the no-WebGL fallback class so a fresh mount (e.g. a motion-preference
       // re-run, or an SPA return that re-creates the island) re-evaluates WebGL from a
       // clean slate instead of inheriting a stale "unavailable" note. If WebGL is still
       // unavailable the next mount simply re-adds it. (SCENE_READY stays owned by the
       // loader script — we never strip it here.)
-      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS);
+      document.body.classList.remove(SCROLLED_BODY_CLASS, AT_OPENING_BODY_CLASS, WEBGL_UNAVAILABLE_BODY_CLASS, DIVING_BODY_CLASS, AT_FINALE_BODY_CLASS);
     };
   }, [backdrop, backdropStage, reduced]);
 
@@ -882,7 +888,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
             exact plate as a static image over the poster crossfade. */}
         {reduced && <CockpitFrame />}
         <HeroIdentity />
-        <ManifestoOverlay counts={counts} cards={cards} />
+        <ManifestoOverlay counts={counts} />
         {/* Opening-only central focus dot: one soft luminous speck dead-centre on the
             black hole. Shown only while body.at-opening (the opening hold); fades out
             once the visitor scrolls past. aria-hidden — pure decoration. (Under reduced

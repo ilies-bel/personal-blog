@@ -2109,12 +2109,45 @@ body.warp-active.hud-active .hud-compass:not(.warp-readout) {
 :where(html[data-motion='reduced']) body.hud-active .hud-compass:not(.hud-compass--boot):not(.warp-readout),
 :where(html[data-motion='reduced']) body.hud-active .hud-compass--boot[data-boot='cue'][data-glide='true'],
 :where(html[data-motion='reduced']) body.hud-active .hud-arc,
-:where(html[data-motion='reduced']) body.hud-active .bh-finale-ledger[data-visible='true'],
+:where(html[data-motion='reduced']) body.hud-active .bh-finale-section[data-visible='true'] .bh-finale-ledger,
 :where(html[data-motion='reduced']) body.hud-active .hud-arc .hud-arc-btn,
 :where(html[data-motion='reduced']) body.warp-active.hud-active .hud-frame,
 :where(html[data-motion='reduced']) body.warp-active.hud-active .hud-arc,
 :where(html[data-motion='reduced']) body.warp-active.hud-active .hud-compass:not(.warp-readout) {
   animation: none;
+}
+
+/* ── LIGHT COCKPIT — finale beat ──────────────────────────────────────────── */
+/* When the finale beat is active (body.bh-at-finale, toggled by HeroIsland at
+   progress >= 0.9), non-essential chrome dims so the quiet ending reads without
+   instrument clutter. The stage rail, time readout, and compass strip all step
+   back; the MFD directory panel stays at full opacity because it IS the content
+   of this screen. Transitions are gentle (0.8s) so the dim arrives as the copy
+   settles, not as a jarring cut. Desktop-only — compact layouts have no frame
+   instruments. Only applies when the HUD is powered (body.hud-active). */
+@media (min-width: 60.0625rem) {
+  body.hud-active.bh-at-finale .hud-system {
+    opacity: 0.18;
+    transition:
+      opacity 0.8s var(--ease-out-quint),
+      transform 0.55s var(--ease-out-quint);
+  }
+  body.hud-active.bh-at-finale .hud-frame-readout {
+    opacity: 0;
+  }
+  body.hud-active.bh-at-finale .hud-frame-compass-num,
+  body.hud-active.bh-at-finale .hud-frame-compass-caret {
+    opacity: 0;
+    transition: opacity 0.8s var(--ease-out-quint);
+  }
+  /* Restore on motion-reduced: the fade theatrics are already stripped, but the
+     opacity values must still reset when the finale class is present. */
+  :where(html[data-motion='reduced']) body.hud-active.bh-at-finale .hud-system,
+  :where(html[data-motion='reduced']) body.hud-active.bh-at-finale .hud-frame-readout,
+  :where(html[data-motion='reduced']) body.hud-active.bh-at-finale .hud-frame-compass-num,
+  :where(html[data-motion='reduced']) body.hud-active.bh-at-finale .hud-frame-compass-caret {
+    transition: none;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────

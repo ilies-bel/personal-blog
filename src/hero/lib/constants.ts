@@ -29,6 +29,13 @@ export const HUD_ACTIVE_BODY_CLASS = 'hud-active';
  *  disappears as the camera dives in. Centralized here so the string is never spelled
  *  inline — referenced from HeroIsland AND hud.css. */
 export const DIVING_BODY_CLASS = 'bh-diving';
+/** Toggled on <body> while the finale beat (the pale-blue-dot / site index) is
+ *  the active beat. Drives the "light cockpit" CSS: non-essential chrome (stage
+ *  rail, time readout, compass strip) dims to ~25% opacity so the quiet ending
+ *  reads without instrument clutter. Raw-scroll threshold: progress >= 0.9
+ *  (lifecycle space [0.0, 0.1], the finale band's physical-scroll equivalent).
+ *  Referenced from HeroIsland AND hud.css. */
+export const AT_FINALE_BODY_CLASS = 'bh-at-finale';
 /** Toggled on <body> once the hero has painted its FIRST real frame (the GPU
  *  cloud is actually on the canvas). Drives the instant intro loader's fade-out:
  *  the loader is full-opacity at load (pure SSR markup, zero JS), and adding this

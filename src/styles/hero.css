@@ -1126,11 +1126,10 @@ body.scene-ready.at-opening .bh-focus-dot {
 }
 
 /* ── FINALE SECTION wrapper ──────────────────────────────────────────────── */
-/* Outer container for all three subsections: proof paths, directory nav, and
-   the replay button. All children inherit visibility + pointer-events from here
-   so new finale elements never need their own per-element gate. Pins to the
-   column bottom via margin-top: auto so the block clears the dot + its hover
-   card above. */
+/* Outer container for the directory nav and REPLAY control. All children
+   inherit visibility + pointer-events from here so new finale elements never
+   need their own per-element gate. Pins to the column bottom via margin-top:
+   auto so the block clears the dot + its hover card above. */
 .bh-finale-section {
   margin-top: auto; /* pin to the column's bottom, clear of the dot + its card */
   width: min(26rem, 92vw);
@@ -1143,71 +1142,6 @@ body.scene-ready.at-opening .bh-focus-dot {
 .bh-finale-section[data-visible='true'] {
   visibility: visible;
   pointer-events: auto;
-}
-
-/* ── PROOF PATHS ─────────────────────────────────────────────────────────── */
-/* Three concrete evidence links — the second decision point above the directory.
-   Each card: kicker (category + derived count) / label (destination title from
-   the collection) / hook (summary or description from the entry). Same
-   hairline/bone palette as the directory rows so the two sections read as one
-   continuous index. */
-.bh-finale-proof {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
-  margin-bottom: 0.25rem;
-}
-.bh-finale-proof-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: clamp(0.55rem, 1.2vh, 0.8rem) 0.2rem;
-  border-bottom: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
-  text-decoration: none;
-  transition: border-color 0.18s ease;
-}
-.bh-finale-proof-card:hover,
-.bh-finale-proof-card:focus-visible {
-  border-color: color-mix(in oklch, var(--fg-overlay) 40%, transparent);
-}
-.bh-finale-proof-card:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 3px;
-}
-.bh-finale-proof-kicker {
-  font-family: var(--font-mono);
-  font-size: var(--text-label);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--fg-chrome-dim);
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
-  transition: color 0.18s ease;
-}
-.bh-finale-proof-card:hover .bh-finale-proof-kicker,
-.bh-finale-proof-card:focus-visible .bh-finale-proof-kicker {
-  color: var(--accent-strong);
-}
-.bh-finale-proof-label {
-  font-family: var(--font-mono);
-  font-size: var(--text-hud);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--fg-overlay);
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
-  transition: color 0.18s ease;
-}
-.bh-finale-proof-hook {
-  font-family: var(--font-mono);
-  font-size: 0.67rem;
-  letter-spacing: 0.04em;
-  color: var(--fg-faint);
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
-  line-height: 1.4;
-  transition: color 0.18s ease;
-}
-.bh-finale-proof-card:hover .bh-finale-proof-hook,
-.bh-finale-proof-card:focus-visible .bh-finale-proof-hook {
-  color: var(--fg-chrome-dim);
 }
 
 /* ── DIRECTORY NAV ───────────────────────────────────────────────────────── */
@@ -1227,16 +1161,9 @@ body.scene-ready.at-opening .bh-focus-dot {
 
 /* DIRECTORY SCREEN — with the ship de-cloaked (body.hud-active) the finale
    site index leaves the floating centre column and mounts INTO the main
-   console: an MFD on the right dash face. The proof paths stay in the centred
-   column (and are hidden on desktop cockpit view for clean UX).
+   console: an MFD on the right dash face.
    Desktop-only — compact layouts keep the two-column floating grid. */
 @media (min-width: 60.0625rem) {
-  /* In cockpit mode the proof paths would overlap the fixed-position nav.
-     Hide them so the cockpit screen is clean: only the directory nav on the
-     instrument panel. */
-  body.hud-active .bh-finale-proof {
-    display: none;
-  }
   body.hud-active .bh-finale-ledger {
     position: fixed;
     right: 2.5vw;
@@ -1250,7 +1177,7 @@ body.scene-ready.at-opening .bh-focus-dot {
   body.hud-active .bh-finale-ledger-head {
     display: block;
     font-family: var(--font-mono);
-    font-size: 0.6rem;
+    font-size: var(--text-label);
     letter-spacing: 0.34em;
     text-transform: uppercase;
     color: color-mix(in oklch, var(--highlight) 55%, var(--fg-faint));
@@ -1269,19 +1196,19 @@ body.scene-ready.at-opening .bh-focus-dot {
   body.hud-active .bh-finale-section[data-visible='true'] .bh-finale-ledger {
     animation: hud-decloak 0.7s steps(1, end);
   }
-  /* Instrument-register rows: tighter pitch than the floating column, one
-     line per row (labels drop a rung, notes to the micro register, both
-     nowrap — a directory page, not prose). */
+  /* Instrument-register rows: tighter pitch than the floating column, labels at
+     the --text-hud rung (the minimum readable tier), notes at --text-label.
+     Both nowrap — a directory screen, not prose. */
   body.hud-active .bh-finale-ledger-row {
-    padding: 0.24rem 0.1rem;
+    padding: 0.28rem 0.1rem;
     gap: 0.9rem;
   }
   body.hud-active .bh-finale-ledger-label {
-    font-size: var(--text-label);
+    font-size: var(--text-hud);
     white-space: nowrap;
   }
   body.hud-active .bh-finale-ledger-note {
-    font-size: 0.62rem;
+    font-size: var(--text-label);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1291,6 +1218,13 @@ body.scene-ready.at-opening .bh-focus-dot {
   }
   body.hud-active .bh-finale-ledger-row:last-child {
     border-bottom: 0;
+  }
+  /* REPLAY control: in cockpit mode the standalone button sits below the MFD
+     panel, fixed just below the ledger's bottom edge. */
+  body.hud-active .bh-finale-replay {
+    position: fixed;
+    right: 2.5vw;
+    bottom: calc(2.4vh - 1.8rem);
   }
 }
 .bh-finale-ledger-row {
@@ -1342,30 +1276,45 @@ body.scene-ready.at-opening .bh-focus-dot {
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
-/* REPLAY (P7) — the ledger's one non-navigation row is a real <button>, so the
-   UA button chrome is stripped back to the row grammar the <a> rows share: the
-   base .bh-finale-ledger-row rules give it the border-top hairline, padding and
-   flex layout; this only zeroes what a <button> brings of its own. font:inherit
-   re-inherits the row's mono stack, and the child label/note spans carry their
-   own sizes exactly as in the anchor rows. */
-.bh-finale-ledger-replay {
+/* GET IN TOUCH — primary CTA row: accent-coloured label so the contact action
+   stands out from the directory list. Note stays at chrome-dim resting; hover
+   lifts both to the brighter accent tier (matching the shared row grammar). */
+.bh-finale-ledger-row--cta .bh-finale-ledger-label {
+  color: var(--accent-strong);
+}
+.bh-finale-ledger-row--cta:hover .bh-finale-ledger-label,
+.bh-finale-ledger-row--cta:focus-visible .bh-finale-ledger-label {
+  color: var(--highlight);
+}
+
+/* ── REPLAY ───────────────────────────────────────────────────────────────── */
+/* Standalone control below the directory nav — not a nav row so it reads as a
+   page-level action, not a destination. In the centre-column layout it sits
+   flush below the ledger's bottom hairline; in cockpit mode (desktop
+   body.hud-active) it is repositioned by the media block above. */
+.bh-finale-replay {
   appearance: none;
   -webkit-appearance: none;
-  width: 100%;
-  margin: 0;
+  display: block;
+  margin: 0.6rem 0 0;
+  padding: 0;
   background: none;
-  border-left: 0;
-  border-right: 0;
-  border-bottom: 0;
-  font: inherit;
-  text-align: inherit;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-chrome-dim);
   cursor: pointer;
+  transition: color 0.18s ease;
 }
-/* The base :last-child rule re-adds the closing hairline via border-bottom;
-   restate it after the reset above (which zeroes border-bottom at equal
-   specificity but later source order within this file's cascade). */
-.bh-finale-ledger-replay:last-child {
-  border-bottom: 1px solid color-mix(in oklch, var(--fg-overlay) 18%, transparent);
+.bh-finale-replay:hover,
+.bh-finale-replay:focus-visible {
+  color: var(--fg-overlay);
+}
+.bh-finale-replay:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 /* SHORT viewports: compress the rows so the ledger's top edge stays below the
    hover card's bottom (~50vh + ~100px) instead of riding up into it. 46rem
@@ -1399,10 +1348,6 @@ body.scene-ready.at-opening .bh-focus-dot {
     border-bottom: 0;
   }
   .bh-finale-ledger-note {
-    display: none;
-  }
-  /* Proof hooks are enrichment on narrow screens — hide to keep rows scannable. */
-  .bh-finale-proof-hook {
     display: none;
   }
 }
