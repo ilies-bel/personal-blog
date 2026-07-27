@@ -1,7 +1,7 @@
 {
   "device": "mid-laptop",
   "scenario": "home",
-  "url": "http://127.0.0.1:39067/",
+  "url": "http://127.0.0.1:36075/",
   "config": {
     "viewport": {
       "width": 1440,
@@ -14,15 +14,20 @@
     "query": ""
   },
   "started": true,
-  "bootMs": 2192.2,
-  "longTaskBootMs": 1407,
-  "longTaskBootCount": 4,
-  "holdFps": 7.3,
-  "holdWorstInstantFps": 0.7,
-  "scrollFps": 7.1,
-  "scrollWorstInstantFps": 1.8,
-  "heapMB": 33.5,
+  "heroMode": "poster",
+  "bootMs": 495.2,
+  "longTaskBootMs": 288,
+  "longTaskBootCount": 2,
+  "holdFps": 59.5,
+  "holdWorstInstantFps": 20,
+  "holdP95FrameMs": 16.8,
+  "holdWorstHitchMs": 50,
+  "scrollFps": 39.9,
+  "scrollWorstInstantFps": 10,
+  "scrollP95FrameMs": 66.5,
+  "scrollWorstHitchMs": 100,
+  "heapMB": 9.5,
   "error": null,
-  "timestamp": "2026-07-15T07:38:08.438Z",
-  "canvasCount": 3
+  "timestamp": "2026-07-27T11:54:45.418Z",
+  "canvasCount": 2
 }

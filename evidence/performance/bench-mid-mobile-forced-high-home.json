@@ -1,7 +1,7 @@
 {
   "device": "mid-mobile-forced-high",
   "scenario": "home",
-  "url": "http://127.0.0.1:54996/?tier=high&adapt=0",
+  "url": "http://127.0.0.1:60595/?tier=high&adapt=0",
   "config": {
     "viewport": {
       "width": 390,
@@ -14,15 +14,20 @@
     "query": "?tier=high&adapt=0"
   },
   "started": true,
-  "bootMs": 2120.9,
-  "longTaskBootMs": 1040,
-  "longTaskBootCount": 6,
-  "holdFps": 114.4,
-  "holdWorstInstantFps": 31.5,
-  "scrollFps": 114,
-  "scrollWorstInstantFps": 84.7,
-  "heapMB": 41.4,
+  "heroMode": "live",
+  "bootMs": 8383,
+  "longTaskBootMs": 179,
+  "longTaskBootCount": 3,
+  "holdFps": 120.1,
+  "holdWorstInstantFps": 106.4,
+  "holdP95FrameMs": 9.2,
+  "holdWorstHitchMs": 9.4,
+  "scrollFps": 109.9,
+  "scrollWorstInstantFps": 29.9,
+  "scrollP95FrameMs": 16.6,
+  "scrollWorstHitchMs": 33.4,
+  "heapMB": 3.7,
   "error": null,
-  "timestamp": "2026-07-14T20:27:56.771Z",
-  "canvasCount": 3
+  "timestamp": "2026-07-27T11:43:26.138Z",
+  "canvasCount": 2
 }
