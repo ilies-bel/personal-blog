@@ -100,6 +100,25 @@ The docker desktop/mid-laptop poster requirement validates the software-GL
 fallback: if those devices boot the live scene under SwiftShader they will
 deliver < 20 fps, so the check asserts the fallback must fire.
 
+### Why the floors gate hold FPS, not scroll FPS
+
+Hold FPS is measured on a stationary page and is stable run-to-run. Scroll FPS
+is not: the sweep competes with whatever else the host is doing, and on a
+software rasteriser that contention dominates. Two back-to-back docker runs of
+the *same* commit measured:
+
+| device | hold fps (run 1 → 2) | scroll fps (run 1 → 2) |
+|---|---|---|
+| desktop / home | 60.0 → 57.3 | 35.6 → 28.5 |
+| mid-laptop / home | 59.5 → 58.6 | 39.9 → 24.1 |
+| low-mobile / home | 60.1 → 58.9 | 52.6 → 48.4 |
+
+Hold moved by ≤ 2.7 fps; scroll moved by up to 40%. A scroll-FPS floor would
+therefore flap. Scroll FPS, `p95FrameMs`, and `worstHitchMs` are still recorded
+in every run file — read them as trend indicators, and compare runs taken on an
+otherwise-idle machine. Close other containers before a run you intend to
+compare against a previous one.
+
 ```sh
 # check against the docker summary (default):
 node scripts/check-bench-floors.mjs
@@ -170,6 +189,31 @@ of importing the three.js engine. This:
 - Renders the `PosterSlideshow` (scroll-driven still images, zero GPU cost)
 
 Forced `?tier=high` (or any explicit tier) keeps the live scene for diagnostics.
+
+---
+
+## Known instrumentation gaps
+
+Read the bench output with these in mind — they are measurement limitations,
+not engine bugs.
+
+1. **`heroMode` has two values but the hero has three paths.** Phone viewports
+   (`< PHONE_VIEWPORT_WIDTH`) mount `MobileHeroVideo`, which fires `scene:ready`
+   without adding `bh-poster-mode` — so the scroll-scrubbed video path is
+   recorded as `'live'`, indistinguishable from the real WebGL scene. Any
+   `low-mobile` / `mid-mobile-*` row reading `heroMode='live'` is actually the
+   video path.
+
+2. **`mid-mobile-forced-high` does not currently force the live scene.** Its
+   `?tier=high&adapt=0` query is applied, but the phone-viewport gate in
+   `HeroIsland` runs *before* tier resolution, so a 390 px viewport takes the
+   video path regardless. To exercise forced-high WebGL, the device needs a
+   viewport ≥ `PHONE_VIEWPORT_WIDTH`.
+
+3. **Mobile boot time is video-bound, not GPU-bound.** `MobileHeroVideo`
+   signals ready on the video's `canplay` event; under 6× CPU throttle that
+   lands around 8.3 s on both host and docker. That number tracks video decode,
+   not scene cost — the hero holds 60 fps immediately after.
 
 ---
 

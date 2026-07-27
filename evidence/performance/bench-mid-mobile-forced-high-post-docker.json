@@ -1,7 +1,7 @@
 {
   "device": "mid-mobile-forced-high",
   "scenario": "post",
-  "url": "http://127.0.0.1:36075/posts/memory-leak-search-and-destroy/?tier=high&adapt=0",
+  "url": "http://127.0.0.1:45587/posts/memory-leak-search-and-destroy/?tier=high&adapt=0",
   "config": {
     "viewport": {
       "width": 390,
@@ -16,19 +16,19 @@
   "started": true,
   "heroMode": null,
   "bootMs": null,
-  "longTaskBootMs": 229,
+  "longTaskBootMs": 210,
   "longTaskBootCount": 1,
-  "holdFps": 60,
-  "holdWorstInstantFps": 29.9,
-  "holdP95FrameMs": 16.7,
-  "holdWorstHitchMs": 33.4,
-  "scrollFps": 58.1,
+  "holdFps": 59.5,
+  "holdWorstInstantFps": 15,
+  "holdP95FrameMs": 16.8,
+  "holdWorstHitchMs": 66.7,
+  "scrollFps": 57.4,
   "scrollWorstInstantFps": 15,
   "scrollP95FrameMs": 16.8,
   "scrollWorstHitchMs": 66.7,
   "heapMB": 9.5,
   "error": null,
-  "timestamp": "2026-07-27T11:58:17.003Z",
+  "timestamp": "2026-07-27T12:18:21.311Z",
   "note": "no scene-ready marker on this route (home-only); bootMs n/a, FPS measured after load",
   "canvasCount": 2
 }
