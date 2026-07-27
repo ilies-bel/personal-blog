@@ -146,6 +146,27 @@ export const PHONE_VIEWPORT_WIDTH = 768;
 // `!== 'low'` or takes a defaulted param, so high and low stay byte-identical.
 export type DeviceTier = 'high' | 'mid' | 'low';
 
+/**
+ * Absolute ceiling on the mid tier's PRE-density grain count, applied on top of
+ * the shared high-tier width ladder in tuneParticlesForDevice.
+ *
+ * WHY: the width ladder's top bucket begins at exactly 1280 (`width < 1280`
+ * returns 240k, so 1280 itself falls through to the full 1.2M desktop count).
+ * 1280 and 1366 are the two commonest small-laptop widths — precisely the
+ * machines the mid tier exists to serve — so the mid tier was inheriting the
+ * FULL desktop cloud and halving it to 600k, five times the 240k that a viewport
+ * one pixel narrower gets. Measured on the 4GB/2-CPU SwiftShader container at
+ * 1280x800, the mid tier submitted 1,488,409 points per frame against the low
+ * tier's 39,697.
+ *
+ * 400k pre-density (200k after MID_TIER_DENSITY) keeps the mid cloud comfortably
+ * denser than the low tier's 24k while removing the cliff. The HIGH tier is
+ * deliberately untouched: it keeps the width ladder exactly as it was, so every
+ * high-tier viewport — including the 1440-wide desktop bench device — renders
+ * byte-identically.
+ */
+export const MID_TIER_MAX_PARTICLES = 400_000;
+
 /** The mid tier's particle-density scale, fed through resolveDensityScale as the
  *  DEFAULT (an explicit ?density= still overrides it — same lever, same plumbing).
  *  0.5 halves the high bucket (1.2M → 600k on desktop) and, being < 1, forces
@@ -993,12 +1014,53 @@ export function resolveDensityScale(defaultScale = 1): number {
   return sanitize(defaultScale) ?? 1;
 }
 
+/**
+ * Resolve the PROFILING pixel-ratio ceiling (?dpr= / sessionStorage / __bhDpr),
+ * or undefined when unset. Mirrors resolveParticleRTScale's priority order and
+ * reload-surviving sessionStorage mirror. Clamped to [0.15, 2]: below 0.15 the
+ * buffer degenerates on small viewports, above 2 there is nothing to learn.
+ *
+ * Applied by tuneRenderPixelRatio as a Math.min ceiling, so it can only ever
+ * LOWER the resolved ratio — never raise a production cap.
+ */
+export function resolveDprCap(): number | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const sanitize = (raw: unknown): number | undefined => {
+    const n = typeof raw === 'string' ? Number.parseFloat(raw) : typeof raw === 'number' ? raw : NaN;
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    return Math.min(2, Math.max(0.15, n));
+  };
+
+  try {
+    const fromUrl = sanitize(new URLSearchParams(window.location.search).get('dpr'));
+    if (fromUrl !== undefined) {
+      window.sessionStorage?.setItem(DEBUG_WINDOW_KEYS.dpr, String(fromUrl));
+      return fromUrl;
+    }
+  } catch {
+    // URL/sessionStorage access can throw in locked-down contexts — ignore.
+  }
+
+  try {
+    const fromStore = sanitize(window.sessionStorage?.getItem(DEBUG_WINDOW_KEYS.dpr));
+    if (fromStore !== undefined) return fromStore;
+  } catch {
+    // ignore — fall through to the window global.
+  }
+
+  return sanitize(readDebugNumber(DEBUG_WINDOW_KEYS.dpr));
+}
+
 export function tuneRenderPixelRatio(reduced = false, tier: DeviceTier = 'high'): number {
   if (typeof window === 'undefined') return 1;
+  // Profiling ceiling — resolved once up front and applied to every return path
+  // below via `capped()`, so no branch can escape it.
+  const profCap = resolveDprCap();
+  const capped = (v: number): number => (profCap === undefined ? v : Math.min(v, profCap));
   const dpr = window.devicePixelRatio || 1;
   const width = window.innerWidth;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < PHONE_VIEWPORT_WIDTH;
-  if (reduced) return Math.min(dpr, 1.25);
+  if (reduced) return capped(Math.min(dpr, 1.25));
   // Low tier (ALL mobile): cap at 0.6 — render WELL BELOW native resolution and let
   // the browser upscale. The additive gaussian-sprite cloud is fragment-bound, so
   // fewer fragments is the single biggest cost lever. A measured low-tier scroll
@@ -1008,16 +1070,16 @@ export function tuneRenderPixelRatio(reduced = false, tier: DeviceTier = 'high')
   // low tier now classifies proactively — every full-screen pass scales with the
   // buffer, so 0.5 (~31% fewer fragments than 0.6) is the honest floor-keeper. The
   // luminance-adaptive film grain in the grade pass masks the extra softness.
-  if (tier === 'low') return Math.min(dpr, 0.5);
+  if (tier === 'low') return capped(Math.min(dpr, 0.5));
   // Mid tier: cap at 1.5. Together with the halved particle bucket this is the
   // second fill-rate lever — 1.5² vs 1.85² is ~34% fewer fragments on a 2x
   // display, while text/UI (DOM, not canvas) stays native-sharp. Below the
   // high desktop cap but comfortably above the low tier's 0.6 upscale blur.
   // (Mobile-mid keeps the tighter 1.4 mobile cap — mid must never raise a cap.)
-  if (tier === 'mid') return Math.min(dpr, isMobile ? 1.4 : 1.5);
-  if (isMobile) return Math.min(dpr, 1.4);
-  if (width < 1280) return Math.min(dpr, 1.6);
-  return Math.min(dpr, 1.85);
+  if (tier === 'mid') return capped(Math.min(dpr, isMobile ? 1.4 : 1.5));
+  if (isMobile) return capped(Math.min(dpr, 1.4));
+  if (width < 1280) return capped(Math.min(dpr, 1.6));
+  return capped(Math.min(dpr, 1.85));
 }
 
 // Particle count tuned down for smaller / mobile devices.
@@ -1051,10 +1113,14 @@ export function tuneParticlesForDevice(tier: DeviceTier = 'high'): number {
   // MID_TIER_DENSITY default — the same ?density= plumbing — so the count AND
   // the density-compensation fatten stay one mechanism, not two.
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || width < PHONE_VIEWPORT_WIDTH;
-  if (width < 480) return 95_000;
-  if (isMobile) return 150_000;
-  if (width < 1280) return 240_000;
-  return CFG.diskParticles;
+  // The mid tier rides the same width buckets as high (so the two never drift),
+  // but never above MID_TIER_MAX_PARTICLES — see that constant for the measured
+  // reason. `cap` is the identity on high/low, so those paths are byte-identical.
+  const cap = (n: number): number => (tier === 'mid' ? Math.min(n, MID_TIER_MAX_PARTICLES) : n);
+  if (width < 480) return cap(95_000);
+  if (isMobile) return cap(150_000);
+  if (width < 1280) return cap(240_000);
+  return cap(CFG.diskParticles);
 }
 
 // --- low-tier density compensation ------------------------------------------

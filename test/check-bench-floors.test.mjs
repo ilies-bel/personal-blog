@@ -221,3 +221,165 @@ test('failed-to-start runs are skipped (not counted as violations)', () => {
     rmSync(tmp, { recursive: true });
   }
 });
+
+// --- the 4GB floor (tag === '4gb') ------------------------------------------
+//
+// The 4gb profile is the constrained-hardware bar: a 4GB / 2-CPU SwiftShader
+// container, where EVERY device x scenario must hold >= 45fps. Unlike the other
+// floors it is not scoped to a named device — the point of the profile is that
+// nothing gets a pass — so these cover both scenarios and the tag scoping.
+
+test('4gb summary: every device above 45fps hold passes', () => {
+  const tmp = makeTmpDir();
+  try {
+    const summary = {
+      tag: '4gb',
+      results: [
+        { device: 'desktop', scenario: 'home', started: true, holdFps: 54.4, heroMode: 'poster' },
+        { device: 'mid-laptop', scenario: 'home', started: true, holdFps: 53.1, heroMode: 'poster' },
+        { device: 'low-mobile', scenario: 'post', started: true, holdFps: 60.1, heroMode: null },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 0, `all above 45fps must pass\nstderr: ${r.stderr}`);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test('4gb summary: a device below 45fps hold fails', () => {
+  const tmp = makeTmpDir();
+  try {
+    const summary = {
+      tag: '4gb',
+      results: [
+        { device: 'desktop', scenario: 'home', started: true, holdFps: 54.4, heroMode: 'poster' },
+        { device: 'mid-laptop', scenario: 'home', started: true, holdFps: 44.9, heroMode: 'poster' },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 1, '44.9fps on the 4gb profile must fail');
+    assert.match(r.stderr, /4gb hold/, 'violation table must name the 4gb rule');
+    assert.match(r.stderr, /mid-laptop/, 'violation must name the offending device');
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test('4gb summary: exactly 45fps passes (floor is inclusive)', () => {
+  const tmp = makeTmpDir();
+  try {
+    const summary = {
+      tag: '4gb',
+      results: [
+        { device: 'desktop', scenario: 'home', started: true, holdFps: 45, heroMode: 'poster' },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 0, `exactly 45fps must pass\nstderr: ${r.stderr}`);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test('the 45fps floor does NOT apply to untagged or docker summaries', () => {
+  const tmp = makeTmpDir();
+  try {
+    // 30fps would violate the 4gb floor, but this is a docker-tagged run, where
+    // only the post/low-mobile/poster rules apply. A home row on a device with
+    // no docker rule of its own must pass.
+    const summary = {
+      tag: 'docker',
+      results: [
+        { device: 'lowgpu-live-low', scenario: 'home', started: true, holdFps: 30, heroMode: 'live' },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 0, `4gb floor must not leak into docker runs\nstderr: ${r.stderr}`);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+// --- filtered runs are not gateable -----------------------------------------
+
+test('a filtered summary is refused rather than silently passed', () => {
+  const tmp = makeTmpDir();
+  try {
+    const summary = {
+      tag: '4gb',
+      filtered: true,
+      deviceFilter: ['desktop'],
+      scenarioFilter: ['home'],
+      results: [
+        { device: 'desktop', scenario: 'home', started: true, holdFps: 60, heroMode: 'poster' },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 1, 'a partial run must not be gateable');
+    assert.match(r.stderr, /FILTERED/, 'the error must say why it was refused');
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test('an unfiltered summary (filtered: false) gates normally', () => {
+  const tmp = makeTmpDir();
+  try {
+    const summary = {
+      tag: '4gb',
+      filtered: false,
+      results: [
+        { device: 'desktop', scenario: 'home', started: true, holdFps: 60, heroMode: 'poster' },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 0, `an explicit filtered:false must gate\nstderr: ${r.stderr}`);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test('diagnostic runs are excluded from the floors', () => {
+  const tmp = makeTmpDir();
+  try {
+    const summary = {
+      tag: '4gb',
+      results: [
+        { device: 'desktop', scenario: 'home', started: true, holdFps: 56.2, heroMode: 'poster' },
+        // A forced live-scene profile on a software rasteriser: far below the
+        // floor, but not a configuration the product ever serves.
+        { device: 'lowgpu-live-mid', scenario: 'home', started: true, holdFps: 1.9, heroMode: 'live', diagnostic: true },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 0, `diagnostic rows must not gate\nstderr: ${r.stderr}`);
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});
+
+test('a non-diagnostic run at the same fps DOES violate the floor', () => {
+  const tmp = makeTmpDir();
+  try {
+    // Guards the exclusion above: it must key off the flag, not the device name.
+    const summary = {
+      tag: '4gb',
+      results: [
+        { device: 'lowgpu-live-mid', scenario: 'home', started: true, holdFps: 1.9, heroMode: 'live' },
+      ],
+    };
+    const path = writeSummary(tmp, summary);
+    const r = run('--summary', path);
+    assert.equal(r.status, 1, 'without the flag the same row must fail');
+  } finally {
+    rmSync(tmp, { recursive: true });
+  }
+});

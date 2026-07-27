@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, FILM_GRAIN_AMT, FILM_GRAIN_AMT_MID, MID_TIER_DENSITY, detectDeviceTierSource, isSoftwareRenderer, resolveDensityScale, resolveParticleRTScale, resolveBlastBake, resolvePerfHud, resolvePhotons, resolveRgGranBake, resolveSunBake, resolveAdaptive, isTierForced, stepDownTier, tuneParticlesForDevice, tuneRenderPixelRatio, shouldAdaptiveDowngrade, ADAPTIVE_SAMPLE_MS, type DeviceTier } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, WARM_SESSION_STORAGE_KEY, readDebugNumber } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, SCENE_WARM_DONE_EVENT, SCENE_WARM_PENDING_EVENT, WARM_SESSION_STORAGE_KEY, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
@@ -1394,7 +1394,10 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
   const drawAuditFrame = { calls: 0, points: 0, triangles: 0, lines: 0 };
   let drawAuditArmed = false;
   (window as unknown as Record<string, unknown>)[DEBUG_WINDOW_KEYS.drawAudit] = {
-    snapshot: (): { calls: number; points: number; triangles: number; lines: number; programs: number } => {
+    snapshot: (): {
+      calls: number; points: number; triangles: number; lines: number; programs: number;
+      geometries: number; textures: number;
+    } => {
       drawAuditArmed = true;
       return {
         calls: drawAuditFrame.calls,
@@ -1402,6 +1405,14 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
         triangles: drawAuditFrame.triangles,
         lines: drawAuditFrame.lines,
         programs: renderer.info.programs?.length ?? 0,
+        // GPU-side RESIDENCY (renderer.info.memory), as opposed to the per-frame
+        // SUBMISSION counters above: how many geometries / textures three.js
+        // currently holds alive on the GPU. These do not reset per frame, so they
+        // are read live rather than mirrored into drawAuditFrame. Together with
+        // the submission counters they are the scene's full "GPU imprint" — the
+        // bench records both (see bench/run-bench.mjs).
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
       };
     },
   };
@@ -1438,6 +1449,45 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     : null;
   if (perfHud) drawAuditArmed = true;
 
+  // --- loader warm gate -------------------------------------------------------
+  // The bake chain below is the load-time cost that buys smooth SCROLLING: each
+  // cubemap that lands before the visitor starts moving is a multi-hundred-ms
+  // stall they never feel. Historically it ran after the reveal, so the visitor
+  // got an interactive-looking scene that hitched on first scroll. Now the scene
+  // ARMS the loader's warm gate up front (SCENE_WARM_PENDING_EVENT) and settles
+  // it when the chain finishes (SCENE_WARM_DONE_EVENT), so the loader can choose
+  // to keep covering the boot until the scene is genuinely ready.
+  //
+  // The loader owns the policy, not this module: it caps the hold at
+  // LOADER_WARM_MAX_MS, waives it entirely on scroll intent, and keeps its 8s
+  // safety backstop above everything. This side only has to guarantee that the
+  // settle signal fires EXACTLY ONCE on every path — success, bake failure, and
+  // disposal mid-chain — which `warmSettled` enforces.
+  let warmSettled = false;
+  const settleWarm = (): void => {
+    if (warmSettled) return;
+    warmSettled = true;
+    window.dispatchEvent(new CustomEvent(SCENE_WARM_DONE_EVENT));
+  };
+  // Arm only when there is genuinely something to wait for, and only when
+  // waiting is a good trade.
+  //
+  //  • No bake rigs at all (no WebGL2, every kill-switch off, gravity sim
+  //    unavailable) → the chain is a single no-op tick; holding buys nothing.
+  //
+  //  • softwareGl → do NOT arm. The gate is premised on bakes costing hundreds
+  //    of ms, which is the real-GPU regime. On a CPU rasteriser they cost
+  //    SECONDS (measured: 8.2s boot on the SwiftShader bench), so holding the
+  //    reveal for them turns a slow boot into an apparently-hung page. These
+  //    machines already warm immediately and lean on the loader's own 8s safety
+  //    backstop; that is the right behaviour for them and it is unchanged.
+  //    (A rasteriser weak enough to be RECOGNISED is usually caught earlier
+  //    still: isSoftwareGl() makes HeroIsland mount the poster instead, so
+  //    createScene never runs. This branch covers the case where the scene did
+  //    construct on the low tier and only then identified the renderer.)
+  const hasWarmWork = Boolean(granBake || blastBake || sunBake || gravitySim.available);
+  if (hasWarmWork && !softwareGl) window.dispatchEvent(new CustomEvent(SCENE_WARM_PENDING_EVENT));
+
   let gpuWarmStarted = false;
   const scheduleGpuWarm = (): void => {
     if (gpuWarmStarted) return;
@@ -1445,7 +1495,13 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     gpuWarmInfo.programsAtFirstFrame = renderer.info.programs?.length ?? 0;
     (window as unknown as Record<string, unknown>)[DEBUG_WINDOW_KEYS.gpuWarm] = gpuWarmInfo;
     const tick = (): void => {
-      if (stopped) return; // disposed/paused → frame()'s lazy bake remains the fallback
+      // Disposed/paused → frame()'s lazy bake remains the fallback. Still settle
+      // the warm gate: a loader holding for SCENE_WARM_DONE_EVENT must never be
+      // stranded by a scene that went away mid-chain.
+      if (stopped) {
+        settleWarm();
+        return;
+      }
       // Red-giant granulation cubemap first: six tiny GPU draws in ONE bounded call
       // (its shader compiles here, under the loader — never mid-scroll), then the
       // disk flips to the baked path via uGranBakeReady. Idempotent; a failure
@@ -1488,49 +1544,29 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
       }
       gpuWarmInfo.bakeDone = !gravitySim.available || gravitySim.isBaked();
       gpuWarmInfo.programsAfterWarm = renderer.info.programs?.length ?? 0;
+      settleWarm();
     };
     requestAnimationFrame(tick);
   };
 
   // The warm's bake chunks above (granulation cubemap, GPGPU collapse programs
-  // + snapshot FBOs) each hold the main thread for hundreds of ms. Started at
-  // first paint they land INSIDE the loader's ≤900ms floor window and starve
-  // the reveal timer — on a fast GPU the honest floor became a ~2.5s hold
-  // (e2e/loader.spec.ts fast-ready regime; software-GL CI can never reach that
-  // branch, so only real hardware sees it). So when this document has a live
-  // intro loader, the warm waits for the reveal (body.scene-ready) and rides
-  // the loader's compositor-driven opacity dissolve instead — still visually
-  // covered, no longer gating. Documents without a pending loader (reading-
-  // route scenes, warm back-navs where the class is already up) warm
-  // immediately, exactly as before. The 3s backstop covers the reveal-never-
-  // lands path (the loader's own 8s no-WebGL backstop): warming late under the
-  // loader still beats first-scroll bake stalls. scheduleGpuWarm is idempotent.
+  // + snapshot FBOs) each hold the main thread for hundreds of ms.
+  //
+  // This USED to defer the whole chain until after the reveal, because starting
+  // it at first paint landed those chunks inside the loader's ≤900ms floor and
+  // starved the reveal timer — the honest floor became a ~2.5s hold on a fast
+  // GPU. That traded a slow reveal for a scene that hitched on the visitor's
+  // FIRST scroll, which is the worse of the two.
+  //
+  // The warm gate inverts that trade: the loader now knows a bake chain is
+  // pending (SCENE_WARM_PENDING_EVENT, armed above) and deliberately keeps
+  // covering the boot until it settles, capped at LOADER_WARM_MAX_MS and waived
+  // the moment the visitor scrolls. So the chain runs UNDER the loader on every
+  // path — where the wait is already covered and every landed bake is a stall
+  // removed from the first interaction — and the reveal-starvation problem is
+  // handled by the cap rather than by deferral. scheduleGpuWarm is idempotent.
   const scheduleGpuWarmAfterReveal = (): void => {
-    if (
-      // KNOWN software rasteriser (the proactive low-DPR branch): its bakes and
-      // shader compiles cost SECONDS, not the hundreds of ms the fast-GPU
-      // reveal-starvation fix above was written for. Waiting for the reveal
-      // would land those seconds inside the visitor's first interactive moments
-      // (and, on the bench, inside the measured hold) — so warm immediately,
-      // under the loader, where the wait is already covered. Real GPUs keep the
-      // after-reveal path unchanged.
-      softwareGl ||
-      document.body.classList.contains(SCENE_READY_BODY_CLASS) ||
-      !document.querySelector('.scene-loader') // class literal mirrors index.astro's loader markup
-    ) {
-      scheduleGpuWarm();
-      return;
-    }
-    const revealWatch = new MutationObserver(() => {
-      if (!document.body.classList.contains(SCENE_READY_BODY_CLASS)) return;
-      revealWatch.disconnect();
-      requestAnimationFrame(() => scheduleGpuWarm());
-    });
-    revealWatch.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    window.setTimeout(() => {
-      revealWatch.disconnect();
-      scheduleGpuWarm();
-    }, 3000);
+    scheduleGpuWarm();
   };
 
   function frame(): void {

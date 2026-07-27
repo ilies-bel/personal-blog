@@ -35,6 +35,18 @@ const SCROLL_S = 10;
 // This prevents containerised runs from clobbering host-run files.
 const BENCH_TAG = process.env.BENCH_TAG ?? '';
 
+// BENCH_DEVICES / BENCH_SCENARIOS: comma-separated allow-lists for iterating on
+// one profile without paying for the whole matrix. Unset = run everything.
+// These NARROW a run, so a filtered run writes fewer files than a full one —
+// never point the floors gate at a filtered summary (it would silently pass on
+// the profiles that were skipped). The summary records the filter for that reason.
+const parseFilter = (raw) => {
+  const list = (raw ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length > 0 ? list : null;
+};
+const DEVICE_FILTER = parseFilter(process.env.BENCH_DEVICES);
+const SCENARIO_FILTER = parseFilter(process.env.BENCH_SCENARIOS);
+
 // --- build freshness ---------------------------------------------------------
 
 function newestMtime(dir) {
@@ -125,6 +137,47 @@ const INIT_SCRIPT = () => {
   document.addEventListener('DOMContentLoaded', mark);
 };
 
+// GPU IMPRINT — what the scene costs the GPU, as opposed to how fast it runs.
+//
+// createScene publishes `window.__bhDrawAudit` (DEBUG_WINDOW_KEYS.drawAudit).
+// snapshot() returns the LAST COMPLETE frame's submission counters (draw calls /
+// points / triangles / lines) plus the live program count and the GPU-side
+// residency (geometries / textures). The FIRST call ARMS whole-frame
+// accumulation — until then the hook costs nothing — so the bench calls it once
+// to arm, lets a measurement window elapse, then calls it again for real
+// numbers.
+//
+// Returns null (never throws) when the hook is absent: poster mode, the phone
+// video path and the reading routes have no live renderer, and that is a
+// legitimate outcome, not a failure.
+const GPU_IMPRINT = () => {
+  const hook = window.__bhDrawAudit;
+  if (!hook || typeof hook.snapshot !== 'function') return null;
+  try {
+    return hook.snapshot();
+  } catch {
+    return null;
+  }
+};
+
+// WARM STATE — which of the boot bakes actually landed.
+//
+// createScene publishes `window.__bhGpuWarm` (DEBUG_WINDOW_KEYS.gpuWarm) with a
+// per-bake completion flag plus the program count before/after the warm chain.
+// A bake that silently failed (or never got scheduled) leaves the shader on its
+// analytic fallback — same picture, far more per-vertex/per-pixel work — which
+// looks like an unexplained frame-time regression unless you can see the flags.
+// Cloned through JSON so Playwright can serialise it; null when absent.
+const WARM_STATE = () => {
+  const w = window.__bhGpuWarm;
+  if (!w) return null;
+  try {
+    return JSON.parse(JSON.stringify(w));
+  } catch {
+    return null;
+  }
+};
+
 const MEASURE_FPS = ({ seconds, scroll }) => new Promise((resolve) => {
   const total = document.documentElement.scrollHeight - window.innerHeight;
   const t0 = performance.now();
@@ -179,6 +232,11 @@ async function runOne(browser, device, scenario, baseUrl) {
 
   const result = {
     device: device.name, scenario: scenario.name, url,
+    // Diagnostic profiles force a configuration the product never ships (e.g. the
+    // live scene on a software rasteriser, which really serves the poster). Their
+    // numbers are recorded and tracked; the FPS floors skip them, because a floor
+    // on a configuration no visitor can reach asserts nothing true.
+    diagnostic: device.diagnostic === true,
     config: {
       viewport: device.viewport, deviceScaleFactor: device.deviceScaleFactor,
       cpuThrottle: device.cpuThrottle, isMobile: device.isMobile,
@@ -192,6 +250,12 @@ async function runOne(browser, device, scenario, baseUrl) {
     holdFps: null, holdWorstInstantFps: null, holdP95FrameMs: null, holdWorstHitchMs: null,
     scrollFps: null, scrollWorstInstantFps: null, scrollP95FrameMs: null, scrollWorstHitchMs: null,
     heapMB: null, error: null,
+    // GPU imprint of the last complete frame of the stationary hold. null when
+    // the route has no live renderer (poster / video / reading routes).
+    gpu: null,
+    // Boot-bake completion flags (window.__bhGpuWarm). null on routes with no
+    // live renderer.
+    warm: null,
     timestamp: new Date().toISOString(),
   };
 
@@ -222,7 +286,12 @@ async function runOne(browser, device, scenario, baseUrl) {
     result.longTaskBootCount = boot.n;
 
     if (result.started) {
+      // Arm whole-frame draw accumulation BEFORE the hold, so the snapshot taken
+      // after it reflects a full composited frame rather than a single pass.
+      await page.evaluate(GPU_IMPRINT);
       const hold = await page.evaluate(MEASURE_FPS, { seconds: HOLD_S, scroll: false });
+      result.gpu = await page.evaluate(GPU_IMPRINT);
+      result.warm = await page.evaluate(WARM_STATE);
       result.holdFps = round(hold.fps);
       result.holdWorstInstantFps = round(hold.worstInstantFps);
       result.holdP95FrameMs = round(hold.p95FrameMs);
@@ -251,15 +320,24 @@ const round = (v) => (v === null || v === undefined ? null : Math.round(v * 10) 
 async function main() {
   ensureBuild();
   mkdirSync(OUT_DIR, { recursive: true });
-  const { devices } = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'devices.json'), 'utf8'));
+  const allDevices = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'devices.json'), 'utf8')).devices;
+  const devices = DEVICE_FILTER ? allDevices.filter((d) => DEVICE_FILTER.includes(d.name)) : allDevices;
+  if (devices.length === 0) {
+    throw new Error(`BENCH_DEVICES matched no device. Known: ${allDevices.map((d) => d.name).join(', ')}`);
+  }
+  if (DEVICE_FILTER) console.log(`[bench] device filter: ${devices.map((d) => d.name).join(', ')}`);
   const { server, port } = await startServer();
   const baseUrl = `http://127.0.0.1:${port}`;
   console.log(`[bench] serving dist/ at ${baseUrl}`);
 
-  const scenarios = [
+  const allScenarios = [
     { name: 'home', path: '/' },
     { name: 'post', path: discoverPostRoute() },
   ];
+  const scenarios = SCENARIO_FILTER ? allScenarios.filter((s) => SCENARIO_FILTER.includes(s.name)) : allScenarios;
+  if (scenarios.length === 0) {
+    throw new Error(`BENCH_SCENARIOS matched no scenario. Known: ${allScenarios.map((s) => s.name).join(', ')}`);
+  }
   console.log(`[bench] scenarios: ${scenarios.map((s) => s.path).join(', ')}`);
 
   const extraArgs = (process.env.BENCH_CHROMIUM_FLAGS ?? '').split(' ').filter(Boolean);
@@ -289,6 +367,10 @@ async function main() {
   const summary = {
     host: { platform: process.platform, cpu: gpu, node: process.version, chromiumFlags: extraArgs },
     tag: BENCH_TAG || null,
+    // Records whether this run covered the whole matrix. A filtered summary is
+    // for iteration only — check-bench-floors.mjs refuses to gate on one.
+    filtered: Boolean(DEVICE_FILTER || SCENARIO_FILTER),
+    deviceFilter: DEVICE_FILTER, scenarioFilter: SCENARIO_FILTER,
     holdSeconds: HOLD_S, scrollSeconds: SCROLL_S, bootTimeoutMs: BOOT_TIMEOUT_MS,
     timestamp: new Date().toISOString(),
     results,
@@ -296,10 +378,16 @@ async function main() {
   const summarySuffix = BENCH_TAG ? `-${BENCH_TAG}` : '';
   writeFileSync(join(OUT_DIR, `bench-summary${summarySuffix}.json`), JSON.stringify(summary, null, 2) + '\n');
 
-  const header = ['device', 'scenario', 'started', 'boot ms', 'hold fps', 'scroll fps', 'longtask ms', 'heap MB'];
+  const header = [
+    'device', 'scenario', 'mode', 'boot ms', 'hold fps', 'scroll fps', 'longtask ms',
+    'heap MB', 'draws', 'points', 'tris', 'progs', 'tex',
+  ];
   const rows = results.map((r) => [
-    r.device, r.scenario, r.started ? 'yes' : 'NO', r.bootMs ?? '-', r.holdFps ?? '-',
+    r.device, r.scenario,
+    r.started ? (r.heroMode ?? '-') : 'NO', r.bootMs ?? '-', r.holdFps ?? '-',
     r.scrollFps ?? '-', r.longTaskBootMs ?? '-', r.heapMB ?? '-',
+    r.gpu?.calls ?? '-', r.gpu?.points ?? '-', r.gpu?.triangles ?? '-',
+    r.gpu?.programs ?? '-', r.gpu?.textures ?? '-',
   ]);
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((row) => String(row[i]).length)));
   const line = (cells) => cells.map((c, i) => String(c).padEnd(widths[i])).join('  ');

@@ -43,6 +43,30 @@
       "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
       "query": "?tier=high&adapt=0",
       "note": "Worst case: mobile viewport/UA but tier pinned high with adaptive downgrade disabled."
+    },
+    {
+      "name": "lowgpu-live-low",
+      "viewport": { "width": 1280, "height": 800 },
+      "deviceScaleFactor": 1,
+      "cpuThrottle": 2,
+      "isMobile": false,
+      "hasTouch": false,
+      "userAgent": null,
+      "query": "?tier=low&adapt=0",
+      "diagnostic": true,
+      "note": "DIAGNOSTIC, not a shipping configuration. Weak-GPU laptop forced to run the LIVE scene: a desktop viewport (>= PHONE_VIEWPORT_WIDTH, so not the video path) plus an explicit ?tier= (isTierForced, so the software-GL poster fallback is bypassed). It exists to measure the WebGL hero's GPU imprint under a software rasteriser — an environment where the product itself serves the poster instead. Excluded from the FPS floors for exactly that reason; its numbers are still recorded and tracked."
+    },
+    {
+      "name": "lowgpu-live-mid",
+      "viewport": { "width": 1280, "height": 800 },
+      "deviceScaleFactor": 1,
+      "cpuThrottle": 2,
+      "isMobile": false,
+      "hasTouch": false,
+      "userAgent": null,
+      "query": "?tier=mid&adapt=0",
+      "diagnostic": true,
+      "note": "DIAGNOSTIC, not a shipping configuration — see lowgpu-live-low. As that profile but pinned to the mid tier, the rung a real 4GB integrated-GPU laptop lands on. Adaptive downgrade disabled so the measurement is of the mid tier itself rather than of the ladder rescuing it."
     }
   ]
 }

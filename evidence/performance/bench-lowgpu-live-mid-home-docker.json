@@ -1,0 +1,51 @@
+{
+  "device": "lowgpu-live-mid",
+  "scenario": "home",
+  "url": "http://127.0.0.1:44809/?tier=mid&adapt=0",
+  "diagnostic": true,
+  "config": {
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "deviceScaleFactor": 1,
+    "cpuThrottle": 2,
+    "isMobile": false,
+    "userAgent": "(chromium default)",
+    "query": "?tier=mid&adapt=0"
+  },
+  "started": true,
+  "heroMode": "live",
+  "bootMs": 2616,
+  "longTaskBootMs": 1337,
+  "longTaskBootCount": 3,
+  "holdFps": 2.1,
+  "holdWorstInstantFps": 0.7,
+  "holdP95FrameMs": 1516.7,
+  "holdWorstHitchMs": 1516.7,
+  "scrollFps": 0.5,
+  "scrollWorstInstantFps": 0.1,
+  "scrollP95FrameMs": 7133,
+  "scrollWorstHitchMs": 7133,
+  "heapMB": 57.5,
+  "error": null,
+  "gpu": {
+    "calls": 23,
+    "points": 538809,
+    "triangles": 16,
+    "lines": 56000,
+    "programs": 24,
+    "geometries": 9,
+    "textures": 44
+  },
+  "warm": {
+    "programsAtFirstFrame": 21,
+    "programsAfterWarm": 24,
+    "bakeDone": true,
+    "granBakeDone": true,
+    "blastBakeDone": true,
+    "sunBakeDone": false
+  },
+  "timestamp": "2026-07-27T15:46:38.873Z",
+  "canvasCount": 3
+}

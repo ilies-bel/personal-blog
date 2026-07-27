@@ -1,8 +1,9 @@
 # WebGL hero engine — device-matrix bench
 
 > **Full performance-testing guide:** [docs/PERF-TESTING.md](../docs/PERF-TESTING.md)
-> — covers host bench, docker bench, LHCI, bundle budgets, smoothness floors,
-> the software-GL fallback, and how to add devices / metrics.
+> — covers host bench, docker bench, the 4GB profile, LHCI, bundle budgets,
+> smoothness floors, GPU-imprint metrics and profiling levers, the software-GL
+> fallback, the loader warm gate, and how to add devices / metrics.
 
 
 Measures the production build (`dist/`) across a matrix of simulated devices
@@ -17,6 +18,8 @@ Per device x scenario (home hero `/` + one `/posts/...` page):
 | scroll FPS | rAF-counted over a 10s scripted top→bottom sweep |
 | long-task ms | `PerformanceObserver('longtask')` total during boot |
 | heap MB | `performance.memory.usedJSHeapSize` (Chromium only) |
+| GPU imprint | `window.__bhDrawAudit` — draw calls, points, triangles, programs, geometries, textures |
+| warm state | `window.__bhGpuWarm` — which boot bakes landed |
 
 Output: `evidence/performance/bench-<device>-<scenario>.json` per run, plus
 `evidence/performance/bench-summary.json` and a printed table. Each JSON embeds

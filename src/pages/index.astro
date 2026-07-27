@@ -139,8 +139,11 @@ const featured = await getFeaturedProof();
     import {
       SCENE_READY_EVENT,
       SCENE_READY_BODY_CLASS,
+      SCENE_WARM_PENDING_EVENT,
+      SCENE_WARM_DONE_EVENT,
       LOADER_GONE_BODY_CLASS,
       LOADER_MIN_MS,
+      LOADER_WARM_MAX_MS,
       LOADER_SEEN_STORAGE_KEY,
       NATIVE_SCROLL_INTENT_PX,
       WARM_SESSION_STORAGE_KEY,
@@ -308,6 +311,38 @@ const featured = await getFeaturedProof();
       let floorTimer = 0;
       let scrollObserving = false;
 
+      // ── Warm gate: hold the reveal while the engine's boot bakes are running ──
+      //
+      // Fourth fact, alongside scenePainted / floorElapsed / intentQualified.
+      // Every bake that lands BEFORE the reveal is a multi-hundred-ms stall the
+      // visitor never feels on their first scroll, so the loader would rather
+      // keep covering the boot than hand over a scene that hitches.
+      //
+      // Defaults to SETTLED and is only armed by a live scene that announces
+      // pending bakes (SCENE_WARM_PENDING_EVENT). That default is what keeps
+      // every no-engine path — reading routes, a document whose engine never
+      // constructs, and the e2e specs that drive this loader with a held engine
+      // and a synthetic scene:ready — behaving exactly as it did before the gate
+      // existed. Nothing that cannot bake can extend the hold.
+      //
+      // Three independent releases, so it can never strand the reveal:
+      //   • the engine settles it (fires on success, bake failure, and disposal)
+      //   • LOADER_WARM_MAX_MS from init, whatever the engine is doing
+      //   • scroll intent waives it outright, exactly as it waives the floor
+      // and the unconditional 8s safety backstop still sits above all of them.
+      let warmSettled = true;
+      let warmTimer = 0;
+
+      const settleWarmGate = (): void => {
+        if (warmSettled) return;
+        warmSettled = true;
+        if (warmTimer) {
+          window.clearTimeout(warmTimer);
+          warmTimer = 0;
+        }
+        tryRelease();
+      };
+
       // Passive scroll observer: qualifies intent from the scrollY OUTCOME only.
       // A raw wheel/touch/key that produces NO downward scroll never qualifies —
       // we read window.scrollY, not input events. Registered passive so it can
@@ -325,6 +360,10 @@ const featured = await getFeaturedProof();
           window.clearTimeout(floorTimer);
           floorTimer = 0;
         }
+        if (warmTimer) {
+          window.clearTimeout(warmTimer);
+          warmTimer = 0;
+        }
         if (scrollObserving) {
           scrollObserving = false;
           window.removeEventListener('scroll', onScroll);
@@ -335,7 +374,9 @@ const featured = await getFeaturedProof();
       // reveal() owns teardown + idempotency + the isConnected guard, so a late
       // event after a page swap is a harmless no-op.
       const tryRelease = (): void => {
-        if (scenePainted && (floorElapsed || intentQualified)) reveal();
+        // Intent is a full waiver: a visitor already scrolling is never held, for
+        // the floor OR the bakes. Otherwise both must be satisfied.
+        if (scenePainted && (intentQualified || (floorElapsed && warmSettled))) reveal();
       };
 
       const qualifyIntent = (): void => {
@@ -358,6 +399,26 @@ const featured = await getFeaturedProof();
         },
         { once: true },
       );
+
+      // The engine announces pending bakes BEFORE its first paint, so this always
+      // lands before the scene:ready above. Arming starts the capped hold; the
+      // cap is measured from loader init (t0), not from this moment, so a late
+      // announcement can never push the reveal past LOADER_WARM_MAX_MS.
+      window.addEventListener(
+        SCENE_WARM_PENDING_EVENT,
+        () => {
+          if (!firstLoad) return; // a warm return already paid the bakes this session
+          warmSettled = false;
+          warmTimer = window.setTimeout(() => {
+            warmTimer = 0;
+            warmSettled = true;
+            tryRelease();
+          }, Math.max(0, LOADER_WARM_MAX_MS - (performance.now() - t0)));
+        },
+        { once: true },
+      );
+
+      window.addEventListener(SCENE_WARM_DONE_EVENT, settleWarmGate, { once: true });
 
       if (firstLoad) {
         // Arm the floor and the intent observer only for a first-session load.

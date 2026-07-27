@@ -164,6 +164,44 @@ export const WARM_SESSION_STORAGE_KEY = 'bh:warm';
  *  and MUST be kept in sync with this value. */
 export const SCENE_READY_EVENT = 'scene:ready';
 
+/** Dispatched on `window` by createScene as soon as it knows it has boot bakes to
+ *  run — BEFORE the first paint, so the loader can decide to hold for them.
+ *
+ *  The loader treats the warm gate as ALREADY SETTLED unless this event arms it.
+ *  That default matters: routes with no engine, documents whose engine never
+ *  constructs, and the e2e specs that drive the loader with a held engine and a
+ *  synthetic scene:ready must all behave exactly as they did before this gate
+ *  existed. Only a live scene that actually intends to bake can extend the hold.
+ *
+ *  Unlike SCENE_READY_EVENT (which is also spelled as a literal by markup that
+ *  cannot import), the only listener is index.astro's bundled loader script,
+ *  which imports this constant directly — so there is no literal to keep in
+ *  sync. */
+export const SCENE_WARM_PENDING_EVENT = 'scene:warm-pending';
+
+/** Dispatched on `window` by createScene when the staggered boot-bake chain has
+ *  settled — every bake either applied or definitively given up on. Fired EXACTLY
+ *  once per scene, on success and on failure alike, and also when the scene is
+ *  disposed mid-chain, so a loader holding for it can never be stranded.
+ *  (LOADER_WARM_MAX_MS is the independent backstop if it is somehow missed.) */
+export const SCENE_WARM_DONE_EVENT = 'scene:warm-done';
+
+/** Hard ceiling, measured from loader init, on how long the reveal may be held
+ *  waiting for SCENE_WARM_DONE_EVENT.
+ *
+ *  The boot bakes (granulation cubemap, blast cubemap, low-tier sun cubemap, the
+ *  GPGPU collapse flipbook) each cost hundreds of ms and each one that lands
+ *  BEFORE the reveal is a stall the visitor never feels mid-scroll. So the loader
+ *  prefers to spend that time under its own cover rather than hand over a scene
+ *  that will hitch on first interaction.
+ *
+ *  It is a CEILING, not a target: the gate releases the moment the chain
+ *  finishes, scroll intent waives it outright (a visitor who is already moving is
+ *  never held), and index.astro's 8s safety backstop still reveals unconditionally
+ *  above it. 2500ms is deliberately below that backstop and leaves the healthy-GPU
+ *  first-visit reveal inside the P7 honesty budget the loader e2e specs assert. */
+export const LOADER_WARM_MAX_MS = 2500;
+
 // --- scroll direction ------------------------------------------------------
 export type ScrollDirection = 'down' | 'up';
 export const SCROLL_DOWN: ScrollDirection = 'down';
@@ -292,6 +330,22 @@ export const DEBUG_WINDOW_KEYS = {
    *  When < 1 the scaled count also flows through densityCompensation (forced),
    *  so per-grain emission/size auto-fatten exactly as the low tier's do. */
   density: '__bhDensity',
+  /** PROFILING lever: hard CEILING on the renderer's pixel ratio (0.15–2). Follows
+   *  the ?prtres= pattern: the ?dpr= URL query is honoured first and persisted to
+   *  sessionStorage, then this window global; unset → the tier's own cap applies
+   *  unchanged.
+   *
+   *  It isolates FILL cost: every full-screen pass (post chain, bloom, grade)
+   *  scales with buffer area, so halving the ratio quarters the fragment work.
+   *  It exists so a bench run can answer "how much of this frame is fill?"
+   *  without a rebuild — and the answer is not always "most of it". Measured on
+   *  the 4GB SwiftShader bench, the low tier went 10.1 -> 16.5fps across an 11x
+   *  fragment reduction (0.50 -> 0.15) and then plateaued, which is how the
+   *  fixed per-draw overhead documented in docs/PERF-TESTING.md was found.
+   *
+   *  Only ever LOWERS the resolved ratio (tuneRenderPixelRatio applies it with
+   *  Math.min) — a debug lever must never be able to raise a production cap. */
+  dpr: '__bhDpr',
   /** A/B override for the disk shader's invisible-tail discard epsilon (uTailEps).
    *  Set 0 to disable the discard outright (byte-identical original fill), or any
    *  epsilon to test; unset → the shipped TAIL_EPS default. Same-session toggling
