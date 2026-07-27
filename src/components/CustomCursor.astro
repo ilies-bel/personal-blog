@@ -313,9 +313,17 @@
     // easeOutCubic: fast pull then soft settle — used to taper the tail head→tail.
     const easeOut = (x: number): number => 1 - Math.pow(1 - x, 3);
     // Cap the device pixel ratio so the offscreen buffer never gets huge on hiDPI.
-    // Hard cap at 2: the comet-trail canvas is a small soft overlay — rendering
-    // above 2× buys no visible quality and wastes memory/fill on 3× displays.
-    const cappedDpr = (): number => Math.min(window.devicePixelRatio || 1, 2);
+    // The trail is a soft, blurred comet — it carries no fine detail, so rendering
+    // it near native resolution is pure fill cost. Narrow viewports cap harder
+    // (1.6) because they are the ones with 3× panels and the weakest GPUs; wide
+    // viewports get 1.85, matching the hero's own high-tier DPR ceiling in
+    // config.ts tuneRenderPixelRatio. Both stay BELOW 2 on purpose: a flat 2×
+    // cap would *raise* cost on every 2×/3× display relative to this.
+    const cappedDpr = (): number => {
+      const dpr = window.devicePixelRatio || 1;
+      if (window.innerWidth < 1280) return Math.min(dpr, 1.6);
+      return Math.min(dpr, 1.85);
+    };
 
     // ---- tuning (a visible luminous comet on a dark cobalt bg — bright head,
     //      long soft fading tail, matching the reference image) ----
