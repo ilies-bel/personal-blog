@@ -15,12 +15,7 @@
 // ordering is asserted here rather than left to review.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LOADER_MIN_MS, LOADER_WARM_MAX_MS } from '../src/hero/lib/constants.ts';
-
-/** The unconditional reveal backstop in src/pages/index.astro. Mirrored, not
- *  imported: it is a literal in that file's inline loader script. If it moves
- *  there, this must move with it — which is the point of asserting on it. */
-const SAFETY_BACKSTOP_MS = 8000;
+import { LOADER_MIN_MS, LOADER_SAFETY_MS, LOADER_WARM_MAX_MS } from '../src/hero/lib/constants.ts';
 
 test('the warm cap sits above the honesty floor', () => {
   // A cap at or below the floor could never extend anything: the floor timer
@@ -35,8 +30,8 @@ test('the warm cap sits below the unconditional safety backstop', () => {
   // If the cap reached the backstop, the backstop would fire first and the cap
   // would be unreachable — the gate would have no bounded release of its own.
   assert.ok(
-    LOADER_WARM_MAX_MS < SAFETY_BACKSTOP_MS,
-    `LOADER_WARM_MAX_MS (${LOADER_WARM_MAX_MS}) must stay below the ${SAFETY_BACKSTOP_MS}ms safety backstop`,
+    LOADER_WARM_MAX_MS < LOADER_SAFETY_MS,
+    `LOADER_WARM_MAX_MS (${LOADER_WARM_MAX_MS}) must stay below the ${LOADER_SAFETY_MS}ms safety backstop`,
   );
 });
 

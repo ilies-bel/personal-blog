@@ -31,6 +31,63 @@ test('loader reveals on scene readiness and fully hands off', async ({ page }) =
   expect(pointerEvents).toBe('none');
 });
 
+test('repeated hard refreshes always resolve to a real scene or explicit fallback', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'desktop Chromium boot lifecycle');
+  test.slow();
+
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => pageErrors.push(String(error)));
+  await page.addInitScript(() => {
+    (window as unknown as { __refreshReadyEvents: number }).__refreshReadyEvents = 0;
+    window.addEventListener('scene:ready', () => {
+      (window as unknown as { __refreshReadyEvents: number }).__refreshReadyEvents += 1;
+    });
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt === 0) {
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+    } else {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
+
+    await expect(page.locator('body'), `refresh ${attempt + 1} releases reveal`).toHaveClass(
+      /scene-ready/,
+      { timeout: 15_000 },
+    );
+    await expect(page.locator('body'), `refresh ${attempt + 1} releases interactivity`).toHaveClass(
+      /loader-gone/,
+      { timeout: 8_000 },
+    );
+
+    const state = await page.evaluate(() => ({
+      painted: document.body.dataset.scenePainted === 'true',
+      readyEvents: (window as unknown as { __refreshReadyEvents: number }).__refreshReadyEvents,
+      webglFallback: document.body.classList.contains('webgl-unavailable'),
+      posterFallback: document.body.classList.contains('bh-poster-mode'),
+      loaderPointerEvents: getComputedStyle(
+        document.querySelector<HTMLElement>('.scene-loader')!,
+      ).pointerEvents,
+    }));
+    const realScene = state.painted && state.readyEvents > 0;
+    expect(
+      realScene || state.webglFallback || state.posterFallback,
+      `refresh ${attempt + 1} must have explicit reveal provenance`,
+    ).toBe(true);
+    expect(state.loaderPointerEvents, `refresh ${attempt + 1} loader is inert`).toBe('none');
+  }
+
+  const benign = /GPU stall|SwiftShader|WebGL.*deprecated|Automatic fallback/i;
+  expect(pageErrors, 'page errors across hard refreshes').toEqual([]);
+  expect(consoleErrors.filter((error) => !benign.test(error)), 'console errors').toEqual([]);
+});
+
 test('first-visit floor is honest: reveal lands promptly after scene:ready', async ({ page }) => {
   // P7 loader honesty: the first-visit floor is ≤1s (LOADER_MIN_MS), so once
   // the scene reports its real first frame the reveal may lag by at most the

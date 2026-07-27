@@ -1,7 +1,7 @@
 // The scene controller: builds renderer/camera + all rigs, runs the per-frame loop, tears down.
 import * as THREE from 'three';
 import { CFG, FILM_GRAIN_AMT, FILM_GRAIN_AMT_MID, MID_TIER_DENSITY, detectDeviceTierSource, isSoftwareRenderer, resolveDensityScale, resolveParticleRTScale, resolveBlastBake, resolvePerfHud, resolvePhotons, resolveRgGranBake, resolveSunBake, resolveAdaptive, isTierForced, stepDownTier, tuneParticlesForDevice, tuneRenderPixelRatio, shouldAdaptiveDowngrade, ADAPTIVE_SAMPLE_MS, type DeviceTier } from '../lib/config';
-import { DEBUG_WINDOW_KEYS, SCENE_READY_BODY_CLASS, SCENE_READY_EVENT, SCENE_WARM_DONE_EVENT, SCENE_WARM_PENDING_EVENT, WARM_SESSION_STORAGE_KEY, readDebugNumber } from '../lib/constants';
+import { DEBUG_WINDOW_KEYS, SCENE_PAINTED_BODY_DATA_KEY, SCENE_READY_EVENT, SCENE_WARM_DONE_EVENT, SCENE_WARM_PENDING_EVENT, WARM_SESSION_STORAGE_KEY, readDebugNumber } from '../lib/constants';
 import { lifecycle, easeOut, smoothstep01, type StarState } from '../lifecycle';
 import { GIANT_RADIUS_SCALE, YELLOW_RED_RADIUS_RATIO } from '../transitions';
 import { buildGravitySim, type GravitySim } from '../gravitySim';
@@ -2669,6 +2669,11 @@ export async function createScene(container: HTMLElement, reduced: boolean, hook
     if (!firstFramePainted) {
       firstFramePainted = true;
       bootGlowT0 = t; // anchor the boot-glow decay timer to this first composited frame
+      // The event is intentionally still the immediate notification, but it is
+      // transient. Persist the painted fact first so a loader listener that
+      // starts late during a hard-refresh chunk race can recover it without
+      // weakening the real-frame gate.
+      document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY] = 'true';
       window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
       // Stamp the warm-session flag: any LATER same-session boot (a back-nav to
       // the hero, an SPA return) may skip the software-GL steady-pacing hold

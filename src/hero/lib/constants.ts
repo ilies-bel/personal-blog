@@ -36,18 +36,15 @@ export const DIVING_BODY_CLASS = 'bh-diving';
  *  (lifecycle space [0.0, 0.1], the finale band's physical-scroll equivalent).
  *  Referenced from HeroIsland AND hud.css. */
 export const AT_FINALE_BODY_CLASS = 'bh-at-finale';
-/** Toggled on <body> once the hero has painted its FIRST real frame (the GPU
- *  cloud is actually on the canvas). Drives the instant intro loader's fade-out:
- *  the loader is full-opacity at load (pure SSR markup, zero JS), and adding this
- *  class transitions it to transparent + pointer-events:none. The trigger is the
- *  ACTUAL first paint — the scene dispatches SCENE_READY_EVENT after its first
- *  frame() composites — NOT a blind timeout. A safety timeout only adds the class
- *  if that event somehow never arrives (e.g. a failed WebGL context) so the loader
- *  can never get stuck over a dead canvas. Centralized here so the string is never
- *  spelled inline — referenced from the inline loader script (index.astro) AND from
- *  scene.css. This class is ORTHOGONAL to the HUD body classes above: the loader
- *  fades on first paint, the HUD boot FSM ignites later at the black hole — they
- *  never touch each other's class. */
+/** Added to <body> when the loader bootstrap starts the reveal. Normally that is
+ *  authorised by SCENE_READY_EVENT after the live scene or mobile video is ready;
+ *  explicit Skip intro and failure backstops can also force the reveal so the page
+ *  is never trapped. The class therefore records loader state, not proof that a
+ *  genuine frame painted (SCENE_PAINTED_BODY_DATA_KEY is that proof). Centralized
+ *  here so the string is never spelled inline — referenced from the parser-inline
+ *  loader script (index.astro) AND from scene.css. This class is ORTHOGONAL to the
+ *  HUD body classes above: the loader reveal and HUD boot FSM never own each
+ *  other's state. */
 export const SCENE_READY_BODY_CLASS = 'scene-ready';
 /** Toggled on <body> when the hero's WebGL visual cannot run — either WebGL is
  *  unavailable at mount (no/blocked context, so createScene throws before building
@@ -63,20 +60,18 @@ export const SCENE_READY_BODY_CLASS = 'scene-ready';
  *  left inert behind the loader-gone gate. Spelled here once so the class string is
  *  never inline. */
 export const WEBGL_UNAVAILABLE_BODY_CLASS = 'webgl-unavailable';
-/** Toggled on <body> once the intro loader is FULLY GONE — i.e. the dark
- *  `.scene-loader::before` background-opacity fade has COMPLETED and the scene
- *  is fully revealed. This is STRICTLY LATER than SCENE_READY_BODY_CLASS:
- *  scene-ready merely STARTS the dissolve (dot+name fade during the glide, then
- *  the dark layer fades out ~glide-start + glide-dur later). The in-scene star
+/** Toggled on <body> once the intro loader is FULLY GONE. On the normal path this
+ *  is later than SCENE_READY_BODY_CLASS, after the dark
+ *  `.scene-loader::before` background-opacity fade completes; immediate Skip
+ *  intro and hard-failure paths add both classes together. The in-scene star
  *  markers gate their interactivity on this class — they must be non-clickable,
  *  non-hoverable AND not Tab-focusable while the loader is still up (they sit
  *  UNDER the loader at z-index 60 but are live <a> links). Wired by the inline
  *  loader script in index.astro: it listens for the `transitionend` of the
  *  ::before opacity fade (the LAST thing to finish) and also arms a timeout
  *  backstop so the class is set even if that transitionend is missed
- *  (interrupted / reduced-motion / no-WebGL safety reveal). Idempotent. The
- *  inline script can't import this module (no bundler on an is:inline script)
- *  so it spells the SAME literal via define:vars and MUST be kept in sync.
+ *  (interrupted / reduced-motion / no-WebGL safety reveal). Idempotent. Astro
+ *  injects the shared value into the parser-inline script via define:vars.
  *  CSS gates pointer-events on `body:not(.loader-gone)` (hud.css); StarMarker
  *  also reads this class to drive tabIndex/aria so the <a> leaves the tab order
  *  until the loader is gone. */
@@ -96,8 +91,8 @@ export const POSTER_MODE_BODY_CLASS = 'bh-poster-mode';
  *  "Skip intro" control (index.astro) bypasses even that. Kept far under the
  *  8s safety backstop (see the loader script in index.astro) so the two
  *  compose cleanly — the floor raises the early bound, the safety caps the
- *  late bound. Spelled here once and imported by the bundled loader script so
- *  there is no inline magic number. */
+ *  late bound. Spelled here once and injected into the parser-inline loader
+ *  through Astro define:vars so there is no inline magic number. */
 export const LOADER_MIN_MS = 900;
 /** Downward native-scroll distance (CSS px) that counts as a visitor's intent to
  *  ENTER the lifecycle, and waives ONLY the remainder of the first-session
@@ -116,8 +111,8 @@ export const LOADER_MIN_MS = 900;
  *  intent too, so a history-restored below-page state doesn't replay a held intro.
  *  12px is small enough that one deliberate wheel notch / arrow press / swipe
  *  qualifies, but large enough that sub-pixel jitter or a rubber-band bounce does
- *  not. Spelled here once beside the loader timing it modifies; the bundled loader
- *  script imports it, so there is no inline magic number.
+ *  not. Spelled here once beside the loader timing it modifies; Astro injects
+ *  it into the parser-inline loader through define:vars.
  * @public */
 export const NATIVE_SCROLL_INTENT_PX = 12;
 /** sessionStorage key recording that the minimum-time loader has already played
@@ -155,14 +150,20 @@ export const REDUCED_MOTION_EXPLAINED_STORAGE_KEY = 'bh:reduced-motion-explained
 export const WARM_SESSION_STORAGE_KEY = 'bh:warm';
 
 // --- cross-layer events ----------------------------------------------------
-/** The window CustomEvent the scene dispatches ONCE, after its first frame has
- *  rendered + composited (see createScene's frame()). The instant intro loader
- *  listens for it to fade itself out (add SCENE_READY_BODY_CLASS). The name lives
- *  here so the dispatcher (createScene) and the listener (the inline loader script
- *  in index.astro) can never disagree on the string. The inline script can't import
- *  this module — no bundler on an is:inline script — so it spells the SAME literal
- *  and MUST be kept in sync with this value. */
+/** The window CustomEvent a hero readiness producer dispatches. createScene emits
+ *  it once after its first composited GPU frame; MobileHeroVideo emits it after
+ *  its first video frame or when its poster fallback must take over. The instant
+ *  intro loader listens on window and starts the reveal. The name lives here so
+ *  producers and the parser-inline listener in index.astro cannot disagree on the
+ *  string. Astro frontmatter imports it and injects it through define:vars. */
 export const SCENE_READY_EVENT = 'scene:ready';
+/** Durable companion to SCENE_READY_EVENT. The event remains the immediate
+ *  notification, while this body data key lets a listener that starts late
+ *  recover the fact that a genuine GPU-scene or mobile-video frame already
+ *  painted. Real-frame producers set
+ *  `document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY] = 'true'` immediately
+ *  before dispatching SCENE_READY_EVENT; failure fallbacks must not set it. */
+export const SCENE_PAINTED_BODY_DATA_KEY = 'scenePainted';
 
 /** Dispatched on `window` by createScene as soon as it knows it has boot bakes to
  *  run — BEFORE the first paint, so the loader can decide to hold for them.
@@ -173,9 +174,8 @@ export const SCENE_READY_EVENT = 'scene:ready';
  *  synthetic scene:ready must all behave exactly as they did before this gate
  *  existed. Only a live scene that actually intends to bake can extend the hold.
  *
- *  Unlike SCENE_READY_EVENT (which is also spelled as a literal by markup that
- *  cannot import), the only listener is index.astro's bundled loader script,
- *  which imports this constant directly — so there is no literal to keep in
+ *  Like SCENE_READY_EVENT, Astro injects this constant into index.astro's
+ *  parser-inline loader through define:vars, so there is no literal to keep in
  *  sync. */
 export const SCENE_WARM_PENDING_EVENT = 'scene:warm-pending';
 
@@ -201,6 +201,10 @@ export const SCENE_WARM_DONE_EVENT = 'scene:warm-done';
  *  above it. 2500ms is deliberately below that backstop and leaves the healthy-GPU
  *  first-visit reveal inside the P7 honesty budget the loader e2e specs assert. */
 export const LOADER_WARM_MAX_MS = 2500;
+/** Ultimate loader fail-open. Unlike the normal reveal predicate this is only
+ *  used when no genuine scene-ready signal has released the loader. Kept here
+ *  so the parser-inline bootstrap and focused regression tests cannot drift. */
+export const LOADER_SAFETY_MS = 8000;
 
 // --- scroll direction ------------------------------------------------------
 export type ScrollDirection = 'down' | 'up';

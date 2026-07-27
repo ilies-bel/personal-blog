@@ -35,6 +35,7 @@ import {
   SCROLL_HINT_DISMISS_AT,
   DEBUG_WINDOW_KEYS,
   CURSOR_WINDOW_KEYS,
+  SCENE_PAINTED_BODY_DATA_KEY,
   SCENE_READY_BODY_CLASS,
   LOADER_GONE_BODY_CLASS,
   HUD_ACTIVE_BODY_CLASS,
@@ -607,6 +608,7 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
       // scroll infrastructure that was set up above.
       return () => {
         cancelled = true;
+        delete document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY];
         restoreHudAuto();
         unsubClock();
         clock.stop();
@@ -762,6 +764,10 @@ export default function HeroIsland({ backdrop = false, backdropStage = BUILT_STA
     document.addEventListener('astro:before-swap', onBeforeSwap);
     return () => {
       cancelled = true;
+      // The readiness latch belongs to this scene instance. Clear it on every
+      // teardown so a later ClientRouter return or motion-mode remount must earn
+      // readiness from its own first frame.
+      delete document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY];
       // A still-pending engine kickoff (the setTimeout 0 above) must not fire into a
       // torn-down mount; the `cancelled` flag already guards every continuation, this
       // just saves the wasted import.

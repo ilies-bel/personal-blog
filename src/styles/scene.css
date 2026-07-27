@@ -209,7 +209,7 @@ html.js .static-edition {
 /* SKIP INTRO (P7 loader honesty) — the loader's one real control: a quiet mono
    bracket label pinned to the loader's bottom-centre (the slot the boot readout
    only occupies AFTER the reveal, so they never overlap). Server-rendered,
-   wired by the bundled loader script (works pre-hydration), ≥44px target via
+   wired by the parser-inline loader script (works pre-hydration), ≥44px target via
    padding. It disappears the moment any reveal starts (body.scene-ready below)
    — once the dissolve is running its job is done. */
 .scene-loader-skip {

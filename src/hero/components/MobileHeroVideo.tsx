@@ -18,7 +18,7 @@
 //      CSS background on .bh-stage (solid #000) is the rock-bottom floor.
 import { useEffect, useRef } from 'react';
 import { resolveHref } from '../lib/url';
-import { SCENE_READY_EVENT } from '../lib/constants';
+import { SCENE_PAINTED_BODY_DATA_KEY, SCENE_READY_EVENT } from '../lib/constants';
 
 export interface MobileHeroVideoProps {
   /** 0..1 scroll progress — 0 at the top (black hole), 1 at the bottom (dot). */
@@ -70,16 +70,25 @@ export default function MobileHeroVideo({ progress, base }: MobileHeroVideoProps
     };
   }, []);
 
-  // On mount: dispatch 'scene:ready' when the video has its first frame available.
-  // The inline script in index.astro listens for this event to reveal the loader
-  // (same flow as createScene firing it after the first GPU frame). This keeps the
-  // skip-intro button keyboard-accessible during the brief load window, and the
-  // index.astro 8 s safety backstop still fires if the video never loads.
+  // On mount: dispatch the window-level 'scene:ready' contract when the video has
+  // its first frame, or when a decode/network error leaves the poster as the valid
+  // visual fallback. The inline script in index.astro listens on window and reveals
+  // the loader; its 8 s safety backstop remains the last resort if neither signal
+  // arrives.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     const dispatchReady = (): void => {
-      document.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
+      // Keep the mobile producer on the same window-level contract as the live
+      // Three.js scene. The durable bit closes the cached-first-frame race where
+      // the one-shot event can precede a late loader listener.
+      document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY] = 'true';
+      window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
+    };
+    const dispatchPosterFallback = (): void => {
+      // A decode/network error still has the poster-backed visual fallback, so
+      // release via the event contract but do not claim a video frame painted.
+      window.dispatchEvent(new CustomEvent(SCENE_READY_EVENT));
     };
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       // Video is already buffered (cache hit) — signal immediately.
@@ -89,11 +98,11 @@ export default function MobileHeroVideo({ progress, base }: MobileHeroVideoProps
       // On error (file missing, codec unsupported, network failure): signal ready
       // immediately so the loader exits and the poster fallback is shown. The
       // index.astro 8 s backstop still fires eventually, but this fires first.
-      video.addEventListener('error', dispatchReady, { once: true });
+      video.addEventListener('error', dispatchPosterFallback, { once: true });
     }
     return () => {
       video.removeEventListener('canplay', dispatchReady);
-      video.removeEventListener('error', dispatchReady);
+      video.removeEventListener('error', dispatchPosterFallback);
     };
   }, []);
 

@@ -80,6 +80,12 @@ test.describe('mobile hero video — phone viewport (390×844)', () => {
   test('loader resolves on the phone video path (scene-ready + loader-gone)', async ({
     page,
   }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __mobileReadyEvents: number }).__mobileReadyEvents = 0;
+      window.addEventListener('scene:ready', () => {
+        (window as unknown as { __mobileReadyEvents: number }).__mobileReadyEvents += 1;
+      });
+    });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     await page.waitForFunction(
@@ -96,8 +102,16 @@ test.describe('mobile hero video — phone viewport (390×844)', () => {
     const loaderGone = await page.evaluate(() =>
       document.body.classList.contains('loader-gone'),
     );
+    const readyEvents = await page.evaluate(
+      () => (window as unknown as { __mobileReadyEvents: number }).__mobileReadyEvents,
+    );
     expect(sceneReady).toBe(true);
     expect(loaderGone).toBe(true);
+    // MobileHeroVideo must dispatch on window, matching the loader listener.
+    // A non-bubbling CustomEvent dispatched on document used to miss it and
+    // leave the page waiting for the 8s safety fallback.
+    expect(readyEvents).toBeGreaterThan(0);
+    await expect(page.locator('body')).not.toHaveClass(/webgl-unavailable/);
   });
 
   test('no GL canvas is created on phone (video replaces the live scene)', async ({

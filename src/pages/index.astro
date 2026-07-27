@@ -5,10 +5,18 @@ import StaticEdition from '../components/StaticEdition.astro';
 import { SCROLL_SECTION_COUNT } from '../hero/timeline';
 import {
   SCENE_READY_EVENT,
+  SCENE_PAINTED_BODY_DATA_KEY,
   SCENE_READY_BODY_CLASS,
+  SCENE_WARM_PENDING_EVENT,
+  SCENE_WARM_DONE_EVENT,
+  WEBGL_UNAVAILABLE_BODY_CLASS,
   LOADER_GONE_BODY_CLASS,
   LOADER_MIN_MS,
+  LOADER_WARM_MAX_MS,
+  LOADER_SAFETY_MS,
   LOADER_SEEN_STORAGE_KEY,
+  NATIVE_SCROLL_INTENT_PX,
+  WARM_SESSION_STORAGE_KEY,
 } from '../hero/lib/constants';
 import { SITE_TITLE, SITE_DESCRIPTION, BRAND_NAME, BRAND_ROLE } from '../consts';
 import { getCounts, getFeaturedProof } from '../lib/contentStats';
@@ -68,7 +76,7 @@ const featured = await getFeaturedProof();
       pure decoration over the same copy the manifesto/SSR fallback already
       announce — but the loader element itself is NOT: it also carries the REAL
       "Skip intro" control (P7 loader honesty), a server-rendered <button> that
-      is visible, Tab-reachable and wired by the same bundled loader script
+      is visible, Tab-reachable and wired by the parser-inline loader script
       below, so it works long before the React island hydrates. Clicking it
       reveals the scene + releases interactivity immediately (scene-ready +
       loader-gone in one stroke). Styling lives in scene.css under "Instant
@@ -84,11 +92,16 @@ const featured = await getFeaturedProof();
     </button>
   </div>
 
-  {/* Wire the loader's fade-out to the ACTUAL first paint, not a blind timeout.
-      A bundled <script> (no is:inline) re-runs on every ClientRouter swap back
-      to '/' via astro:page-load (+ one direct call for the initial hard load):
-      it adds body.scene-ready when the scene dispatches scene:ready (its first
-      composited frame).
+  {/* Wire the loader's fade-out to actual hero readiness, not a blind timeout.
+      A parser-inline <script> installs the listener synchronously before the
+      React island can hydrate or import the scene. This ordering is critical:
+      scene:ready is a one-shot window event, so a separately fetched module
+      script could lose a hard-refresh race to a cached hero chunk. Real-frame
+      producers also stamp a durable data-scene-painted latch before dispatching,
+      which lets this bootstrap recover the genuine painted state if future
+      script ordering ever changes. The inline script has no runtime import/chunk
+      of its own, so its failure timer and Skip intro control cannot disappear
+      with a module-load failure.
 
       FIRST load of the SESSION only, the loader is held for a minimum of
       LOADER_MIN_MS (≤1s — the P7 honesty budget: one legible beat for the boot
@@ -101,7 +114,7 @@ const featured = await getFeaturedProof();
       session therefore never re-imposes the floor.
 
       SKIP INTRO — the loader's server-rendered .scene-loader-skip button is
-      wired HERE (this bundled script runs on page load, long before the React
+      wired HERE (this parser-inline script runs on page load, before the React
       island hydrates, so the control works from first paint). Clicking it is
       the impatient path PLUS the honest one: it reveals the scene AND releases
       interactivity in one stroke (scene-ready + loader-gone immediately — no
@@ -110,11 +123,11 @@ const featured = await getFeaturedProof();
       (CSS display:none) — its job is done the moment the reveal starts.
 
       A long safety timeout is the hard backstop in BOTH cases — it fires solely
-      if scene:ready never arrives (a failed WebGL context / a browser with JS but
-      no WebGL), so the loader can never get stuck over a dead canvas. It bypasses
-      the floor (the floor only fires once the scene is actually ready). 8s ≫ the
-      ≤1s floor, so they compose cleanly: floor raises the early bound, safety
-      caps the late bound.
+      if scene:ready never arrives (a failed import/WebGL context / a browser with
+      JS but no WebGL), so the loader can never get stuck over a dead canvas. It
+      bypasses the floor, releases interactivity, and exposes the existing
+      on-brand no-WebGL fallback. 8s ≫ the ≤1s floor, so they compose cleanly:
+      floor raises the early bound, safety caps the late bound.
 
       Once the loader is REVEALED (scene-ready added) the dissolve runs in order:
       the dot+name fade out FIRST (their own early 0→0.3s window), THEN the readout
@@ -130,28 +143,34 @@ const featured = await getFeaturedProof();
       loader-gone is eventually set (reduced-motion still fades → still fires;
       the no-WebGL 8s safety reveal also chains the backstop). Idempotent.
 
-      Constants are imported directly from src/hero/lib/constants.ts — bundled
-      scripts can import modules, so no define:vars is needed and no drift is
-      possible. initLoader() is idempotent: a dataset flag on .scene-loader gates
-      double-init within the same DOM, and loader.isConnected guards reveal/
-      markGone against stale timers firing after a page swap away. */}
-  <script>
-    import {
+      Constants are imported in Astro frontmatter from
+      src/hero/lib/constants.ts, then injected into this parser-inline script via
+      define:vars. There is no runtime module import or loader bundle.
+      initLoader() is idempotent: a dataset flag on .scene-loader gates double-init
+      within the same DOM, and loader.isConnected guards reveal/markGone against
+      stale timers firing after a page swap away. */}
+  <script
+    is:inline
+    data-astro-rerun
+    define:vars={{
       SCENE_READY_EVENT,
+      SCENE_PAINTED_BODY_DATA_KEY,
       SCENE_READY_BODY_CLASS,
       SCENE_WARM_PENDING_EVENT,
       SCENE_WARM_DONE_EVENT,
+      WEBGL_UNAVAILABLE_BODY_CLASS,
       LOADER_GONE_BODY_CLASS,
       LOADER_MIN_MS,
       LOADER_WARM_MAX_MS,
+      LOADER_SAFETY_MS,
       LOADER_SEEN_STORAGE_KEY,
       NATIVE_SCROLL_INTENT_PX,
       WARM_SESSION_STORAGE_KEY,
-    } from '../hero/lib/constants';
-
-    function initLoader(): void {
+    }}
+  >
+    function initLoader() {
       // Only run on the home page — the loader element is present only on '/'.
-      const loader = document.querySelector<HTMLElement>('.scene-loader');
+      const loader = document.querySelector('.scene-loader');
       if (!loader) return;
 
       // Idempotent guard: if this loader element was already initialised (same
@@ -162,7 +181,7 @@ const featured = await getFeaturedProof();
 
       // Stamp body.loader-gone ONCE the dark ::before layer has fully faded out.
       // isConnected guards against stale timers firing after the page is swapped.
-      const markGone = (): void => {
+      const markGone = () => {
         if (!loader.isConnected) return;
         document.body.classList.add(LOADER_GONE_BODY_CLASS);
       };
@@ -179,7 +198,7 @@ const featured = await getFeaturedProof();
       //      transitionend fires at ~700ms and wins the race; the 2.1s backstop
       //      is only a safety net for degenerate environments.
       let goneArmed = false;
-      const armGone = (): void => {
+      const armGone = () => {
         if (goneArmed) return;
         goneArmed = true;
         // SOFT-GL HARD CUT — when the software-rasteriser flattening is active
@@ -212,15 +231,20 @@ const featured = await getFeaturedProof();
       // explicit skip, and the 8s safety — so no decorative timer or listener
       // from this document can outlive the reveal or leak onto a swapped route.
       // A no-op by default (warm returns arm nothing).
-      let teardownFirstLoad = (): void => {};
+      let teardownFirstLoad = () => {};
+      let safetyTimer = 0;
 
       // Idempotent: adding the class twice is harmless. Every release path calls
       // this. Revealing tears down first-load machinery and arms the
       // loader-gone signal.
-      const reveal = (): void => {
+      const reveal = () => {
         // isConnected guard: if the page was swapped away since this closure was
         // created, stale timers must not touch the incoming document.
         if (!loader.isConnected) return;
+        if (safetyTimer) {
+          window.clearTimeout(safetyTimer);
+          safetyTimer = 0;
+        }
         teardownFirstLoad();
         document.body.classList.add(SCENE_READY_BODY_CLASS);
         // Stamp the engine's warm-session flag at the moment the reveal actually
@@ -249,7 +273,7 @@ const featured = await getFeaturedProof();
       // session was already marked seen at init below, so a later reload never
       // re-imposes the floor either. CSS hides the button on body.scene-ready
       // (its job is done once any reveal starts).
-      const skip = loader.querySelector<HTMLButtonElement>('.scene-loader-skip');
+      const skip = loader.querySelector('.scene-loader-skip');
       if (skip) {
         skip.addEventListener('click', () => {
           reveal();
@@ -333,7 +357,7 @@ const featured = await getFeaturedProof();
       let warmSettled = true;
       let warmTimer = 0;
 
-      const settleWarmGate = (): void => {
+      const settleWarmGate = () => {
         if (warmSettled) return;
         warmSettled = true;
         if (warmTimer) {
@@ -348,14 +372,14 @@ const featured = await getFeaturedProof();
       // we read window.scrollY, not input events. Registered passive so it can
       // never preventDefault() or interfere with native scrolling.
       const scrollBaseline = window.scrollY;
-      const onScroll = (): void => {
+      const onScroll = () => {
         if (window.scrollY - scrollBaseline >= NATIVE_SCROLL_INTENT_PX) qualifyIntent();
       };
 
       // Detach the floor timer + intent observer. reveal() calls this (via the
       // teardownFirstLoad hook) on EVERY release path, so nothing here outlives
       // the reveal or leaks onto a swapped route.
-      teardownFirstLoad = (): void => {
+      teardownFirstLoad = () => {
         if (floorTimer) {
           window.clearTimeout(floorTimer);
           floorTimer = 0;
@@ -373,13 +397,13 @@ const featured = await getFeaturedProof();
       // Re-check the release predicate and reveal exactly once when it holds.
       // reveal() owns teardown + idempotency + the isConnected guard, so a late
       // event after a page swap is a harmless no-op.
-      const tryRelease = (): void => {
+      const tryRelease = () => {
         // Intent is a full waiver: a visitor already scrolling is never held, for
         // the floor OR the bakes. Otherwise both must be satisfied.
         if (scenePainted && (intentQualified || (floorElapsed && warmSettled))) reveal();
       };
 
-      const qualifyIntent = (): void => {
+      const qualifyIntent = () => {
         if (intentQualified) return;
         intentQualified = true; // one-way: scrolling back up never reinstates it
         // Stop observing now even if the scene isn't painted yet — intent is a
@@ -420,6 +444,14 @@ const featured = await getFeaturedProof();
 
       window.addEventListener(SCENE_WARM_DONE_EVENT, settleWarmGate, { once: true });
 
+      // Recover a genuine first frame if its one-shot event won a future
+      // ordering race. Producers stamp this durable bit immediately BEFORE
+      // dispatching scene:ready; failure fallbacks deliberately never stamp it.
+      if (document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY] === 'true') {
+        scenePainted = true;
+        tryRelease();
+      }
+
       if (firstLoad) {
         // Arm the floor and the intent observer only for a first-session load.
         floorTimer = window.setTimeout(() => {
@@ -438,14 +470,26 @@ const featured = await getFeaturedProof();
         }
       }
 
-      // Safety backstop ONLY — never the normal path; it bypasses the floor AND
-      // intent. Long enough that the engine has surely painted on any real
-      // device; if it hasn't (no WebGL), we still lift the loader so the page
-      // isn't trapped. reveal() tears down the floor timer + scroll observer.
-      window.setTimeout(reveal, 8000);
+      // Safety backstop ONLY — never the normal path. If a valid ready source
+      // signalled (or a genuine frame's event was lost but its latch survived),
+      // reveal it. Otherwise this is an import/boot/WebGL failure: expose the
+      // existing static fallback and release interactivity immediately instead
+      // of dissolving to empty black.
+      if (!document.body.classList.contains(SCENE_READY_BODY_CLASS)) {
+        safetyTimer = window.setTimeout(() => {
+          safetyTimer = 0;
+          if (!loader.isConnected) return;
+          const ready = scenePainted
+            || document.body.dataset[SCENE_PAINTED_BODY_DATA_KEY] === 'true';
+          if (!ready) {
+            document.body.classList.add(WEBGL_UNAVAILABLE_BODY_CLASS);
+          }
+          reveal();
+          if (!ready) markGone();
+        }, LOADER_SAFETY_MS);
+      }
     }
 
-    document.addEventListener('astro:page-load', initLoader);
     initLoader();
   </script>
 

@@ -152,9 +152,8 @@ test('slow network: loader paints immediately and skip releases the page while c
   }
 
   // The skip control releases the page while the engine chunks are STILL held
-  // at the edge. Its wiring rides the small bundled loader script (crawling in
-  // after ~2s here), so retry the click until the wiring has landed — a
-  // visitor on a bad connection presses it again exactly the same way.
+  // at the edge. Its wiring is parser-inline, so it does not depend on any of
+  // the crawling script chunks.
   const skip = page.locator('.scene-loader-skip');
   await expect(skip).toBeVisible();
   await expect(async () => {
