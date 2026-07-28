@@ -10,10 +10,16 @@ for (const route of ALL_ROUTES) {
   test(`smoke ${route}`, async ({ page, browserName }) => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
+    // Collect 404 URLs so assertion failures name the missing asset rather than
+    // logging only the opaque "Failed to load resource" message Chrome emits.
+    const urls404: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
     page.on('pageerror', (err) => pageErrors.push(String(err)));
+    page.on('response', (res) => {
+      if (res.status() === 404) urls404.push(res.url());
+    });
 
     const response = await page.goto(route, { waitUntil: 'load' });
     expect(response?.status()).toBe(200);
@@ -36,10 +42,11 @@ for (const route of ALL_ROUTES) {
         ? /GPU stall|SwiftShader|WebGL.*deprecated|Automatic fallback|Failed to load resource/i
         : /GPU stall|SwiftShader|WebGL.*deprecated|Automatic fallback/i;
     expect(pageErrors, `page errors on ${route}`).toEqual([]);
-    expect(
-      consoleErrors.filter((e) => !benign.test(e)),
-      `console errors on ${route}`,
-    ).toEqual([]);
+    const filteredErrors = consoleErrors.filter((e) => !benign.test(e));
+    const errorContext = urls404.length
+      ? `console errors on ${route}\n  404 requests: ${urls404.join(', ')}`
+      : `console errors on ${route}`;
+    expect(filteredErrors, errorContext).toEqual([]);
   });
 }
 
