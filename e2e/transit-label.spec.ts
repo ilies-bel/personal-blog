@@ -1,4 +1,5 @@
 import { test, expect } from './test-base';
+import { posterFallbackActive, isPhoneViewport } from './hero-mode';
 
 // PRD-004 Destination-name transition continuity.
 //
@@ -33,6 +34,13 @@ test.describe('destination-name transition continuity (PRD-004)', () => {
     test.slow();
     await page.goto('/', { waitUntil: 'load' });
     await expect(page.locator('body')).toHaveClass(/loader-gone/, { timeout: 15_000 });
+    // Firing a dive needs the live in-scene yellow marker, which only mounts on
+    // the live WebGL scene — not the software-GL poster (headless CI) nor the
+    // phone video hero.
+    test.skip(
+      (await posterFallbackActive(page)) || isPhoneViewport(page),
+      'dive fires off the live in-scene marker (not the poster / phone hero)',
+    );
     // Reveal the yellow marker by scrolling to its settled band.
     const marker = page.locator('a.star-marker[href$="projects#fleet"]');
     for (let i = 1; i <= 14; i += 1) {

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from './test-base';
 import AxeBuilder from '@axe-core/playwright';
+import { posterFallbackActive, isPhoneViewport } from './hero-mode';
 
 // Axe WCAG 2.2 AA sweeps for the STATES the per-route sweep (a11y.spec.ts)
 // never sees: it scans each route settled, but the home page is a machine with
@@ -41,6 +42,19 @@ test('axe: home with the intro loader up', async ({ page, browserName }) => {
     await route.continue().catch(() => {});
   });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // "Loader up" is a live-engine state: with the engine chunks held, the live
+  // scene keeps the loader (and its Skip control) up. On the DESKTOP software-GL
+  // poster (headless CI, no GPU) HeroIsland mounts the poster without the engine,
+  // so it lifts the loader straight away and there is no "loader up" state to
+  // scan. On a PHONE the video hero owns the page and the loader-up window is
+  // brief but real — so gate the (reveal-awaiting) poster probe on desktop
+  // viewports and never let it run down the phone's short loader-up window.
+  if (!isPhoneViewport(page)) {
+    test.skip(
+      await posterFallbackActive(page),
+      'the held-loader state is live-engine only; the desktop poster path lifts the loader immediately',
+    );
+  }
   await expect(page.locator('.scene-loader')).toBeVisible();
   const skipVisible = await page.locator('.scene-loader-skip').isVisible();
   expect(skipVisible, 'loader state must include the live Skip control').toBe(true);

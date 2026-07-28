@@ -1,4 +1,5 @@
 import { test, expect } from './test-base';
+import { posterFallbackActive, isPhoneViewport } from './hero-mode';
 
 // Loader honesty: the intro loader must lift on the scene's real readiness
 // signal (or its backstop), never trap the page, and hand interactivity over
@@ -190,6 +191,16 @@ test('warm return (same session) reveals without the first-visit floor', async (
 
   await page.goto('/', { waitUntil: 'load' });
   await expect(page.locator('body')).toHaveClass(/scene-ready/, { timeout: 30_000 });
+
+  // Contract 1 below judges the ENGINE's warm-return dispatch of the scene:ready
+  // EVENT. The software-GL poster (headless CI, no GPU) reveals via the
+  // scene-ready body class but never fires that event, and the phone hero is a
+  // different mechanism (MobileHeroVideo) — neither exercises the live engine's
+  // warm path this test exists to protect.
+  test.skip(
+    (await posterFallbackActive(page)) || isPhoneViewport(page),
+    'warm-return scene:ready is a live-engine contract (not the poster / phone hero)',
+  );
 
   // Navigate away and back within the session.
   await page.goto('/writing', { waitUntil: 'load' });

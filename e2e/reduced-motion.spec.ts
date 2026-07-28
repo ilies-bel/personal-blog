@@ -1,4 +1,5 @@
 import { test, expect } from './test-base';
+import { posterFallbackActive } from './hero-mode';
 
 // The reduced-motion contract: an OS-level prefers-reduced-motion visitor
 // gets the poster edition — and the heavy Three.js engine chunks are never
@@ -51,6 +52,15 @@ test.describe('mid-session preference flip', () => {
 
   test('flipping to reduced swaps the live hero for the poster (and back) without reload', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
+
+    // This test swaps a LIVE hero to the poster and back. Where the hero already
+    // IS a poster because the WebGL probe found a software rasteriser (headless
+    // CI, no GPU), there is no live hero to swap and .bh-poster-slideshow is
+    // present from the start — the transition under test cannot be exercised.
+    test.skip(
+      await posterFallbackActive(page),
+      'the live↔poster motion swap needs a live hero to begin with (software-GL already serves the poster)',
+    );
 
     // Full-motion session: attribute stamped 'full', no poster hero mounted.
     await expect(page.locator('html')).toHaveAttribute('data-motion', 'full');

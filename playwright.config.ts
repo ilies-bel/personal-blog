@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
 // projects at a preinstalled binary via PW_CHROMIUM_EXECUTABLE; CI installs
 // the full browser set with `npx playwright install --with-deps` and leaves
 // the variable unset.
-const PORT = 4321;
+const PORT = Number(process.env.PORT) || 4321;
 
 const chromiumExecutable = process.env.PW_CHROMIUM_EXECUTABLE;
 const chromiumLaunch = chromiumExecutable

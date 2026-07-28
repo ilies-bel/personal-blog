@@ -1,4 +1,5 @@
 import { test, expect } from './test-base';
+import { posterFallbackActive, isPhoneViewport } from './hero-mode';
 
 // Degraded-mode sweep (P14): the two matrix cells no other suite covered.
 //
@@ -23,6 +24,10 @@ test.describe.configure({ retries: 2 });
 test('no-WebGL homepage reveals the on-brand fallback promptly and stays usable', async ({
   page,
 }) => {
+  // Desktop degraded-mode contract: a phone falls below PHONE_VIEWPORT_WIDTH and
+  // MobileHeroVideo owns the hero BEFORE the WebGL probe, so body.webgl-unavailable
+  // never appears. The phone hero is covered by mobile-access.spec.ts.
+  test.skip(isPhoneViewport(page), 'desktop no-WebGL path; the phone hero is the video, not this fallback');
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   page.on('console', (msg) => {
@@ -121,6 +126,20 @@ test('slow network: loader paints immediately and skip releases the page while c
 
   const t0 = Date.now();
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  // The "skip releases while the engine crawls" contract is a live-engine one:
+  // with the engine held, the live scene keeps the loader up until Skip fires.
+  // On the DESKTOP software-GL poster (headless CI) HeroIsland never waits on the
+  // engine — it mounts the poster and lifts the loader on its own — so there is
+  // no held-loader state for Skip to release. On a PHONE the video hero owns the
+  // page (loader-up window intact), so gate the reveal-awaiting probe on desktop
+  // viewports; the short budget keeps it clear of this test's timing assertion.
+  if (!isPhoneViewport(page)) {
+    test.skip(
+      await posterFallbackActive(page, 5000),
+      'held-engine skip-release is live-engine only; the desktop poster path self-reveals without the engine',
+    );
+  }
 
   // The loader is server-rendered: it is up as soon as the document parses,
   // long before any held chunk lands (its CSS is inlined in the document).

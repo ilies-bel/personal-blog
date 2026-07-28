@@ -1,4 +1,5 @@
 import { test, expect } from './test-base';
+import { posterFallbackActive, isPhoneViewport } from './hero-mode';
 
 // PRD-003 Yellow-star featured-project proof.
 //
@@ -39,6 +40,14 @@ test.describe('featured-project proof — destination & catalogue (PRD-003)', ()
     await page.goto('/', { waitUntil: 'load' });
     // Let the loader hand off so markers can become interactive.
     await expect(page.locator('body')).toHaveClass(/loader-gone/, { timeout: 15_000 });
+    // The in-scene yellow marker only mounts on the live WebGL scene. The
+    // software-GL poster (headless CI) and the phone video hero never mount it;
+    // browserName stays 'chromium' on the mobile-chrome project, so the viewport
+    // — not the engine name — is what distinguishes the phone here.
+    test.skip(
+      (await posterFallbackActive(page)) || isPhoneViewport(page),
+      'live in-scene marker needs the live WebGL scene (not the poster / phone hero)',
+    );
 
     // Scroll through the lifecycle until the yellow-star Projects marker mounts
     // (it gates on the settled yellow hold). The marker is a real <a.star-marker>.
@@ -94,6 +103,11 @@ test.describe('featured-project proof — no-WebGL edition (PRD-003)', () => {
   });
 
   test('the WebGL-unavailable home exposes a readable Fleet proof and the #fleet link', async ({ page }) => {
+    // Desktop degraded-mode contract: on a phone the viewport falls below
+    // PHONE_VIEWPORT_WIDTH, so MobileHeroVideo owns the hero BEFORE the WebGL
+    // probe runs and body.webgl-unavailable never appears. The phone hero is
+    // covered by mobile-access.spec.ts; this edition is the desktop path.
+    test.skip(isPhoneViewport(page), 'desktop no-WebGL edition; the phone hero is the video, not this fallback');
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toHaveClass(/webgl-unavailable/, { timeout: 9_000 });
     const proof = page.locator('.webgl-fallback-proof');
@@ -110,6 +124,8 @@ test.describe('featured-project proof — no-WebGL edition (PRD-003)', () => {
     // The Fleet link in the no-WebGL fallback proof must be reachable by Tab
     // and must expose a focus ring — it is the only path to /projects#fleet
     // for keyboard users who cannot trigger the live canvas marker.
+    // Desktop edition — a phone gets MobileHeroVideo, not this fallback (see above).
+    test.skip(isPhoneViewport(page), 'desktop no-WebGL edition; the phone hero is the video, not this fallback');
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toHaveClass(/webgl-unavailable/, { timeout: 9_000 });
 
