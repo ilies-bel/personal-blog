@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <g stroke="#0a1017" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Accretion disk: straight diameter line, full width through the hole -->
+    <path d="M2 64 H126" />
+    <!-- Left fork: line swells up & down to merge onto the outer ring -->
+    <path d="M27 64 C38 64 34.53 50.76 43.16 42.42" />
+    <path d="M27 64 C38 64 34.53 77.24 43.16 85.58" />
+    <!-- Right fork (mirror) -->
+    <path d="M101 64 C90 64 93.47 50.76 84.84 42.42" />
+    <path d="M101 64 C90 64 93.47 77.24 84.84 85.58" />
+    <!-- Outer event-horizon ring -->
+    <circle cx="64" cy="64" r="30" />
+    <!-- Inner ring -->
+    <circle cx="64" cy="64" r="18" />
+  </g>
+  <style>
+    g { stroke: #0a1017; }
+    @media (prefers-color-scheme: dark) {
+      g { stroke: #F5ECD9; }
+    }
+  </style>
+</svg>
