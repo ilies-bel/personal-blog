@@ -234,12 +234,14 @@ try {
   run(['git', 'worktree', 'add', worktreePath, GH_PAGES_BRANCH]);
 
   // Delete all tracked files so removed pages actually disappear from the branch.
-  console.log('deploy: clearing existing tracked files…');
-  const rmResult = spawnSync('git', ['rm', '-rf', '.'], { cwd: worktreePath, stdio: 'inherit' });
-  if (rmResult.error) throw rmResult.error;
-  // git rm exits 1 with "nothing to rm" on an empty/fresh branch — that's fine.
-  if (rmResult.status !== 0 && rmResult.status !== 1) {
-    throw new Error(`git rm failed (exit ${rmResult.status})`);
+  // On a fresh orphan branch git rm exits 128 ("pathspec '.' did not match any files"),
+  // not 1, so we check first rather than guessing at exit codes.
+  const tracked = capture(['git', 'ls-files'], worktreePath).trim();
+  if (tracked) {
+    console.log('deploy: clearing existing tracked files…');
+    run(['git', 'rm', '-rf', '.'], worktreePath);   // real failures still throw
+  } else {
+    console.log('deploy: branch has no tracked files yet; nothing to clear.');
   }
 
   // Copy the built site into the worktree.
