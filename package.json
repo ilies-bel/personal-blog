@@ -22,7 +22,8 @@
     "bench": "node bench/run-bench.mjs",
     "bench:docker": "docker build -f bench/Dockerfile -t blog-bench . && docker run --rm -v \"$PWD/evidence:/app/evidence\" blog-bench",
     "bench:docker:4gb": "docker build -f bench/Dockerfile -t blog-bench . && docker run --rm --memory=4g --memory-swap=4g --cpus=2 -e BENCH_TAG=4gb -v \"$PWD/evidence:/app/evidence\" blog-bench",
-    "astro": "astro"
+    "astro": "astro",
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^6.0.1",

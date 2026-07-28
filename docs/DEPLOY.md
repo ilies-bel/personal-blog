@@ -6,33 +6,71 @@ binds the domain on every deploy).
 
 ## How deploys are triggered
 
-Deploys run on **version tags only** — not on every push to `main`.
+### Primary path — local deploy (`pnpm run deploy`)
 
-Pushing commits to `main` no longer spends CI minutes or republishes the site.
-A deploy is a deliberate act: you cut a tag when you want the current `main` to
-go live.
+The fastest way to ship is directly from your machine:
 
 ```sh
-# 1. make sure main is up to date and pushed
-git push origin main
-
-# 2. cut a version tag and push it — this triggers the deploy
-git tag v1.0.0
-git push origin v1.0.0
+pnpm run deploy
 ```
 
-Any tag matching `v*` (`v1.0.0`, `v2`, `v1.2.3-rc1`, …) fires the
-`.github/workflows/deploy.yml` workflow, which builds with Astro and publishes
-`dist/` to Pages.
+This runs `scripts/deploy.mjs`, which:
 
-Because deploys are tag-triggered, every published build is **immutable and
-re-runnable**: rolling back means re-running the deploy workflow on the
-previous good tag (see `docs/RUNBOOK.md`).
+1. Checks for a dirty working tree (commit or stash first; pass `--allow-dirty`
+   to override).
+2. Runs `pnpm run build` (astro build).
+3. Runs the same two dist gates as the Actions workflow:
+   `check-links.mjs` then `check-asset-sizes.mjs`.
+4. Asserts `dist/CNAME` contains `ilies-bel.dev` (custom-domain guard) and
+   `dist/index.html` exists and is non-empty.
+5. Publishes `dist/` to the `gh-pages` branch via a temporary git worktree
+   (the main checkout is never mutated). Creates `gh-pages` as an orphan
+   branch on first run if it does not exist.
+6. Prints the live URL on success.
 
-### Manual deploy (no tag)
+**Dry run** — builds and runs all gates but does not push:
 
-The workflow also has `workflow_dispatch`, so you can deploy the current default
-branch without cutting a tag:
+```sh
+pnpm run deploy -- --dry-run
+```
+
+Prints the target branch, commit message, file count, and total dist size,
+then exits 0. Safe to run anytime to verify the build is clean.
+
+**Dirty-tree override** (skip the uncommitted-files check):
+
+```sh
+pnpm run deploy -- --allow-dirty
+```
+
+#### Pages source
+
+The repository's GitHub Pages source **must be set to the `gh-pages` branch**
+(not the legacy `workflow` / `actions-artifact` mode). The Actions `deploy` job
+uses the `actions/upload-pages-artifact` + `actions/deploy-pages` stack, which
+publishes from an artifact, not from a branch — the two methods are mutually
+exclusive. Switch to branch mode once and `pnpm run deploy` owns all future
+publishes.
+
+```sh
+# Check current Pages config
+gh api repos/ilies-bel/personal-blog/pages --jq '.source'
+
+# Switch to gh-pages branch (root folder)
+gh api --method PUT repos/ilies-bel/personal-blog/pages \
+  -f source[branch]=gh-pages -f source[path]=/
+```
+
+### GitHub Actions deploy (`.github/workflows/deploy.yml`)
+
+The Actions workflow triggers on **every push to `main`** and on
+`workflow_dispatch`. It is NOT tag-triggered. The workflow builds the site,
+runs both dist gates, and uploads the artifact — but the `deploy` job requires
+`needs: [build, e2e]`, so it is blocked whenever the e2e job fails. The
+workflow remains in the repo as a regression signal; it is not currently the
+active publishing path.
+
+To manually trigger it without a push:
 
 - **GitHub UI:** Actions → *Deploy to GitHub Pages* → **Run workflow**.
 - **CLI:** `gh workflow run deploy.yml`
